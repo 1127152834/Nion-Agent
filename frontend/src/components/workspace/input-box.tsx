@@ -801,8 +801,150 @@ export function InputBox({
           placeholder={t.inputBox.placeholder}
           autoFocus={autoFocus}
           defaultValue={initialValue}
+          onKeyDown={handleMentionKeyDown}
         />
       </PromptInputBody>
+      {/* Mention autocomplete popup */}
+      {mentionState && (
+        <div className="absolute right-0 bottom-full left-0 z-20 pb-2">
+          <div className="bg-background border-border mx-2 overflow-hidden rounded-lg border shadow-lg">
+            <div className="border-border/70 border-b px-3 py-2">
+              <span className="text-muted-foreground text-xs">
+                {mentionState.trigger === "@"
+                  ? (t.migration.workspace?.inputBox?.mentionHintAt ?? "↑↓ select · Tab switch · Enter apply")
+                  : (t.migration.workspace?.inputBox?.mentionHintSlash ?? "↑↓ select · Enter apply")}
+              </span>
+            </div>
+            {mentionState.trigger === "@" && (
+              <div className="px-3 pb-1 pt-2">
+                <div className="bg-muted/70 inline-flex items-center gap-1 rounded-lg p-1">
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-md px-2 py-1 text-xs transition-colors",
+                      mentionAtSource === "context"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      setMentionAtSource("context");
+                    }}
+                  >
+                    {t.migration.workspace?.inputBox?.contextLabel ?? "Context"}
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-md px-2 py-1 text-xs transition-colors",
+                      mentionAtSource === "mcp"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      setMentionAtSource("mcp");
+                    }}
+                  >
+                    MCP
+                  </button>
+                </div>
+              </div>
+            )}
+            {mentionGroups.length === 0 ? (
+              <div className="text-muted-foreground px-3 py-2 text-xs">
+                {t.migration.workspace?.inputBox?.noMatches ?? "No matches"}
+              </div>
+            ) : (
+              <div className="max-h-60 overflow-auto p-1">
+                {(() => {
+                  let optionIndex = -1;
+                  return mentionGroups.map((group) => (
+                    <div key={group.id} className="pt-1 first:pt-0">
+                      <div className="text-muted-foreground px-2 pb-1 text-[10px]">
+                        {group.label}
+                      </div>
+                      <div className="space-y-0.5">
+                        {group.options.map((option) => {
+                          optionIndex += 1;
+                          const active = optionIndex === mentionActiveIndex;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              className={cn(
+                                "hover:bg-accent flex w-full items-start gap-2 rounded-md px-2 py-2 text-left transition-colors",
+                                active && "bg-accent text-accent-foreground",
+                              )}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                applyMentionOption(option);
+                              }}
+                            >
+                              <span className="text-muted-foreground mt-0.5">
+                                {option.kind === "directory" && (
+                                  <FolderIcon className="size-3.5" />
+                                )}
+                                {option.kind === "file" && (
+                                  <FileIcon className="size-3.5" />
+                                )}
+                                {option.kind === "skill" && (
+                                  <SparklesIcon className="size-3.5" />
+                                )}
+                                {option.kind === "mcp" && (
+                                  <WrenchIcon className="size-3.5" />
+                                )}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium">
+                                  {option.kind === "skill"
+                                    ? `/${option.label}`
+                                    : option.kind === "mcp"
+                                      ? `@mcp/${option.label}`
+                                      : `@${option.label}`}
+                                </span>
+                                {option.description ? (
+                                  <span className="text-muted-foreground block truncate text-[11px]">
+                                    {option.description}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+            <div className="border-border/70 border-t px-3 py-2">
+              <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-[11px]">
+                <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
+                  Tab
+                </kbd>
+                <span>
+                  {mentionState.trigger === "@"
+                    ? (t.migration.workspace?.inputBox?.switchLabel ?? "Switch")
+                    : (t.migration.workspace?.inputBox?.completeLabel ?? "Complete")}
+                </span>
+                <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
+                  ↑↓
+                </kbd>
+                <span>{t.migration.workspace?.inputBox?.navigateLabel ?? "Navigate"}</span>
+                <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
+                  Enter
+                </kbd>
+                <span>{t.migration.workspace?.inputBox?.selectLabel ?? "Select"}</span>
+                <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
+                  Esc
+                </kbd>
+                <span>{t.migration.workspace?.inputBox?.closeLabel ?? "Close"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <PromptInputFooter className="flex">
         <PromptInputTools>
           {/* TODO: Add more connectors here
