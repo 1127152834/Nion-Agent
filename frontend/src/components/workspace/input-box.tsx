@@ -3,12 +3,16 @@
 import type { ChatStatus } from "ai";
 import {
   CheckIcon,
+  FileIcon,
+  FolderIcon,
   GraduationCapIcon,
   LightbulbIcon,
   PaperclipIcon,
   PlusIcon,
   SparklesIcon,
   RocketIcon,
+  WrenchIcon,
+  XIcon,
   ZapIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -102,6 +106,15 @@ interface RecentMentionsState {
   "@": string[];
   "/": string[];
 }
+
+interface MentionGroup {
+  id: string;
+  label: string;
+  options: MentionOption[];
+}
+
+// Constants
+const RECENT_MENTION_LIMIT = 5;
 
 // Mention system utility functions
 function normalizePath(path: string): string {
@@ -351,6 +364,98 @@ export function InputBox({
         })),
     [mcpConfig?.mcp_servers],
   );
+
+  // Filter and rank mention options based on query
+  const filteredMentionOptions = useMemo(() => {
+    if (!mentionState) {
+      return [];
+    }
+    const source =
+      mentionState.trigger === "@"
+        ? (mentionAtSource === "context" ? fileMentionOptions : mcpMentionOptions)
+        : skillMentionOptions;
+    const normalizedQuery = mentionState.query.trim().toLowerCase();
+    return source
+      .map((option) => ({
+        option,
+        score: rankMentionOption(option, normalizedQuery),
+      }))
+      .filter((item) => item.score > 0 || !normalizedQuery)
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return b.score - a.score;
+        }
+        return a.option.value.localeCompare(b.option.value);
+      })
+      .slice(0, 80)
+      .map((item) => item.option);
+  }, [fileMentionOptions, mcpMentionOptions, mentionAtSource, mentionState, skillMentionOptions]);
+
+  // Group mention options with recent items
+  const mentionGroups = useMemo<MentionGroup[]>(() => {
+    if (!mentionState) {
+      return [];
+    }
+
+    const recents = recentMentions[mentionState.trigger] ?? [];
+    const byValue = new Map(
+      filteredMentionOptions.map((option) => [option.value, option]),
+    );
+    const recentOptions = recents
+      .map((value) => byValue.get(value))
+      .filter((item): item is MentionOption => Boolean(item));
+    const recentValues = new Set(recentOptions.map((item) => item.value));
+    const remaining = filteredMentionOptions.filter(
+      (item) => !recentValues.has(item.value),
+    );
+
+    const groups: MentionGroup[] = [];
+    if (recentOptions.length > 0) {
+      groups.push({
+        id: "recent",
+        label: t.migration.workspace?.inputBox?.recentLabel ?? "Recent",
+        options: recentOptions.slice(0, RECENT_MENTION_LIMIT),
+      });
+    }
+
+    if (mentionState.trigger === "/") {
+      if (remaining.length > 0) {
+        groups.push({
+          id: "skills",
+          label: t.migration.workspace?.inputBox?.allSkillsLabel ?? "All skills",
+          options: remaining.slice(0, 40),
+        });
+      }
+    } else {
+      const directories = remaining.filter((item) => item.kind === "directory");
+      const files = remaining.filter((item) => item.kind === "file");
+      const mcpTools = remaining.filter((item) => item.kind === "mcp");
+
+      if (directories.length > 0) {
+        groups.push({
+          id: "directories",
+          label: t.migration.workspace?.inputBox?.directoriesLabel ?? "Directories",
+          options: directories.slice(0, 20),
+        });
+      }
+      if (files.length > 0) {
+        groups.push({
+          id: "files",
+          label: t.migration.workspace?.inputBox?.filesLabel ?? "Files",
+          options: files.slice(0, 20),
+        });
+      }
+      if (mcpTools.length > 0) {
+        groups.push({
+          id: "mcp",
+          label: t.migration.workspace?.inputBox?.mcpToolsLabel ?? "MCP Tools",
+          options: mcpTools.slice(0, 20),
+        });
+      }
+    }
+
+    return groups;
+  }, [filteredMentionOptions, mentionState, recentMentions, t]);
 
   useEffect(() => {
     if (models.length === 0) {
