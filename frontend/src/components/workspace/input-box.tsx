@@ -326,6 +326,8 @@ export function InputBox({
     "@": [],
     "/": [],
   });
+  const [mcpSelectorOpen, setMcpSelectorOpen] = useState(false);
+  const [mcpSelectorQuery, setMcpSelectorQuery] = useState("");
 
   // Fetch data for mention options
   const { skills } = useSkills();
@@ -456,6 +458,33 @@ export function InputBox({
 
     return groups;
   }, [filteredMentionOptions, mentionState, recentMentions, t]);
+
+  // Filter MCP options for selector
+  const filteredMcpSelectorOptions = useMemo(() => {
+    const normalizedQuery = mcpSelectorQuery.trim().toLowerCase();
+    return mcpMentionOptions
+      .map((option) => ({
+        option,
+        score: rankMentionOption(option, normalizedQuery),
+      }))
+      .filter((item) => item.score > 0 || !normalizedQuery)
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return b.score - a.score;
+        }
+        return a.option.value.localeCompare(b.option.value);
+      })
+      .map((item) => item.option);
+  }, [mcpMentionOptions, mcpSelectorQuery]);
+
+  const toggleMcpTool = useCallback((value: string) => {
+    setSelectedMcpTools((prev) => {
+      if (prev.includes(value)) {
+        return prev.filter((item) => item !== value);
+      }
+      return [...prev, value];
+    });
+  }, []);
 
   // Get text input controller
   const { textInput } = usePromptInputController();
@@ -1015,6 +1044,69 @@ export function InputBox({
             <SparklesIcon className="size-3" />
             <span>{t.migration.workspace?.inputBox?.skillLabel ?? "Skill"}</span>
           </PromptInputButton>
+          <DropdownMenu
+            open={mcpSelectorOpen}
+            onOpenChange={(open) => {
+              setMcpSelectorOpen(open);
+              if (!open) setMcpSelectorQuery("");
+            }}
+          >
+            <DropdownMenuTrigger asChild>
+              <PromptInputButton className="gap-1! px-2! text-xs" disabled={disabled}>
+                <WrenchIcon className="size-3" />
+                <span>MCP</span>
+                {selectedMcpTools.length > 0 && (
+                  <span className="bg-foreground text-background inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-semibold">
+                    {selectedMcpTools.length}
+                  </span>
+                )}
+              </PromptInputButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80">
+              <div className="p-2">
+                <input
+                  type="text"
+                  placeholder={t.migration.workspace?.inputBox?.searchMcpTools ?? "Search MCP tools..."}
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={mcpSelectorQuery}
+                  onChange={(e) => setMcpSelectorQuery(e.target.value)}
+                />
+              </div>
+              <div className="max-h-60 overflow-auto">
+                {filteredMcpSelectorOptions.length === 0 ? (
+                  <div className="text-muted-foreground px-3 py-2 text-xs">
+                    {t.migration.workspace?.inputBox?.noMcpTools ?? "No MCP tools available"}
+                  </div>
+                ) : (
+                  filteredMcpSelectorOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.id}
+                      className="flex items-start gap-2 px-3 py-2"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        toggleMcpTool(option.value);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedMcpTools.includes(option.value)}
+                        onChange={() => toggleMcpTool(option.value)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-xs font-medium">{option.label}</div>
+                        {option.description && (
+                          <div className="text-muted-foreground text-[11px]">
+                            {option.description}
+                          </div>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <PromptInputActionMenu>
             <ModeHoverGuide
               mode={
