@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
@@ -26,8 +27,11 @@ import { cn } from "@/lib/utils";
 export default function ChatPage() {
   const { t } = useI18n();
   const [settings, setSettings] = useLocalSettings();
+  const searchParams = useSearchParams();
 
   const { threadId, isNewThread, setIsNewThread, isMock } = useThreadChat();
+  const prefillPrompt = searchParams.get("prefill")?.trim() ?? "";
+  const prefillSentRef = useRef<string | null>(null);
   useSpecificChatMode();
 
   const { showNotification } = useNotification();
@@ -67,6 +71,23 @@ export default function ChatPage() {
   const handleStop = useCallback(async () => {
     await thread.stop();
   }, [thread]);
+
+  useEffect(() => {
+    if (!isNewThread || !prefillPrompt) {
+      return;
+    }
+    const requestKey = `${threadId}:${prefillPrompt}`;
+    if (prefillSentRef.current === requestKey) {
+      return;
+    }
+    prefillSentRef.current = requestKey;
+    void sendMessage(threadId, {
+      text: prefillPrompt,
+      files: [],
+    }).catch(() => {
+      prefillSentRef.current = null;
+    });
+  }, [isNewThread, prefillPrompt, sendMessage, threadId]);
 
   return (
     <ThreadContext.Provider value={{ thread, isMock }}>

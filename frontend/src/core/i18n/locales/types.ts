@@ -196,6 +196,12 @@ export interface Translations {
     markUnread: string;
     star: string;
     unstar: string;
+    askAI: string;
+    summarize: string;
+    translate: string;
+    askAIPrompt: string;
+    summarizePrompt: string;
+    translatePrompt: string;
     openOriginal: string;
     backToList: string;
     aiPanelTitle: string;

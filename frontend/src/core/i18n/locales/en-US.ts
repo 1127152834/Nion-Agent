@@ -265,6 +265,14 @@ export const enUS: Translations = {
     markUnread: "Mark unread",
     star: "Star",
     unstar: "Unstar",
+    askAI: "Ask AI",
+    summarize: "Summarize",
+    translate: "Translate",
+    askAIPrompt:
+      "Please explain the following passage using the current article context:\n\n{text}",
+    summarizePrompt: "Please provide a concise summary of this text:\n\n{text}",
+    translatePrompt:
+      "Please translate the following passage to Chinese and keep key details:\n\n{text}",
     openOriginal: "Open original",
     backToList: "Back to list",
     aiPanelTitle: "AI Reader Assistant",
