@@ -1,12 +1,12 @@
-"""DeerFlowClient — Embedded Python client for DeerFlow agent system.
+"""NionClient — Embedded Python client for Nion agent system.
 
-Provides direct programmatic access to DeerFlow's agent capabilities
+Provides direct programmatic access to Nion's agent capabilities
 without requiring LangGraph Server or Gateway API processes.
 
 Usage:
-    from src.client import DeerFlowClient
+    from src.client import NionClient
 
-    client = DeerFlowClient()
+    client = NionClient()
     response = client.chat("Analyze this paper for me", thread_id="my-thread")
     print(response)
 
@@ -62,10 +62,10 @@ class StreamEvent:
     data: dict[str, Any] = field(default_factory=dict)
 
 
-class DeerFlowClient:
-    """Embedded Python client for DeerFlow agent system.
+class NionClient:
+    """Embedded Python client for Nion agent system.
 
-    Provides direct programmatic access to DeerFlow's agent capabilities
+    Provides direct programmatic access to Nion's agent capabilities
     without requiring LangGraph Server or Gateway API processes.
 
     Note:
@@ -80,9 +80,9 @@ class DeerFlowClient:
 
     Example::
 
-        from src.client import DeerFlowClient
+        from src.client import NionClient
 
-        client = DeerFlowClient()
+        client = NionClient()
 
         # Simple one-shot
         print(client.chat("hello"))
@@ -496,7 +496,7 @@ class DeerFlowClient:
         if config_path is None:
             raise FileNotFoundError(
                 "Cannot locate extensions_config.json. "
-                "Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root."
+                "Set NION_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root."
             )
 
         current_config = get_extensions_config()
@@ -563,7 +563,7 @@ class DeerFlowClient:
         if config_path is None:
             raise FileNotFoundError(
                 "Cannot locate extensions_config.json. "
-                "Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root."
+                "Set NION_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root."
             )
 
         extensions_config = get_extensions_config()

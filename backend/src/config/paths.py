@@ -10,7 +10,7 @@ _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
 class Paths:
     """
-    Centralized path configuration for DeerFlow application data.
+    Centralized path configuration for Nion application data.
 
     Directory layout (host side):
         {base_dir}/
@@ -30,9 +30,9 @@ class Paths:
 
     BaseDir resolution (in priority order):
         1. Constructor argument `base_dir`
-        2. DEER_FLOW_HOME environment variable
-        3. Local dev fallback: cwd/.deer-flow  (when cwd is the backend/ dir)
-        4. Default: $HOME/.deer-flow
+        2. NION_HOME environment variable
+        3. Local dev fallback: cwd/.nion  (when cwd is the backend/ dir)
+        4. Default: $HOME/.nion
     """
 
     def __init__(self, base_dir: str | Path | None = None) -> None:
@@ -44,14 +44,14 @@ class Paths:
         if self._base_dir is not None:
             return self._base_dir
 
-        if env_home := os.getenv("DEER_FLOW_HOME"):
+        if env_home := os.getenv("NION_HOME"):
             return Path(env_home).resolve()
 
         cwd = Path.cwd()
         if cwd.name == "backend" or (cwd / "pyproject.toml").exists():
-            return cwd / ".deer-flow"
+            return cwd / ".nion"
 
-        return Path.home() / ".deer-flow"
+        return Path.home() / ".nion"
 
     @property
     def memory_file(self) -> Path:
