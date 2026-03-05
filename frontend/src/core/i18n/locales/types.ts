@@ -298,5 +298,27 @@ export interface Translations {
       emptyTitle: string;
       emptyDescription: string;
     };
+    workbenchPlugins: {
+      title: string;
+      description: string;
+      installed: string;
+      marketplace: string;
+      addPlugin: string;
+      createViaSkill: string;
+      uploadPackage: string;
+      uploading: string;
+      uploadFormatError: string;
+      uploadFailed: string;
+      pluginInstalled: string;
+      pluginDeleted: string;
+      deleteFailed: string;
+      deleteConfirmTitle: string;
+      deleteConfirmDescription: string;
+      cancelAction: string;
+      confirmDeleteAction: string;
+      emptyTitle: string;
+      emptyDescription: string;
+      emptyButton: string;
+    };
   };
 }

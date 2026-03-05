@@ -58,7 +58,7 @@ export class WorkbenchRegistry {
         plugin,
         priority: plugin.canHandle(artifact),
       }))
-      .filter(({ priority }) => priority !== false && priority > 0)
+      .filter(({ priority }) => typeof priority === "number" && priority > 0)
       .sort((a, b) => (b.priority as number) - (a.priority as number));
 
     return candidates.map(({ plugin }) => plugin);
