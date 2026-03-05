@@ -35,6 +35,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     setOpen: setArtifactsOpen,
     setArtifacts,
     select: selectArtifact,
+    deselect,
     selectedArtifact,
   } = useArtifacts();
   const threadArtifacts = useMemo(
@@ -46,6 +47,12 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   useEffect(() => {
     setArtifacts(threadArtifacts);
     if (
+      thread.values.artifacts?.length === 0 ||
+      (selectedArtifact && !thread.values.artifacts?.includes(selectedArtifact))
+    ) {
+      deselect();
+    }
+    if (
       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
       autoSelectFirstArtifact
     ) {
@@ -56,7 +63,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     }
   }, [
     autoSelectFirstArtifact,
+    deselect,
     selectArtifact,
+    selectedArtifact,
     setArtifacts,
     threadArtifacts,
   ]);
