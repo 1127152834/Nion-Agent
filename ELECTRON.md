@@ -1,0 +1,167 @@
+# Electron 桌面端使用指南
+
+本项目支持 Web 和 Electron 桌面端双模式运行。
+
+## 快速开始
+
+### 安装依赖
+
+```bash
+cd desktop/electron
+pnpm install
+```
+
+### 启动 Electron 应用
+
+```bash
+pnpm run dev  # 开发模式
+```
+
+Electron 应用会自动：
+- 启动 LangGraph 服务（端口 2024）
+- 启动 Gateway API（端口 8001）
+- 启动 Frontend（端口 3000）
+- 打开应用窗口
+
+### 构建安装包
+
+```bash
+pnpm run dist  # 构建 macOS/Windows/Linux 安装包
+```
+
+## 数据目录
+
+Electron 和 Web 模式共享数据目录：`~/.nion`
+
+可通过环境变量 `NION_HOME` 自定义：
+```bash
+NION_HOME=/custom/path pnpm run dev
+```
+
+## 日志
+
+日志位置：`~/.nion/logs/desktop/`
+- `langgraph.log` - LangGraph 服务日志
+- `gateway.log` - Gateway API 日志
+- `frontend.log` - Frontend 日志
+
+## 验证安装
+
+```bash
+# 验证 Electron 模式
+bash scripts/verify-electron.sh
+
+# 验证 Web 模式
+bash scripts/verify-web.sh
+```
+
+## 架构说明
+
+### 核心组件
+
+- **主进程** (`desktop/electron/src/main.ts`) - 窗口管理、生命周期
+- **进程管理器** (`desktop/electron/src/process-manager.ts`) - 后端服务管理
+- **预加载脚本** (`desktop/electron/src/preload.ts`) - IPC 通信桥接
+- **前端平台适配** (`frontend/src/core/platform/`) - 环境检测和 API 适配
+
+### 服务管理
+
+Electron 自动管理以下服务：
+1. LangGraph 服务 - AI 代理运行时
+2. Gateway API - REST API 网关
+3. Frontend - Next.js 前端
+
+所有服务在应用启动时自动启动，关闭时自动停止。
+
+### 环境检测
+
+前端代码自动检测运行环境：
+- Electron 模式：使用本地服务（localhost:2024, localhost:8001）
+- Web 模式：使用环境变量或 nginx 代理
+
+## 高级功能
+
+### 运行时打包
+
+将 Python 环境打包到安装包中：
+```bash
+cd desktop/runtime
+./build-python-runtime.sh
+./create-runtime-bundle.sh
+```
+
+### 自动更新
+
+配置 GitHub releases 自动更新（`desktop/electron/package.json`）：
+```json
+{
+  "nionAutoUpdate": {
+    "enabled": true,
+    "owner": "your-org",
+    "repo": "your-repo",
+    "checkIntervalMinutes": 240
+  }
+}
+```
+
+### 启动诊断
+
+启动指标记录在 `~/.nion/startup-metrics.json`，包含：
+- 每个启动阶段的耗时
+- 失败信息和错误分类
+- 重试次数
+
+## 开发调试
+
+### 主进程调试
+```bash
+electron --inspect=5858 dist/main.js
+```
+
+### 渲染进程调试
+开发模式自动打开 Chrome DevTools
+
+### 查看日志
+```bash
+tail -f ~/.nion/logs/desktop/*.log
+```
+
+## 故障排除
+
+### 端口冲突
+确保端口 2024、8001、3000 未被占用：
+```bash
+lsof -i :2024 -i :8001 -i :3000
+```
+
+### 依赖缺失
+确保已安装 uv 和 pnpm：
+```bash
+# 安装 uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 安装 pnpm
+npm install -g pnpm
+```
+
+### 进程残留
+检查并清理残留进程：
+```bash
+ps aux | grep -E "langgraph|uvicorn|next" | grep -v grep
+```
+
+## 与 Web 模式对比
+
+| 特性 | Electron 模式 | Web 模式 |
+|------|--------------|----------|
+| 启动方式 | `pnpm run dev` | `make dev` |
+| 服务管理 | 自动 | 手动 |
+| 数据目录 | `~/.nion` | `~/.nion` |
+| 端口 | 固定（2024/8001/3000） | 可配置 |
+| 分发方式 | 安装包 | Docker/本地部署 |
+
+## 参考资料
+
+- [计划文档](/.claude/plans/wondrous-plotting-zebra.md) - 完整的迁移计划
+- [验证脚本](scripts/verify-electron.sh) - Electron 验证
+- [验证脚本](scripts/verify-web.sh) - Web 验证
