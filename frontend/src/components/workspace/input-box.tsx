@@ -45,7 +45,10 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useI18n } from "@/core/i18n/hooks";
+import { useMCPConfig } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
+import { getLocalizedSkillDescription } from "@/core/skills/i18n";
+import { useSkills } from "@/core/skills/hooks";
 import type { AgentThreadContext } from "@/core/threads";
 import { cn } from "@/lib/utils";
 
@@ -262,6 +265,7 @@ export function InputBox({
   extraHeader,
   isNewThread,
   initialValue,
+  workspacePaths = [],
   onContextChange,
   onSubmit,
   onStop,
@@ -280,6 +284,7 @@ export function InputBox({
   extraHeader?: React.ReactNode;
   isNewThread?: boolean;
   initialValue?: string;
+  workspacePaths?: string[];
   onContextChange?: (
     context: Omit<
       AgentThreadContext,
@@ -308,6 +313,44 @@ export function InputBox({
     "@": [],
     "/": [],
   });
+
+  // Fetch data for mention options
+  const { skills } = useSkills();
+  const { config: mcpConfig } = useMCPConfig();
+  const { locale } = useI18n();
+
+  // Build mention options
+  const fileMentionOptions = useMemo<MentionOption[]>(
+    () => buildPathMentionOptions(workspacePaths),
+    [workspacePaths],
+  );
+
+  const skillMentionOptions = useMemo<MentionOption[]>(
+    () =>
+      skills.map((skill) => ({
+        id: `skill:${skill.name}`,
+        label: skill.name,
+        value: skill.name,
+        kind: "skill",
+        description: getLocalizedSkillDescription(skill, locale),
+      })),
+    [locale, skills],
+  );
+
+  const mcpMentionOptions = useMemo<MentionOption[]>(
+    () =>
+      Object.entries(mcpConfig?.mcp_servers ?? {})
+        .filter(([, server]) => server.enabled)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([serverName, server]) => ({
+          id: `mcp:${serverName}`,
+          label: serverName,
+          value: serverName,
+          kind: "mcp",
+          description: server.description?.trim() || "MCP tool",
+        })),
+    [mcpConfig?.mcp_servers],
+  );
 
   useEffect(() => {
     if (models.length === 0) {
