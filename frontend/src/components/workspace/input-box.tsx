@@ -297,6 +297,18 @@ export function InputBox({
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const { models } = useModels();
 
+  // Mention system state
+  const [mentionState, setMentionState] = useState<MentionState | null>(null);
+  const [mentionAtSource, setMentionAtSource] = useState<MentionAtSource>("context");
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const [selectedContexts, setSelectedContexts] = useState<SelectedContextTag[]>([]);
+  const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [recentMentions, setRecentMentions] = useState<RecentMentionsState>({
+    "@": [],
+    "/": [],
+  });
+
   useEffect(() => {
     if (models.length === 0) {
       return;
