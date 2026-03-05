@@ -19,3 +19,27 @@ export async function updateMCPConfig(config: MCPConfig) {
   );
   return response.json();
 }
+
+export interface MCPServerProbeResponse {
+  success: boolean;
+  message: string;
+  tool_count: number;
+  tools: string[];
+}
+
+export async function probeMCPServer(serverName: string) {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/mcp/servers/${encodeURIComponent(serverName)}/probe`,
+  );
+  const payload = (await response.json().catch(() => null)) as
+    | MCPServerProbeResponse
+    | { detail?: string }
+    | null;
+
+  if (!response.ok) {
+    const detail = payload && "detail" in payload ? payload.detail : undefined;
+    throw new Error(detail ?? `Failed to probe MCP server (${response.status})`);
+  }
+
+  return payload as MCPServerProbeResponse;
+}
