@@ -197,21 +197,39 @@ function resolveMentionState(value: string, caret: number): MentionState | null 
     return null;
   }
 
-  const triggerChar = value.charAt(safeCaret - 1);
-  if (triggerChar !== "@" && triggerChar !== "/") {
-    return null;
+  // 向前扫描，找到最近的触发字符
+  let triggerIndex = -1;
+  let trigger: MentionTrigger | null = null;
+
+  for (let i = safeCaret - 1; i >= 0; i--) {
+    const char = value.charAt(i);
+
+    // 如果遇到空格或换行，停止扫描（mention 不能包含空格）
+    if (char === ' ' || char === '\n') {
+      break;
+    }
+
+    // 如果找到触发字符
+    if (char === '@' || char === '/') {
+      // 检查触发字符前面是否是空格或字符串开头
+      if (i === 0 || /\s/.test(value.charAt(i - 1))) {
+        triggerIndex = i;
+        trigger = char as MentionTrigger;
+        break;
+      }
+    }
   }
-  const trigger = triggerChar as MentionTrigger;
-  const start = safeCaret - 1;
-  const prevChar = start > 0 ? value.charAt(start - 1) : "";
-  if (start > 0 && !/\s/.test(prevChar)) {
+
+  if (triggerIndex === -1 || !trigger) {
     return null;
   }
 
+  const query = value.slice(triggerIndex + 1, safeCaret);
+
   return {
     trigger,
-    query: "",
-    start,
+    query,
+    start: triggerIndex,
     end: safeCaret,
   };
 }
@@ -587,8 +605,11 @@ export function InputBox({
       }
       const prefix = textInput.value.slice(0, mentionState.start);
       const suffix = textInput.value.slice(mentionState.end);
-      const nextValue = removeLooseMentionTriggers(`${prefix}${suffix}`);
-      const nextCaret = prefix.length;
+
+      // 插入选中的 mention，保留触发字符
+      const mentionText = `${mentionState.trigger}${option.value}`;
+      const nextValue = `${prefix}${mentionText} ${suffix}`;
+      const nextCaret = prefix.length + mentionText.length + 1;
 
       textInput.setInput(nextValue);
       pushRecentMention(mentionState.trigger, option.value);
