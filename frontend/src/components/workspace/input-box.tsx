@@ -945,6 +945,48 @@ export function InputBox({
           </div>
         </div>
       )}
+      {/* Selected skills tags */}
+      {selectedSkills.length > 0 && (
+        <div className="order-last w-full px-3 pb-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {selectedSkills.map((skill) => (
+              <button
+                key={skill}
+                type="button"
+                className="bg-muted/70 text-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+                onClick={() => removeSelectedSkill(skill)}
+              >
+                <SparklesIcon className="size-3" />
+                <span>{skill}</span>
+                <XIcon className="text-muted-foreground size-3" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Selected contexts tags */}
+      {selectedContexts.length > 0 && (
+        <div className="order-last w-full px-3 pb-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {selectedContexts.map((context) => (
+              <button
+                key={context.value}
+                type="button"
+                className="bg-muted/70 text-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+                onClick={() => removeSelectedContext(context.value)}
+              >
+                {context.kind === "directory" ? (
+                  <FolderIcon className="size-3" />
+                ) : (
+                  <FileIcon className="size-3" />
+                )}
+                <span>{basename(context.value)}</span>
+                <XIcon className="text-muted-foreground size-3" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <PromptInputFooter className="flex">
         <PromptInputTools>
           {/* TODO: Add more connectors here
@@ -957,6 +999,22 @@ export function InputBox({
             </PromptInputActionMenuContent>
           </PromptInputActionMenu> */}
           <AddAttachmentsButton className="px-2!" />
+          <PromptInputButton
+            className="gap-1! px-2! text-xs"
+            onClick={() => insertMentionTrigger("@")}
+            disabled={disabled}
+          >
+            <span>@</span>
+            <span>{t.migration.workspace?.inputBox?.contextLabel ?? "Context"}</span>
+          </PromptInputButton>
+          <PromptInputButton
+            className="gap-1! px-2! text-xs"
+            onClick={() => insertMentionTrigger("/")}
+            disabled={disabled}
+          >
+            <SparklesIcon className="size-3" />
+            <span>{t.migration.workspace?.inputBox?.skillLabel ?? "Skill"}</span>
+          </PromptInputButton>
           <PromptInputActionMenu>
             <ModeHoverGuide
               mode={
