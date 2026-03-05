@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from src.config.app_config import get_app_config
 from src.gateway.config import get_gateway_config
-from src.gateway.routers import agents, artifacts, mcp, memory, models, skills, uploads
+from src.gateway.routers import agents, artifacts, config, mcp, memory, models, skills, uploads
 
 # Configure logging
 logging.basicConfig(
@@ -77,6 +77,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
         openapi_url="/openapi.json",
         openapi_tags=[
             {
+                "name": "config",
+                "description": "Manage application configuration with version control",
+            },
+            {
                 "name": "models",
                 "description": "Operations for querying available AI models and their configurations",
             },
@@ -114,6 +118,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # CORS is handled by nginx - no need for FastAPI middleware
 
     # Include routers
+    # Config API is mounted at /api/config
+    app.include_router(config.router)
+
     # Models API is mounted at /api/models
     app.include_router(models.router)
 
