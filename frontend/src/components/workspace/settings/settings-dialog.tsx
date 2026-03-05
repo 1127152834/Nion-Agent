@@ -7,6 +7,9 @@ import {
   PaletteIcon,
   SparklesIcon,
   WrenchIcon,
+  BotIcon,
+  BoxIcon,
+  DatabaseIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -20,7 +23,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AboutSettingsPage } from "@/components/workspace/settings/about-settings-page";
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
+import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
+import { RetrievalSettingsPage } from "@/components/workspace/settings/retrieval-settings-page";
+import { SandboxSettingsPage } from "@/components/workspace/settings/sandbox-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
 import { useI18n } from "@/core/i18n/hooks";
@@ -28,9 +34,12 @@ import { cn } from "@/lib/utils";
 
 type SettingsSection =
   | "appearance"
+  | "models"
   | "memory"
   | "tools"
   | "skills"
+  | "sandbox"
+  | "retrieval"
   | "notification"
   | "about";
 
@@ -60,6 +69,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
         icon: PaletteIcon,
       },
       {
+        id: "models",
+        label: t.settings.models?.title ?? "Models",
+        icon: BotIcon,
+      },
+      {
         id: "notification",
         label: t.settings.sections.notification,
         icon: BellIcon,
@@ -71,13 +85,18 @@ export function SettingsDialog(props: SettingsDialogProps) {
       },
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
       { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
+      { id: "sandbox", label: t.settings.sandbox?.title ?? "Sandbox", icon: BoxIcon },
+      { id: "retrieval", label: t.settings.retrieval?.title ?? "Retrieval", icon: DatabaseIcon },
       { id: "about", label: t.settings.sections.about, icon: InfoIcon },
     ],
     [
       t.settings.sections.appearance,
+      t.settings.models?.title,
       t.settings.sections.memory,
       t.settings.sections.tools,
       t.settings.sections.skills,
+      t.settings.sandbox?.title,
+      t.settings.retrieval?.title,
       t.settings.sections.notification,
       t.settings.sections.about,
     ],
@@ -125,6 +144,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           <ScrollArea className="h-full min-h-0 rounded-lg border">
             <div className="space-y-8 p-6">
               {activeSection === "appearance" && <AppearanceSettingsPage />}
+              {activeSection === "models" && <ModelSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}
               {activeSection === "skills" && (
@@ -132,6 +152,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   onClose={() => props.onOpenChange?.(false)}
                 />
               )}
+              {activeSection === "sandbox" && <SandboxSettingsPage />}
+              {activeSection === "retrieval" && <RetrievalSettingsPage />}
               {activeSection === "notification" && <NotificationSettingsPage />}
               {activeSection === "about" && <AboutSettingsPage />}
             </div>
