@@ -100,6 +100,104 @@ class AppConfig(BaseModel):
         return result
 
     @classmethod
+    def from_store(cls) -> Self:
+        """Load config from SQLite database.
+
+        Returns:
+            AppConfig: The loaded config.
+
+        Raises:
+            Exception: If config store is not initialized or read fails.
+        """
+        from src.config.config_store import create_config_store
+
+        store = create_config_store()
+        config_data, version, db_path = store.read()
+        config_data = cls.resolve_env_variables(config_data)
+
+        # Load title config if present
+        if "title" in config_data:
+            load_title_config_from_dict(config_data["title"])
+
+        # Load summarization config if present
+        if "summarization" in config_data:
+            load_summarization_config_from_dict(config_data["summarization"])
+
+        # Load memory config if present
+        if "memory" in config_data:
+            load_memory_config_from_dict(config_data["memory"])
+
+        # Load subagents config if present
+        if "subagents" in config_data:
+            load_subagents_config_from_dict(config_data["subagents"])
+
+        # Load extensions config separately (it's in a different file)
+        extensions_config = ExtensionsConfig.from_file()
+        config_data["extensions"] = extensions_config.model_dump()
+
+        result = cls.model_validate(config_data)
+        return result
+
+    @classmethod
+    def from_store_or_file(cls, config_path: str | None = None) -> Self:
+        """Load config from SQLite database or YAML file with automatic migration.
+
+        Priority:
+        1. Try to load from SQLite database
+        2. If SQLite doesn't exist, load from config.yaml and migrate to SQLite
+        3. If config.yaml doesn't exist, use default configuration
+
+        Args:
+            config_path: Optional path to config.yaml file (for migration)
+
+        Returns:
+            AppConfig: The loaded config.
+        """
+        from src.config.migration import migrate_config_to_sqlite
+
+        # Try to load from SQLite first
+        try:
+            return cls.from_store()
+        except Exception:
+            # SQLite doesn't exist or failed to load, try migration
+            pass
+
+        # Try to migrate from config.yaml
+        try:
+            yaml_path = cls.resolve_config_path(config_path) if config_path or os.getenv("NION_CONFIG_PATH") else None
+            migrated = migrate_config_to_sqlite(yaml_path)
+            if migrated:
+                # Migration successful, load from SQLite
+                return cls.from_store()
+        except FileNotFoundError:
+            # config.yaml doesn't exist, will use default config
+            pass
+        except Exception as e:
+            # Migration failed, fall back to loading from file
+            import logging
+
+            logging.warning(f"Config migration failed: {e}, falling back to YAML file")
+
+        # Fall back to loading from YAML file
+        try:
+            return cls.from_file(config_path)
+        except FileNotFoundError:
+            # No config file found, use default configuration
+            import logging
+
+            logging.warning("No config file found, using default configuration")
+            # Return minimal default config
+            return cls.model_validate(
+                {
+                    "models": [],
+                    "tools": [],
+                    "tool_groups": [],
+                    "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
+                    "extensions": ExtensionsConfig.from_file().model_dump(),
+                }
+            )
+
+    @classmethod
     def resolve_env_variables(cls, config: Any) -> Any:
         """Recursively resolve environment variables in the config.
 
@@ -166,18 +264,24 @@ def get_app_config() -> AppConfig:
 
     Returns a cached singleton instance. Use `reload_app_config()` to reload
     from file, or `reset_app_config()` to clear the cache.
+
+    Configuration is loaded from SQLite database if available, otherwise
+    from config.yaml with automatic migration to SQLite.
     """
     global _app_config
     if _app_config is None:
-        _app_config = AppConfig.from_file()
+        _app_config = AppConfig.from_store_or_file()
     return _app_config
 
 
 def reload_app_config(config_path: str | None = None) -> AppConfig:
-    """Reload the config from file and update the cached instance.
+    """Reload the config from storage and update the cached instance.
 
-    This is useful when the config file has been modified and you want
+    This is useful when the config has been modified and you want
     to pick up the changes without restarting the application.
+
+    Configuration is loaded from SQLite database if available, otherwise
+    from config.yaml with automatic migration to SQLite.
 
     Args:
         config_path: Optional path to config file. If not provided,
@@ -187,7 +291,7 @@ def reload_app_config(config_path: str | None = None) -> AppConfig:
         The newly loaded AppConfig instance.
     """
     global _app_config
-    _app_config = AppConfig.from_file(config_path)
+    _app_config = AppConfig.from_store_or_file(config_path)
     return _app_config
 
 
