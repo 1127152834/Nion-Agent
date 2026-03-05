@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/core/i18n/hooks";
-import { useRSSEntry, useUpdateRSSEntry } from "@/core/rss";
+import { useRSSContext, useRSSEntry, useUpdateRSSEntry } from "@/core/rss";
 import { formatTimeAgo } from "@/core/utils/datetime";
 import { cn } from "@/lib/utils";
 
@@ -141,6 +141,7 @@ export function EntryReader({
 }) {
   const { t } = useI18n();
   const { entry, isLoading, error } = useRSSEntry(entryId);
+  const { addBlock, removeBlock } = useRSSContext();
   const updateEntryMutation = useUpdateRSSEntry();
 
   const contentHostRef = useRef<HTMLDivElement | null>(null);
@@ -166,6 +167,26 @@ export function EntryReader({
         didAutoMarkReadRef.current = null;
       });
   }, [entry, updateEntryMutation]);
+
+  useEffect(() => {
+    if (!entry) {
+      return;
+    }
+    addBlock({
+      id: "mainEntry",
+      type: "mainEntry",
+      value: entry.id,
+      metadata: {
+        title: entry.title,
+        url: entry.url,
+        summary: entry.description,
+        feed_id: entry.feed_id,
+      },
+    });
+    return () => {
+      removeBlock("mainEntry");
+    };
+  }, [addBlock, entry, removeBlock]);
 
   useEffect(() => {
     const host = contentHostRef.current;
