@@ -115,6 +115,8 @@ interface MentionGroup {
 
 // Constants
 const RECENT_MENTION_LIMIT = 5;
+const RECENT_MODELS_STORAGE_KEY = "nion:recent-models";
+const RECENT_MODELS_LIMIT = 5;
 
 // Mention system utility functions
 function normalizePath(path: string): string {
@@ -256,6 +258,25 @@ function removeLooseMentionTriggers(value: string): string {
     .replace(/(^|[\s\n])\/(?=$|[\s\n])/g, "$1");
 }
 
+function readRecentModels(): string[] {
+  try {
+    const stored = localStorage.getItem(RECENT_MODELS_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentModels(models: string[]): void {
+  try {
+    localStorage.setItem(RECENT_MODELS_STORAGE_KEY, JSON.stringify(models));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
 function getResolvedMode(
   mode: InputMode | undefined,
   supportsThinking: boolean,
@@ -328,6 +349,12 @@ export function InputBox({
   });
   const [mcpSelectorOpen, setMcpSelectorOpen] = useState(false);
   const [mcpSelectorQuery, setMcpSelectorQuery] = useState("");
+  const [recentModelNames, setRecentModelNames] = useState<string[]>([]);
+
+  // Load recent models on mount
+  useEffect(() => {
+    setRecentModelNames(readRecentModels());
+  }, []);
 
   // Fetch data for mention options
   const { skills } = useSkills();
@@ -740,6 +767,22 @@ export function InputBox({
     return models.find((m) => m.name === context.model_name) ?? models[0];
   }, [context.model_name, models]);
 
+  // Build recent and remaining models
+  const modelNamesSet = useMemo(() => new Set(models.map((m) => m.name)), [models]);
+  const recentModels = useMemo(
+    () =>
+      recentModelNames
+        .filter((name) => modelNamesSet.has(name))
+        .map((name) => models.find((model) => model.name === name))
+        .filter((model): model is typeof models[0] => Boolean(model)),
+    [modelNamesSet, models, recentModelNames],
+  );
+  const recentNameSet = useMemo(() => new Set(recentModels.map((m) => m.name)), [recentModels]);
+  const remainingModels = useMemo(
+    () => models.filter((model) => !recentNameSet.has(model.name)),
+    [models, recentNameSet],
+  );
+
   const supportThinking = useMemo(
     () => selectedModel?.supports_thinking ?? false,
     [selectedModel],
@@ -763,6 +806,14 @@ export function InputBox({
         reasoning_effort: context.reasoning_effort,
       });
       setModelDialogOpen(false);
+
+      // Track recent model
+      setRecentModelNames((prev) => {
+        const filtered = prev.filter((name) => name !== model_name);
+        const next = [model_name, ...filtered].slice(0, RECENT_MODELS_LIMIT);
+        writeRecentModels(next);
+        return next;
+      });
     },
     [onContextChange, context, models],
   );
@@ -1402,7 +1453,36 @@ export function InputBox({
             <ModelSelectorContent>
               <ModelSelectorInput placeholder={t.inputBox.searchModels} />
               <ModelSelectorList>
-                {models.map((m) => (
+                {recentModels.length > 0 && (
+                  <>
+                    <DropdownMenuLabel className="text-muted-foreground px-2 py-1.5 text-xs">
+                      {t.migration.workspace?.inputBox?.recentModelsLabel ?? "Recent"}
+                    </DropdownMenuLabel>
+                    {recentModels.map((m) => (
+                      <ModelSelectorItem
+                        key={m.name}
+                        value={m.name}
+                        onSelect={() => handleModelSelect(m.name)}
+                      >
+                        <ModelSelectorName>{m.display_name}</ModelSelectorName>
+                        {m.name === context.model_name ? (
+                          <CheckIcon className="ml-auto size-4" />
+                        ) : (
+                          <div className="ml-auto size-4" />
+                        )}
+                      </ModelSelectorItem>
+                    ))}
+                    {remainingModels.length > 0 && (
+                      <DropdownMenuSeparator />
+                    )}
+                  </>
+                )}
+                {remainingModels.length > 0 && recentModels.length > 0 && (
+                  <DropdownMenuLabel className="text-muted-foreground px-2 py-1.5 text-xs">
+                    {t.migration.workspace?.inputBox?.allModelsLabel ?? "All Models"}
+                  </DropdownMenuLabel>
+                )}
+                {(recentModels.length > 0 ? remainingModels : models).map((m) => (
                   <ModelSelectorItem
                     key={m.name}
                     value={m.name}
