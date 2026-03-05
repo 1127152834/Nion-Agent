@@ -661,6 +661,28 @@ export function InputBox({
     }
   }, [applyMentionOption, insertMentionTrigger, mentionActiveIndex, mentionGroups, mentionState]);
 
+  // Reset active index when mention state changes
+  useEffect(() => {
+    if (!mentionState) {
+      setMentionActiveIndex(0);
+      return;
+    }
+    const flatOptions = mentionGroups.flatMap((group) => group.options);
+    setMentionActiveIndex((current) => {
+      if (flatOptions.length === 0) {
+        return 0;
+      }
+      return Math.min(current, flatOptions.length - 1);
+    });
+  }, [mentionState, mentionGroups]);
+
+  // Sync mention state on text input change
+  useEffect(() => {
+    const textarea = focusMessageInput();
+    const caret = textarea?.selectionStart ?? textInput.value.length;
+    syncMentionState(textInput.value, caret);
+  }, [focusMessageInput, syncMentionState, textInput.value]);
+
   useEffect(() => {
     if (models.length === 0) {
       return;
