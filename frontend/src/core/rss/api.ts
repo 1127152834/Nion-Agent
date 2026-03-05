@@ -8,6 +8,9 @@ import type {
   RSSEntry,
   RSSEntryListResponse,
   ListRSSEntriesParams,
+  RSSEntrySummaryResponse,
+  RSSEntryTranslationResponse,
+  TranslateRSSEntryRequest,
   UpdateRSSEntryRequest,
 } from "./types";
 
@@ -197,6 +200,57 @@ export async function updateRSSEntry(
   }
   if (!payload) {
     throw new Error("Invalid response when updating RSS entry");
+  }
+  return payload;
+}
+
+export async function summarizeRSSEntry(
+  entryId: string,
+): Promise<RSSEntrySummaryResponse> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/rss/entries/${encodeURIComponent(entryId)}/summarize`,
+    {
+      method: "POST",
+    },
+  );
+  const payload = (await parseJSONOrNull(response)) as RSSEntrySummaryResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to summarize RSS entry (${response.status})`,
+    );
+  }
+  if (!payload) {
+    throw new Error("Invalid response when summarizing RSS entry");
+  }
+  return payload;
+}
+
+export async function translateRSSEntry(
+  entryId: string,
+  request: TranslateRSSEntryRequest = {},
+): Promise<RSSEntryTranslationResponse> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/rss/entries/${encodeURIComponent(entryId)}/translate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        target_language: request.target_language ?? "zh-cn",
+      }),
+    },
+  );
+  const payload = (await parseJSONOrNull(response)) as RSSEntryTranslationResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to translate RSS entry (${response.status})`,
+    );
+  }
+  if (!payload) {
+    throw new Error("Invalid response when translating RSS entry");
   }
   return payload;
 }

@@ -202,6 +202,12 @@ export interface Translations {
     askAIPrompt: string;
     summarizePrompt: string;
     translatePrompt: string;
+    generateSummary: string;
+    generateTranslation: string;
+    summaryTitle: string;
+    translationTitle: string;
+    summaryFailed: string;
+    translationFailed: string;
     openOriginal: string;
     backToList: string;
     aiPanelTitle: string;

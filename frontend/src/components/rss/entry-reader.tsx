@@ -19,7 +19,13 @@ import {
 } from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/core/i18n/hooks";
-import { useRSSContext, useRSSEntry, useUpdateRSSEntry } from "@/core/rss";
+import {
+  useRSSContext,
+  useRSSEntry,
+  useSummarizeRSSEntry,
+  useTranslateRSSEntry,
+  useUpdateRSSEntry,
+} from "@/core/rss";
 import { formatTimeAgo } from "@/core/utils/datetime";
 import { cn } from "@/lib/utils";
 
@@ -147,6 +153,8 @@ export function EntryReader({
   const { entry, isLoading, error } = useRSSEntry(entryId);
   const { addBlock, removeBlock } = useRSSContext();
   const updateEntryMutation = useUpdateRSSEntry();
+  const summarizeEntryMutation = useSummarizeRSSEntry();
+  const translateEntryMutation = useTranslateRSSEntry();
 
   const contentHostRef = useRef<HTMLDivElement | null>(null);
   const shadowRootRef = useRef<ShadowRoot | null>(null);
@@ -154,6 +162,8 @@ export function EntryReader({
   const [textSelection, setTextSelection] = useState<TextSelectionInfo | null>(
     null,
   );
+  const [generatedSummary, setGeneratedSummary] = useState("");
+  const [generatedTranslation, setGeneratedTranslation] = useState("");
 
   const articleContent = useMemo(
     () => entry?.content ?? entry?.description ?? "",
@@ -197,6 +207,8 @@ export function EntryReader({
 
   useEffect(() => {
     setTextSelection(null);
+    setGeneratedSummary("");
+    setGeneratedTranslation("");
   }, [entryId]);
 
   useEffect(() => {
@@ -309,6 +321,39 @@ export function EntryReader({
     },
     [openChatWithPrompt, t.rssReader.translatePrompt],
   );
+
+  const handleGenerateSummary = useCallback(async () => {
+    if (!entry) {
+      return;
+    }
+    try {
+      const response = await summarizeEntryMutation.mutateAsync(entry.id);
+      setGeneratedSummary(response.summary);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t.rssReader.summaryFailed,
+      );
+    }
+  }, [entry, summarizeEntryMutation, t.rssReader.summaryFailed]);
+
+  const handleGenerateTranslation = useCallback(async () => {
+    if (!entry) {
+      return;
+    }
+    try {
+      const response = await translateEntryMutation.mutateAsync({
+        entryId: entry.id,
+        request: {
+          target_language: "zh-cn",
+        },
+      });
+      setGeneratedTranslation(response.content);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t.rssReader.translationFailed,
+      );
+    }
+  }, [entry, t.rssReader.translationFailed, translateEntryMutation]);
 
   const handleToggleRead = async () => {
     if (!entry) {
@@ -424,8 +469,61 @@ export function EntryReader({
                 {t.rssReader.aiPanelTitle}
               </div>
             </div>
-            <div className="text-muted-foreground flex flex-1 items-center justify-center p-6 text-center text-sm leading-relaxed">
-              {t.rssReader.aiPanelDescription}
+            <div className="min-h-0 flex-1">
+              <ScrollArea className="size-full">
+                <div className="space-y-4 p-4">
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {t.rssReader.aiPanelDescription}
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handleGenerateSummary()}
+                      disabled={summarizeEntryMutation.isPending}
+                    >
+                      {summarizeEntryMutation.isPending && (
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                      )}
+                      {t.rssReader.generateSummary}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handleGenerateTranslation()}
+                      disabled={translateEntryMutation.isPending}
+                    >
+                      {translateEntryMutation.isPending && (
+                        <Loader2Icon className="size-3.5 animate-spin" />
+                      )}
+                      {t.rssReader.generateTranslation}
+                    </Button>
+                  </div>
+
+                  {generatedSummary && (
+                    <section className="bg-background rounded-xl border p-3">
+                      <h3 className="mb-2 text-sm font-semibold">
+                        {t.rssReader.summaryTitle}
+                      </h3>
+                      <div className="text-muted-foreground whitespace-pre-wrap text-sm leading-relaxed">
+                        {generatedSummary}
+                      </div>
+                    </section>
+                  )}
+
+                  {generatedTranslation && (
+                    <section className="bg-background rounded-xl border p-3">
+                      <h3 className="mb-2 text-sm font-semibold">
+                        {t.rssReader.translationTitle}
+                      </h3>
+                      <div className="text-muted-foreground whitespace-pre-wrap text-sm leading-relaxed">
+                        {generatedTranslation}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
           </div>
         </ResizablePanel>

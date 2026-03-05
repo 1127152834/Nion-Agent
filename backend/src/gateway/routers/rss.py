@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from src.database.models.rss import Entry, Feed
-from src.services import rss_store
+from src.services import rss_ai, rss_store
 from src.services.rss_parser import RSSParseError
 
 router = APIRouter(prefix="/api/rss", tags=["rss"])
@@ -42,6 +42,29 @@ class UpdateEntryRequest(BaseModel):
 
     read: bool | None = Field(default=None, description="Whether the entry has been read")
     starred: bool | None = Field(default=None, description="Whether the entry is starred")
+
+
+class SummarizeEntryResponse(BaseModel):
+    """Response payload for AI summary generation."""
+
+    entry_id: str
+    summary: str
+    cached: bool
+
+
+class TranslateEntryRequest(BaseModel):
+    """Request body for AI translation generation."""
+
+    target_language: str = Field(default="zh-cn", min_length=2, description="Target language code")
+
+
+class TranslateEntryResponse(BaseModel):
+    """Response payload for AI translation generation."""
+
+    entry_id: str
+    language: str
+    content: str
+    cached: bool
 
 
 @router.post(
@@ -163,3 +186,60 @@ async def update_entry(entry_id: str, request: UpdateEntryRequest) -> Entry:
         return rss_store.update_entry(entry_id, read=request.read, starred=request.starred)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
+
+
+@router.post(
+    "/entries/{entry_id}/summarize",
+    response_model=SummarizeEntryResponse,
+    summary="Summarize Entry",
+    description="Generate and cache AI summary for an entry.",
+)
+async def summarize_entry(entry_id: str) -> SummarizeEntryResponse:
+    entry = rss_store.get_entry(entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
+
+    existing_summary = rss_store.get_summary(entry_id)
+    if existing_summary is not None:
+        return SummarizeEntryResponse(
+            entry_id=entry_id,
+            summary=existing_summary.summary,
+            cached=True,
+        )
+
+    content = entry.content or entry.description or entry.title
+    summary_text = rss_ai.summarize_entry_content(title=entry.title, content=content)
+    summary = rss_store.upsert_summary(entry_id, summary_text)
+    return SummarizeEntryResponse(entry_id=entry_id, summary=summary.summary, cached=False)
+
+
+@router.post(
+    "/entries/{entry_id}/translate",
+    response_model=TranslateEntryResponse,
+    summary="Translate Entry",
+    description="Generate and cache AI translation for an entry.",
+)
+async def translate_entry(entry_id: str, request: TranslateEntryRequest) -> TranslateEntryResponse:
+    entry = rss_store.get_entry(entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
+
+    target_language = request.target_language.strip().lower() or "zh-cn"
+    existing_translation = rss_store.get_translation(entry_id, target_language)
+    if existing_translation is not None:
+        return TranslateEntryResponse(
+            entry_id=entry_id,
+            language=existing_translation.language,
+            content=existing_translation.content,
+            cached=True,
+        )
+
+    content = entry.content or entry.description or entry.title
+    translated = rss_ai.translate_entry_content(content=content, target_language=target_language)
+    translation = rss_store.upsert_translation(entry_id, target_language, translated)
+    return TranslateEntryResponse(
+        entry_id=entry_id,
+        language=translation.language,
+        content=translation.content,
+        cached=False,
+    )

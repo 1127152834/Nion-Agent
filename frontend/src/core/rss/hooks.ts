@@ -13,12 +13,15 @@ import {
   listRSSEntries,
   listRSSFeeds,
   refreshRSSFeed,
+  summarizeRSSEntry,
+  translateRSSEntry,
   updateRSSEntry,
 } from "./api";
 import type {
   AddRSSFeedRequest,
   ListRSSEntriesParams,
   RSSEntryFilter,
+  TranslateRSSEntryRequest,
   UpdateRSSEntryRequest,
 } from "./types";
 
@@ -158,5 +161,23 @@ export function useUpdateRSSEntry() {
       });
       void queryClient.invalidateQueries({ queryKey: RSS_FEEDS_QUERY_KEY });
     },
+  });
+}
+
+export function useSummarizeRSSEntry() {
+  return useMutation({
+    mutationFn: (entryId: string) => summarizeRSSEntry(entryId),
+  });
+}
+
+export function useTranslateRSSEntry() {
+  return useMutation({
+    mutationFn: ({
+      entryId,
+      request,
+    }: {
+      entryId: string;
+      request?: TranslateRSSEntryRequest;
+    }) => translateRSSEntry(entryId, request),
   });
 }

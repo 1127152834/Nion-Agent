@@ -41,6 +41,19 @@ export interface RSSEntryListResponse {
   next_cursor: string | null;
 }
 
+export interface RSSEntrySummaryResponse {
+  entry_id: string;
+  summary: string;
+  cached: boolean;
+}
+
+export interface RSSEntryTranslationResponse {
+  entry_id: string;
+  language: string;
+  content: string;
+  cached: boolean;
+}
+
 export interface AddRSSFeedRequest {
   url: string;
   category?: string;
@@ -49,6 +62,10 @@ export interface AddRSSFeedRequest {
 export interface UpdateRSSEntryRequest {
   read?: boolean;
   starred?: boolean;
+}
+
+export interface TranslateRSSEntryRequest {
+  target_language?: string;
 }
 
 export type RSSEntryFilter = "all" | "unread" | "starred";

@@ -117,3 +117,62 @@ def test_refresh_feed_imports_only_new_entries(rss_client):
     entries_resp = rss_client.get("/api/rss/entries", params={"feed_id": feed_id})
     entries = entries_resp.json()["entries"]
     assert [entry["title"] for entry in entries] == ["New Entry", "Old Entry"]
+
+
+def test_summarize_and_translate_entry_with_cache(rss_client):
+    now = datetime(2026, 3, 5, 15, 0, tzinfo=UTC)
+    parsed = _parsed_feed(
+        "https://example.com/feed.xml",
+        [("AI Entry", "https://example.com/ai", now)],
+    )
+
+    with patch("src.services.rss_store.parse_rss_feed", return_value=parsed):
+        add_resp = rss_client.post("/api/rss/feeds", json={"url": "https://example.com/feed.xml"})
+        feed_id = add_resp.json()["feed"]["id"]
+
+    entries_resp = rss_client.get("/api/rss/entries", params={"feed_id": feed_id})
+    entry_id = entries_resp.json()["entries"][0]["id"]
+
+    with patch("src.gateway.routers.rss.rss_ai.summarize_entry_content", return_value="summary v1") as summarize_mock:
+        first_summary = rss_client.post(f"/api/rss/entries/{entry_id}/summarize")
+        second_summary = rss_client.post(f"/api/rss/entries/{entry_id}/summarize")
+
+    assert first_summary.status_code == 200
+    assert first_summary.json() == {
+        "entry_id": entry_id,
+        "summary": "summary v1",
+        "cached": False,
+    }
+    assert second_summary.status_code == 200
+    assert second_summary.json() == {
+        "entry_id": entry_id,
+        "summary": "summary v1",
+        "cached": True,
+    }
+    summarize_mock.assert_called_once()
+
+    with patch("src.gateway.routers.rss.rss_ai.translate_entry_content", return_value="translation v1") as translate_mock:
+        first_translation = rss_client.post(
+            f"/api/rss/entries/{entry_id}/translate",
+            json={"target_language": "zh-CN"},
+        )
+        second_translation = rss_client.post(
+            f"/api/rss/entries/{entry_id}/translate",
+            json={"target_language": "zh-CN"},
+        )
+
+    assert first_translation.status_code == 200
+    assert first_translation.json() == {
+        "entry_id": entry_id,
+        "language": "zh-cn",
+        "content": "translation v1",
+        "cached": False,
+    }
+    assert second_translation.status_code == 200
+    assert second_translation.json() == {
+        "entry_id": entry_id,
+        "language": "zh-cn",
+        "content": "translation v1",
+        "cached": True,
+    }
+    translate_mock.assert_called_once()

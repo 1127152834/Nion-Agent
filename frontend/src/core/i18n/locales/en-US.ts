@@ -273,6 +273,12 @@ export const enUS: Translations = {
     summarizePrompt: "Please provide a concise summary of this text:\n\n{text}",
     translatePrompt:
       "Please translate the following passage to Chinese and keep key details:\n\n{text}",
+    generateSummary: "Summarize article",
+    generateTranslation: "Translate article",
+    summaryTitle: "AI Summary",
+    translationTitle: "AI Translation",
+    summaryFailed: "Failed to generate summary",
+    translationFailed: "Failed to generate translation",
     openOriginal: "Open original",
     backToList: "Back to list",
     aiPanelTitle: "AI Reader Assistant",
