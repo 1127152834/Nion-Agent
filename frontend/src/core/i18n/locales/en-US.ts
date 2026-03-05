@@ -12,6 +12,16 @@ import {
 import type { Translations } from "./types";
 
 export const enUS: Translations = {
+  migration: {
+    settings: {
+      modelSettings: {},
+      toolSettings: {},
+      skillSettings: {},
+      retrieval: {},
+      common: {},
+    },
+  },
+
   // Locale meta
   locale: {
     localName: "English",
@@ -327,6 +337,70 @@ export const enUS: Translations = {
     tools: {
       title: "Tools",
       description: "Manage the configuration and enabled status of MCP tools.",
+    },
+    models: {
+      title: "Models",
+      description: "Manage model providers, model catalogs, and default model.",
+    },
+    sandbox: {
+      title: "Sandbox",
+      description: "Configure sandbox execution and environment variables.",
+    },
+    retrieval: {
+      title: "Retrieval",
+      description: "Configure embedding and rerank providers, local model catalog, and diagnostics.",
+      tabEmbedding: "Embedding",
+      tabRerank: "Rerank",
+      tabTesting: "Testing",
+      actionRefresh: "Refresh",
+      localModelsTitleEmbedding: "Embedding model catalog",
+      localModelsTitleRerank: "Rerank model catalog",
+      noModels: "No retrieval models available.",
+      statusInstalled: "Installed",
+      statusNotInstalled: "Not installed",
+      statusActive: "Active",
+      statusConfiguredPending: "Configured (pending install)",
+      configuredPendingHint: "This model is configured as active but not installed yet.",
+      actionDownload: "Download",
+      actionImport: "Import",
+      actionDelete: "Delete",
+      actionEnable: "Enable",
+      actionEnabled: "Enabled",
+      setActiveSuccess: "Active model updated.",
+      removeSuccess: "Model removed.",
+      operationFailedPrefix: "Operation failed: ",
+      desktopOnlyHint: "Desktop runtime is required for local model operations.",
+      advancedTitle: "Advanced provider settings",
+      providerDetailTitle: "Provider settings",
+      providerEmbeddingTitle: "OpenAI-compatible embedding provider",
+      providerRerankTitle: "Rerank API provider",
+      providerProtocolOpenAI: "OpenAI compatible",
+      providerProtocolRerank: "Rerank API",
+      providerApiKey: "API Key",
+      providerApiBase: "API Base URL",
+      providerModel: "Model",
+      providerPath: "Path",
+      providerModelList: "Model suggestions",
+      providerDelete: "Reset provider",
+      providerDeleteSuccess: "Provider reset.",
+      providerDeleteConfirmTitle: "Reset provider settings?",
+      providerDeleteConfirmDescription: (name: string) =>
+        `Reset provider \"${name}\" settings?`,
+      providerTestConnection: "Test connection",
+      providerTesting: "Testing...",
+      providerConnectionSuccess: "Provider connection succeeded.",
+      testTitle: "Retrieval diagnostics",
+      testQueryPlaceholder: "Enter a test query",
+      testDocsPlaceholder: "One document per line for rerank test",
+      actionTestEmbedding: "Test embedding",
+      actionTestRerank: "Test rerank",
+      testEmpty: "No test result yet.",
+      deleteConfirmTitle: "Delete local model?",
+      deleteConfirmDescription: (name: string) =>
+        `Delete local model \"${name}\" from disk?`,
+      autoSwitchLocalSuccess: "Switched to another local model.",
+      autoSwitchRemoteSuccess: "Switched to remote provider model.",
+      autoSwitchFailed: "Auto switch failed. Configure active model manually.",
     },
     skills: {
       title: "Agent Skills",

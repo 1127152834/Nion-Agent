@@ -168,6 +168,7 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
     isLoading,
     error,
     dirty,
+    disabled: isLoading || updateMutation.isPending,
     validating: validateMutation.isPending,
     saving: updateMutation.isPending,
     onConfigChange,

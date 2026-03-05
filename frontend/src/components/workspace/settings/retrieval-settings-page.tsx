@@ -85,7 +85,22 @@ const PROVIDER_MODEL_SUGGESTIONS: Record<RetrievalFamily, string[]> = {
   ],
 };
 
-const FALLBACK_MODEL_CATALOG: Record<RetrievalFamily, Array<{ model_id: string; display_name: string; locale: string; license: string; approx_size_bytes: number }>> = {
+const FALLBACK_MODEL_CATALOG: {
+  embedding: Array<{
+    model_id: string;
+    display_name: string;
+    locale: string;
+    license: string;
+    approx_size_bytes: number;
+  }>;
+  rerank: Array<{
+    model_id: string;
+    display_name: string;
+    locale: string;
+    license: string;
+    approx_size_bytes: number;
+  }>;
+} = {
   embedding: [
     {
       model_id: "zh-embedding-lite",
@@ -676,7 +691,7 @@ export function RetrievalSettingsPage() {
 
   const tryAutoSwitchAfterRemove = async (family: RetrievalFamily, removedModelId: string) => {
     const currentStatus = await loadStatus();
-    const models = parseStatusModels(currentStatus)[family]
+    const models = (parseStatusModels(currentStatus)[family] ?? [])
       .filter((item) => item.installed && item.model_id !== removedModelId);
 
     if (models.length > 0) {
@@ -855,7 +870,7 @@ export function RetrievalSettingsPage() {
   };
 
   const renderModelCards = (family: RetrievalFamily) => {
-    const models = parsedModels[family];
+    const models = parsedModels[family] ?? [];
     if (models.length === 0) {
       return <div className="text-muted-foreground text-sm">{t.settings.retrieval.noModels}</div>;
     }
@@ -1021,7 +1036,7 @@ export function RetrievalSettingsPage() {
       });
     };
 
-    const modelSuggestions = PROVIDER_MODEL_SUGGESTIONS[family];
+    const modelSuggestions = PROVIDER_MODEL_SUGGESTIONS[family] ?? [];
 
     if (family === "embedding") {
       return (

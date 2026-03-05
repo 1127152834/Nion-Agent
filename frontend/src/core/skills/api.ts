@@ -24,12 +24,30 @@ export async function enableSkill(skillName: string, enabled: boolean) {
   return response.json();
 }
 
+export async function deleteSkill(skillName: string): Promise<void> {
+  const response = await fetch(`${getBackendBaseURL()}/api/skills/${skillName}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as
+      | { detail?: string }
+      | null;
+    throw new Error(payload?.detail ?? `Failed to delete skill (${response.status})`);
+  }
+}
+
 export interface InstallSkillRequest {
   thread_id: string;
   path: string;
 }
 
 export interface InstallSkillResponse {
+  success: boolean;
+  skill_name: string;
+  message: string;
+}
+
+export interface UploadSkillArchiveResponse {
   success: boolean;
   skill_name: string;
   message: string;
@@ -59,4 +77,27 @@ export async function installSkill(
   }
 
   return response.json();
+}
+
+export async function uploadSkillArchive(
+  file: File,
+): Promise<UploadSkillArchiveResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${getBackendBaseURL()}/api/skills/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | UploadSkillArchiveResponse
+    | { detail?: string }
+    | null;
+
+  if (!response.ok) {
+    const detail = payload && "detail" in payload ? payload.detail : undefined;
+    throw new Error(detail ?? `Failed to upload skill archive (${response.status})`);
+  }
+  return payload as UploadSkillArchiveResponse;
 }

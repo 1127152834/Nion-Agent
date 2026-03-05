@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 
 export interface Translations {
+  migration: any;
+
   // Locale meta
   locale: {
     localName: string;
@@ -264,6 +266,15 @@ export interface Translations {
       title: string;
       description: string;
     };
+    models: {
+      title: string;
+      description: string;
+    };
+    sandbox: {
+      title: string;
+      description: string;
+    };
+    retrieval: Record<string, any>;
     skills: {
       title: string;
       description: string;

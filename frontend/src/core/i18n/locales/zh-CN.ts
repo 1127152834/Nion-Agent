@@ -12,6 +12,16 @@ import {
 import type { Translations } from "./types";
 
 export const zhCN: Translations = {
+  migration: {
+    settings: {
+      modelSettings: {},
+      toolSettings: {},
+      skillSettings: {},
+      retrieval: {},
+      common: {},
+    },
+  },
+
   // Locale meta
   locale: {
     localName: "中文",
@@ -314,6 +324,70 @@ export const zhCN: Translations = {
     tools: {
       title: "工具",
       description: "管理 MCP 工具的配置和启用状态。",
+    },
+    models: {
+      title: "模型",
+      description: "管理模型供应商、模型目录与默认模型。",
+    },
+    sandbox: {
+      title: "沙箱",
+      description: "配置沙箱执行与环境变量。",
+    },
+    retrieval: {
+      title: "检索",
+      description: "配置向量模型与重排模型、本地模型目录及诊断。",
+      tabEmbedding: "向量",
+      tabRerank: "重排",
+      tabTesting: "测试",
+      actionRefresh: "刷新",
+      localModelsTitleEmbedding: "向量模型目录",
+      localModelsTitleRerank: "重排模型目录",
+      noModels: "暂无可用检索模型。",
+      statusInstalled: "已安装",
+      statusNotInstalled: "未安装",
+      statusActive: "已激活",
+      statusConfiguredPending: "已配置（待安装）",
+      configuredPendingHint: "该模型已被配置为激活，但尚未安装。",
+      actionDownload: "下载",
+      actionImport: "导入",
+      actionDelete: "删除",
+      actionEnable: "启用",
+      actionEnabled: "已启用",
+      setActiveSuccess: "已更新激活模型。",
+      removeSuccess: "模型已移除。",
+      operationFailedPrefix: "操作失败：",
+      desktopOnlyHint: "本地模型操作仅支持桌面端运行时。",
+      advancedTitle: "高级供应商设置",
+      providerDetailTitle: "供应商设置",
+      providerEmbeddingTitle: "OpenAI 兼容向量供应商",
+      providerRerankTitle: "重排 API 供应商",
+      providerProtocolOpenAI: "OpenAI 兼容",
+      providerProtocolRerank: "重排 API",
+      providerApiKey: "API Key",
+      providerApiBase: "API Base URL",
+      providerModel: "模型",
+      providerPath: "路径",
+      providerModelList: "模型建议",
+      providerDelete: "重置供应商",
+      providerDeleteSuccess: "供应商配置已重置。",
+      providerDeleteConfirmTitle: "确认重置供应商配置？",
+      providerDeleteConfirmDescription: (name: string) =>
+        `确认重置供应商“${name}”的配置？`,
+      providerTestConnection: "测试连接",
+      providerTesting: "测试中...",
+      providerConnectionSuccess: "供应商连接成功。",
+      testTitle: "检索诊断",
+      testQueryPlaceholder: "输入测试查询",
+      testDocsPlaceholder: "每行一条文档，用于重排测试",
+      actionTestEmbedding: "测试向量",
+      actionTestRerank: "测试重排",
+      testEmpty: "暂无测试结果。",
+      deleteConfirmTitle: "确认删除本地模型？",
+      deleteConfirmDescription: (name: string) =>
+        `确认从磁盘删除本地模型“${name}”？`,
+      autoSwitchLocalSuccess: "已自动切换到其他本地模型。",
+      autoSwitchRemoteSuccess: "已自动切换到远端供应商模型。",
+      autoSwitchFailed: "自动切换失败，请手动配置激活模型。",
     },
     skills: {
       title: "技能",
