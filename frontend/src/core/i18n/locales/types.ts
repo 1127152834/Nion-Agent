@@ -102,6 +102,7 @@ export interface Translations {
     chats: string;
     demoChats: string;
     agents: string;
+    rss: string;
   };
 
   // Agents
@@ -135,6 +136,7 @@ export interface Translations {
   breadcrumb: {
     workspace: string;
     chats: string;
+    rss: string;
   };
 
   // Workspace
@@ -163,8 +165,51 @@ export interface Translations {
   pages: {
     appName: string;
     chats: string;
+    rss: string;
     newChat: string;
     untitled: string;
+  };
+
+  rssReader: {
+    title: string;
+    entries: string;
+    allFeeds: string;
+    addFeed: string;
+    addFeedDescription: string;
+    feedUrlPlaceholder: string;
+    feedCategoryPlaceholder: string;
+    feedUrlRequired: string;
+    feedUrlInvalid: string;
+    subscribe: string;
+    refresh: string;
+    refreshAll: string;
+    emptyFeeds: string;
+    emptyEntries: string;
+    loadingEntries: string;
+    loadingEntry: string;
+    loadingMore: string;
+    loadMoreHint: string;
+    filterAll: string;
+    filterUnread: string;
+    filterStarred: string;
+    markRead: string;
+    markUnread: string;
+    star: string;
+    unstar: string;
+    openOriginal: string;
+    backToList: string;
+    aiPanelTitle: string;
+    aiPanelDescription: string;
+    feedAdded: string;
+    feedDeleted: string;
+    feedRefreshed: string;
+    feedAddFailed: string;
+    feedDeleteFailed: string;
+    feedRefreshFailed: string;
+    feedDeleteConfirm: string;
+    entryUpdateFailed: string;
+    entryLoadFailed: string;
+    entryNotFound: string;
   };
 
   // Tool calls
