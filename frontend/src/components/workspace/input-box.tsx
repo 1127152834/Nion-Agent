@@ -457,6 +457,210 @@ export function InputBox({
     return groups;
   }, [filteredMentionOptions, mentionState, recentMentions, t]);
 
+  // Get text input controller
+  const { textInput } = usePromptInputController();
+
+  // Helper functions for mention system
+  const pushRecentMention = useCallback((trigger: MentionTrigger, value: string) => {
+    setRecentMentions((prev) => {
+      const list = prev[trigger];
+      const filtered = list.filter((item) => item !== value);
+      const next = [value, ...filtered].slice(0, RECENT_MENTION_LIMIT);
+      return { ...prev, [trigger]: next };
+    });
+  }, []);
+
+  const addSelectedContext = useCallback((value: string, kind: "file" | "directory") => {
+    setSelectedContexts((prev) => {
+      if (prev.some((item) => item.value === value)) {
+        return prev;
+      }
+      return [...prev, { value, kind }];
+    });
+  }, []);
+
+  const addSelectedMcpTool = useCallback((value: string) => {
+    setSelectedMcpTools((prev) => {
+      if (prev.includes(value)) {
+        return prev;
+      }
+      return [...prev, value];
+    });
+  }, []);
+
+  const addSelectedSkill = useCallback((value: string) => {
+    setSelectedSkills((prev) => {
+      if (prev.includes(value)) {
+        return prev;
+      }
+      return [...prev, value];
+    });
+  }, []);
+
+  const removeSelectedContext = useCallback((value: string) => {
+    setSelectedContexts((prev) => prev.filter((item) => item.value !== value));
+  }, []);
+
+  const removeSelectedSkill = useCallback((value: string) => {
+    setSelectedSkills((prev) => prev.filter((item) => item !== value));
+  }, []);
+
+  const focusMessageInput = useCallback(() => {
+    return document.querySelector<HTMLTextAreaElement>("textarea[name='message']");
+  }, []);
+
+  const syncMentionState = useCallback((value: string, caret: number) => {
+    const resolved = resolveMentionState(value, caret);
+    if (!resolved) {
+      setMentionState(null);
+      return;
+    }
+
+    const query = value.slice(resolved.start + 1, caret);
+    setMentionState({
+      ...resolved,
+      query,
+      end: caret,
+    });
+  }, []);
+
+  const applyMentionOption = useCallback(
+    (option: MentionOption) => {
+      if (!mentionState) {
+        return;
+      }
+      const prefix = textInput.value.slice(0, mentionState.start);
+      const suffix = textInput.value.slice(mentionState.end);
+      const nextValue = removeLooseMentionTriggers(`${prefix}${suffix}`);
+      const nextCaret = prefix.length;
+
+      textInput.setInput(nextValue);
+      pushRecentMention(mentionState.trigger, option.value);
+      if (mentionState.trigger === "@") {
+        if (option.kind === "mcp") {
+          addSelectedMcpTool(option.value);
+        } else {
+          addSelectedContext(
+            option.value,
+            option.kind === "directory" ? "directory" : "file",
+          );
+        }
+      } else {
+        addSelectedSkill(option.value);
+      }
+      setMentionState(null);
+      setMentionActiveIndex(0);
+
+      requestAnimationFrame(() => {
+        const textarea = focusMessageInput();
+        if (!textarea) {
+          return;
+        }
+        textarea.focus();
+        textarea.setSelectionRange(nextCaret, nextCaret);
+      });
+    },
+    [
+      addSelectedContext,
+      addSelectedMcpTool,
+      addSelectedSkill,
+      focusMessageInput,
+      mentionState,
+      pushRecentMention,
+      textInput,
+    ],
+  );
+
+  const insertMentionTrigger = useCallback((trigger: MentionTrigger) => {
+    const textarea = focusMessageInput();
+    const value = textInput.value;
+    const start = textarea?.selectionStart ?? value.length;
+    const end = textarea?.selectionEnd ?? start;
+
+    const before = value.slice(0, start);
+    const after = value.slice(end);
+    const needsLeadingSpace = before.length > 0 && !/\s$/.test(before);
+    const insertion = `${needsLeadingSpace ? " " : ""}${trigger}`;
+    const nextValue = `${before}${insertion}${after}`;
+    const nextCaret = before.length + insertion.length;
+
+    textInput.setInput(nextValue);
+    requestAnimationFrame(() => {
+      const target = focusMessageInput();
+      if (!target) {
+        return;
+      }
+      target.focus();
+      target.setSelectionRange(nextCaret, nextCaret);
+    });
+  }, [focusMessageInput, textInput]);
+
+  const handleMentionKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+    if (hasPrimaryModifier && !event.altKey && event.key === "/") {
+      event.preventDefault();
+      insertMentionTrigger("/");
+      return;
+    }
+    if (
+      hasPrimaryModifier
+      && !event.altKey
+      && (event.key === "@" || (event.shiftKey && event.key === "2"))
+    ) {
+      event.preventDefault();
+      insertMentionTrigger("@");
+      return;
+    }
+
+    if (!mentionState) {
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMentionState(null);
+      return;
+    }
+
+    if (mentionState.trigger === "@" && event.key === "Tab") {
+      event.preventDefault();
+      setMentionAtSource((current) => (current === "context" ? "mcp" : "context"));
+      return;
+    }
+
+    const flatOptions = mentionGroups.flatMap((group) => group.options);
+    if (flatOptions.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setMentionActiveIndex((current) =>
+        (current + 1) % flatOptions.length,
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setMentionActiveIndex((current) =>
+        current === 0 ? flatOptions.length - 1 : current - 1,
+      );
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      const currentOption =
+        flatOptions[
+          Math.min(mentionActiveIndex, flatOptions.length - 1)
+        ];
+      if (currentOption) {
+        applyMentionOption(currentOption);
+      }
+    }
+  }, [applyMentionOption, insertMentionTrigger, mentionActiveIndex, mentionGroups, mentionState]);
+
   useEffect(() => {
     if (models.length === 0) {
       return;
