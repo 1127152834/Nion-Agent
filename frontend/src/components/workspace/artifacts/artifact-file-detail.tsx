@@ -43,6 +43,7 @@ import { useThread } from "../messages/context";
 import { Tooltip } from "../tooltip";
 
 import { useArtifacts } from "./context";
+import { WorkbenchContainer } from "./workbench-container";
 
 export function ArtifactFileDetail({
   className,
@@ -235,29 +236,31 @@ export function ArtifactFileDetail({
         </div>
       </ArtifactHeader>
       <ArtifactContent className="p-0">
-        {isSupportPreview &&
-          viewMode === "preview" &&
-          (language === "markdown" || language === "html") && (
-            <ArtifactFilePreview
-              filepath={filepath}
-              threadId={threadId}
-              content={displayContent}
-              language={language ?? "text"}
+        <WorkbenchContainer filepath={filepath} threadId={threadId}>
+          {isSupportPreview &&
+            viewMode === "preview" &&
+            (language === "markdown" || language === "html") && (
+              <ArtifactFilePreview
+                filepath={filepath}
+                threadId={threadId}
+                content={displayContent}
+                language={language ?? "text"}
+              />
+            )}
+          {isCodeFile && viewMode === "code" && (
+            <CodeEditor
+              className="size-full resize-none rounded-none border-none"
+              value={displayContent ?? ""}
+              readonly
             />
           )}
-        {isCodeFile && viewMode === "code" && (
-          <CodeEditor
-            className="size-full resize-none rounded-none border-none"
-            value={displayContent ?? ""}
-            readonly
-          />
-        )}
-        {!isCodeFile && (
-          <iframe
-            className="size-full"
-            src={urlOfArtifact({ filepath, threadId, isMock })}
-          />
-        )}
+          {!isCodeFile && (
+            <iframe
+              className="size-full"
+              src={urlOfArtifact({ filepath, threadId, isMock })}
+            />
+          )}
+        </WorkbenchContainer>
       </ArtifactContent>
     </Artifact>
   );
