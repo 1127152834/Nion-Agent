@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
+import { RSSContextProvider } from "@/core/rss";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
 
 const queryClient = new QueryClient();
@@ -31,14 +32,16 @@ export default function WorkspaceLayout({
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <SidebarProvider
-        className="h-screen"
-        open={open}
-        onOpenChange={handleOpenChange}
-      >
-        <WorkspaceSidebar />
-        <SidebarInset className="min-w-0">{children}</SidebarInset>
-      </SidebarProvider>
+      <RSSContextProvider>
+        <SidebarProvider
+          className="h-screen"
+          open={open}
+          onOpenChange={handleOpenChange}
+        >
+          <WorkspaceSidebar />
+          <SidebarInset className="min-w-0">{children}</SidebarInset>
+        </SidebarProvider>
+      </RSSContextProvider>
       <Toaster position="top-center" />
     </QueryClientProvider>
   );

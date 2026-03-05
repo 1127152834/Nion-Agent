@@ -164,6 +164,7 @@ export const enUS: Translations = {
     recentChats: "Recent chats",
     demoChats: "Demo chats",
     agents: "Agents",
+    rss: "News",
   },
 
   // Agents
@@ -204,6 +205,7 @@ export const enUS: Translations = {
   breadcrumb: {
     workspace: "Workspace",
     chats: "Chats",
+    rss: "News",
   },
 
   // Workspace
@@ -232,8 +234,67 @@ export const enUS: Translations = {
   pages: {
     appName: "Nion",
     chats: "Chats",
+    rss: "News",
     newChat: "New chat",
     untitled: "Untitled",
+  },
+
+  rssReader: {
+    title: "RSS Subscriptions",
+    entries: "Entries",
+    allFeeds: "All feeds",
+    addFeed: "Add feed",
+    addFeedDescription: "Paste an RSS/Atom URL to import the latest entries.",
+    feedUrlPlaceholder: "https://example.com/feed.xml",
+    feedCategoryPlaceholder: "Category (optional, e.g. tech)",
+    feedUrlRequired: "Feed URL is required",
+    feedUrlInvalid: "Invalid URL. Please use http/https.",
+    subscribe: "Subscribe",
+    refresh: "Refresh",
+    refreshAll: "Refresh list",
+    emptyFeeds: "No feeds yet. Add one to start reading.",
+    emptyEntries: "No entries found",
+    loadingEntries: "Loading entries...",
+    loadingEntry: "Loading article...",
+    loadingMore: "Loading more...",
+    loadMoreHint: "Scroll down to load more",
+    filterAll: "All",
+    filterUnread: "Unread",
+    filterStarred: "Starred",
+    markRead: "Mark read",
+    markUnread: "Mark unread",
+    star: "Star",
+    unstar: "Unstar",
+    askAI: "Ask AI",
+    summarize: "Summarize",
+    translate: "Translate",
+    askAIPrompt:
+      "Please explain the following passage using the current article context:\n\n{text}",
+    summarizePrompt: "Please provide a concise summary of this text:\n\n{text}",
+    translatePrompt:
+      "Please translate the following passage to Chinese and keep key details:\n\n{text}",
+    generateSummary: "Summarize article",
+    generateTranslation: "Translate article",
+    summaryTitle: "AI Summary",
+    translationTitle: "AI Translation",
+    summaryFailed: "Failed to generate summary",
+    translationFailed: "Failed to generate translation",
+    openOriginal: "Open original",
+    backToList: "Back to list",
+    aiPanelTitle: "AI Reader Assistant",
+    aiPanelDescription:
+      "Article context to chat integration is planned for the next phase. In this phase, RSS reading and curation workflows are available.",
+    feedAdded: "Subscribed successfully, imported {count} entries",
+    feedDeleted: "Feed deleted",
+    feedRefreshed: "Refresh complete, imported {count} new entries",
+    feedAddFailed: "Failed to add feed",
+    feedDeleteFailed: "Failed to delete feed",
+    feedRefreshFailed: "Failed to refresh feed",
+    feedDeleteConfirm:
+      "Delete feed \"{title}\"? This will remove all associated entries.",
+    entryUpdateFailed: "Failed to update entry status",
+    entryLoadFailed: "Failed to load entries",
+    entryNotFound: "Entry not found or has been removed",
   },
 
   // Tool calls

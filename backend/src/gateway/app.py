@@ -7,7 +7,7 @@ from fastapi import FastAPI
 
 from src.config.app_config import get_app_config
 from src.gateway.config import get_gateway_config
-from src.gateway.routers import agents, artifacts, config, mcp, memory, models, skills, uploads
+from src.gateway.routers import agents, artifacts, config, mcp, memory, models, rss, skills, uploads
 
 # Configure logging
 logging.basicConfig(
@@ -109,6 +109,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Create and manage custom agents with per-agent config and prompts",
             },
             {
+                "name": "rss",
+                "description": "RSS feed subscription, refresh and entry management",
+            },
+            {
                 "name": "health",
                 "description": "Health check and system status endpoints",
             },
@@ -141,6 +145,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Agents API is mounted at /api/agents
     app.include_router(agents.router)
+
+    # RSS API is mounted at /api/rss
+    app.include_router(rss.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

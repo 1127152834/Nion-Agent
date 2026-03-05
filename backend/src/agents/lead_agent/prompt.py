@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from src.config.agents_config import load_agent_soul
 from src.skills import load_skills
@@ -154,6 +155,7 @@ You are {agent_name}, an open-source super agent.
 
 {soul}
 {memory_context}
+{rss_context_section}
 
 <thinking_style>
 - Think concisely and strategically about the user's request BEFORE taking action
@@ -366,9 +368,64 @@ def get_agent_soul(agent_name: str | None) -> str:
     return ""
 
 
-def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagents: int = 3, *, agent_name: str | None = None, available_skills: set[str] | None = None) -> str:
+def _format_rss_context_section(rss_context: list[dict[str, Any]] | None) -> str:
+    if not rss_context:
+        return ""
+
+    lines: list[str] = []
+    for block in rss_context:
+        if not isinstance(block, dict):
+            continue
+        block_type = str(block.get("type", "")).strip()
+        title = str(block.get("title", "")).strip()
+        url = str(block.get("url", "")).strip()
+        summary = str(block.get("summary", "")).strip()
+        entry_id = str(block.get("entry_id", "")).strip()
+        feed_id = str(block.get("feed_id", "")).strip()
+
+        if block_type == "mainEntry":
+            lines.append("- Active article context:")
+            if title:
+                lines.append(f"  - Title: {title}")
+            if url:
+                lines.append(f"  - URL: {url}")
+            if summary:
+                lines.append(f"  - Summary: {summary[:800]}")
+            if entry_id:
+                lines.append(f"  - Entry ID: {entry_id}")
+        elif block_type == "mainFeed":
+            lines.append("- Active feed context:")
+            if title:
+                lines.append(f"  - Feed title: {title}")
+            if url:
+                lines.append(f"  - Feed URL: {url}")
+            if summary:
+                lines.append(f"  - Feed summary: {summary[:800]}")
+            if feed_id:
+                lines.append(f"  - Feed ID: {feed_id}")
+
+    if not lines:
+        return ""
+
+    return (
+        "<rss_context>\n"
+        "The user is currently browsing RSS content. Use this context first when questions mention \"this article\" or \"this feed\".\n"
+        + "\n".join(lines)
+        + "\n</rss_context>\n"
+    )
+
+
+def apply_prompt_template(
+    subagent_enabled: bool = False,
+    max_concurrent_subagents: int = 3,
+    *,
+    agent_name: str | None = None,
+    available_skills: set[str] | None = None,
+    rss_context: list[dict[str, Any]] | None = None,
+) -> str:
     # Get memory context
     memory_context = _get_memory_context(agent_name)
+    rss_context_section = _format_rss_context_section(rss_context)
 
     # Include subagent section only if enabled (from runtime parameter)
     n = max_concurrent_subagents
@@ -401,6 +458,7 @@ def apply_prompt_template(subagent_enabled: bool = False, max_concurrent_subagen
         soul=get_agent_soul(agent_name),
         skills_section=skills_section,
         memory_context=memory_context,
+        rss_context_section=rss_context_section,
         subagent_section=subagent_section,
         subagent_reminder=subagent_reminder,
         subagent_thinking=subagent_thinking,

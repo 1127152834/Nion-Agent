@@ -10,6 +10,7 @@ import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { getAPIClient } from "../api";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
+import { useRSSContext } from "../rss";
 import type { LocalSettings } from "../settings";
 import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
@@ -52,6 +53,7 @@ export function useThreadStream({
 
   const queryClient = useQueryClient();
   const updateSubtask = useUpdateSubtask();
+  const { blocks: rssContextBlocks } = useRSSContext();
   const thread = useStream<AgentThreadState>({
     client: getAPIClient(isMock),
     assistantId: "lead_agent",
@@ -249,6 +251,27 @@ export function useThreadStream({
           }),
         );
 
+        const rssContext = rssContextBlocks.map((block) => ({
+          type: block.type,
+          entry_id: block.type === "mainEntry" ? block.value : undefined,
+          feed_id: block.type === "mainFeed" ? block.value : block.metadata?.feed_id,
+          title: block.metadata?.title,
+          url: block.metadata?.url,
+          summary: block.metadata?.summary,
+        }));
+
+        const runtimeContext: Record<string, unknown> = {
+          ...extraContext,
+          ...context,
+          thinking_enabled: context.mode !== "flash",
+          is_plan_mode: context.mode === "pro" || context.mode === "ultra",
+          subagent_enabled: context.mode === "ultra",
+          thread_id: threadId,
+        };
+        if (rssContext.length > 0) {
+          runtimeContext.rss_context = rssContext;
+        }
+
         await thread.submit(
           {
             messages: [
@@ -273,14 +296,7 @@ export function useThreadStream({
             config: {
               recursion_limit: 1000,
             },
-            context: {
-              ...extraContext,
-              ...context,
-              thinking_enabled: context.mode !== "flash",
-              is_plan_mode: context.mode === "pro" || context.mode === "ultra",
-              subagent_enabled: context.mode === "ultra",
-              thread_id: threadId,
-            },
+            context: runtimeContext,
           },
         );
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
@@ -289,7 +305,7 @@ export function useThreadStream({
         throw error;
       }
     },
-    [thread, t.uploads.uploadingFiles, onStart, context, queryClient],
+    [rssContextBlocks, thread, t.uploads.uploadingFiles, onStart, context, queryClient],
   );
 
   // Merge thread with optimistic messages for display
