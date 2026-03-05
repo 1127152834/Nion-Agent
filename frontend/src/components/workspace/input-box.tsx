@@ -71,6 +71,175 @@ import { Tooltip } from "./tooltip";
 
 type InputMode = "flash" | "thinking" | "pro" | "ultra";
 
+// Mention system types
+type MentionTrigger = "@" | "/";
+type MentionAtSource = "context" | "mcp";
+
+interface MentionOption {
+  id: string;
+  label: string;
+  value: string;
+  kind: "file" | "directory" | "skill" | "mcp";
+  description?: string;
+}
+
+interface MentionState {
+  trigger: MentionTrigger;
+  query: string;
+  start: number;
+  end: number;
+}
+
+interface SelectedContextTag {
+  value: string;
+  kind: "file" | "directory";
+}
+
+interface RecentMentionsState {
+  "@": string[];
+  "/": string[];
+}
+
+// Mention system utility functions
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/{2,}/g, "/");
+}
+
+function basename(path: string): string {
+  const normalized = normalizePath(path).replace(/\/$/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? normalized;
+}
+
+function dirname(path: string): string {
+  const normalized = normalizePath(path).replace(/\/$/, "");
+  const index = normalized.lastIndexOf("/");
+  if (index <= 0) {
+    return "/";
+  }
+  return normalized.slice(0, index);
+}
+
+function buildPathMentionOptions(paths: string[]): MentionOption[] {
+  const fileSet = new Set<string>();
+  const directorySet = new Set<string>();
+
+  for (const rawPath of paths) {
+    const normalized = normalizePath(rawPath).trim();
+    if (!normalized) {
+      continue;
+    }
+
+    const isDirectoryInput = normalized.endsWith("/");
+    const pathWithoutTrailingSlash = normalized.replace(/\/+$/, "");
+    if (!pathWithoutTrailingSlash) {
+      continue;
+    }
+
+    if (isDirectoryInput) {
+      directorySet.add(pathWithoutTrailingSlash);
+    } else {
+      fileSet.add(pathWithoutTrailingSlash);
+    }
+
+    const parts = pathWithoutTrailingSlash.split("/").filter(Boolean);
+    const rootsPrefix = pathWithoutTrailingSlash.startsWith("/") ? "/" : "";
+    let current = "";
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      current = `${current}/${parts[index]}`;
+      directorySet.add(`${rootsPrefix}${current}`.replace(/\/{2,}/g, "/"));
+    }
+  }
+
+  const directoryOptions: MentionOption[] = [...directorySet]
+    .filter((path) => path !== "/mnt" && path !== "mnt")
+    .sort((a, b) => a.localeCompare(b))
+    .map((path) => ({
+      id: `dir:${path}`,
+      label: basename(path),
+      value: path,
+      kind: "directory" as const,
+      description: path,
+    }));
+  const fileOptions: MentionOption[] = [...fileSet]
+    .sort((a, b) => a.localeCompare(b))
+    .map((path) => ({
+      id: `file:${path}`,
+      label: basename(path),
+      value: path,
+      kind: "file" as const,
+      description: path,
+    }));
+  return [...directoryOptions, ...fileOptions];
+}
+
+function resolveMentionState(value: string, caret: number): MentionState | null {
+  const safeCaret = Math.max(0, Math.min(caret, value.length));
+  if (safeCaret <= 0) {
+    return null;
+  }
+
+  const triggerChar = value.charAt(safeCaret - 1);
+  if (triggerChar !== "@" && triggerChar !== "/") {
+    return null;
+  }
+  const trigger = triggerChar as MentionTrigger;
+  const start = safeCaret - 1;
+  const prevChar = start > 0 ? value.charAt(start - 1) : "";
+  if (start > 0 && !/\s/.test(prevChar)) {
+    return null;
+  }
+
+  return {
+    trigger,
+    query: "",
+    start,
+    end: safeCaret,
+  };
+}
+
+function rankMentionOption(option: MentionOption, normalizedQuery: string): number {
+  if (!normalizedQuery) {
+    return 0;
+  }
+  const label = option.label.toLowerCase();
+  const value = option.value.toLowerCase();
+  const description = option.description?.toLowerCase() ?? "";
+
+  if (label === normalizedQuery || value === normalizedQuery) {
+    return 5;
+  }
+  if (label.startsWith(normalizedQuery) || value.startsWith(normalizedQuery)) {
+    return 4;
+  }
+  if (label.includes(normalizedQuery) || value.includes(normalizedQuery)) {
+    return 3;
+  }
+
+  if (description.includes(normalizedQuery)) {
+    return 2;
+  }
+
+  const terms = normalizedQuery.split(/\s+/).filter(Boolean);
+  if (terms.length > 1) {
+    const matchedAllTerms = terms.every(
+      (term) =>
+        label.includes(term) || value.includes(term) || description.includes(term),
+    );
+    if (matchedAllTerms) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+function removeLooseMentionTriggers(value: string): string {
+  return value
+    .replace(/(^|[\s\n])@(?=$|[\s\n])/g, "$1")
+    .replace(/(^|[\s\n])\/(?=$|[\s\n])/g, "$1");
+}
+
 function getResolvedMode(
   mode: InputMode | undefined,
   supportsThinking: boolean,
