@@ -4,6 +4,7 @@ import "katex/dist/katex.min.css";
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
+import { PluginInitializer } from "@/components/plugin-initializer";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/core/i18n/context";
 import { detectLocaleServer } from "@/core/i18n/server";
@@ -30,6 +31,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body>
+        <PluginInitializer />
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
           <I18nProvider initialLocale={locale}>{children}</I18nProvider>
         </ThemeProvider>
