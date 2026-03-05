@@ -176,3 +176,28 @@ def test_summarize_and_translate_entry_with_cache(rss_client):
         "cached": True,
     }
     translate_mock.assert_called_once()
+
+
+def test_discover_sources_support_keyword_and_category(rss_client):
+    response = rss_client.get("/api/rss/discover/sources")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sources"]
+    assert payload["categories"]
+
+    programming_response = rss_client.get(
+        "/api/rss/discover/sources",
+        params={"category": "programming"},
+    )
+    assert programming_response.status_code == 200
+    programming_payload = programming_response.json()
+    assert programming_payload["sources"]
+    assert all(item["category"] == "programming" for item in programming_payload["sources"])
+
+    search_response = rss_client.get(
+        "/api/rss/discover/sources",
+        params={"q": "hacker news"},
+    )
+    assert search_response.status_code == 200
+    search_payload = search_response.json()
+    assert any("hacker news" in item["title"].lower() for item in search_payload["sources"])

@@ -54,6 +54,29 @@ export interface RSSEntryTranslationResponse {
   cached: boolean;
 }
 
+export interface RSSDiscoverCategory {
+  id: string;
+  label: string;
+  count: number;
+}
+
+export interface RSSDiscoverSource {
+  id: string;
+  title: string;
+  feed_url: string;
+  site_url: string;
+  description: string;
+  category: string;
+  language: string;
+  tags: string[];
+  featured: boolean;
+}
+
+export interface RSSDiscoverSourcesResponse {
+  categories: RSSDiscoverCategory[];
+  sources: RSSDiscoverSource[];
+}
+
 export interface AddRSSFeedRequest {
   url: string;
   category?: string;
@@ -75,4 +98,10 @@ export interface ListRSSEntriesParams {
   limit?: number;
   cursor?: string | null;
   filter?: RSSEntryFilter;
+}
+
+export interface ListRSSDiscoverSourcesParams {
+  q?: string;
+  category?: string;
+  limit?: number;
 }

@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from src.database.models.rss import Entry, Feed
-from src.services import rss_ai, rss_store
+from src.services import rss_ai, rss_discovery, rss_store
 from src.services.rss_parser import RSSParseError
 
 router = APIRouter(prefix="/api/rss", tags=["rss"])
@@ -65,6 +65,35 @@ class TranslateEntryResponse(BaseModel):
     language: str
     content: str
     cached: bool
+
+
+class DiscoverCategoryResponse(BaseModel):
+    """Discover category metadata."""
+
+    id: str
+    label: str
+    count: int
+
+
+class DiscoverSourceResponse(BaseModel):
+    """Curated source card for discover page."""
+
+    id: str
+    title: str
+    feed_url: str
+    site_url: str
+    description: str
+    category: str
+    language: str
+    tags: list[str]
+    featured: bool
+
+
+class DiscoverSourcesResponse(BaseModel):
+    """Response for discover source listing."""
+
+    categories: list[DiscoverCategoryResponse]
+    sources: list[DiscoverSourceResponse]
 
 
 @router.post(
@@ -242,4 +271,49 @@ async def translate_entry(entry_id: str, request: TranslateEntryRequest) -> Tran
         language=translation.language,
         content=translation.content,
         cached=False,
+    )
+
+
+@router.get(
+    "/discover/sources",
+    response_model=DiscoverSourcesResponse,
+    summary="List Discover Sources",
+    description="List curated RSS sources for the discover page with category and keyword filters.",
+)
+async def list_discover_sources(
+    q: str | None = Query(default=None, description="Keyword for fuzzy search"),
+    category: str = Query(default="all", description="Discover category"),
+    limit: int = Query(default=60, ge=1, le=200, description="Maximum number of sources"),
+) -> DiscoverSourcesResponse:
+    sources = rss_discovery.list_sources(keyword=q, category=category, limit=limit)
+
+    counts: dict[str, int] = {"all": len(sources)}
+    for source in sources:
+        counts[source.category] = counts.get(source.category, 0) + 1
+
+    categories = [
+        DiscoverCategoryResponse(
+            id=category_item.id,
+            label=category_item.label,
+            count=counts.get(category_item.id, 0),
+        )
+        for category_item in rss_discovery.list_categories()
+    ]
+
+    return DiscoverSourcesResponse(
+        categories=categories,
+        sources=[
+            DiscoverSourceResponse(
+                id=source.id,
+                title=source.title,
+                feed_url=source.feed_url,
+                site_url=source.site_url,
+                description=source.description,
+                category=source.category,
+                language=source.language,
+                tags=list(source.tags),
+                featured=source.featured,
+            )
+            for source in sources
+        ],
     )

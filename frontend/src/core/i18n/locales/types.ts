@@ -183,6 +183,13 @@ export interface Translations {
     subscribe: string;
     refresh: string;
     refreshAll: string;
+    discoverTitle: string;
+    discoverSearchPlaceholder: string;
+    discoverEmpty: string;
+    discoverLoadFailed: string;
+    discoverFeatured: string;
+    discoverSubscribed: string;
+    discoverAlreadySubscribed: string;
     emptyFeeds: string;
     emptyEntries: string;
     loadingEntries: string;

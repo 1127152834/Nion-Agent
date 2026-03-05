@@ -2,7 +2,9 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type {
   AddRSSFeedRequest,
+  ListRSSDiscoverSourcesParams,
   RSSFeed,
+  RSSDiscoverSourcesResponse,
   RSSFeedListResponse,
   RSSFeedMutationResponse,
   RSSEntry,
@@ -253,4 +255,35 @@ export async function translateRSSEntry(
     throw new Error("Invalid response when translating RSS entry");
   }
   return payload;
+}
+
+export async function listRSSDiscoverSources(
+  params: ListRSSDiscoverSourcesParams = {},
+): Promise<RSSDiscoverSourcesResponse> {
+  const search = new URLSearchParams();
+  if (params.q) {
+    search.set("q", params.q);
+  }
+  if (params.category && params.category !== "all") {
+    search.set("category", params.category);
+  }
+  if (params.limit) {
+    search.set("limit", String(params.limit));
+  }
+
+  const query = search.toString();
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/rss/discover/sources${query ? `?${query}` : ""}`,
+  );
+  const payload = (await parseJSONOrNull(response)) as RSSDiscoverSourcesResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to load RSS discover sources (${response.status})`,
+    );
+  }
+  return {
+    categories: payload?.categories ?? [],
+    sources: payload?.sources ?? [],
+  };
 }

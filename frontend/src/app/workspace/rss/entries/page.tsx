@@ -1,9 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
-import { EntryList, FeedList, normalizeRSSEntryFilter } from "@/components/rss";
+import { EntryList, RSSNavTabs, normalizeRSSEntryFilter } from "@/components/rss";
 import {
   WorkspaceBody,
   WorkspaceContainer,
@@ -11,6 +12,12 @@ import {
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
 import type { RSSEntryFilter } from "@/core/rss";
+
+// Disable SSR for FeedList to prevent Radix UI Dialog hydration mismatch
+const FeedList = dynamic(
+  () => import("@/components/rss").then((mod) => ({ default: mod.FeedList })),
+  { ssr: false },
+);
 
 export default function RSSEntriesPage() {
   const { t } = useI18n();
@@ -51,26 +58,29 @@ export default function RSSEntriesPage() {
     <WorkspaceContainer>
       <WorkspaceHeader />
       <WorkspaceBody className="min-h-0">
-        <div className="grid size-full min-h-0 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <FeedList
-            selectedFeedId={selectedFeedId}
-            onSelectFeed={(feedId) =>
-              updateQuery({
-                feedId,
-                filter: selectedFilter,
-              })
-            }
-          />
-          <EntryList
-            selectedFeedId={selectedFeedId}
-            filter={selectedFilter}
-            onFilterChange={(filter) =>
-              updateQuery({
-                feedId: selectedFeedId,
-                filter,
-              })
-            }
-          />
+        <div className="flex size-full min-h-0 flex-col">
+          <RSSNavTabs />
+          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
+            <FeedList
+              selectedFeedId={selectedFeedId}
+              onSelectFeed={(feedId) =>
+                updateQuery({
+                  feedId,
+                  filter: selectedFilter,
+                })
+              }
+            />
+            <EntryList
+              selectedFeedId={selectedFeedId}
+              filter={selectedFilter}
+              onFilterChange={(filter) =>
+                updateQuery({
+                  feedId: selectedFeedId,
+                  filter,
+                })
+              }
+            />
+          </div>
         </div>
       </WorkspaceBody>
     </WorkspaceContainer>

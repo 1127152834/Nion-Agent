@@ -10,6 +10,7 @@ import {
   deleteRSSFeed,
   getRSSEntry,
   getRSSFeed,
+  listRSSDiscoverSources,
   listRSSEntries,
   listRSSFeeds,
   refreshRSSFeed,
@@ -19,6 +20,7 @@ import {
 } from "./api";
 import type {
   AddRSSFeedRequest,
+  ListRSSDiscoverSourcesParams,
   ListRSSEntriesParams,
   RSSEntryFilter,
   TranslateRSSEntryRequest,
@@ -27,6 +29,7 @@ import type {
 
 const RSS_FEEDS_QUERY_KEY = ["rss", "feeds"] as const;
 const RSS_ENTRIES_QUERY_KEY = ["rss", "entries"] as const;
+const RSS_DISCOVER_QUERY_KEY = ["rss", "discover"] as const;
 
 export function useRSSFeeds() {
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
@@ -180,4 +183,25 @@ export function useTranslateRSSEntry() {
       request?: TranslateRSSEntryRequest;
     }) => translateRSSEntry(entryId, request),
   });
+}
+
+export function useRSSDiscoverSources(params: ListRSSDiscoverSourcesParams) {
+  const { data, isLoading, error, refetch, isRefetching } = useQuery({
+    queryKey: [
+      ...RSS_DISCOVER_QUERY_KEY,
+      params.q ?? "",
+      params.category ?? "all",
+      params.limit ?? 60,
+    ],
+    queryFn: () => listRSSDiscoverSources(params),
+  });
+
+  return {
+    categories: data?.categories ?? [],
+    sources: data?.sources ?? [],
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+  };
 }
