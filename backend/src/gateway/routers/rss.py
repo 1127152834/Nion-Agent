@@ -316,9 +316,15 @@ async def translate_entry(entry_id: str, request: TranslateEntryRequest) -> Tran
 async def list_discover_sources(
     q: str | None = Query(default=None, description="Keyword for fuzzy search"),
     category: str = Query(default="all", description="Discover category"),
+    language: str = Query(default="all", description="Language filter"),
     limit: int = Query(default=60, ge=1, le=200, description="Maximum number of sources"),
 ) -> DiscoverSourcesResponse:
-    all_sources = rss_discovery.list_sources(keyword=q, category="all", limit=200)
+    all_sources = rss_discovery.list_sources(
+        keyword=q,
+        category="all",
+        language=language,
+        limit=200,
+    )
     if category and category != "all":
         filtered_sources = [item for item in all_sources if item.category == category]
     else:

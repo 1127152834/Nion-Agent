@@ -121,12 +121,16 @@ function buildRSSHubFeedURL(instance: string, route: string) {
 export function DiscoverPanel({
   keyword,
   category,
+  language,
   onKeywordChange,
+  onLanguageChange,
   onCategoryChange,
 }: {
   keyword: string;
   category: string;
+  language: string;
   onKeywordChange: (value: string) => void;
+  onLanguageChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
 }) {
   const { t } = useI18n();
@@ -151,6 +155,7 @@ export function DiscoverPanel({
     useRSSDiscoverSources({
       q: keyword || undefined,
       category,
+      language,
       limit: 100,
     });
 
@@ -776,6 +781,36 @@ export function DiscoverPanel({
             </div>
           </section>
         )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground text-xs">
+            {t.rssReader.discoverLanguageLabel}
+          </span>
+          <Button
+            size="sm"
+            variant={language === "all" ? "default" : "outline"}
+            className="h-7 rounded-full px-2 text-xs"
+            onClick={() => onLanguageChange("all")}
+          >
+            {t.rssReader.discoverLanguageAll}
+          </Button>
+          <Button
+            size="sm"
+            variant={language === "zh" ? "default" : "outline"}
+            className="h-7 rounded-full px-2 text-xs"
+            onClick={() => onLanguageChange("zh")}
+          >
+            {t.rssReader.discoverLanguageChinese}
+          </Button>
+          <Button
+            size="sm"
+            variant={language === "en" ? "default" : "outline"}
+            className="h-7 rounded-full px-2 text-xs"
+            onClick={() => onLanguageChange("en")}
+          >
+            {t.rssReader.discoverLanguageEnglish}
+          </Button>
+        </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">

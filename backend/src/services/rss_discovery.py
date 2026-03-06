@@ -478,14 +478,18 @@ def list_sources(
     *,
     keyword: str | None = None,
     category: str | None = None,
+    language: str | None = None,
     limit: int = 60,
 ) -> list[DiscoverSource]:
     normalized_keyword = (keyword or "").strip().lower()
     normalized_category = (category or "all").strip().lower()
+    normalized_language = (language or "all").strip().lower()
 
     items = list(_SOURCES)
     if normalized_category and normalized_category != "all":
         items = [item for item in items if item.category == normalized_category]
+    if normalized_language and normalized_language != "all":
+        items = [item for item in items if item.language == normalized_language]
 
     if normalized_keyword:
         def _matches(source: DiscoverSource) -> bool:

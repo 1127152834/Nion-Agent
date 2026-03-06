@@ -275,6 +275,10 @@ export const enUS: Translations = {
     discoverSortFeatured: "Featured",
     discoverSortTitle: "Title",
     discoverSortSite: "Site",
+    discoverLanguageLabel: "Language",
+    discoverLanguageAll: "All",
+    discoverLanguageChinese: "Chinese",
+    discoverLanguageEnglish: "English",
     rsshubTool: "RSSHub",
     rsshubDialogTitle: "Generate feed via RSSHub",
     rsshubDialogDescription:

@@ -202,6 +202,15 @@ def test_discover_sources_support_keyword_and_category(rss_client):
     search_payload = search_response.json()
     assert any("hacker news" in item["title"].lower() for item in search_payload["sources"])
 
+    zh_response = rss_client.get(
+        "/api/rss/discover/sources",
+        params={"language": "zh"},
+    )
+    assert zh_response.status_code == 200
+    zh_payload = zh_response.json()
+    assert zh_payload["sources"]
+    assert all(item["language"] == "zh" for item in zh_payload["sources"])
+
 
 def test_list_rsshub_routes(rss_client):
     response = rss_client.get("/api/rss/discover/rsshub/routes")

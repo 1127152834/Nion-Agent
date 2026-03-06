@@ -270,6 +270,9 @@ export async function listRSSDiscoverSources(
   if (params.category && params.category !== "all") {
     search.set("category", params.category);
   }
+  if (params.language && params.language !== "all") {
+    search.set("language", params.language);
+  }
   if (params.limit) {
     search.set("limit", String(params.limit));
   }

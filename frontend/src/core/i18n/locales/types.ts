@@ -204,6 +204,10 @@ export interface Translations {
     discoverSortFeatured: string;
     discoverSortTitle: string;
     discoverSortSite: string;
+    discoverLanguageLabel: string;
+    discoverLanguageAll: string;
+    discoverLanguageChinese: string;
+    discoverLanguageEnglish: string;
     rsshubTool: string;
     rsshubDialogTitle: string;
     rsshubDialogDescription: string;

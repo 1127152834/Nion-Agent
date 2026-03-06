@@ -128,6 +128,7 @@ export interface ListRSSEntriesParams {
 export interface ListRSSDiscoverSourcesParams {
   q?: string;
   category?: string;
+  language?: string;
   limit?: number;
 }
 

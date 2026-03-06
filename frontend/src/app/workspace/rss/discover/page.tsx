@@ -19,6 +19,7 @@ export default function RSSDiscoverPage() {
   const searchParams = useSearchParams();
 
   const keyword = searchParams.get("q") ?? "";
+  const language = (searchParams.get("language") ?? "all").trim().toLowerCase();
   const category = "all";
   const legacyCategory = (searchParams.get("category") ?? "all").trim().toLowerCase();
 
@@ -29,9 +30,9 @@ export default function RSSDiscoverPage() {
   useEffect(() => {
     // Backward compatibility for old query-style category URLs.
     if (legacyCategory !== "all") {
-      router.replace(buildRSSDiscoverPath(legacyCategory, keyword));
+      router.replace(buildRSSDiscoverPath(legacyCategory, keyword, language));
     }
-  }, [keyword, legacyCategory, router]);
+  }, [keyword, language, legacyCategory, router]);
 
   return (
     <WorkspaceContainer>
@@ -43,11 +44,15 @@ export default function RSSDiscoverPage() {
             <DiscoverPanel
               keyword={keyword}
               category={category}
+              language={language}
               onKeywordChange={(q) =>
-                router.replace(buildRSSDiscoverPath(category, q))
+                router.replace(buildRSSDiscoverPath(category, q, language))
+              }
+              onLanguageChange={(nextLanguage) =>
+                router.replace(buildRSSDiscoverPath(category, keyword, nextLanguage))
               }
               onCategoryChange={(nextCategory) =>
-                router.replace(buildRSSDiscoverPath(nextCategory, keyword))
+                router.replace(buildRSSDiscoverPath(nextCategory, keyword, language))
               }
             />
           </div>

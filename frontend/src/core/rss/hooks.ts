@@ -195,6 +195,7 @@ export function useRSSDiscoverSources(params: ListRSSDiscoverSourcesParams) {
       ...RSS_DISCOVER_QUERY_KEY,
       params.q ?? "",
       params.category ?? "all",
+      params.language ?? "all",
       params.limit ?? 60,
     ],
     queryFn: () => listRSSDiscoverSources(params),
