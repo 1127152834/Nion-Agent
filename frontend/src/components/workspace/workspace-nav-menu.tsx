@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BugIcon,
   ChevronsUpDown,
   GlobeIcon,
   InfoIcon,
@@ -27,7 +26,6 @@ import {
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/core/i18n/hooks";
 
-import { GithubIcon } from "./github-icon";
 import { SettingsDialog } from "./settings";
 
 function NavMenuButtonContent({
@@ -106,27 +104,6 @@ export function WorkspaceNavMenu() {
                     <DropdownMenuItem>
                       <GlobeIcon />
                       {t.workspace.officialWebsite}
-                    </DropdownMenuItem>
-                  </a>
-                  <a
-                    href="https://github.com/huanxi/nion"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <DropdownMenuItem>
-                      <GithubIcon />
-                      {t.workspace.visitGithub}
-                    </DropdownMenuItem>
-                  </a>
-                  <DropdownMenuSeparator />
-                  <a
-                    href="https://github.com/huanxi/nion/issues"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <DropdownMenuItem>
-                      <BugIcon />
-                      {t.workspace.reportIssue}
                     </DropdownMenuItem>
                   </a>
                   <a href="mailto:support@nion.tech">

@@ -94,29 +94,9 @@ export default function ChatPage() {
     <ThreadContext.Provider value={{ thread, isMock }}>
       <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">
-          <header
-            className={cn(
-              "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center px-4",
-              isNewThread
-                ? "bg-background/0 backdrop-blur-none"
-                : "bg-background/80 shadow-xs backdrop-blur",
-            )}
-          >
-            <div className="flex w-full items-center text-sm font-medium">
-              <ThreadTitle threadId={threadId} thread={thread} />
-            </div>
-            <div className="flex items-center gap-1">
-              <WorkingDirectoryTrigger />
-              <ArtifactCenter threadId={threadId} />
-            </div>
-          </header>
           <main className="flex min-h-0 max-w-full grow flex-col">
             <div className="flex size-full justify-center">
-              <MessageList
-                className={cn("size-full", !isNewThread && "pt-10")}
-                threadId={threadId}
-                thread={thread}
-              />
+              <MessageList className="size-full" threadId={threadId} thread={thread} />
             </div>
             <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
               <div
@@ -139,6 +119,17 @@ export default function ChatPage() {
                     />
                   </div>
                 </div>
+                {!isNewThread && (
+                  <div className="bg-background/70 mb-2 flex items-center justify-between gap-2 rounded-xl border px-3 py-2 backdrop-blur">
+                    <div className="min-w-0 text-sm font-medium">
+                      <ThreadTitle threadId={threadId} thread={thread} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <WorkingDirectoryTrigger />
+                      <ArtifactCenter threadId={threadId} />
+                    </div>
+                  </div>
+                )}
                 <InputBox
                   className={cn("bg-background/5 w-full -translate-y-4")}
                   isNewThread={isNewThread}
