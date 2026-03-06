@@ -264,6 +264,12 @@ export const enUS: Translations = {
     discoverFeatured: "Featured",
     discoverSubscribed: "Subscribed",
     discoverAlreadySubscribed: "This feed is already subscribed",
+    discoverPreview: "Preview",
+    discoverPreviewTitle: "Feed preview",
+    discoverPreviewLoading: "Loading preview content...",
+    discoverPreviewFailed: "Failed to load preview",
+    discoverPreviewEmpty: "No previewable entries available for this feed",
+    discoverPreviewRecentEntries: "Recent entries",
     subscriptionsNavTitle: "Subscriptions",
     discoverNavDescription:
       "Explore curated feeds, RSSHub templates, and import tools.",

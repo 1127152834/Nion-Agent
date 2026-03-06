@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from src.database.models.rss import Entry, Feed
 from src.services import rss_ai, rss_discovery, rss_opml, rss_store
-from src.services.rss_parser import RSSParseError
+from src.services.rss_parser import RSSParseError, parse_rss_feed
 
 router = APIRouter(prefix="/api/rss", tags=["rss"])
 
@@ -94,6 +94,27 @@ class DiscoverSourcesResponse(BaseModel):
 
     categories: list[DiscoverCategoryResponse]
     sources: list[DiscoverSourceResponse]
+
+
+class DiscoverPreviewEntryResponse(BaseModel):
+    """Single preview entry for discover feed preview."""
+
+    title: str
+    url: str
+    description: str
+    author: str | None
+    published_at: str
+
+
+class DiscoverPreviewResponse(BaseModel):
+    """Discover feed preview payload."""
+
+    title: str
+    feed_url: str
+    site_url: str | None
+    description: str | None
+    image: str | None
+    entries: list[DiscoverPreviewEntryResponse]
 
 
 class RSSHubRouteParamResponse(BaseModel):
@@ -372,6 +393,41 @@ async def list_discover_sources(
                 featured=source.featured,
             )
             for source in sources
+        ],
+    )
+
+
+@router.get(
+    "/discover/preview",
+    response_model=DiscoverPreviewResponse,
+    summary="Preview Discover Source",
+    description="Parse a feed URL and return recent entries for preview before subscribing.",
+)
+async def preview_discover_source(
+    url: str = Query(..., min_length=1, description="RSS/Atom URL"),
+    limit: int = Query(default=6, ge=1, le=20, description="Maximum entries for preview"),
+) -> DiscoverPreviewResponse:
+    try:
+        parsed = parse_rss_feed(url)
+    except RSSParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    entries = parsed.entries[:limit]
+    return DiscoverPreviewResponse(
+        title=parsed.title,
+        feed_url=parsed.url,
+        site_url=parsed.site_url,
+        description=parsed.description,
+        image=parsed.image,
+        entries=[
+            DiscoverPreviewEntryResponse(
+                title=item.title,
+                url=item.url,
+                description=item.description,
+                author=item.author,
+                published_at=item.published_at.isoformat(),
+            )
+            for item in entries
         ],
     )
 

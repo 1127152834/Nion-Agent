@@ -4,9 +4,11 @@ import type {
   AddRSSFeedRequest,
   ListRSSHubRoutesParams,
   ListRSSDiscoverSourcesParams,
+  PreviewRSSDiscoverSourceParams,
   ParseOPMLResponse,
   RSSFeed,
   RSSHubRoutesResponse,
+  RSSDiscoverPreviewResponse,
   RSSDiscoverSourcesResponse,
   RSSFeedListResponse,
   RSSFeedMutationResponse,
@@ -322,6 +324,31 @@ export async function listRSSHubRoutes(
   return {
     routes: payload?.routes ?? [],
   };
+}
+
+export async function previewRSSDiscoverSource(
+  params: PreviewRSSDiscoverSourceParams,
+): Promise<RSSDiscoverPreviewResponse> {
+  const search = new URLSearchParams();
+  search.set("url", params.url);
+  if (params.limit) {
+    search.set("limit", String(params.limit));
+  }
+
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/rss/discover/preview?${search.toString()}`,
+  );
+  const payload = (await parseJSONOrNull(response)) as RSSDiscoverPreviewResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to preview RSS discover source (${response.status})`,
+    );
+  }
+  if (!payload) {
+    throw new Error("Invalid response when previewing RSS discover source");
+  }
+  return payload;
 }
 
 export async function parseRSSOPML(file: File): Promise<ParseOPMLResponse> {

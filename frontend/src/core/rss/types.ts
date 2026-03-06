@@ -77,6 +77,23 @@ export interface RSSDiscoverSourcesResponse {
   sources: RSSDiscoverSource[];
 }
 
+export interface RSSDiscoverPreviewEntry {
+  title: string;
+  url: string;
+  description: string;
+  author: string | null;
+  published_at: string;
+}
+
+export interface RSSDiscoverPreviewResponse {
+  title: string;
+  feed_url: string;
+  site_url: string | null;
+  description: string | null;
+  image: string | null;
+  entries: RSSDiscoverPreviewEntry[];
+}
+
 export interface RSSHubRouteParam {
   key: string;
   label: string;
@@ -140,6 +157,11 @@ export interface ListRSSDiscoverSourcesParams {
   q?: string;
   category?: string;
   language?: string;
+  limit?: number;
+}
+
+export interface PreviewRSSDiscoverSourceParams {
+  url: string;
   limit?: number;
 }
 

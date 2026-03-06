@@ -195,6 +195,12 @@ export interface Translations {
     discoverFeatured: string;
     discoverSubscribed: string;
     discoverAlreadySubscribed: string;
+    discoverPreview: string;
+    discoverPreviewTitle: string;
+    discoverPreviewLoading: string;
+    discoverPreviewFailed: string;
+    discoverPreviewEmpty: string;
+    discoverPreviewRecentEntries: string;
     subscriptionsNavTitle: string;
     discoverNavDescription: string;
     subscriptionsNavDescription: string;

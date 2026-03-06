@@ -11,6 +11,7 @@ import {
   getRSSEntry,
   getRSSFeed,
   listRSSHubRoutes,
+  previewRSSDiscoverSource,
   listRSSDiscoverSources,
   listRSSEntries,
   listRSSFeeds,
@@ -24,6 +25,7 @@ import type {
   AddRSSFeedRequest,
   ListRSSDiscoverSourcesParams,
   ListRSSHubRoutesParams,
+  PreviewRSSDiscoverSourceParams,
   ListRSSEntriesParams,
   RSSEntryFilter,
   TranslateRSSEntryRequest,
@@ -234,5 +236,12 @@ export function useRSSHubRoutes(params: ListRSSHubRoutesParams) {
 export function useParseRSSOPML() {
   return useMutation({
     mutationFn: (file: File) => parseRSSOPML(file),
+  });
+}
+
+export function usePreviewRSSDiscoverSource() {
+  return useMutation({
+    mutationFn: (params: PreviewRSSDiscoverSourceParams) =>
+      previewRSSDiscoverSource(params),
   });
 }

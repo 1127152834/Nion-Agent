@@ -3,6 +3,7 @@
 import {
   ArrowRightIcon,
   CompassIcon,
+  EyeIcon,
   ExternalLinkIcon,
   FileUpIcon,
   Link2Icon,
@@ -31,12 +32,14 @@ import { useI18n } from "@/core/i18n/hooks";
 import {
   useAddRSSFeed,
   useParseRSSOPML,
+  usePreviewRSSDiscoverSource,
   useRSSDiscoverSources,
   useRSSFeeds,
   useRSSHubRoutes,
 } from "@/core/rss";
 import type {
   OPMLSource,
+  RSSDiscoverPreviewResponse,
   RSSDiscoverSource,
   RSSHubRoute,
 } from "@/core/rss";
@@ -172,6 +175,13 @@ export function DiscoverPanel({
   );
   const [importingOPML, setImportingOPML] = useState(false);
   const [sortMode, setSortMode] = useState<DiscoverSortMode>("featured");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSource, setPreviewSource] = useState<RSSDiscoverSource | null>(
+    null,
+  );
+  const [previewData, setPreviewData] = useState<RSSDiscoverPreviewResponse | null>(
+    null,
+  );
 
   const { categories, sources, isLoading, isRefetching, refetch, error } =
     useRSSDiscoverSources({
@@ -194,6 +204,7 @@ export function DiscoverPanel({
   const { feeds } = useRSSFeeds();
   const addFeedMutation = useAddRSSFeed();
   const parseOPMLMutation = useParseRSSOPML();
+  const previewDiscoverMutation = usePreviewRSSDiscoverSource();
 
   const subscribedFeedMap = useMemo(
     () =>
@@ -326,6 +337,23 @@ export function DiscoverPanel({
       feed_url: rsshubPreviewURL,
       category: "rsshub",
     });
+  };
+
+  const handlePreviewSource = async (source: RSSDiscoverSource) => {
+    setPreviewSource(source);
+    setPreviewOpen(true);
+    setPreviewData(null);
+    try {
+      const payload = await previewDiscoverMutation.mutateAsync({
+        url: source.feed_url,
+        limit: 6,
+      });
+      setPreviewData(payload);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : t.rssReader.discoverPreviewFailed,
+      );
+    }
   };
 
   const handleSelectRSSHubRoute = (route: RSSHubRoute) => {
@@ -481,6 +509,15 @@ export function DiscoverPanel({
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void handlePreviewSource(source)}
+              disabled={previewDiscoverMutation.isPending}
+            >
+              <EyeIcon className="size-4" />
+              {t.rssReader.discoverPreview}
+            </Button>
             <Button
               size="sm"
               className="flex-1"
@@ -825,6 +862,68 @@ export function DiscoverPanel({
           </Button>
         </div>
       </header>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>
+              {t.rssReader.discoverPreviewTitle}
+              {previewData?.title ? ` · ${previewData.title}` : ""}
+            </DialogTitle>
+            <DialogDescription>
+              {previewSource?.feed_url ?? previewData?.feed_url}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 overflow-y-auto pr-1">
+            {previewDiscoverMutation.isPending && !previewData ? (
+              <div className="text-muted-foreground flex items-center gap-2 py-8 text-sm">
+                <Loader2Icon className="size-4 animate-spin" />
+                {t.rssReader.discoverPreviewLoading}
+              </div>
+            ) : previewData?.entries.length ? (
+              <>
+                <div className="text-muted-foreground text-xs">
+                  {t.rssReader.discoverPreviewRecentEntries}
+                </div>
+                <div className="space-y-2">
+                  {previewData.entries.map((entry) => (
+                    <a
+                      key={`${entry.url}-${entry.published_at}`}
+                      href={entry.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:bg-accent block rounded-md border p-3"
+                    >
+                      <div className="line-clamp-2 text-sm font-medium">
+                        {entry.title}
+                      </div>
+                      <div className="text-muted-foreground mt-1 line-clamp-2 text-xs">
+                        {entry.description || entry.url}
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="text-muted-foreground py-8 text-sm">
+                {t.rssReader.discoverPreviewEmpty}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPreviewOpen(false)}>
+              {t.common.cancel}
+            </Button>
+            {previewSource && (
+              <Button onClick={() => void handleSubscribe(previewSource)}>
+                {t.rssReader.subscribe}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
         {category === "all" && !keyword.trim() && categoryCards.length > 0 && (

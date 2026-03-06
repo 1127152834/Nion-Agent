@@ -232,6 +232,31 @@ def test_list_rsshub_routes(rss_client):
     assert all(item["category"] == "programming" for item in programming_payload["routes"])
 
 
+def test_preview_discover_source(rss_client):
+    now = datetime(2026, 3, 6, 9, 0, tzinfo=UTC)
+    parsed = _parsed_feed(
+        "https://example.com/preview.xml",
+        [
+            ("Preview 1", "https://example.com/p1", now),
+            ("Preview 2", "https://example.com/p2", now - timedelta(hours=1)),
+        ],
+    )
+    parsed.title = "Preview Feed"
+
+    with patch("src.gateway.routers.rss.parse_rss_feed", return_value=parsed):
+        response = rss_client.get(
+            "/api/rss/discover/preview",
+            params={"url": "https://example.com/preview.xml", "limit": 1},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "Preview Feed"
+    assert payload["feed_url"] == "https://example.com/preview.xml"
+    assert len(payload["entries"]) == 1
+    assert payload["entries"][0]["title"] == "Preview 1"
+
+
 def test_parse_opml_for_import_preview(rss_client):
     content = b"""<?xml version='1.0' encoding='UTF-8'?>
 <opml version='2.0'>
