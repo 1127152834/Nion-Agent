@@ -40,7 +40,7 @@ export const enUS: Translations = {
     search: "Search",
     download: "Download",
     thinking: "Thinking",
-    artifacts: "Artifacts",
+    artifacts: "Artifact Center",
     public: "Public",
     custom: "Custom",
     notAvailableInDemoMode: "Not available in demo mode",
@@ -58,6 +58,16 @@ export const enUS: Translations = {
     directoryTree: "Directory Tree",
     filesSuffix: " files",
     noFilesInDirectory: "No files in current directory.",
+  },
+
+  artifactCenter: {
+    trigger: "Artifacts",
+    triggerTooltip: "Open artifact center for this thread",
+    title: "Artifact Center",
+    description: "Browse all artifacts generated in this conversation.",
+    shortcut: "Shortcut: Cmd/Ctrl + Shift + A",
+    empty: "No artifacts yet",
+    workbenchTitle: "Artifact Workbench",
   },
 
   // Welcome

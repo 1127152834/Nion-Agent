@@ -1,6 +1,5 @@
 export * from "./artifact-directory-tree";
 export * from "./artifact-file-detail";
 export * from "./artifact-file-list";
-export * from "./artifact-trigger";
 export * from "./working-directory-trigger";
 export * from "./context";

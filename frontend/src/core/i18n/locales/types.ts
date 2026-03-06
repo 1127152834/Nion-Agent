@@ -41,6 +41,16 @@ export interface Translations {
     noFilesInDirectory: string;
   };
 
+  artifactCenter: {
+    trigger: string;
+    triggerTooltip: string;
+    title: string;
+    description: string;
+    shortcut: string;
+    empty: string;
+    workbenchTitle: string;
+  };
+
   // Welcome
   welcome: {
     greeting: string;

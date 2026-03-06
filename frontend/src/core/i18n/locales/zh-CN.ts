@@ -40,7 +40,7 @@ export const zhCN: Translations = {
     search: "搜索",
     download: "下载",
     thinking: "思考",
-    artifacts: "文件",
+    artifacts: "产物中心",
     public: "公共",
     custom: "自定义",
     notAvailableInDemoMode: "在演示模式下不可用",
@@ -58,6 +58,16 @@ export const zhCN: Translations = {
     directoryTree: "目录树",
     filesSuffix: " 个文件",
     noFilesInDirectory: "当前目录暂无文件。",
+  },
+
+  artifactCenter: {
+    trigger: "产物中心",
+    triggerTooltip: "查看当前会话产物",
+    title: "产物中心",
+    description: "查看当前对话生成的全部产物。",
+    shortcut: "快捷键：Cmd/Ctrl + Shift + A",
+    empty: "暂无产物",
+    workbenchTitle: "产物工作台",
   },
 
   // Welcome
