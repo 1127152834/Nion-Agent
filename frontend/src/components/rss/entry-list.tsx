@@ -199,7 +199,7 @@ export function EntryList({
                   }
                   query.set("filter", filter);
                   router.push(
-                    `/workspace/rss/entries/${entry.id}?${query.toString()}`,
+                    `/workspace/rss/subscriptions/${entry.id}?${query.toString()}`,
                   );
                 }}
               >

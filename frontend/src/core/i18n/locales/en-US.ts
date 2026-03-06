@@ -264,6 +264,11 @@ export const enUS: Translations = {
     discoverFeatured: "Featured",
     discoverSubscribed: "Subscribed",
     discoverAlreadySubscribed: "This feed is already subscribed",
+    subscriptionsNavTitle: "Subscriptions",
+    discoverNavDescription:
+      "Explore curated feeds, RSSHub templates, and import tools.",
+    subscriptionsNavDescription:
+      "Manage your feeds and read the latest entries.",
     discoverLanguageLabel: "Language",
     discoverLanguageAll: "All languages",
     discoverLanguageChinese: "Chinese",

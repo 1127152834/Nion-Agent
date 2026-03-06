@@ -195,6 +195,9 @@ export interface Translations {
     discoverFeatured: string;
     discoverSubscribed: string;
     discoverAlreadySubscribed: string;
+    subscriptionsNavTitle: string;
+    discoverNavDescription: string;
+    subscriptionsNavDescription: string;
     discoverLanguageLabel: string;
     discoverLanguageAll: string;
     discoverLanguageChinese: string;

@@ -47,7 +47,9 @@ export default function RSSEntryDetailPage() {
       next.set("filter", filter);
     }
     const query = next.toString();
-    return query ? `/workspace/rss/entries?${query}` : "/workspace/rss/entries";
+    return query
+      ? `/workspace/rss/subscriptions?${query}`
+      : "/workspace/rss/subscriptions";
   };
 
   return (
