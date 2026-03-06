@@ -2,11 +2,13 @@ import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import { resolveRuntimePaths, type DesktopRuntimePaths } from "./paths";
 import { DesktopProcessManager, type DesktopRuntimePorts } from "./process-manager";
+import { RuntimeOptionalComponentsManager } from "./runtime-manager";
 
 let mainWindow: BrowserWindow | null = null;
 let runtimePaths: DesktopRuntimePaths | null = null;
 let processManager: DesktopProcessManager | null = null;
 let runtimePorts: DesktopRuntimePorts | null = null;
+let runtimeManager: RuntimeOptionalComponentsManager | null = null;
 let startupInProgress = false;
 let isShuttingDown = false;
 
@@ -26,6 +28,7 @@ if (!gotTheLock) {
 app.on("ready", async () => {
   try {
     runtimePaths = resolveRuntimePaths();
+    runtimeManager = new RuntimeOptionalComponentsManager(runtimePaths);
     runtimePorts = await startupRuntime();
     createMainWindow();
   } catch (error) {
@@ -96,12 +99,18 @@ async function startupRuntime(): Promise<DesktopRuntimePorts> {
 }
 
 function createMainWindow(): void {
+  const isMac = process.platform === "darwin";
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1000,
     minHeight: 600,
     title: "Nion",
+    ...(isMac
+      ? {
+          titleBarStyle: "hiddenInset" as const
+        }
+      : {}),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -110,10 +119,10 @@ function createMainWindow(): void {
     }
   });
 
-  const frontendPort = runtimePorts?.frontendPort ?? 3000;
+  const proxyPort = runtimePorts?.proxyPort ?? 2026;
 
-  // 加载前端应用
-  mainWindow.loadURL(`http://localhost:${frontendPort}`);
+  // 始终走同源代理入口，避免跨域问题
+  mainWindow.loadURL(`http://localhost:${proxyPort}`);
 
   // 开发模式打开 DevTools
   if (!app.isPackaged) {
@@ -146,6 +155,47 @@ ipcMain.handle("desktop:get-platform", () => {
 
 ipcMain.handle("desktop:get-paths", () => {
   return runtimePaths;
+});
+
+ipcMain.handle("desktop:get-runtime-status", () => {
+  if (!runtimeManager) {
+    throw new Error("Runtime manager is not initialized");
+  }
+  return runtimeManager.getStatus();
+});
+
+ipcMain.handle("desktop:download-runtime-component", async (_, componentName: string) => {
+  if (!runtimeManager) {
+    throw new Error("Runtime manager is not initialized");
+  }
+
+  return runtimeManager.downloadOptionalComponent(componentName, (progress) => {
+    mainWindow?.webContents.send("runtime:download-progress", progress);
+  });
+});
+
+ipcMain.handle("desktop:retry-runtime-component", async (_, componentName: string) => {
+  if (!runtimeManager) {
+    throw new Error("Runtime manager is not initialized");
+  }
+
+  return runtimeManager.retryOptionalComponent(componentName, (progress) => {
+    mainWindow?.webContents.send("runtime:download-progress", progress);
+  });
+});
+
+ipcMain.handle("desktop:complete-runtime-onboarding", () => {
+  if (!runtimeManager) {
+    throw new Error("Runtime manager is not initialized");
+  }
+  return runtimeManager.markOnboardingCompleted();
+});
+
+ipcMain.handle("desktop:skip-runtime-component", (_, componentName: string) => {
+  if (!runtimeManager) {
+    throw new Error("Runtime manager is not initialized");
+  }
+  return runtimeManager.markComponentSkipped(componentName);
 });
 
 ipcMain.handle("desktop:open-external", async (_, url: string) => {
