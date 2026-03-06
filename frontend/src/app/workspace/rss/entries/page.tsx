@@ -1,10 +1,13 @@
 "use client";
 
+import { CompassIcon } from "lucide-react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
-import { EntryList, RSSNavTabs, normalizeRSSEntryFilter } from "@/components/rss";
+import { EntryList, normalizeRSSEntryFilter } from "@/components/rss";
+import { Button } from "@/components/ui/button";
 import {
   WorkspaceBody,
   WorkspaceContainer,
@@ -59,7 +62,25 @@ export default function RSSEntriesPage() {
       <WorkspaceHeader />
       <WorkspaceBody className="min-h-0">
         <div className="flex size-full min-h-0 flex-col">
-          <RSSNavTabs />
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold">
+                {t.rssReader.subscriptionsNavTitle}
+              </h2>
+              <p className="text-muted-foreground text-xs">
+                {t.rssReader.subscriptionsNavDescription}
+              </p>
+            </div>
+            <Button asChild className="h-9 px-4">
+              <Link
+                href="/workspace/rss/discover"
+                className="inline-flex items-center gap-2"
+              >
+                <CompassIcon className="size-4" />
+                <span>{t.rssReader.goToDiscover}</span>
+              </Link>
+            </Button>
+          </div>
           <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
             <FeedList
               selectedFeedId={selectedFeedId}

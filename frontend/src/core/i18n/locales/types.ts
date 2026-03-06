@@ -198,6 +198,8 @@ export interface Translations {
     subscriptionsNavTitle: string;
     discoverNavDescription: string;
     subscriptionsNavDescription: string;
+    goToDiscover: string;
+    backToSubscriptions: string;
     discoverLanguageLabel: string;
     discoverLanguageAll: string;
     discoverLanguageChinese: string;

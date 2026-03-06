@@ -269,6 +269,8 @@ export const enUS: Translations = {
       "Explore curated feeds, RSSHub templates, and import tools.",
     subscriptionsNavDescription:
       "Manage your feeds and read the latest entries.",
+    goToDiscover: "Go to discover",
+    backToSubscriptions: "Back to subscriptions",
     discoverLanguageLabel: "Language",
     discoverLanguageAll: "All languages",
     discoverLanguageChinese: "Chinese",

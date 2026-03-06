@@ -42,7 +42,7 @@ export function WorkspaceNavChatList() {
             isActive={pathname.startsWith("/workspace/rss")}
             asChild
           >
-            <Link className="text-muted-foreground" href="/workspace/rss/discover">
+            <Link className="text-muted-foreground" href="/workspace/rss">
               <NewspaperIcon />
               <span>{t.sidebar.rss}</span>
             </Link>

@@ -257,6 +257,8 @@ export const zhCN: Translations = {
     subscriptionsNavTitle: "订阅",
     discoverNavDescription: "探索推荐资源、RSSHub 模板和导入工具",
     subscriptionsNavDescription: "管理订阅源并阅读最新文章",
+    goToDiscover: "前往发现",
+    backToSubscriptions: "返回订阅",
     discoverLanguageLabel: "语言",
     discoverLanguageAll: "全部语言",
     discoverLanguageChinese: "中文",

@@ -1,9 +1,11 @@
 "use client";
 
+import { ArrowLeftIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
-import { DiscoverPanel, RSSNavTabs } from "@/components/rss";
+import { DiscoverPanel } from "@/components/rss";
+import { Button } from "@/components/ui/button";
 import {
   WorkspaceBody,
   WorkspaceContainer,
@@ -39,7 +41,16 @@ export default function RSSDiscoverPage() {
       <WorkspaceHeader />
       <WorkspaceBody className="min-h-0">
         <div className="flex size-full min-h-0 flex-col">
-          <RSSNavTabs />
+          <div className="border-b px-4 py-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/workspace/rss/subscriptions")}
+            >
+              <ArrowLeftIcon className="size-4" />
+              {t.rssReader.backToSubscriptions}
+            </Button>
+          </div>
           <div className="min-h-0 flex-1">
             <DiscoverPanel
               keyword={keyword}
