@@ -12,7 +12,7 @@ from src.channels.runtime_manager import ChannelRuntimeManager
 from src.config.app_config import get_app_config
 from src.config.paths import get_paths
 from src.gateway.config import get_gateway_config
-from src.gateway.routers import agents, artifacts, channels, config, mcp, memory, models, rss, scheduler, skills, uploads
+from src.gateway.routers import agents, artifact_groups, artifacts, channels, config, mcp, memory, models, rss, scheduler, skills, uploads
 from src.scheduler.service import shutdown_scheduler, startup_scheduler
 
 # Configure logging
@@ -187,6 +187,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Artifacts API is mounted at /api/threads/{thread_id}/artifacts
     app.include_router(artifacts.router)
 
+    # Artifact groups API is mounted at /api/threads/{thread_id}/artifact-groups
+    app.include_router(artifact_groups.router)
+
     # Uploads API is mounted at /api/threads/{thread_id}/uploads
     app.include_router(uploads.router)
 
@@ -195,9 +198,6 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # RSS API is mounted at /api/rss
     app.include_router(rss.router)
-
-    # Channels API is mounted at /api/channels
-    app.include_router(channels.router)
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)

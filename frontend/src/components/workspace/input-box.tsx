@@ -4,6 +4,7 @@ import type { ChatStatus } from "ai";
 import {
   CheckIcon,
   FileIcon,
+  FilesIcon,
   FolderIcon,
   GraduationCapIcon,
   LightbulbIcon,
@@ -51,9 +52,11 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
+import { getLocalSettings, saveLocalSettings } from "@/core/settings/local";
 import { useSkills } from "@/core/skills/hooks";
 import { getLocalizedSkillDescription } from "@/core/skills/i18n";
 import type { AgentThreadContext } from "@/core/threads";
+import { useArtifactCenter } from "@/hooks/use-artifact-center";
 import { cn } from "@/lib/utils";
 
 import {
@@ -73,6 +76,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
+import { ArtifactCenter } from "./artifact-center";
+import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
 import { Tooltip } from "./tooltip";
 
@@ -481,6 +486,7 @@ function getResolvedMode(
 
 export function InputBox({
   className,
+  threadId,
   disabled,
   autoFocus,
   status = "ready",
@@ -494,6 +500,7 @@ export function InputBox({
   onStop,
   ...props
 }: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
+  threadId: string;
   assistantId?: string | null;
   status?: ChatStatus;
   disabled?: boolean;
@@ -524,8 +531,18 @@ export function InputBox({
   const mentionLabels = t.migration.workspace?.inputBox;
   const searchParams = useSearchParams();
   const [hydrated, setHydrated] = useState(false);
+  const { thread } = useThread();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const { models } = useModels();
+  const artifactCenter = useArtifactCenter();
+  const { toggleOpen } = artifactCenter;
+  const [localModelName, setLocalModelName] = useState<string | undefined>(
+    undefined,
+  );
+  const artifacts = useMemo(
+    () => thread.values.artifacts ?? [],
+    [thread.values.artifacts],
+  );
 
   // Mention system state
   const [mentionState, setMentionState] = useState<MentionState | null>(null);
@@ -553,6 +570,34 @@ export function InputBox({
   useEffect(() => {
     setRecentModelNames(readRecentModels());
   }, []);
+
+  // Read initial model from local settings for model selector persistence
+  useEffect(() => {
+    const persistedModelName = getLocalSettings().context.model_name;
+    setLocalModelName(
+      typeof persistedModelName === "string" ? persistedModelName : undefined,
+    );
+  }, []);
+
+  // Toggle artifact center with Cmd/Ctrl + Shift + A
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
+      if (!hasPrimaryModifier || !event.shiftKey) {
+        return;
+      }
+      if (event.key.toLowerCase() !== "a") {
+        return;
+      }
+      event.preventDefault();
+      toggleOpen();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [toggleOpen]);
 
   // Fetch data for mention options
   const { skills } = useSkills();
@@ -984,7 +1029,10 @@ export function InputBox({
     if (models.length === 0) {
       return;
     }
-    const currentModel = models.find((m) => m.name === context.model_name);
+    const preferredModelName = context.model_name ?? localModelName;
+    const currentModel = preferredModelName
+      ? models.find((m) => m.name === preferredModelName)
+      : undefined;
     const fallbackModel = currentModel ?? models[0]!;
     const supportsThinking = fallbackModel.supports_thinking ?? false;
     const nextModelName = fallbackModel.name;
@@ -999,14 +1047,30 @@ export function InputBox({
       model_name: nextModelName,
       mode: nextMode,
     });
-  }, [context, models, onContextChange]);
+
+    const settings = getLocalSettings();
+    saveLocalSettings({
+      ...settings,
+      context: {
+        ...settings.context,
+        model_name: nextModelName,
+      },
+    });
+    setLocalModelName(nextModelName);
+  }, [context, localModelName, models, onContextChange]);
+
+  const activeModelName = context.model_name ?? localModelName;
 
   const selectedModel = useMemo(() => {
     if (models.length === 0) {
       return undefined;
     }
-    return models.find((m) => m.name === context.model_name) ?? models[0];
-  }, [context.model_name, models]);
+    return (
+      models.find((m) => m.name === activeModelName) ??
+      models.find((m) => m.name === localModelName) ??
+      models[0]
+    );
+  }, [activeModelName, localModelName, models]);
 
   // Build recent and remaining models
   const modelNamesSet = useMemo(() => new Set(models.map((m) => m.name)), [models]);
@@ -1046,6 +1110,15 @@ export function InputBox({
         mode: getResolvedMode(context.mode, model.supports_thinking ?? false),
         reasoning_effort: context.reasoning_effort,
       });
+      const settings = getLocalSettings();
+      saveLocalSettings({
+        ...settings,
+        context: {
+          ...settings.context,
+          model_name,
+        },
+      });
+      setLocalModelName(model_name);
       setModelDialogOpen(false);
 
       // Track recent model
@@ -1774,6 +1847,19 @@ export function InputBox({
           )}
         </PromptInputTools>
         <PromptInputTools>
+          <PromptInputButton
+            className="gap-1! px-2! text-xs"
+            onClick={toggleOpen}
+            disabled={disabled}
+          >
+            <FilesIcon className="size-3" />
+            <span>{t.artifactCenter.triggerLabel}</span>
+            {artifacts.length > 0 && (
+              <span className="bg-foreground text-background inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-semibold">
+                {artifacts.length}
+              </span>
+            )}
+          </PromptInputButton>
           <ModelSelector
             open={modelDialogOpen}
             onOpenChange={setModelDialogOpen}
@@ -1800,7 +1886,7 @@ export function InputBox({
                         onSelect={() => handleModelSelect(m.name)}
                       >
                         <ModelSelectorName>{m.display_name}</ModelSelectorName>
-                        {m.name === context.model_name ? (
+                        {m.name === activeModelName ? (
                           <CheckIcon className="ml-auto size-4" />
                         ) : (
                           <div className="ml-auto size-4" />
@@ -1824,7 +1910,7 @@ export function InputBox({
                     onSelect={() => handleModelSelect(m.name)}
                   >
                     <ModelSelectorName>{m.display_name}</ModelSelectorName>
-                    {m.name === context.model_name ? (
+                    {m.name === activeModelName ? (
                       <CheckIcon className="ml-auto size-4" />
                     ) : (
                       <div className="ml-auto size-4" />
@@ -1842,6 +1928,17 @@ export function InputBox({
           />
         </PromptInputTools>
       </PromptInputFooter>
+      <ArtifactCenter
+        open={artifactCenter.open}
+        onOpenChange={artifactCenter.setOpen}
+        artifacts={artifacts}
+        threadId={threadId}
+        selectedArtifact={artifactCenter.selectedArtifact}
+        workbenchOpen={artifactCenter.workbenchOpen}
+        matchedPluginId={artifactCenter.matchedPluginId}
+        openWorkbench={artifactCenter.openWorkbench}
+        closeWorkbench={artifactCenter.closeWorkbench}
+      />
       {isNewThread && searchParams.get("mode") !== "skill" && (
         <div className="absolute right-0 -bottom-20 left-0 z-0 flex items-center justify-center">
           <SuggestionList />

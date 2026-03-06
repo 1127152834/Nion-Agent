@@ -49,7 +49,7 @@ class StreamEvent:
     """A single event from the streaming agent response.
 
     Event types align with the LangGraph SSE protocol:
-        - ``"values"``: Full state snapshot (title, messages, artifacts).
+        - ``"values"``: Full state snapshot (title, messages, artifacts, artifact_groups).
         - ``"messages-tuple"``: Per-message update (AI text, tool calls, tool results).
         - ``"end"``: Stream finished.
 
@@ -285,7 +285,7 @@ class NionClient:
 
         Yields:
             StreamEvent with one of:
-            - type="values"          data={"title": str|None, "messages": [...], "artifacts": [...]}
+            - type="values"          data={"title": str|None, "messages": [...], "artifacts": [...], "artifact_groups": [...]}
             - type="messages-tuple"  data={"type": "ai", "content": str, "id": str}
             - type="messages-tuple"  data={"type": "ai", "content": "", "id": str, "tool_calls": [...]}
             - type="messages-tuple"  data={"type": "tool", "content": str, "name": str, "tool_call_id": str, "id": str}
@@ -353,6 +353,7 @@ class NionClient:
                     "title": chunk.get("title"),
                     "messages": [self._serialize_message(m) for m in messages],
                     "artifacts": chunk.get("artifacts", []),
+                    "artifact_groups": chunk.get("artifact_groups", []),
                 },
             )
 

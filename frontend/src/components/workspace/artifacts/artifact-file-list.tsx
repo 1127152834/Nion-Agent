@@ -1,5 +1,6 @@
 import { DownloadIcon, LoaderIcon, PackageIcon } from "lucide-react";
 import { useCallback, useState } from "react";
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,10 +27,20 @@ export function ArtifactFileList({
   className,
   files,
   threadId,
+  onSelectArtifact,
+  renderExtraActions,
+  draggableArtifacts,
+  onDragStartArtifact,
+  onDragEndArtifact,
 }: {
   className?: string;
   files: string[];
   threadId: string;
+  onSelectArtifact?: (filepath: string) => void;
+  renderExtraActions?: (filepath: string) => ReactNode;
+  draggableArtifacts?: boolean;
+  onDragStartArtifact?: (filepath: string) => void;
+  onDragEndArtifact?: () => void;
 }) {
   const { t } = useI18n();
   const { select: selectArtifact, setOpen } = useArtifacts();
@@ -37,10 +48,14 @@ export function ArtifactFileList({
 
   const handleClick = useCallback(
     (filepath: string) => {
+      if (onSelectArtifact) {
+        onSelectArtifact(filepath);
+        return;
+      }
       selectArtifact(filepath);
       setOpen(true);
     },
-    [selectArtifact, setOpen],
+    [onSelectArtifact, selectArtifact, setOpen],
   );
 
   const handleInstallSkill = useCallback(
@@ -78,6 +93,9 @@ export function ArtifactFileList({
           key={file}
           className="relative cursor-pointer p-3"
           onClick={() => handleClick(file)}
+          draggable={draggableArtifacts}
+          onDragStart={() => onDragStartArtifact?.(file)}
+          onDragEnd={() => onDragEndArtifact?.()}
         >
           <CardHeader className="pr-2 pl-1">
             <CardTitle className="relative pl-8">
@@ -104,6 +122,7 @@ export function ArtifactFileList({
                   {t.common.install}
                 </Button>
               )}
+              {renderExtraActions?.(file)}
               <a
                 href={urlOfArtifact({
                   filepath: file,

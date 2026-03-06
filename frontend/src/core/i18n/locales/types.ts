@@ -100,6 +100,55 @@ export interface Translations {
     )[];
   };
 
+  // Artifact Center
+  artifactCenter: {
+    triggerLabel: string;
+    title: string;
+    description: string;
+    searchPlaceholder: string;
+    filterLabel: string;
+    filterAll: string;
+    filterDocuments: string;
+    filterImages: string;
+    filterMedia: string;
+    filterCode: string;
+    filterSkills: string;
+    filterOther: string;
+    sortLabel: string;
+    sortRecent: string;
+    sortNameAsc: string;
+    sortNameDesc: string;
+    resultSummary: string;
+    clearFiltersAction: string;
+    groupedSectionTitle: string;
+    ungroupedSectionTitle: string;
+    autoGroupHint: string;
+    persistAutoGroups: string;
+    enableAutoGrouping: string;
+    disableAutoGrouping: string;
+    createGroupAction: string;
+    createGroupPrompt: string;
+    downloadGroupAction: string;
+    renameGroupAction: string;
+    deleteGroupAction: string;
+    renameGroupPrompt: string;
+    deleteGroupConfirm: string;
+    moveArtifactAction: string;
+    removeFromGroupAction: string;
+    moveArtifactPrompt: string;
+    moveArtifactNoGroupHint: string;
+    dragToMoveHint: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    filteredEmptyTitle: string;
+    filteredEmptyDescription: string;
+    workbenchTitle: string;
+    matchedPluginPrefix: string;
+    noMatchedPlugin: string;
+    loadingContent: string;
+    noPreview: string;
+  };
+
   // Sidebar
   sidebar: {
     recentChats: string;
