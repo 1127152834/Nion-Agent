@@ -24,6 +24,16 @@ class DiscoverCategory:
     label: str
 
 
+@dataclass(frozen=True)
+class RSSHubRoute:
+    id: str
+    title: str
+    route: str
+    category: str
+    description: str
+    example_url: str
+
+
 _CATEGORIES: tuple[DiscoverCategory, ...] = (
     DiscoverCategory(id="all", label="全部"),
     DiscoverCategory(id="programming", label="编程"),
@@ -34,6 +44,129 @@ _CATEGORIES: tuple[DiscoverCategory, ...] = (
     DiscoverCategory(id="finance", label="财经"),
     DiscoverCategory(id="science", label="科学"),
     DiscoverCategory(id="chinese", label="中文精选"),
+)
+
+_RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
+    RSSHubRoute(
+        id="github-trending-daily",
+        title="GitHub Trending Daily",
+        route="/github/trending/daily",
+        category="programming",
+        description="GitHub 每日热门项目榜单。",
+        example_url="https://rsshub.app/github/trending/daily",
+    ),
+    RSSHubRoute(
+        id="github-releases",
+        title="GitHub Releases",
+        route="/github/release/facebook/react",
+        category="programming",
+        description="GitHub 仓库 release 更新。",
+        example_url="https://rsshub.app/github/release/facebook/react",
+    ),
+    RSSHubRoute(
+        id="weibo-hot",
+        title="微博热搜",
+        route="/weibo/search/hot",
+        category="news",
+        description="微博实时热搜榜。",
+        example_url="https://rsshub.app/weibo/search/hot",
+    ),
+    RSSHubRoute(
+        id="zhihu-hotlist",
+        title="知乎热榜",
+        route="/zhihu/hotlist",
+        category="chinese",
+        description="知乎热榜内容。",
+        example_url="https://rsshub.app/zhihu/hotlist",
+    ),
+    RSSHubRoute(
+        id="bilibili-hot-search",
+        title="Bilibili 热搜",
+        route="/bilibili/hot-search",
+        category="chinese",
+        description="B 站热搜排行。",
+        example_url="https://rsshub.app/bilibili/hot-search",
+    ),
+    RSSHubRoute(
+        id="v2ex-hot",
+        title="V2EX 热门",
+        route="/v2ex/topics/hot",
+        category="programming",
+        description="V2EX 热门主题。",
+        example_url="https://rsshub.app/v2ex/topics/hot",
+    ),
+    RSSHubRoute(
+        id="sspai-matrix",
+        title="少数派 Matrix",
+        route="/sspai/matrix",
+        category="chinese",
+        description="少数派 Matrix 最新内容。",
+        example_url="https://rsshub.app/sspai/matrix",
+    ),
+    RSSHubRoute(
+        id="juejin-trending",
+        title="掘金热榜",
+        route="/juejin/trending/all",
+        category="programming",
+        description="掘金全站热榜文章。",
+        example_url="https://rsshub.app/juejin/trending/all",
+    ),
+    RSSHubRoute(
+        id="x-hot",
+        title="X 热门",
+        route="/twitter/list/elonmusk",
+        category="social-media",
+        description="X/Twitter 指定列表更新。",
+        example_url="https://rsshub.app/twitter/list/elonmusk",
+    ),
+    RSSHubRoute(
+        id="youtube-channel",
+        title="YouTube 频道视频",
+        route="/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
+        category="multimedia",
+        description="指定 YouTube 频道更新。",
+        example_url="https://rsshub.app/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
+    ),
+    RSSHubRoute(
+        id="bloomberg-markets",
+        title="Bloomberg Markets",
+        route="/bloomberg/markets",
+        category="finance",
+        description="Bloomberg 市场新闻。",
+        example_url="https://rsshub.app/bloomberg/markets",
+    ),
+    RSSHubRoute(
+        id="economist-finance",
+        title="The Economist Finance",
+        route="/economist/finance-and-economics",
+        category="finance",
+        description="经济学人财经栏目。",
+        example_url="https://rsshub.app/economist/finance-and-economics",
+    ),
+    RSSHubRoute(
+        id="nature-latest",
+        title="Nature 最新文章",
+        route="/nature/research",
+        category="science",
+        description="Nature 研究论文更新。",
+        example_url="https://rsshub.app/nature/research",
+    ),
+    RSSHubRoute(
+        id="producthunt-popular",
+        title="Product Hunt Popular",
+        route="/producthunt/popular",
+        category="product",
+        description="Product Hunt 热门产品。",
+        example_url="https://rsshub.app/producthunt/popular",
+    ),
+    RSSHubRoute(
+        id="dribbble-popular",
+        title="Dribbble Popular",
+        route="/dribbble/popular",
+        category="design",
+        description="Dribbble 热门设计作品。",
+        example_url="https://rsshub.app/dribbble/popular",
+    ),
 )
 
 _SOURCES: tuple[DiscoverSource, ...] = (
@@ -378,4 +511,37 @@ def list_sources(
             item.title.lower(),
         ),
     )
+    return items[: max(1, min(limit, 200))]
+
+
+def list_rsshub_routes(
+    *,
+    keyword: str | None = None,
+    category: str | None = None,
+    limit: int = 80,
+) -> list[RSSHubRoute]:
+    normalized_keyword = (keyword or "").strip().lower()
+    normalized_category = (category or "all").strip().lower()
+
+    items = list(_RSSHUB_ROUTES)
+    if normalized_category and normalized_category != "all":
+        items = [item for item in items if item.category == normalized_category]
+
+    if normalized_keyword:
+
+        def _matches(route: RSSHubRoute) -> bool:
+            haystack = " ".join(
+                [
+                    route.title,
+                    route.route,
+                    route.category,
+                    route.description,
+                    route.example_url,
+                ],
+            ).lower()
+            return normalized_keyword in haystack
+
+        items = [item for item in items if _matches(item)]
+
+    items.sort(key=lambda item: (item.category, item.title.lower()))
     return items[: max(1, min(limit, 200))]

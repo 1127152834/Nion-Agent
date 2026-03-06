@@ -10,9 +10,11 @@ import {
   deleteRSSFeed,
   getRSSEntry,
   getRSSFeed,
+  listRSSHubRoutes,
   listRSSDiscoverSources,
   listRSSEntries,
   listRSSFeeds,
+  parseRSSOPML,
   refreshRSSFeed,
   summarizeRSSEntry,
   translateRSSEntry,
@@ -21,6 +23,7 @@ import {
 import type {
   AddRSSFeedRequest,
   ListRSSDiscoverSourcesParams,
+  ListRSSHubRoutesParams,
   ListRSSEntriesParams,
   RSSEntryFilter,
   TranslateRSSEntryRequest,
@@ -30,6 +33,7 @@ import type {
 const RSS_FEEDS_QUERY_KEY = ["rss", "feeds"] as const;
 const RSS_ENTRIES_QUERY_KEY = ["rss", "entries"] as const;
 const RSS_DISCOVER_QUERY_KEY = ["rss", "discover"] as const;
+const RSSHUB_ROUTES_QUERY_KEY = ["rss", "rsshub", "routes"] as const;
 
 export function useRSSFeeds() {
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
@@ -204,4 +208,30 @@ export function useRSSDiscoverSources(params: ListRSSDiscoverSourcesParams) {
     refetch,
     isRefetching,
   };
+}
+
+export function useRSSHubRoutes(params: ListRSSHubRoutesParams) {
+  const { data, isLoading, error, refetch, isRefetching } = useQuery({
+    queryKey: [
+      ...RSSHUB_ROUTES_QUERY_KEY,
+      params.q ?? "",
+      params.category ?? "all",
+      params.limit ?? 80,
+    ],
+    queryFn: () => listRSSHubRoutes(params),
+  });
+
+  return {
+    routes: data?.routes ?? [],
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+  };
+}
+
+export function useParseRSSOPML() {
+  return useMutation({
+    mutationFn: (file: File) => parseRSSOPML(file),
+  });
 }

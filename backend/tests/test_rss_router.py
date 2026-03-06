@@ -201,3 +201,42 @@ def test_discover_sources_support_keyword_and_category(rss_client):
     assert search_response.status_code == 200
     search_payload = search_response.json()
     assert any("hacker news" in item["title"].lower() for item in search_payload["sources"])
+
+
+def test_list_rsshub_routes(rss_client):
+    response = rss_client.get("/api/rss/discover/rsshub/routes")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["routes"]
+    assert any(item["route"].startswith("/") for item in payload["routes"])
+
+    programming_response = rss_client.get(
+        "/api/rss/discover/rsshub/routes",
+        params={"category": "programming"},
+    )
+    assert programming_response.status_code == 200
+    programming_payload = programming_response.json()
+    assert programming_payload["routes"]
+    assert all(item["category"] == "programming" for item in programming_payload["routes"])
+
+
+def test_parse_opml_for_import_preview(rss_client):
+    content = b"""<?xml version='1.0' encoding='UTF-8'?>
+<opml version='2.0'>
+  <body>
+    <outline text='Tech'>
+      <outline text='Hacker News' type='rss' xmlUrl='https://hnrss.org/frontpage' htmlUrl='https://news.ycombinator.com/' />
+      <outline text='Lobsters' type='rss' xmlUrl='https://lobste.rs/rss' htmlUrl='https://lobste.rs/' />
+    </outline>
+  </body>
+</opml>
+"""
+
+    response = rss_client.post(
+        "/api/rss/discover/opml/parse",
+        files={"file": ("subscriptions.opml", content, "text/xml")},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 2
+    assert {item["title"] for item in payload["sources"]} == {"Hacker News", "Lobsters"}

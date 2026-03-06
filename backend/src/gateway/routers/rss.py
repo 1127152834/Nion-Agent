@@ -1,10 +1,10 @@
 """RSS API router."""
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from src.database.models.rss import Entry, Feed
-from src.services import rss_ai, rss_discovery, rss_store
+from src.services import rss_ai, rss_discovery, rss_opml, rss_store
 from src.services.rss_parser import RSSParseError
 
 router = APIRouter(prefix="/api/rss", tags=["rss"])
@@ -94,6 +94,39 @@ class DiscoverSourcesResponse(BaseModel):
 
     categories: list[DiscoverCategoryResponse]
     sources: list[DiscoverSourceResponse]
+
+
+class RSSHubRouteResponse(BaseModel):
+    """RSSHub route card response."""
+
+    id: str
+    title: str
+    route: str
+    category: str
+    description: str
+    example_url: str
+
+
+class RSSHubRoutesResponse(BaseModel):
+    """Response for RSSHub route discovery."""
+
+    routes: list[RSSHubRouteResponse]
+
+
+class OPMLSourceResponse(BaseModel):
+    """Single OPML feed source."""
+
+    title: str
+    feed_url: str
+    site_url: str | None
+    category: str | None
+
+
+class ParseOPMLResponse(BaseModel):
+    """Response payload for OPML parsing."""
+
+    sources: list[OPMLSourceResponse]
+    total: int
 
 
 @router.post(
@@ -285,10 +318,15 @@ async def list_discover_sources(
     category: str = Query(default="all", description="Discover category"),
     limit: int = Query(default=60, ge=1, le=200, description="Maximum number of sources"),
 ) -> DiscoverSourcesResponse:
-    sources = rss_discovery.list_sources(keyword=q, category=category, limit=limit)
+    all_sources = rss_discovery.list_sources(keyword=q, category="all", limit=200)
+    if category and category != "all":
+        filtered_sources = [item for item in all_sources if item.category == category]
+    else:
+        filtered_sources = all_sources
+    sources = filtered_sources[:limit]
 
-    counts: dict[str, int] = {"all": len(sources)}
-    for source in sources:
+    counts: dict[str, int] = {"all": len(all_sources)}
+    for source in all_sources:
         counts[source.category] = counts.get(source.category, 0) + 1
 
     categories = [
@@ -316,4 +354,64 @@ async def list_discover_sources(
             )
             for source in sources
         ],
+    )
+
+
+@router.get(
+    "/discover/rsshub/routes",
+    response_model=RSSHubRoutesResponse,
+    summary="List RSSHub Routes",
+    description="List curated RSSHub route templates for discover tools.",
+)
+async def list_rsshub_routes(
+    q: str | None = Query(default=None, description="Keyword for fuzzy search"),
+    category: str = Query(default="all", description="Route category"),
+    limit: int = Query(default=80, ge=1, le=200, description="Maximum number of routes"),
+) -> RSSHubRoutesResponse:
+    routes = rss_discovery.list_rsshub_routes(keyword=q, category=category, limit=limit)
+    return RSSHubRoutesResponse(
+        routes=[
+            RSSHubRouteResponse(
+                id=item.id,
+                title=item.title,
+                route=item.route,
+                category=item.category,
+                description=item.description,
+                example_url=item.example_url,
+            )
+            for item in routes
+        ],
+    )
+
+
+@router.post(
+    "/discover/opml/parse",
+    response_model=ParseOPMLResponse,
+    summary="Parse OPML",
+    description="Parse OPML file and return feed sources for import preview.",
+)
+async def parse_opml(file: UploadFile = File(...)) -> ParseOPMLResponse:
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="OPML file is required")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="OPML file is empty")
+
+    try:
+        sources = rss_opml.parse_opml(content)
+    except rss_opml.OPMLParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return ParseOPMLResponse(
+        sources=[
+            OPMLSourceResponse(
+                title=item.title,
+                feed_url=item.feed_url,
+                site_url=item.site_url,
+                category=item.category,
+            )
+            for item in sources
+        ],
+        total=len(sources),
     )

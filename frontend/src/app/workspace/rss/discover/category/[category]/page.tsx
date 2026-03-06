@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 
 import { DiscoverPanel, RSSNavTabs } from "@/components/rss";
@@ -11,27 +11,26 @@ import {
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
 
-import { buildRSSDiscoverPath } from "./routing";
+import { buildRSSDiscoverPath } from "../../routing";
 
-export default function RSSDiscoverPage() {
+export default function RSSDiscoverCategoryPage() {
   const { t } = useI18n();
+  const params = useParams<{ category: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const keyword = searchParams.get("q") ?? "";
-  const category = "all";
-  const legacyCategory = (searchParams.get("category") ?? "all").trim().toLowerCase();
+  const category = (params.category ?? "all").trim().toLowerCase();
 
   useEffect(() => {
     document.title = `${t.rssReader.discoverTitle} - ${t.pages.appName}`;
   }, [t.pages.appName, t.rssReader.discoverTitle]);
 
   useEffect(() => {
-    // Backward compatibility for old query-style category URLs.
-    if (legacyCategory !== "all") {
-      router.replace(buildRSSDiscoverPath(legacyCategory, keyword));
+    if (category === "all") {
+      router.replace(buildRSSDiscoverPath("all", keyword));
     }
-  }, [keyword, legacyCategory, router]);
+  }, [category, keyword, router]);
 
   return (
     <WorkspaceContainer>

@@ -34,6 +34,11 @@ export interface Translations {
     save: string;
     install: string;
     create: string;
+    workingDirectory: string;
+    browseWorkspace: string;
+    directoryTree: string;
+    filesSuffix: string;
+    noFilesInDirectory: string;
   };
 
   // Welcome
@@ -190,6 +195,28 @@ export interface Translations {
     discoverFeatured: string;
     discoverSubscribed: string;
     discoverAlreadySubscribed: string;
+    rsshubTool: string;
+    rsshubDialogTitle: string;
+    rsshubDialogDescription: string;
+    rsshubInstancePlaceholder: string;
+    rsshubRoutePlaceholder: string;
+    rsshubPreviewLabel: string;
+    rsshubSearchPlaceholder: string;
+    rsshubNoRoutes: string;
+    rsshubRouteRequired: string;
+    opmlTool: string;
+    opmlDialogTitle: string;
+    opmlDialogDescription: string;
+    opmlFilterPlaceholder: string;
+    opmlSelectFiltered: string;
+    opmlClearSelection: string;
+    opmlSelectedCount: string;
+    opmlNoSource: string;
+    opmlImportSelected: string;
+    opmlParsed: string;
+    opmlParseFailed: string;
+    opmlSelectAtLeastOne: string;
+    opmlImportSummary: string;
     emptyFeeds: string;
     emptyEntries: string;
     loadingEntries: string;

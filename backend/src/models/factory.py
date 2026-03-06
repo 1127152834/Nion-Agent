@@ -1,6 +1,9 @@
 import logging
 
-from langchain.chat_models import BaseChatModel
+try:
+    from langchain_core.language_models.chat_models import BaseChatModel
+except Exception:  # pragma: no cover - compatibility fallback
+    from langchain.chat_models import BaseChatModel  # type: ignore
 
 from src.config import get_app_config, get_tracing_config, is_tracing_enabled
 from src.reflection import resolve_class

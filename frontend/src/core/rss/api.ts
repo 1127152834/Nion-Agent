@@ -2,8 +2,11 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type {
   AddRSSFeedRequest,
+  ListRSSHubRoutesParams,
   ListRSSDiscoverSourcesParams,
+  ParseOPMLResponse,
   RSSFeed,
+  RSSHubRoutesResponse,
   RSSDiscoverSourcesResponse,
   RSSFeedListResponse,
   RSSFeedMutationResponse,
@@ -285,5 +288,56 @@ export async function listRSSDiscoverSources(
   return {
     categories: payload?.categories ?? [],
     sources: payload?.sources ?? [],
+  };
+}
+
+export async function listRSSHubRoutes(
+  params: ListRSSHubRoutesParams = {},
+): Promise<RSSHubRoutesResponse> {
+  const search = new URLSearchParams();
+  if (params.q) {
+    search.set("q", params.q);
+  }
+  if (params.category && params.category !== "all") {
+    search.set("category", params.category);
+  }
+  if (params.limit) {
+    search.set("limit", String(params.limit));
+  }
+
+  const query = search.toString();
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/rss/discover/rsshub/routes${query ? `?${query}` : ""}`,
+  );
+  const payload = (await parseJSONOrNull(response)) as RSSHubRoutesResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to load RSSHub routes (${response.status})`,
+    );
+  }
+  return {
+    routes: payload?.routes ?? [],
+  };
+}
+
+export async function parseRSSOPML(file: File): Promise<ParseOPMLResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${getBackendBaseURL()}/api/rss/discover/opml/parse`, {
+    method: "POST",
+    body: formData,
+  });
+  const payload = (await parseJSONOrNull(response)) as ParseOPMLResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to parse OPML file (${response.status})`,
+    );
+  }
+  return {
+    sources: payload?.sources ?? [],
+    total: payload?.total ?? 0,
   };
 }

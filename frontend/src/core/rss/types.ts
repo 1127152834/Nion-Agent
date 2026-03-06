@@ -77,6 +77,31 @@ export interface RSSDiscoverSourcesResponse {
   sources: RSSDiscoverSource[];
 }
 
+export interface RSSHubRoute {
+  id: string;
+  title: string;
+  route: string;
+  category: string;
+  description: string;
+  example_url: string;
+}
+
+export interface RSSHubRoutesResponse {
+  routes: RSSHubRoute[];
+}
+
+export interface OPMLSource {
+  title: string;
+  feed_url: string;
+  site_url: string | null;
+  category: string | null;
+}
+
+export interface ParseOPMLResponse {
+  sources: OPMLSource[];
+  total: number;
+}
+
 export interface AddRSSFeedRequest {
   url: string;
   category?: string;
@@ -101,6 +126,12 @@ export interface ListRSSEntriesParams {
 }
 
 export interface ListRSSDiscoverSourcesParams {
+  q?: string;
+  category?: string;
+  limit?: number;
+}
+
+export interface ListRSSHubRoutesParams {
   q?: string;
   category?: string;
   limit?: number;
