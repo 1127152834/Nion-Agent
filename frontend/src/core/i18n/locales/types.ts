@@ -195,19 +195,19 @@ export interface Translations {
     discoverFeatured: string;
     discoverSubscribed: string;
     discoverAlreadySubscribed: string;
-    discoverCategoryBoardTitle: string;
-    discoverCategoryBoardDescription: string;
-    discoverExploreCategory: string;
-    discoverFeaturedSectionTitle: string;
-    discoverFeaturedSectionDescription: string;
-    discoverSortLabel: string;
-    discoverSortFeatured: string;
-    discoverSortTitle: string;
-    discoverSortSite: string;
     discoverLanguageLabel: string;
     discoverLanguageAll: string;
     discoverLanguageChinese: string;
     discoverLanguageEnglish: string;
+    discoverSortLabel: string;
+    discoverSortFeatured: string;
+    discoverSortTitle: string;
+    discoverSortSite: string;
+    discoverFeaturedSectionTitle: string;
+    discoverFeaturedSectionDescription: string;
+    discoverCategoryBoardTitle: string;
+    discoverCategoryBoardDescription: string;
+    discoverExploreCategory: string;
     rsshubTool: string;
     rsshubDialogTitle: string;
     rsshubDialogDescription: string;
@@ -217,6 +217,8 @@ export interface Translations {
     rsshubSearchPlaceholder: string;
     rsshubNoRoutes: string;
     rsshubRouteRequired: string;
+    rsshubTemplateLabel: string;
+    rsshubNoParamsNeeded: string;
     opmlTool: string;
     opmlDialogTitle: string;
     opmlDialogDescription: string;
@@ -316,6 +318,7 @@ export interface Translations {
       appearance: string;
       memory: string;
       tools: string;
+      channels: string;
       skills: string;
       notification: string;
       about: string;
@@ -367,6 +370,10 @@ export interface Translations {
       languageDescription: string;
     };
     tools: {
+      title: string;
+      description: string;
+    };
+    channels: {
       title: string;
       description: string;
     };

@@ -96,15 +96,28 @@ class DiscoverSourcesResponse(BaseModel):
     sources: list[DiscoverSourceResponse]
 
 
+class RSSHubRouteParamResponse(BaseModel):
+    """RSSHub route parameter metadata."""
+
+    key: str
+    label: str
+    placeholder: str
+    required: bool
+    default_value: str | None
+    description: str | None
+
+
 class RSSHubRouteResponse(BaseModel):
     """RSSHub route card response."""
 
     id: str
     title: str
     route: str
+    route_template: str
     category: str
     description: str
     example_url: str
+    params: list[RSSHubRouteParamResponse]
 
 
 class RSSHubRoutesResponse(BaseModel):
@@ -381,9 +394,21 @@ async def list_rsshub_routes(
                 id=item.id,
                 title=item.title,
                 route=item.route,
+                route_template=item.route_template,
                 category=item.category,
                 description=item.description,
                 example_url=item.example_url,
+                params=[
+                    RSSHubRouteParamResponse(
+                        key=param.key,
+                        label=param.label,
+                        placeholder=param.placeholder,
+                        required=param.required,
+                        default_value=param.default_value,
+                        description=param.description,
+                    )
+                    for param in item.params
+                ],
             )
             for item in routes
         ],

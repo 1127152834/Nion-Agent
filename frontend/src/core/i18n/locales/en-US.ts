@@ -64,7 +64,7 @@ export const enUS: Translations = {
   welcome: {
     greeting: "Hello, again!",
     description:
-      "Welcome to 🦌 Nion, an open source super agent. With built-in and custom skills, Nion helps you search on the web, analyze data, and generate artifacts like slides, web pages and do almost anything.",
+      "One thought, everything delivered. Your personal AI assistant that understands your intent and acts for you.",
 
     createYourOwnSkill: "Create Your Own Skill",
     createYourOwnSkillDescription:
@@ -264,21 +264,21 @@ export const enUS: Translations = {
     discoverFeatured: "Featured",
     discoverSubscribed: "Subscribed",
     discoverAlreadySubscribed: "This feed is already subscribed",
+    discoverLanguageLabel: "Language",
+    discoverLanguageAll: "All languages",
+    discoverLanguageChinese: "Chinese",
+    discoverLanguageEnglish: "English",
+    discoverSortLabel: "Sort",
+    discoverSortFeatured: "Featured first",
+    discoverSortTitle: "Title",
+    discoverSortSite: "Site",
+    discoverFeaturedSectionTitle: "Featured subscriptions",
+    discoverFeaturedSectionDescription:
+      "Prioritize curated and high-quality RSS resources.",
     discoverCategoryBoardTitle: "Explore by category",
     discoverCategoryBoardDescription:
       "Jump into a category and browse curated RSS resources quickly.",
     discoverExploreCategory: "Open",
-    discoverFeaturedSectionTitle: "Category highlights",
-    discoverFeaturedSectionDescription:
-      "Featured feeds recommended first in this category.",
-    discoverSortLabel: "Sort",
-    discoverSortFeatured: "Featured",
-    discoverSortTitle: "Title",
-    discoverSortSite: "Site",
-    discoverLanguageLabel: "Language",
-    discoverLanguageAll: "All",
-    discoverLanguageChinese: "Chinese",
-    discoverLanguageEnglish: "English",
     rsshubTool: "RSSHub",
     rsshubDialogTitle: "Generate feed via RSSHub",
     rsshubDialogDescription:
@@ -289,6 +289,8 @@ export const enUS: Translations = {
     rsshubSearchPlaceholder: "Search RSSHub routes",
     rsshubNoRoutes: "No matching RSSHub routes",
     rsshubRouteRequired: "Please provide a valid RSSHub route first",
+    rsshubTemplateLabel: "Template",
+    rsshubNoParamsNeeded: "No additional parameters are required for this template",
     opmlTool: "Import OPML",
     opmlDialogTitle: "Import feeds from OPML",
     opmlDialogDescription:
@@ -395,6 +397,7 @@ export const enUS: Translations = {
       appearance: "Appearance",
       memory: "Memory",
       tools: "Tools",
+      channels: "Channels",
       skills: "Skills",
       notification: "Notification",
       about: "About",
@@ -450,6 +453,10 @@ export const enUS: Translations = {
     tools: {
       title: "Tools",
       description: "Manage the configuration and enabled status of MCP tools.",
+    },
+    channels: {
+      title: "Channels",
+      description: "Configure Lark and DingTalk integrations, pairing, and runtime status.",
     },
     models: {
       title: "Models",

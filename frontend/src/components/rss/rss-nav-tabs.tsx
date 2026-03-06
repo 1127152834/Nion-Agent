@@ -1,5 +1,6 @@
 "use client";
 
+import { CompassIcon, NewspaperIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -24,15 +25,19 @@ export function RSSNavTabs({ className }: { className?: string }) {
           item.key === "discover"
             ? t.rssReader.discoverTitle
             : t.rssReader.entries;
+        const Icon = item.key === "discover" ? CompassIcon : NewspaperIcon;
         return (
           <Button
             key={item.href}
             asChild
             size="sm"
-            variant={active ? "default" : "ghost"}
-            className="rounded-full"
+            variant={active ? "default" : "outline"}
+            className="h-8 rounded-full px-3"
           >
-            <Link href={item.href}>{label}</Link>
+            <Link href={item.href} className="inline-flex items-center gap-1.5">
+              <Icon className="size-3.5" />
+              <span>{label}</span>
+            </Link>
           </Button>
         );
       })}

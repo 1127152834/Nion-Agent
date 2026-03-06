@@ -77,13 +77,24 @@ export interface RSSDiscoverSourcesResponse {
   sources: RSSDiscoverSource[];
 }
 
+export interface RSSHubRouteParam {
+  key: string;
+  label: string;
+  placeholder: string;
+  required: boolean;
+  default_value: string | null;
+  description: string | null;
+}
+
 export interface RSSHubRoute {
   id: string;
   title: string;
   route: string;
+  route_template: string;
   category: string;
   description: string;
   example_url: string;
+  params: RSSHubRouteParam[];
 }
 
 export interface RSSHubRoutesResponse {

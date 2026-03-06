@@ -29,9 +29,21 @@ class RSSHubRoute:
     id: str
     title: str
     route: str
+    route_template: str
     category: str
     description: str
     example_url: str
+    params: tuple[RSSHubRouteParam, ...] = ()
+
+
+@dataclass(frozen=True)
+class RSSHubRouteParam:
+    key: str
+    label: str
+    placeholder: str
+    required: bool = True
+    default_value: str | None = None
+    description: str | None = None
 
 
 _CATEGORIES: tuple[DiscoverCategory, ...] = (
@@ -51,6 +63,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="github-trending-daily",
         title="GitHub Trending Daily",
         route="/github/trending/daily",
+        route_template="/github/trending/daily",
         category="programming",
         description="GitHub 每日热门项目榜单。",
         example_url="https://rsshub.app/github/trending/daily",
@@ -59,14 +72,32 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="github-releases",
         title="GitHub Releases",
         route="/github/release/facebook/react",
+        route_template="/github/release/:owner/:repo",
         category="programming",
         description="GitHub 仓库 release 更新。",
         example_url="https://rsshub.app/github/release/facebook/react",
+        params=(
+            RSSHubRouteParam(
+                key="owner",
+                label="Owner",
+                placeholder="facebook",
+                default_value="facebook",
+                description="GitHub 组织或用户名",
+            ),
+            RSSHubRouteParam(
+                key="repo",
+                label="Repository",
+                placeholder="react",
+                default_value="react",
+                description="仓库名",
+            ),
+        ),
     ),
     RSSHubRoute(
         id="weibo-hot",
         title="微博热搜",
         route="/weibo/search/hot",
+        route_template="/weibo/search/hot",
         category="news",
         description="微博实时热搜榜。",
         example_url="https://rsshub.app/weibo/search/hot",
@@ -75,6 +106,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="zhihu-hotlist",
         title="知乎热榜",
         route="/zhihu/hotlist",
+        route_template="/zhihu/hotlist",
         category="chinese",
         description="知乎热榜内容。",
         example_url="https://rsshub.app/zhihu/hotlist",
@@ -83,6 +115,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="bilibili-hot-search",
         title="Bilibili 热搜",
         route="/bilibili/hot-search",
+        route_template="/bilibili/hot-search",
         category="chinese",
         description="B 站热搜排行。",
         example_url="https://rsshub.app/bilibili/hot-search",
@@ -91,6 +124,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="v2ex-hot",
         title="V2EX 热门",
         route="/v2ex/topics/hot",
+        route_template="/v2ex/topics/hot",
         category="programming",
         description="V2EX 热门主题。",
         example_url="https://rsshub.app/v2ex/topics/hot",
@@ -99,6 +133,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="sspai-matrix",
         title="少数派 Matrix",
         route="/sspai/matrix",
+        route_template="/sspai/matrix",
         category="chinese",
         description="少数派 Matrix 最新内容。",
         example_url="https://rsshub.app/sspai/matrix",
@@ -107,6 +142,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="juejin-trending",
         title="掘金热榜",
         route="/juejin/trending/all",
+        route_template="/juejin/trending/all",
         category="programming",
         description="掘金全站热榜文章。",
         example_url="https://rsshub.app/juejin/trending/all",
@@ -115,22 +151,43 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="x-hot",
         title="X 热门",
         route="/twitter/list/elonmusk",
+        route_template="/twitter/list/:list",
         category="social-media",
         description="X/Twitter 指定列表更新。",
         example_url="https://rsshub.app/twitter/list/elonmusk",
+        params=(
+            RSSHubRouteParam(
+                key="list",
+                label="List",
+                placeholder="elonmusk",
+                default_value="elonmusk",
+                description="Twitter 列表 slug 或 ID",
+            ),
+        ),
     ),
     RSSHubRoute(
         id="youtube-channel",
         title="YouTube 频道视频",
         route="/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
+        route_template="/youtube/channel/:channel_id",
         category="multimedia",
         description="指定 YouTube 频道更新。",
         example_url="https://rsshub.app/youtube/channel/UC_x5XG1OV2P6uZZ5FSM9Ttw",
+        params=(
+            RSSHubRouteParam(
+                key="channel_id",
+                label="Channel ID",
+                placeholder="UC_x5XG1OV2P6uZZ5FSM9Ttw",
+                default_value="UC_x5XG1OV2P6uZZ5FSM9Ttw",
+                description="YouTube 频道 ID",
+            ),
+        ),
     ),
     RSSHubRoute(
         id="bloomberg-markets",
         title="Bloomberg Markets",
         route="/bloomberg/markets",
+        route_template="/bloomberg/markets",
         category="finance",
         description="Bloomberg 市场新闻。",
         example_url="https://rsshub.app/bloomberg/markets",
@@ -139,6 +196,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="economist-finance",
         title="The Economist Finance",
         route="/economist/finance-and-economics",
+        route_template="/economist/finance-and-economics",
         category="finance",
         description="经济学人财经栏目。",
         example_url="https://rsshub.app/economist/finance-and-economics",
@@ -147,6 +205,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="nature-latest",
         title="Nature 最新文章",
         route="/nature/research",
+        route_template="/nature/research",
         category="science",
         description="Nature 研究论文更新。",
         example_url="https://rsshub.app/nature/research",
@@ -155,6 +214,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="producthunt-popular",
         title="Product Hunt Popular",
         route="/producthunt/popular",
+        route_template="/producthunt/popular",
         category="product",
         description="Product Hunt 热门产品。",
         example_url="https://rsshub.app/producthunt/popular",
@@ -163,6 +223,7 @@ _RSSHUB_ROUTES: tuple[RSSHubRoute, ...] = (
         id="dribbble-popular",
         title="Dribbble Popular",
         route="/dribbble/popular",
+        route_template="/dribbble/popular",
         category="design",
         description="Dribbble 热门设计作品。",
         example_url="https://rsshub.app/dribbble/popular",
@@ -534,13 +595,35 @@ def list_rsshub_routes(
     if normalized_keyword:
 
         def _matches(route: RSSHubRoute) -> bool:
+            param_haystack = " ".join(
+                filter(
+                    None,
+                    (
+                        " ".join(
+                            filter(
+                                None,
+                                [
+                                    param.key,
+                                    param.label,
+                                    param.placeholder,
+                                    param.default_value,
+                                    param.description,
+                                ],
+                            ),
+                        )
+                        for param in route.params
+                    ),
+                ),
+            )
             haystack = " ".join(
                 [
                     route.title,
                     route.route,
+                    route.route_template,
                     route.category,
                     route.description,
                     route.example_url,
+                    param_haystack,
                 ],
             ).lower()
             return normalized_keyword in haystack

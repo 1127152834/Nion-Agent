@@ -35,7 +35,11 @@ import {
   useRSSFeeds,
   useRSSHubRoutes,
 } from "@/core/rss";
-import type { OPMLSource, RSSDiscoverSource } from "@/core/rss";
+import type {
+  OPMLSource,
+  RSSDiscoverSource,
+  RSSHubRoute,
+} from "@/core/rss";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_VISUALS: Record<
@@ -118,6 +122,19 @@ function buildRSSHubFeedURL(instance: string, route: string) {
   return `${normalizedInstance}${normalizedRoute}`;
 }
 
+function resolveRSSHubRouteTemplate(
+  routeTemplate: string,
+  values: Record<string, string>,
+) {
+  return routeTemplate.replace(/:([a-zA-Z0-9_]+)/g, (_, key: string) => {
+    const value = (values[key] ?? "").trim();
+    if (!value) {
+      return `:${key}`;
+    }
+    return encodeURIComponent(value);
+  });
+}
+
 export function DiscoverPanel({
   keyword,
   category,
@@ -141,6 +158,11 @@ export function DiscoverPanel({
   const [rsshubCategory, setRsshubCategory] = useState("all");
   const [rsshubInstance, setRsshubInstance] = useState("https://rsshub.app");
   const [rsshubRoute, setRsshubRoute] = useState("");
+  const [selectedRSSHubRoute, setSelectedRSSHubRoute] =
+    useState<RSSHubRoute | null>(null);
+  const [rsshubRouteParams, setRsshubRouteParams] = useState<
+    Record<string, string>
+  >({});
 
   const [opmlOpen, setOpmlOpen] = useState(false);
   const [opmlFilter, setOpmlFilter] = useState("");
@@ -296,13 +318,37 @@ export function DiscoverPanel({
   };
 
   const handleSubscribeFromRSSHub = async () => {
-    if (!rsshubPreviewURL) {
+    if (!rsshubPreviewURL || /:([a-zA-Z0-9_]+)/.test(rsshubRoute)) {
       toast.error(t.rssReader.rsshubRouteRequired);
       return;
     }
     await handleSubscribe({
       feed_url: rsshubPreviewURL,
       category: "rsshub",
+    });
+  };
+
+  const handleSelectRSSHubRoute = (route: RSSHubRoute) => {
+    const defaults = Object.fromEntries(
+      route.params.map((param) => [
+        param.key,
+        param.default_value ?? "",
+      ]),
+    );
+    setSelectedRSSHubRoute(route);
+    setRsshubRouteParams(defaults);
+    setRsshubRoute(resolveRSSHubRouteTemplate(route.route_template, defaults));
+  };
+
+  const handleRSSHubParamChange = (key: string, value: string) => {
+    setRsshubRouteParams((previous) => {
+      const next = { ...previous, [key]: value };
+      if (selectedRSSHubRoute) {
+        setRsshubRoute(
+          resolveRSSHubRouteTemplate(selectedRSSHubRoute.route_template, next),
+        );
+      }
+      return next;
     });
   };
 
@@ -512,9 +558,58 @@ export function DiscoverPanel({
                 />
                 <Input
                   value={rsshubRoute}
-                  onChange={(event) => setRsshubRoute(event.target.value)}
+                  onChange={(event) => {
+                    setRsshubRoute(event.target.value);
+                    if (selectedRSSHubRoute?.params.length) {
+                      setSelectedRSSHubRoute(null);
+                      setRsshubRouteParams({});
+                    }
+                  }}
                   placeholder={t.rssReader.rsshubRoutePlaceholder}
+                  readOnly={Boolean(selectedRSSHubRoute?.params.length)}
                 />
+                {selectedRSSHubRoute && (
+                  <div className="space-y-2 rounded-md border p-3">
+                    <div className="text-xs font-medium">
+                      {t.rssReader.rsshubTemplateLabel}:{" "}
+                      <code>{selectedRSSHubRoute.route_template}</code>
+                    </div>
+                    {selectedRSSHubRoute.params.length === 0 ? (
+                      <div className="text-muted-foreground text-xs">
+                        {t.rssReader.rsshubNoParamsNeeded}
+                      </div>
+                    ) : (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {selectedRSSHubRoute.params.map((param) => (
+                          <label
+                            key={`${selectedRSSHubRoute.id}-${param.key}`}
+                            className="grid gap-1"
+                          >
+                            <span className="text-xs font-medium">
+                              {param.label}
+                              {param.required && (
+                                <span className="text-destructive ml-1">*</span>
+                              )}
+                            </span>
+                            <Input
+                              value={rsshubRouteParams[param.key] ?? ""}
+                              onChange={(event) =>
+                                handleRSSHubParamChange(param.key, event.target.value)
+                              }
+                              placeholder={param.placeholder}
+                              className="h-8"
+                            />
+                            {param.description && (
+                              <span className="text-muted-foreground text-[11px]">
+                                {param.description}
+                              </span>
+                            )}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="text-muted-foreground rounded-md border px-3 py-2 text-xs">
                   {t.rssReader.rsshubPreviewLabel}:{" "}
                   <span className="text-foreground break-all">
@@ -557,7 +652,7 @@ export function DiscoverPanel({
                       <button
                         key={route.id}
                         type="button"
-                        onClick={() => setRsshubRoute(route.route)}
+                        onClick={() => handleSelectRSSHubRoute(route)}
                         className="hover:bg-accent flex w-full flex-col items-start gap-1 rounded-md border px-3 py-2 text-left"
                       >
                         <div className="flex w-full items-center justify-between gap-2">
@@ -567,7 +662,7 @@ export function DiscoverPanel({
                         <div className="text-muted-foreground text-xs">
                           {route.description}
                         </div>
-                        <code className="text-xs">{route.route}</code>
+                        <code className="text-xs">{route.route_template}</code>
                       </button>
                     ))
                   )}
@@ -580,7 +675,11 @@ export function DiscoverPanel({
                 </Button>
                 <Button
                   onClick={() => void handleSubscribeFromRSSHub()}
-                  disabled={addFeedMutation.isPending || !rsshubPreviewURL}
+                  disabled={
+                    addFeedMutation.isPending ||
+                    !rsshubPreviewURL ||
+                    /:([a-zA-Z0-9_]+)/.test(rsshubRoute)
+                  }
                 >
                   {t.rssReader.subscribe}
                 </Button>

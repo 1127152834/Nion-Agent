@@ -218,6 +218,9 @@ def test_list_rsshub_routes(rss_client):
     payload = response.json()
     assert payload["routes"]
     assert any(item["route"].startswith("/") for item in payload["routes"])
+    assert all("route_template" in item for item in payload["routes"])
+    assert all("params" in item for item in payload["routes"])
+    assert any(item["params"] for item in payload["routes"])
 
     programming_response = rss_client.get(
         "/api/rss/discover/rsshub/routes",
