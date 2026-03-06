@@ -300,6 +300,7 @@ export function useThreadStream({
           thinking_enabled: context.mode !== "flash",
           is_plan_mode: context.mode === "pro" || context.mode === "ultra",
           subagent_enabled: context.mode === "ultra",
+          user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           thread_id: threadId,
         };
         if (rssContext.length > 0) {

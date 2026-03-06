@@ -4,13 +4,28 @@ from langchain.tools import BaseTool
 
 from src.config import get_app_config
 from src.reflection import resolve_variable
-from src.tools.builtins import ask_clarification_tool, present_file_tool, task_tool, view_image_tool
+from src.tools.builtins import (
+    ask_clarification_tool,
+    mcp_manage_tool,
+    models_manage_tool,
+    present_file_tool,
+    scheduler_create_task_tool,
+    scheduler_operate_task_tool,
+    skills_manage_tool,
+    task_tool,
+    view_image_tool,
+)
 
 logger = logging.getLogger(__name__)
 
 BUILTIN_TOOLS = [
     present_file_tool,
     ask_clarification_tool,
+    scheduler_create_task_tool,
+    scheduler_operate_task_tool,
+    skills_manage_tool,
+    mcp_manage_tool,
+    models_manage_tool,
 ]
 
 SUBAGENT_TOOLS = [

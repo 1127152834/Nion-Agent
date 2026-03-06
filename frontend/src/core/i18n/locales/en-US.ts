@@ -186,6 +186,7 @@ export const enUS: Translations = {
     demoChats: "Demo chats",
     agents: "Agents",
     rss: "News",
+    scheduler: "Scheduler",
   },
 
   // Agents
@@ -227,6 +228,7 @@ export const enUS: Translations = {
     workspace: "Workspace",
     chats: "Chats",
     rss: "News",
+    scheduler: "Scheduler",
   },
 
   // Workspace
@@ -263,6 +265,7 @@ export const enUS: Translations = {
     appName: "Nion",
     chats: "Chats",
     rss: "News",
+    scheduler: "Scheduler",
     newChat: "New chat",
     untitled: "Untitled",
   },

@@ -181,6 +181,7 @@ export const zhCN: Translations = {
     demoChats: "演示对话",
     agents: "智能体",
     rss: "资讯",
+    scheduler: "定时任务",
   },
 
   // Agents
@@ -217,6 +218,7 @@ export const zhCN: Translations = {
     workspace: "工作区",
     chats: "对话",
     rss: "资讯",
+    scheduler: "定时任务",
   },
 
   // Workspace
@@ -253,6 +255,7 @@ export const zhCN: Translations = {
     appName: "Nion",
     chats: "对话",
     rss: "资讯",
+    scheduler: "定时任务",
     newChat: "新对话",
     untitled: "未命名",
   },

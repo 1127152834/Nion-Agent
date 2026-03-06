@@ -38,6 +38,7 @@ import { FlipDisplay } from "../flip-display";
 import { Tooltip } from "../tooltip";
 
 import { MarkdownContent } from "./markdown-content";
+import { ToolActionCard, type ToolActionCardPayload } from "./tool-action-card";
 
 export function MessageGroup({
   className,
@@ -203,6 +204,28 @@ function ToolCall({
   const { t } = useI18n();
   const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
     useArtifacts();
+  const uiCard = useMemo(() => {
+    if (!result || typeof result !== "object") {
+      return null;
+    }
+    const card = (result as { ui_card?: unknown }).ui_card;
+    if (!card || typeof card !== "object") {
+      return null;
+    }
+    return card as ToolActionCardPayload;
+  }, [result]);
+
+  if (uiCard) {
+    const responseMessage =
+      typeof (result as { message?: unknown })?.message === "string"
+        ? (result as { message: string }).message
+        : t.toolCalls.useTool(name);
+    return (
+      <ChainOfThoughtStep key={id} label={responseMessage} icon={WrenchIcon}>
+        <ToolActionCard card={uiCard} />
+      </ChainOfThoughtStep>
+    );
+  }
 
   if (name === "web_search") {
     let label: React.ReactNode = t.toolCalls.searchForRelatedInfo;

@@ -12,7 +12,8 @@ from src.channels.runtime_manager import ChannelRuntimeManager
 from src.config.app_config import get_app_config
 from src.config.paths import get_paths
 from src.gateway.config import get_gateway_config
-from src.gateway.routers import agents, artifacts, channels, config, mcp, memory, models, rss, skills, uploads
+from src.gateway.routers import agents, artifacts, channels, config, mcp, memory, models, rss, scheduler, skills, uploads
+from src.scheduler.service import shutdown_scheduler, startup_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +42,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         sys.exit(1)
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
+    startup_scheduler()
+    logger.info("Scheduler service started")
 
     try:
         channel_repo = ChannelRepository(paths=get_paths())
@@ -58,12 +61,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # MCP tools are lazily initialized in LangGraph Server when first needed
 
     yield
-
     channel_runtime_manager = getattr(app.state, "channel_runtime_manager", None)
     if isinstance(channel_runtime_manager, ChannelRuntimeManager):
         channel_runtime_manager.stop()
         app.state.channel_runtime_manager = None
 
+    shutdown_scheduler()
+    logger.info("Scheduler service stopped")
     logger.info("Shutting down API Gateway")
 
 
@@ -142,6 +146,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Message channel integration for Lark and DingTalk",
             },
             {
+                "name": "scheduler",
+                "description": "Scheduled tasks with cron/interval/event triggers and workflow execution",
+            },
+            {
                 "name": "health",
                 "description": "Health check and system status endpoints",
             },
@@ -190,6 +198,12 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)
+
+    # Channels API is mounted at /api/channels
+    app.include_router(channels.router)
+
+    # Scheduler API is mounted at /api/scheduler
+    app.include_router(scheduler.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

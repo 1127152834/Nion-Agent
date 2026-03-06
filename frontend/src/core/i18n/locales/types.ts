@@ -108,6 +108,7 @@ export interface Translations {
     demoChats: string;
     agents: string;
     rss: string;
+    scheduler: string;
   };
 
   // Agents
@@ -142,6 +143,7 @@ export interface Translations {
     workspace: string;
     chats: string;
     rss: string;
+    scheduler: string;
   };
 
   // Workspace
@@ -178,6 +180,7 @@ export interface Translations {
     appName: string;
     chats: string;
     rss: string;
+    scheduler: string;
     newChat: string;
     untitled: string;
   };

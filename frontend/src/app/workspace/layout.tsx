@@ -6,6 +6,7 @@ import { Toaster } from "sonner";
 
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { RuntimeOnboardingOverlay } from "@/components/workspace/runtime-onboarding-overlay";
+import { SchedulerReminderWatcher } from "@/components/workspace/scheduler/scheduler-reminder-watcher";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
 import { RSSContextProvider } from "@/core/rss";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
@@ -42,6 +43,8 @@ export default function WorkspaceLayout({
   return (
     <QueryClientProvider client={queryClient}>
       <RSSContextProvider>
+        <RuntimeOnboardingOverlay />
+        <SchedulerReminderWatcher />
         <RuntimeOnboardingOverlay />
         <SidebarProvider
           className="h-screen"
