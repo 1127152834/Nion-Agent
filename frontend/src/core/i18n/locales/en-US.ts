@@ -264,6 +264,10 @@ export const enUS: Translations = {
     discoverFeatured: "Featured",
     discoverSubscribed: "Subscribed",
     discoverAlreadySubscribed: "This feed is already subscribed",
+    discoverCategoryBoardTitle: "Explore by category",
+    discoverCategoryBoardDescription:
+      "Jump into a category and browse curated RSS resources quickly.",
+    discoverExploreCategory: "Open",
     rsshubTool: "RSSHub",
     rsshubDialogTitle: "Generate feed via RSSHub",
     rsshubDialogDescription:

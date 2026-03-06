@@ -195,6 +195,9 @@ export interface Translations {
     discoverFeatured: string;
     discoverSubscribed: string;
     discoverAlreadySubscribed: string;
+    discoverCategoryBoardTitle: string;
+    discoverCategoryBoardDescription: string;
+    discoverExploreCategory: string;
     rsshubTool: string;
     rsshubDialogTitle: string;
     rsshubDialogDescription: string;

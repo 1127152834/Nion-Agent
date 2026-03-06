@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ArrowRightIcon,
   CompassIcon,
   ExternalLinkIcon,
   FileUpIcon,
@@ -36,6 +37,52 @@ import {
 } from "@/core/rss";
 import type { OPMLSource } from "@/core/rss";
 import { cn } from "@/lib/utils";
+
+const CATEGORY_VISUALS: Record<
+  string,
+  { emoji: string; gradientFrom: string; gradientTo: string }
+> = {
+  programming: {
+    emoji: "💻",
+    gradientFrom: "#0ea5e9",
+    gradientTo: "#0284c7",
+  },
+  ai: {
+    emoji: "🤖",
+    gradientFrom: "#22c55e",
+    gradientTo: "#16a34a",
+  },
+  design: {
+    emoji: "🎨",
+    gradientFrom: "#f97316",
+    gradientTo: "#ea580c",
+  },
+  product: {
+    emoji: "🧭",
+    gradientFrom: "#8b5cf6",
+    gradientTo: "#7c3aed",
+  },
+  news: {
+    emoji: "🗞️",
+    gradientFrom: "#ef4444",
+    gradientTo: "#dc2626",
+  },
+  finance: {
+    emoji: "📈",
+    gradientFrom: "#14b8a6",
+    gradientTo: "#0d9488",
+  },
+  science: {
+    emoji: "🧪",
+    gradientFrom: "#6366f1",
+    gradientTo: "#4f46e5",
+  },
+  chinese: {
+    emoji: "🀄",
+    gradientFrom: "#f59e0b",
+    gradientTo: "#d97706",
+  },
+};
 
 function normalizeURL(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -151,6 +198,11 @@ export function DiscoverPanel({
       return haystack.includes(normalizedFilter);
     });
   }, [opmlFilter, opmlSources]);
+
+  const categoryCards = useMemo(
+    () => categories.filter((item) => item.id !== "all"),
+    [categories],
+  );
 
   useEffect(() => {
     setKeywordInput(keyword);
@@ -552,6 +604,60 @@ export function DiscoverPanel({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
+        {category === "all" && !keyword.trim() && categoryCards.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-end justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold">
+                  {t.rssReader.discoverCategoryBoardTitle}
+                </h3>
+                <p className="text-muted-foreground text-xs">
+                  {t.rssReader.discoverCategoryBoardDescription}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              {categoryCards.map((item) => {
+                const visual = CATEGORY_VISUALS[item.id] ?? {
+                  emoji: "📰",
+                  gradientFrom: "#64748b",
+                  gradientTo: "#475569",
+                };
+                return (
+                  <button
+                    key={`card-${item.id}`}
+                    type="button"
+                    onClick={() => onCategoryChange(item.id)}
+                    className="group relative overflow-hidden rounded-xl p-0 text-left"
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, ${visual.gradientFrom}, ${visual.gradientTo})`,
+                    }}
+                  >
+                    <div className="absolute -top-2 -right-1 text-5xl opacity-20 transition-transform duration-300 group-hover:scale-110">
+                      {visual.emoji}
+                    </div>
+                    <div className="flex min-h-24 flex-col justify-between p-3">
+                      <div className="text-3xl leading-none">{visual.emoji}</div>
+                      <div className="space-y-0.5">
+                        <div className="text-sm font-semibold text-white">
+                          {item.label}
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-white/90">
+                          <span>{item.count}</span>
+                          <span className="inline-flex items-center gap-1">
+                            {t.rssReader.discoverExploreCategory}
+                            <ArrowRightIcon className="size-3.5" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           {categories.map((item) => (
             <Button
