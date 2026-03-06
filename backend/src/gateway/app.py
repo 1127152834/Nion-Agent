@@ -4,10 +4,15 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from src.channels.event_broker import ChannelEventBroker
+from src.channels.repository import ChannelRepository
+from src.channels.runtime_manager import ChannelRuntimeManager
 from src.config.app_config import get_app_config
+from src.config.paths import get_paths
 from src.gateway.config import get_gateway_config
-from src.gateway.routers import agents, artifacts, config, mcp, memory, models, rss, skills, uploads
+from src.gateway.routers import agents, artifacts, channels, config, mcp, memory, models, rss, skills, uploads
 
 # Configure logging
 logging.basicConfig(
@@ -23,6 +28,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler."""
 
+    app.state.channel_event_broker = ChannelEventBroker()
+    app.state.channel_runtime_manager = None
+    app.state.channel_runtime_error = None
+
     # Load config and check necessary environment variables at startup
     try:
         get_app_config()
@@ -33,12 +42,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
 
+    try:
+        channel_repo = ChannelRepository(paths=get_paths())
+        channel_repo.init_schema()
+        channel_runtime_manager = ChannelRuntimeManager(repo=channel_repo)
+        channel_runtime_manager.start()
+        app.state.channel_runtime_manager = channel_runtime_manager
+    except Exception as error:
+        app.state.channel_runtime_error = str(error)
+        logger.warning("Channel runtime manager startup failed (non-blocking): %s", error)
+
     # NOTE: MCP tools initialization is NOT done here because:
     # 1. Gateway doesn't use MCP tools - they are used by Agents in the LangGraph Server
     # 2. Gateway and LangGraph Server are separate processes with independent caches
     # MCP tools are lazily initialized in LangGraph Server when first needed
 
     yield
+
+    channel_runtime_manager = getattr(app.state, "channel_runtime_manager", None)
+    if isinstance(channel_runtime_manager, ChannelRuntimeManager):
+        channel_runtime_manager.stop()
+        app.state.channel_runtime_manager = None
+
     logger.info("Shutting down API Gateway")
 
 
@@ -113,13 +138,27 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "RSS feed subscription, refresh and entry management",
             },
             {
+                "name": "channels",
+                "description": "Message channel integration for Lark and DingTalk",
+            },
+            {
                 "name": "health",
                 "description": "Health check and system status endpoints",
             },
         ],
     )
 
-    # CORS is handled by nginx - no need for FastAPI middleware
+    # Keep CORS at app-level so local frontend can call gateway directly
+    # (e.g., http://localhost:3000 -> http://localhost:8001) without nginx.
+    gateway_config = get_gateway_config()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=gateway_config.cors_origins,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Include routers
     # Config API is mounted at /api/config
@@ -148,6 +187,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # RSS API is mounted at /api/rss
     app.include_router(rss.router)
+
+    # Channels API is mounted at /api/channels
+    app.include_router(channels.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

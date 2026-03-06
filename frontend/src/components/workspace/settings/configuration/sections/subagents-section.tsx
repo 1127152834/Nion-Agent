@@ -39,7 +39,7 @@ export function SubagentsSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.configSections?.subagents;
+  const copy = t.settings.configSections.subagents;
 
   const subagents = asObject(config.subagents);
   const agents = asObject(subagents.agents);
@@ -47,19 +47,6 @@ export function SubagentsSection({
     const item = asObject(value);
     return [name, toInputValue(item.timeout_seconds)];
   });
-
-  const copy = {
-    title: m?.title ?? "Subagent timeouts",
-    subtitle: m?.subtitle ?? "Configure default and per-agent execution timeout.",
-    defaultTimeout: m?.defaultTimeout ?? "Default timeout (seconds)",
-    perAgent: m?.perAgent ?? "Per-agent overrides",
-    agentName: m?.agentName ?? "Agent name",
-    timeout: m?.timeout ?? "Timeout (seconds)",
-    add: m?.add ?? "Add override",
-    remove: m?.remove ?? "Remove",
-    empty: m?.empty ?? "No overrides. Default timeout will be used.",
-    hint: m?.hint ?? "Use this to control subtask wait time and avoid long-running stalls. Enter seconds greater than 0.",
-  };
 
   const updateSubagents = (nextSubagents: Record<string, unknown>) => {
     const next = cloneConfig(config);

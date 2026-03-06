@@ -5,6 +5,12 @@ interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   onStartupStage: (callback: (data: any) => void) => void;
+  getRuntimeStatus: () => Promise<any>;
+  downloadRuntimeComponent: (componentName: string) => Promise<any>;
+  retryRuntimeComponent: (componentName: string) => Promise<any>;
+  completeRuntimeOnboarding: () => Promise<any>;
+  skipRuntimeComponent: (componentName: string) => Promise<any>;
+  onRuntimeDownloadProgress: (callback: (data: any) => void) => void;
 }
 
 interface Window {

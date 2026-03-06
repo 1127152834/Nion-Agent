@@ -241,7 +241,24 @@ export function ArtifactDirectoryTree({
   );
 
   useEffect(() => {
-    setExpandedDirs(collectInitialExpandedDirs(tree, 1));
+    const nextExpanded = collectInitialExpandedDirs(tree, 1);
+    setExpandedDirs((previous) => {
+      const previousKeys = Object.keys(previous);
+      const nextKeys = Object.keys(nextExpanded);
+      if (previousKeys.length === nextKeys.length) {
+        let same = true;
+        for (const key of nextKeys) {
+          if (previous[key] !== nextExpanded[key]) {
+            same = false;
+            break;
+          }
+        }
+        if (same) {
+          return previous;
+        }
+      }
+      return nextExpanded;
+    });
   }, [tree]);
 
   return (

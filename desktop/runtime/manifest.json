@@ -1,0 +1,34 @@
+{
+  "version": "0.1.0",
+  "platform": "multi",
+  "arch": "multi",
+  "coreComponents": [
+    {
+      "name": "python-runtime",
+      "path": "core/python"
+    },
+    {
+      "name": "backend-runtime",
+      "path": "core/backend"
+    },
+    {
+      "name": "frontend-runtime",
+      "path": "core/frontend"
+    }
+  ],
+  "optionalComponents": [
+    {
+      "name": "sandbox-image-cache",
+      "description": "Sandbox 镜像预拉取缓存包",
+      "assetName": "nion-runtime-optional-sandbox-{platform}-{arch}-v{version}.tar.gz",
+      "sha256": ""
+    },
+    {
+      "name": "extended-tools-bundle",
+      "description": "扩展工具依赖包（image-search/provisioner）",
+      "assetName": "nion-runtime-optional-tools-{platform}-{arch}-v{version}.tar.gz",
+      "sha256": ""
+    }
+  ],
+  "checksums": {}
+}

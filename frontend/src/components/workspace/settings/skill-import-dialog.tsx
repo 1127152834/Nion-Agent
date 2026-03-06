@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { useI18n } from "@/core/i18n/hooks";
 
 type SkillImportDialogProps = {
   open: boolean;
@@ -19,18 +20,21 @@ export function SkillImportDialog({
   open,
   onOpenChange,
 }: SkillImportDialogProps) {
+  const { t } = useI18n();
+  const copy = t.settings.skillImportDialog;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Import skills</DialogTitle>
+          <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>
-            Importing skills from other agents is not available in this build.
+            {copy.description}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button type="button" onClick={() => onOpenChange(false)}>
-            OK
+            {copy.close}
           </Button>
         </DialogFooter>
       </DialogContent>

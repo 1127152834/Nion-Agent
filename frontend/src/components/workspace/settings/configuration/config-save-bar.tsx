@@ -20,16 +20,9 @@ export function ConfigSaveBar({
   onSave: () => void;
 }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.configSections?.saveBar;
+  const copy = t.settings.configSections.saveBar;
   const isDisabled = disabled ?? false;
   const isSaving = saving ?? false;
-  const copy = {
-    dirty: m?.dirty ?? "Unsaved changes",
-    clean: m?.clean ?? "No pending changes",
-    discard: m?.discard ?? "Discard",
-    save: m?.save ?? "Save",
-    saving: m?.saving ?? "Saving...",
-  };
 
   return (
     <div

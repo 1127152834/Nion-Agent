@@ -64,7 +64,12 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
       "runtime.assign-ports": {
         message: "分配本地端口",
         detail: "为前端、网关和 LangGraph 选择可用端口",
-        percent: 0.24
+        percent: 0.18
+      },
+      "runtime.check-ports": {
+        message: "校验端口占用",
+        detail: "检查关键端口是否被其他进程占用",
+        percent: 0.28
       },
       "runtime.check-dependencies": {
         message: "检查运行依赖",
@@ -74,17 +79,22 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
       "runtime.start.langgraph": {
         message: "启动 Agent 引擎",
         detail: "正在拉起 LangGraph 服务",
-        percent: 0.62
+        percent: 0.6
       },
       "runtime.start.gateway": {
         message: "启动 API 网关",
         detail: "正在拉起 127.0.0.1 网关服务",
-        percent: 0.78
+        percent: 0.74
       },
       "runtime.start.frontend": {
         message: "启动前端界面",
         detail: "正在加载本地桌面 UI 服务",
-        percent: 0.92
+        percent: 0.86
+      },
+      "runtime.start.proxy": {
+        message: "启动同源代理",
+        detail: "正在建立本地 2026 统一入口",
+        percent: 0.94
       }
     }
   },
@@ -120,7 +130,12 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
       "runtime.assign-ports": {
         message: "Assigning local ports",
         detail: "Selecting available ports for frontend, gateway and LangGraph",
-        percent: 0.24
+        percent: 0.18
+      },
+      "runtime.check-ports": {
+        message: "Checking occupied ports",
+        detail: "Verifying required startup ports are available",
+        percent: 0.28
       },
       "runtime.check-dependencies": {
         message: "Checking dependencies",
@@ -130,17 +145,22 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
       "runtime.start.langgraph": {
         message: "Starting Agent engine",
         detail: "Launching LangGraph service",
-        percent: 0.62
+        percent: 0.6
       },
       "runtime.start.gateway": {
         message: "Starting API gateway",
         detail: "Launching local gateway on 127.0.0.1",
-        percent: 0.78
+        percent: 0.74
       },
       "runtime.start.frontend": {
         message: "Starting frontend UI",
         detail: "Loading local desktop UI service",
-        percent: 0.92
+        percent: 0.86
+      },
+      "runtime.start.proxy": {
+        message: "Starting same-origin proxy",
+        detail: "Binding local unified entry on port 2026",
+        percent: 0.94
       }
     }
   }

@@ -49,7 +49,7 @@ export function TitleSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.configSections?.title;
+  const copy = t.settings.configSections.title;
   const title = asObject(config.title);
   const models = asArray(config.models);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -66,17 +66,6 @@ export function TitleSection({
   );
 
   const selectedModel = asString(title.model_name).trim();
-
-  const copy = {
-    title: m?.title ?? "Conversation title",
-    subtitle: m?.subtitle ?? "Auto-generate a title for each chat.",
-    enabled: m?.enabled ?? "Enable auto title",
-    model: m?.model ?? "Title model",
-    useDefaultModel: m?.useDefaultModel ?? "Use default model",
-    advanced: m?.advanced ?? "Advanced options",
-    maxWords: m?.maxWords ?? "Max words",
-    maxChars: m?.maxChars ?? "Max characters",
-  };
 
   const updateTitle = (key: string, value: unknown) => {
     const next = cloneConfig(config);

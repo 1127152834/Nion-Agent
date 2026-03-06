@@ -1,6 +1,6 @@
 # Nion - Unified Development Environment
 
-.PHONY: help config check install dev stop clean docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
+.PHONY: help config check install dev stop clean desktop-dev desktop-stop docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
 
 help:
 	@echo "Nion Development Commands:"
@@ -9,6 +9,8 @@ help:
 	@echo "  make install         - Install all dependencies (frontend + backend)"
 	@echo "  make setup-sandbox   - Pre-pull sandbox container image (recommended)"
 	@echo "  make dev             - Start all services (frontend + backend + nginx on localhost:2026)"
+	@echo "  make desktop-dev     - Start Electron desktop app (auto install dependencies)"
+	@echo "  make desktop-stop    - Stop desktop-related services/processes"
 	@echo "  make stop            - Stop all running services"
 	@echo "  make clean           - Clean up processes and temporary files"
 	@echo ""
@@ -245,6 +247,38 @@ clean: stop
 	@echo "Cleaning up..."
 	@-rm -rf logs/*.log 2>/dev/null || true
 	@echo "✓ Cleanup complete"
+
+# Start Electron desktop app with auto dependency install
+desktop-dev:
+	@echo "Stopping existing desktop-related services if any..."
+	@-pkill -f "langgraph dev" 2>/dev/null || true
+	@-pkill -f "uvicorn src.gateway.app:app" 2>/dev/null || true
+	@-pkill -f "next dev" 2>/dev/null || true
+	@-pkill -f "electron dist/main.js" 2>/dev/null || true
+	@sleep 1
+	@echo ""
+	@echo "=========================================="
+	@echo "  Starting Nion Desktop (Electron)"
+	@echo "=========================================="
+	@echo ""
+	@echo "Installing backend dependencies..."
+	@cd backend && uv sync
+	@echo "Installing frontend dependencies..."
+	@cd frontend && pnpm install
+	@echo "Installing desktop dependencies..."
+	@cd desktop/electron && pnpm install
+	@echo ""
+	@echo "Launching Electron desktop app..."
+	@cd desktop/electron && pnpm run dev
+
+# Stop desktop-related services/processes
+desktop-stop:
+	@echo "Stopping desktop-related services..."
+	@-pkill -f "langgraph dev" 2>/dev/null || true
+	@-pkill -f "uvicorn src.gateway.app:app" 2>/dev/null || true
+	@-pkill -f "next dev" 2>/dev/null || true
+	@-pkill -f "electron dist/main.js" 2>/dev/null || true
+	@echo "✓ Desktop services stopped"
 
 # ==========================================
 # Docker Development Commands

@@ -1,323 +1,131 @@
-# 🦌 Nion - 2.0
+# 一念 Nion
 
-<a href="https://trendshift.io/repositories/14699" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14699" alt="huanxi%2Fnion | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-> On February 28th, 2026, Nion claimed the 🏆 #1 spot on GitHub Trending following the launch of version 2. Thanks a million to our incredible community — you made this happen! 💪🔥
+一念之间，万事即达。你的专属 AI 智能助手，懂你所想，为你而行。  
+耗费繁琐操作，只需一个念头，工作与生活，皆可轻松托付。
 
-Nion (**D**eep **E**xploration and **E**fficient **R**esearch **Flow**) is an open-source **super agent harness** that orchestrates **sub-agents**, **memory**, and **sandboxes** to do almost anything — powered by **extensible skills**.
-
-https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
-
-> [!NOTE]
-> **Nion 2.0 is a ground-up rewrite.** It shares no code with v1. If you're looking for the original Deep Research framework, it's maintained on the [`1.x` branch](https://github.com/huanxi/nion/tree/main-1.x) — contributions there are still welcome. Active development has moved to 2.0.
-
-## Official Website
-
-Learn more and see **real demos** on our official website.
-
-**[nion.tech](https://nion.tech/)**
+一念 Nion 是一个面向真实任务执行的 AI 智能体系统。它将多智能体编排、工具调用、沙箱执行、上下文存储（Context-Store）和可扩展技能整合在同一套运行时中，帮助你把“想法”快速落地为可执行结果。
 
 ---
 
-## Table of Contents
+## 核心能力
 
-- [🦌 Nion - 2.0](#-nion---20)
-  - [Official Website](#official-website)
-  - [Table of Contents](#table-of-contents)
-  - [Quick Start](#quick-start)
-    - [Configuration](#configuration)
-    - [Running the Application](#running-the-application)
-      - [Option 1: Docker (Recommended)](#option-1-docker-recommended)
-      - [Option 2: Local Development](#option-2-local-development)
-    - [Advanced](#advanced)
-      - [Sandbox Mode](#sandbox-mode)
-      - [MCP Server](#mcp-server)
-  - [From Deep Research to Super Agent Harness](#from-deep-research-to-super-agent-harness)
-  - [Core Features](#core-features)
-    - [Skills \& Tools](#skills--tools)
-    - [Sub-Agents](#sub-agents)
-    - [Sandbox \& File System](#sandbox--file-system)
-    - [Context Engineering](#context-engineering)
-    - [Long-Term Memory](#long-term-memory)
-  - [Recommended Models](#recommended-models)
-  - [Documentation](#documentation)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
-    - [Key Contributors](#key-contributors)
-  - [Star History](#star-history)
+- 多智能体协作：主智能体可按任务拆解并调度子智能体并行执行
+- 沙箱与文件系统：支持安全执行命令、读写文件、产物沉淀与回溯
+- 技能系统：支持按需加载技能（SKILL）与工具扩展（含 MCP）
+- 配置中心：运行时可视化配置，配置持久化到本地 SQLite
+- 上传与产物链路：文件上传、解析、产物访问与下载能力完整闭环
+- 上下文存储：支持 workspace/thread 级上下文沉淀与召回
 
-## Quick Start
+---
 
-### Configuration
+## 快速开始
 
-1. **Clone the Nion repository**
+### 1) 准备环境
 
-   ```bash
-   git clone https://github.com/huanxi/nion.git
-   cd nion
-   ```
+- Node.js 22+
+- pnpm
+- uv
+- nginx
 
-2. **Generate local configuration files**
+可先运行：
 
-   From the project root directory (`nion/`), run:
-
-   ```bash
-   make config
-   ```
-
-   This command creates local configuration files based on the provided example templates.
-
-3. **Configure your preferred model(s)**
-
-   Edit `config.yaml` and define at least one model:
-
-   ```yaml
-   models:
-     - name: gpt-4                       # Internal identifier
-       display_name: GPT-4               # Human-readable name
-       use: langchain_openai:ChatOpenAI  # LangChain class path
-       model: gpt-4                      # Model identifier for API
-       api_key: $OPENAI_API_KEY          # API key (recommended: use env var)
-       max_tokens: 4096                  # Maximum tokens per request
-       temperature: 0.7                  # Sampling temperature
-   ```
-
-  
-4. **Set API keys for your configured model(s)**
-
-   Choose one of the following methods:
-
-- Option A: Edit the `.env` file in the project root (Recommended)
-
-
-   ```bash
-   TAVILY_API_KEY=your-tavily-api-key
-   OPENAI_API_KEY=your-openai-api-key
-   # Add other provider keys as needed
-   ```
-
-- Option B: Export environment variables in your shell
-
-   ```bash
-   export OPENAI_API_KEY=your-openai-api-key
-   ```
-
-- Option C: Edit `config.yaml` directly (Not recommended for production)
-
-   ```yaml
-   models:
-     - name: gpt-4
-       api_key: your-actual-api-key-here  # Replace placeholder
-   ```
-
-### Running the Application
-
-#### Option 1: Docker (Recommended)
-
-The fastest way to get started with a consistent environment:
-
-1. **Initialize and start**:
-   ```bash
-   make docker-init    # Pull sandbox image (Only once or when image updates)
-   make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
-   ```
-
-   `make docker-start` now starts `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: src.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
-
-2. **Access**: http://localhost:2026
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed Docker development guide.
-
-#### Option 2: Local Development
-
-If you prefer running services locally:
-
-1. **Check prerequisites**:
-   ```bash
-   make check  # Verifies Node.js 22+, pnpm, uv, nginx
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   make install  # Install backend + frontend dependencies
-   ```
-
-3. **(Optional) Pre-pull sandbox image**:
-   ```bash
-   # Recommended if using Docker/Container-based sandbox
-   make setup-sandbox
-   ```
-
-4. **Start services**:
-   ```bash
-   make dev
-   ```
-
-5. **Access**: http://localhost:2026
-
-### Advanced
-#### Sandbox Mode
-
-Nion supports multiple sandbox execution modes:
-- **Local Execution** (runs sandbox code directly on the host machine)
-- **Docker Execution** (runs sandbox code in isolated Docker containers)
-- **Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service)
-
-For Docker development, service startup follows `config.yaml` sandbox mode. In Local/Docker modes, `provisioner` is not started.
-
-See the [Sandbox Configuration Guide](backend/docs/CONFIGURATION.md#sandbox) to configure your preferred mode.
-
-#### MCP Server
-
-Nion supports configurable MCP servers and skills to extend its capabilities.
-For HTTP/SSE MCP servers, OAuth token flows are supported (`client_credentials`, `refresh_token`).
-See the [MCP Server Guide](backend/docs/MCP_SERVER.md) for detailed instructions.
-
-## From Deep Research to Super Agent Harness
-
-Nion started as a Deep Research framework — and the community ran with it. Since launch, developers have pushed it far beyond research: building data pipelines, generating slide decks, spinning up dashboards, automating content workflows. Things we never anticipated.
-
-That told us something important: Nion wasn't just a research tool. It was a **harness** — a runtime that gives agents the infrastructure to actually get work done.
-
-So we rebuilt it from scratch.
-
-Nion 2.0 is no longer a framework you wire together. It's a super agent harness — batteries included, fully extensible. Built on LangGraph and LangChain, it ships with everything an agent needs out of the box: a filesystem, memory, skills, sandboxed execution, and the ability to plan and spawn sub-agents for complex, multi-step tasks.
-
-Use it as-is. Or tear it apart and make it yours.
-
-## Core Features
-
-### Skills & Tools
-
-Skills are what make Nion do *almost anything*.
-
-A standard Agent Skill is a structured capability module — a Markdown file that defines a workflow, best practices, and references to supporting resources. Nion ships with built-in skills for research, report generation, slide creation, web pages, image and video generation, and more. But the real power is extensibility: add your own skills, replace the built-in ones, or combine them into compound workflows.
-
-Skills are loaded progressively — only when the task needs them, not all at once. This keeps the context window lean and makes Nion work well even with token-sensitive models.
-
-Tools follow the same philosophy. Nion comes with a core toolset — web search, web fetch, file operations, bash execution — and supports custom tools via MCP servers and Python functions. Swap anything. Add anything.
-
-```
-# Paths inside the sandbox container
-/mnt/skills/public
-├── research/SKILL.md
-├── report-generation/SKILL.md
-├── slide-creation/SKILL.md
-├── web-page/SKILL.md
-└── image-generation/SKILL.md
-
-/mnt/skills/custom
-└── your-custom-skill/SKILL.md      ← yours
+```bash
+make check
 ```
 
-### Sub-Agents
+### 2) 初始化配置
 
-Complex tasks rarely fit in a single pass. Nion decomposes them.
-
-The lead agent can spawn sub-agents on the fly — each with its own scoped context, tools, and termination conditions. Sub-agents run in parallel when possible, report back structured results, and the lead agent synthesizes everything into a coherent output.
-
-This is how Nion handles tasks that take minutes to hours: a research task might fan out into a dozen sub-agents, each exploring a different angle, then converge into a single report — or a website — or a slide deck with generated visuals. One harness, many hands.
-
-### Sandbox & File System
-
-Nion doesn't just *talk* about doing things. It has its own computer.
-
-Each task runs inside an isolated Docker container with a full filesystem — skills, workspace, uploads, outputs. The agent reads, writes, and edits files. It executes bash commands and codes. It views images. All sandboxed, all auditable, zero contamination between sessions.
-
-This is the difference between a chatbot with tool access and an agent with an actual execution environment.
-
-```
-# Paths inside the sandbox container
-/mnt/user-data/
-├── uploads/          ← your files
-├── workspace/        ← agents' working directory
-└── outputs/          ← final deliverables
+```bash
+cp .env.example .env
+cp frontend/.env.example frontend/.env
 ```
 
-### Context Engineering
+运行时配置由应用内“配置中心”统一管理并持久化到 SQLite（默认路径 `backend/.nion/config.db`）。
 
-**Isolated Sub-Agent Context**: Each sub-agent runs in its own isolated context. This means that the sub-agent will not be able to see the context of the main agent or other sub-agents. This is important to ensure that the sub-agent is able to focus on the task at hand and not be distracted by the context of the main agent or other sub-agents.
+可选（自定义数据库位置）：
 
-**Summarization**: Within a session, Nion manages context aggressively — summarizing completed sub-tasks, offloading intermediate results to the filesystem, compressing what's no longer immediately relevant. This lets it stay sharp across long, multi-step tasks without blowing the context window.
-
-### Long-Term Memory
-
-Most agents forget everything the moment a conversation ends. Nion remembers.
-
-Across sessions, Nion builds a persistent memory of your profile, preferences, and accumulated knowledge. The more you use it, the better it knows you — your writing style, your technical stack, your recurring workflows. Memory is stored locally and stays under your control.
-
-## Recommended Models
-
-Nion is model-agnostic — it works with any LLM that implements the OpenAI-compatible API. That said, it performs best with models that support:
-
-- **Long context windows** (100k+ tokens) for deep research and multi-step tasks
-- **Reasoning capabilities** for adaptive planning and complex decomposition
-- **Multimodal inputs** for image understanding and video comprehension
-- **Strong tool-use** for reliable function calling and structured outputs
-
-## Embedded Python Client
-
-Nion can be used as an embedded Python library without running the full HTTP services. The `NionClient` provides direct in-process access to all agent and Gateway capabilities, returning the same response schemas as the HTTP Gateway API:
-
-```python
-from src.client import NionClient
-
-client = NionClient()
-
-# Chat
-response = client.chat("Analyze this paper for me", thread_id="my-thread")
-
-# Streaming (LangGraph SSE protocol: values, messages-tuple, end)
-for event in client.stream("hello"):
-    if event.type == "messages-tuple" and event.data.get("type") == "ai":
-        print(event.data["content"])
-
-# Configuration & management — returns Gateway-aligned dicts
-models = client.list_models()        # {"models": [...]}
-skills = client.list_skills()        # {"skills": [...]}
-client.update_skill("web-search", enabled=True)
-client.upload_files("thread-1", ["./report.pdf"])  # {"success": True, "files": [...]}
+```bash
+export NION_CONFIG_DB_PATH=/path/to/config.db
 ```
 
-All dict-returning methods are validated against Gateway Pydantic response models in CI (`TestGatewayConformance`), ensuring the embedded client stays in sync with the HTTP API schemas. See `backend/src/client.py` for full API documentation.
+### 3) 安装依赖
 
-## Documentation
+```bash
+make install
+```
 
-- [Contributing Guide](CONTRIBUTING.md) - Development environment setup and workflow
-- [Configuration Guide](backend/docs/CONFIGURATION.md) - Setup and configuration instructions
-- [Architecture Overview](backend/CLAUDE.md) - Technical architecture details
-- [Backend Architecture](backend/README.md) - Backend architecture and API reference
+### 4) 启动开发环境
 
-## Contributing
+```bash
+make dev
+```
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, workflow, and guidelines.
+启动后访问：
 
-Regression coverage includes Docker sandbox mode detection and provisioner kubeconfig-path handling tests in `backend/tests/`.
+- 应用入口：`http://localhost:2026`
+- Gateway API：`http://localhost:2026/api/*`
+- LangGraph：`http://localhost:2026/api/langgraph/*`
 
-## License
+### 5)（可选）清理旧 memory 历史数据
 
-This project is open source and available under the [MIT License](./LICENSE).
+```bash
+# 默认 dry-run，仅预览将被清理的路径
+scripts/cleanup-legacy-memory-data.sh --app-data-dir ~/.localnion
 
-## Acknowledgments
+# 确认后执行实际清理（不会触碰 openviking 数据）
+scripts/cleanup-legacy-memory-data.sh --app-data-dir ~/.localnion --execute --yes
+```
 
-Nion is built upon the incredible work of the open-source community. We are deeply grateful to all the projects and contributors whose efforts have made Nion possible. Truly, we stand on the shoulders of giants.
+---
 
-We would like to extend our sincere appreciation to the following projects for their invaluable contributions:
+## Docker 开发模式
 
-- **[LangChain](https://github.com/langchain-ai/langchain)**: Their exceptional framework powers our LLM interactions and chains, enabling seamless integration and functionality.
-- **[LangGraph](https://github.com/langchain-ai/langgraph)**: Their innovative approach to multi-agent orchestration has been instrumental in enabling Nion's sophisticated workflows.
+```bash
+make docker-init
+make docker-start
+```
 
-These projects exemplify the transformative power of open-source collaboration, and we are proud to build upon their foundations.
+访问：`http://localhost:2026`
 
-### Key Contributors
+---
 
-A heartfelt thank you goes out to the core authors of `Nion`, whose vision, passion, and dedication have brought this project to life:
+## 项目结构
 
-- **[Daniel Walnut](https://github.com/hetaoBackend/)**
-- **[Henry Li](https://github.com/magiccube/)**
+```text
+.
+├── backend/        # FastAPI Gateway + LangGraph + 配置/沙箱/上下文存储能力
+├── frontend/       # Next.js 前端工作台
+├── docker/         # Nginx、开发容器与沙箱相关配置
+├── scripts/        # 开发与运维脚本
+├── skills/         # 内置与扩展技能目录
+└── docs/           # 架构、接口与实施文档
+```
 
-Your unwavering commitment and expertise have been the driving force behind Nion's success. We are honored to have you at the helm of this journey.
+---
 
-## Star History
+## 桌面端路线
 
-[![Star History Chart](https://api.star-history.com/svg?repos=huanxi/nion&type=Date)](https://star-history.com/#huanxi/nion&Date)
+当前版本将以 Electron 作为桌面端优先路线，目标是实现“安装即用”的前后端一体桌面体验：
+
+- 内置后端运行时
+- 本地 SQLite 持久化
+- 用户目录统一数据管理
+- 沙箱与文件路径在桌面端可控、可诊断、可恢复
+
+---
+
+## v0.10 发布说明
+
+`v0.10` 为项目基础版本，完成了核心骨架与关键能力闭环：
+
+- 初始化前后端工程与统一开发流程
+- 完成 AI 工作台基础界面与会话链路
+- 落地配置中心（SQLite 持久化）
+- 完成文件上传、产物访问、技能管理与工具调用基础能力
+- 建立沙箱执行与线程级文件目录管理机制
+
+---
+
+## 许可证
+
+本项目采用 [MIT License](./LICENSE)。

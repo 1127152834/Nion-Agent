@@ -6,6 +6,14 @@ from pydantic import BaseModel, Field
 class MemoryConfig(BaseModel):
     """Configuration for global memory mechanism."""
 
+    version: str = Field(
+        default="2.0",
+        description="Memory system version identifier.",
+    )
+    fallback_to_v1: bool = Field(
+        default=True,
+        description="Whether to include legacy v1 compatible memory payload.",
+    )
     enabled: bool = Field(
         default=True,
         description="Whether to enable memory mechanism",
@@ -32,6 +40,111 @@ class MemoryConfig(BaseModel):
     model_name: str | None = Field(
         default=None,
         description="Model name to use for memory updates (None = use default model)",
+    )
+    embedding_provider: str = Field(
+        default="sentence-transformers",
+        description="Embedding backend: sentence-transformers | openai",
+    )
+    embedding_model: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="Embedding model name.",
+    )
+    embedding_api_key: str | None = Field(
+        default=None,
+        description="Optional API key for embedding providers requiring credentials.",
+    )
+    vector_store_path: str = Field(
+        default="",
+        description=(
+            "Path to vector storage. If empty, defaults to "
+            "`{base_dir}/memory_v2/vectors.db` in the manager layer."
+        ),
+    )
+    vector_weight: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Fusion weight for vector similarity scores.",
+    )
+    bm25_weight: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Fusion weight for BM25 scores.",
+    )
+    bm25_k1: float = Field(
+        default=1.5,
+        ge=0.0,
+        le=3.0,
+        description="BM25 k1 parameter.",
+    )
+    bm25_b: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="BM25 b parameter.",
+    )
+    proactive_enabled: bool = Field(
+        default=True,
+        description="Whether to enable dual-mode proactive retrieval.",
+    )
+    fast_mode_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Confidence threshold to keep retrieval in fast mode.",
+    )
+    deep_mode_threshold: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Confidence threshold to trigger deep reasoning mode.",
+    )
+    evolution_enabled: bool = Field(
+        default=True,
+        description="Whether to enable the self-evolving memory engine.",
+    )
+    evolution_interval_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="Interval for scheduled memory evolution.",
+    )
+    compression_threshold: int = Field(
+        default=10,
+        ge=2,
+        le=1000,
+        description="Minimum group size used by compression logic.",
+    )
+    merge_similarity_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Similarity threshold for automatic merge.",
+    )
+    staleness_threshold_days: int = Field(
+        default=90,
+        ge=1,
+        le=3650,
+        description="Days after which rarely used memories are considered stale.",
+    )
+    max_items_before_compress: int = Field(
+        default=200,
+        ge=10,
+        le=100000,
+        description="Item-count threshold to trigger compression.",
+    )
+    redundancy_threshold: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description="Redundancy threshold to trigger compression.",
+    )
+    min_category_usage: int = Field(
+        default=3,
+        ge=1,
+        le=1000,
+        description="Minimum usage count to keep category untouched during optimization.",
     )
     max_facts: int = Field(
         default=100,

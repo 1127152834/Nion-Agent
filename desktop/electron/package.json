@@ -8,7 +8,12 @@
     "build": "tsc -p tsconfig.json",
     "dev": "pnpm run build && electron dist/main.js",
     "start": "pnpm run build && electron dist/main.js",
-    "dist": "pnpm run build && electron-builder --config electron-builder.yml"
+    "prepare-runtime": "bash ../runtime/prepare-runtime-core.sh",
+    "dist": "pnpm run build && pnpm run prepare-runtime && electron-builder --config electron-builder.yml"
+  },
+  "nionRuntimeDownload": {
+    "owner": "huanxi",
+    "repo": "nion"
   },
   "devDependencies": {
     "@types/node": "^20.17.0",

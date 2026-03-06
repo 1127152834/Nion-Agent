@@ -57,31 +57,11 @@ export function SandboxSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.configSections?.sandbox;
+  const copy = t.settings.configSections.sandbox;
   const sandbox = asObject(config.sandbox);
   const sandboxUse = asString(sandbox.use);
   const sandboxMode = getSandboxMode(sandboxUse);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-
-  const copy = {
-    title: m?.title ?? "Sandbox",
-    subtitle: m?.subtitle ?? "Choose how tools run code.",
-    mode: m?.mode ?? "Execution mode",
-    local: m?.local ?? "Local",
-    aio: m?.aio ?? "AIO container",
-    custom: m?.custom ?? "Custom executor",
-    usePath: m?.usePath ?? "Executor path",
-    usePathPlaceholder: m?.usePathPlaceholder ?? "e.g. src.sandbox.local:LocalSandboxProvider",
-    image: m?.image ?? "Container image",
-    imagePlaceholder: m?.imagePlaceholder ?? "e.g. nion/sandbox:latest",
-    port: m?.port ?? "Port",
-    autoStart: m?.autoStart ?? "Auto start container",
-    advanced: m?.advanced ?? "Advanced options",
-    baseUrl: m?.baseUrl ?? "Existing sandbox URL",
-    baseUrlPlaceholder: m?.baseUrlPlaceholder ?? "Optional. Leave empty for auto-start",
-    containerPrefix: m?.containerPrefix ?? "Container name prefix",
-    idleTimeout: m?.idleTimeout ?? "Idle timeout (seconds)",
-  };
 
   const updateSandbox = (key: string, value: unknown) => {
     const next = cloneConfig(config);
@@ -134,8 +114,8 @@ export function SandboxSection({
       </div>
 
       <FieldTip
-        zh={m?.modeTipZh ?? (m?.modeTipEn ?? "Use Local for development and AIO for production.")}
-        en={m?.modeTipEn ?? "Use Local for development and AIO for production."}
+        zh={copy.modeTipZh}
+        en={copy.modeTipEn}
       />
 
       {sandboxMode === "custom" && (
@@ -233,7 +213,7 @@ export function SandboxSection({
 
       {sandboxMode === "custom" && (
         <div className="text-muted-foreground text-xs">
-          {m?.customConfiguredHint ?? "Custom executor path configured."}
+          {copy.customConfiguredHint}
         </div>
       )}
     </div>

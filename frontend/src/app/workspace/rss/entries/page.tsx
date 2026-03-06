@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import {
   WorkspaceBody,
   WorkspaceContainer,
-  WorkspaceHeader,
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
 import type { RSSEntryFilter } from "@/core/rss";
@@ -59,7 +58,6 @@ export default function RSSEntriesPage() {
 
   return (
     <WorkspaceContainer>
-      <WorkspaceHeader />
       <WorkspaceBody className="min-h-0">
         <div className="flex size-full min-h-0 flex-col">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">

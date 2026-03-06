@@ -20,14 +20,14 @@ export function FieldTip({
   risk?: string;
 }) {
   const { locale, t } = useI18n();
-  const m = t.migration.settings?.configSections?.fieldTip;
+  const copy = t.settings.configSections.fieldTip;
   const primary = locale === "zh-CN" ? zh : en;
   const recommendedLabel = locale === "zh-CN"
-    ? (m?.recommendedZh ?? "Recommended")
-    : (m?.recommendedEn ?? "Recommended");
+    ? copy.recommendedZh
+    : copy.recommendedEn;
   const riskLabel = locale === "zh-CN"
-    ? (m?.riskZh ?? "Risk")
-    : (m?.riskEn ?? "Risk");
+    ? copy.riskZh
+    : copy.riskEn;
   const hasDetail = Boolean((recommended ?? "").trim() || (risk ?? "").trim());
 
   if (!primary && !recommended && !risk) {
@@ -43,7 +43,7 @@ export function FieldTip({
             <button
               type="button"
               className="text-muted-foreground hover:text-foreground inline-flex items-center"
-              aria-label={m?.ariaLabel ?? "Field guidance"}
+              aria-label={copy.ariaLabel}
             >
               <CircleHelpIcon className="size-3.5" />
             </button>

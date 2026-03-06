@@ -1,6 +1,5 @@
 "use client";
 
-import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
 
 import { AuroraText } from "@/components/ui/aurora-text";
@@ -21,7 +20,6 @@ export function CommunitySection() {
       <div className="flex justify-center">
         <Button className="text-xl" size="lg" asChild>
           <Link href="https://github.com/huanxi/nion" target="_blank">
-            <GitHubLogoIcon />
             Contribute Now
           </Link>
         </Button>

@@ -43,21 +43,19 @@ import { SettingsSection } from "./settings-section";
 export function WorkbenchPluginsPage({ onClose }: { onClose?: () => void } = {}) {
   const { t } = useI18n();
   const { data: plugins, isLoading, error } = useInstalledPlugins();
+  const copy = t.settings.workbenchPluginsPage;
 
   return (
     <SettingsSection
-      title={t.settings.workbenchPlugins?.title ?? "Workbench Plugins"}
-      description={
-        t.settings.workbenchPlugins?.description
-        ?? "Manage workbench plugins for different artifact types"
-      }
+      title={copy.title}
+      description={copy.description}
     >
       <div className="space-y-6">
         <section className="space-y-3 rounded-lg border p-4">
           {isLoading ? (
             <div className="text-muted-foreground text-sm">{t.common.loading}</div>
           ) : error ? (
-            <div>Error: {error.message}</div>
+            <div>{error.message}</div>
           ) : (
             <WorkbenchPluginsList plugins={plugins ?? []} onClose={onClose} />
           )}
@@ -84,7 +82,7 @@ function WorkbenchPluginsList({
   onClose?: () => void;
 }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.workbenchPlugins;
+  const copy = t.settings.workbenchPluginsPage;
   const router = useRouter();
   const [filter, setFilter] = useState<string>("installed");
   const [pendingDeletePluginId, setPendingDeletePluginId] = useState<string | null>(null);
@@ -111,7 +109,7 @@ function WorkbenchPluginsList({
 
     const filename = file.name.toLowerCase();
     if (!filename.endsWith(".nwp")) {
-      toast.error(m?.uploadFormatError ?? "Please upload a .nwp package");
+      toast.error(copy.uploadFormatError);
       return;
     }
 
@@ -120,7 +118,7 @@ function WorkbenchPluginsList({
       {
         onSuccess: (result) => {
           toast.success(
-            (m?.pluginInstalled ?? "Plugin \"{name}\" installed").replaceAll(
+            copy.pluginInstalled.replaceAll(
               "{name}",
               result.manifest.name,
             ),
@@ -130,7 +128,7 @@ function WorkbenchPluginsList({
           toast.error(
             error instanceof Error
               ? error.message
-              : (m?.uploadFailed ?? "Failed to upload plugin"),
+              : copy.uploadFailed,
           );
         },
       },
@@ -143,14 +141,14 @@ function WorkbenchPluginsList({
     }
     uninstallPlugin(pendingDeletePluginId, {
       onSuccess: () => {
-        toast.success(m?.pluginDeleted ?? "Plugin deleted");
+        toast.success(copy.pluginDeleted);
         setPendingDeletePluginId(null);
       },
       onError: (error) => {
         toast.error(
           error instanceof Error
             ? error.message
-            : (m?.deleteFailed ?? "Failed to delete plugin"),
+            : copy.deleteFailed,
         );
       },
     });
@@ -163,10 +161,10 @@ function WorkbenchPluginsList({
           <Tabs defaultValue="installed" onValueChange={setFilter}>
             <TabsList variant="line">
               <TabsTrigger value="installed">
-                {m?.installed ?? "Installed"}
+                {copy.installed}
               </TabsTrigger>
               <TabsTrigger value="marketplace" disabled>
-                {m?.marketplace ?? "Marketplace"}
+                {copy.marketplace}
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -176,14 +174,14 @@ function WorkbenchPluginsList({
             <DropdownMenuTrigger asChild>
               <Button size="sm" disabled={installingPlugin}>
                 <PackageIcon className="size-4" />
-                {m?.addPlugin ?? "Add Plugin"}
+                {copy.addPlugin}
                 <ChevronDownIcon className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onSelect={handleCreatePlugin}>
                 <SparklesIcon className="size-4 text-muted-foreground" />
-                {m?.createViaSkill ?? "Create plugin via skill"}
+                {copy.createViaSkill}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={handleUploadMenuClick}
@@ -191,8 +189,8 @@ function WorkbenchPluginsList({
               >
                 <UploadIcon className="size-4 text-muted-foreground" />
                 {installingPlugin
-                  ? (m?.uploading ?? "Uploading...")
-                  : (m?.uploadPackage ?? "Upload .nwp package")}
+                  ? copy.uploading
+                  : copy.uploadPackage}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -222,7 +220,7 @@ function WorkbenchPluginsList({
                 </div>
               </ItemTitle>
               <ItemDescription className="line-clamp-4">
-                {plugin.manifest.description ?? "No description"}
+                {plugin.manifest.description ?? copy.noDescription}
                 {plugin.manifest.author && (
                   <span className="text-muted-foreground text-xs">
                     {" "}
@@ -262,18 +260,15 @@ function WorkbenchPluginsList({
             setPendingDeletePluginId(null);
           }
         }}
-        title={m?.deleteConfirmTitle ?? "Confirm Plugin Deletion"}
+        title={copy.deleteConfirmTitle}
         description={
-          (
-            m?.deleteConfirmDescription
-            ?? "Delete plugin \"{name}\"? This action cannot be undone."
-          ).replaceAll(
+          copy.deleteConfirmDescription.replaceAll(
             "{name}",
             plugins.find((p) => p.manifest.id === pendingDeletePluginId)?.manifest.name ?? "",
           )
         }
-        cancelText={m?.cancelAction ?? "Cancel"}
-        confirmText={m?.confirmDeleteAction ?? "Delete"}
+        cancelText={copy.cancelAction}
+        confirmText={copy.confirmDeleteAction}
         confirmDisabled={uninstallingPlugin}
         onConfirm={handleConfirmDeletePlugin}
         confirmVariant="destructive"
@@ -284,22 +279,21 @@ function WorkbenchPluginsList({
 
 function EmptyPlugin({ onCreatePlugin }: { onCreatePlugin: () => void }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.workbenchPlugins;
+  const copy = t.settings.workbenchPluginsPage;
   return (
     <Empty>
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <PackageIcon />
         </EmptyMedia>
-        <EmptyTitle>{m?.emptyTitle ?? "No plugins installed"}</EmptyTitle>
+        <EmptyTitle>{copy.emptyTitle}</EmptyTitle>
         <EmptyDescription>
-          {m?.emptyDescription
-            ?? "Install workbench plugins to handle different artifact types"}
+          {copy.emptyDescription}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button onClick={onCreatePlugin}>
-          {m?.emptyButton ?? "Create your first plugin"}
+          {copy.emptyButton}
         </Button>
       </EmptyContent>
     </Empty>

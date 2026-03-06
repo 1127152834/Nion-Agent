@@ -154,7 +154,8 @@ export class DesktopProcessManager {
 
     const env = {
       ...process.env,
-      NION_HOME: this.paths.appDataDir // 关键：设置 NION_HOME
+      NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
+      CORS_ORIGINS: `http://localhost:${this.ports!.frontendPort},http://127.0.0.1:${this.ports!.frontendPort}`,
     };
 
     const child = spawn(

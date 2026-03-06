@@ -17,24 +17,28 @@ export function ThreadTitle({
 }) {
   const { t } = useI18n();
   const { isNewThread } = useThreadChat();
+  const untitled = t.workspace.threadTitle.untitled;
+  const loading = t.workspace.threadTitle.loading;
+
   useEffect(() => {
     const pageTitle = isNewThread
       ? t.pages.newChat
-      : thread.values?.title && thread.values.title !== "Untitled"
+      : thread.values?.title && thread.values.title !== "Untitled" && thread.values.title !== untitled
         ? thread.values.title
-        : t.pages.untitled;
+        : untitled;
     if (thread.isThreadLoading) {
-      document.title = `Loading... - ${t.pages.appName}`;
+      document.title = `${loading} - ${t.pages.appName}`;
     } else {
       document.title = `${pageTitle} - ${t.pages.appName}`;
     }
   }, [
     isNewThread,
-    t.pages.newChat,
-    t.pages.untitled,
+    loading,
     t.pages.appName,
+    t.pages.newChat,
     thread.isThreadLoading,
     thread.values,
+    untitled,
   ]);
 
   if (!thread.values?.title) {
@@ -42,7 +46,7 @@ export function ThreadTitle({
   }
   return (
     <FlipDisplay uniqueKey={threadId}>
-      {thread.values.title ?? "Untitled"}
+      {thread.values.title ?? untitled}
     </FlipDisplay>
   );
 }

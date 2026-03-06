@@ -1,0 +1,10 @@
+frontend/src/core/i18n/locales/types.ts
+frontend/src/core/i18n/locales/en-US.ts
+frontend/src/core/i18n/locales/zh-CN.ts
+frontend/src/components/workspace/settings/configuration/sections/memory-section.tsx
+frontend/src/components/workspace/settings/configuration/sections/models-section.tsx
+frontend/src/components/workspace/settings/configuration/sections/rss-section.tsx
+frontend/src/components/workspace/settings/configuration/sections/tools-section.tsx
+frontend/src/components/workspace/settings/tool-settings-page.tsx
+frontend/src/components/workspace/workspace-container.tsx
+frontend/src/components/workspace/settings/about-settings-page.tsx

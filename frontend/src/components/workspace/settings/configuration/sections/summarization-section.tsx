@@ -67,7 +67,7 @@ export function SummarizationSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.configSections?.summarization;
+  const copy = t.settings.configSections.summarization;
   const summarization = asObject(config.summarization);
   const triggerList = normalizeTriggerList(summarization.trigger);
   const keep = asObject(summarization.keep);
@@ -87,27 +87,10 @@ export function SummarizationSection({
     [models],
   );
 
-  const copy = {
-    title: m?.title ?? "Summarization",
-    subtitle: m?.subtitle ?? "Summarize history when context gets long.",
-    enabled: m?.enabled ?? "Enable summarization",
-    model: m?.model ?? "Summarization model",
-    useDefaultModel: m?.useDefaultModel ?? "Use default model",
-    triggers: m?.triggers ?? "Triggers",
-    addTrigger: m?.addTrigger ?? "Add trigger",
-    triggerType: m?.triggerType ?? "Type",
-    triggerValue: m?.triggerValue ?? "Threshold",
-    remove: m?.remove ?? "Remove",
-    advanced: m?.advanced ?? "Advanced options",
-    keepType: m?.keepType ?? "Keep type",
-    keepValue: m?.keepValue ?? "Keep value",
-    noTrigger: m?.noTrigger ?? "No trigger set. Auto summarization is disabled.",
-  };
-
   const triggerTypeLabel: Record<ContextSizeType, string> = {
-    tokens: m?.tokensLabel ?? "Tokens",
-    messages: m?.messagesLabel ?? "Messages",
-    fraction: m?.fractionLabel ?? "Context fraction",
+    tokens: copy.tokensLabel,
+    messages: copy.messagesLabel,
+    fraction: copy.fractionLabel,
   };
 
   const updateSummarization = (key: string, value: unknown) => {

@@ -1,3 +1,3 @@
-from . import artifacts, mcp, models, rss, skills, uploads
+from . import artifacts, channels, mcp, models, rss, skills, uploads
 
-__all__ = ["artifacts", "mcp", "models", "rss", "skills", "uploads"]
+__all__ = ["artifacts", "channels", "mcp", "models", "rss", "skills", "uploads"]

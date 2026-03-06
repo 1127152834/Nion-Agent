@@ -382,6 +382,9 @@ def _format_rss_context_section(rss_context: list[dict[str, Any]] | None) -> str
         summary = str(block.get("summary", "")).strip()
         entry_id = str(block.get("entry_id", "")).strip()
         feed_id = str(block.get("feed_id", "")).strip()
+        selected_text = str(
+            block.get("selected_text", block.get("value", ""))
+        ).strip()
 
         if block_type == "mainEntry":
             lines.append("- Active article context:")
@@ -403,6 +406,18 @@ def _format_rss_context_section(rss_context: list[dict[str, Any]] | None) -> str
                 lines.append(f"  - Feed summary: {summary[:800]}")
             if feed_id:
                 lines.append(f"  - Feed ID: {feed_id}")
+        elif block_type == "selectedText":
+            lines.append(
+                "- Active selected passage (highest priority for requests about \"this paragraph\" or \"this excerpt\"):"
+            )
+            if selected_text:
+                lines.append(f"  - Text: {selected_text[:1200]}")
+            if entry_id:
+                lines.append(f"  - Source Entry ID: {entry_id}")
+            if title:
+                lines.append(f"  - Source Title: {title}")
+            if url:
+                lines.append(f"  - Source URL: {url}")
 
     if not lines:
         return ""

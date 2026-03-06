@@ -44,7 +44,7 @@ function extractValidationErrors(detail: unknown): ConfigValidateErrorItem[] | n
         message?: unknown;
         type?: unknown;
       };
-      const message = typeof source.message === "string" ? source.message : "Validation error";
+      const message = typeof source.message === "string" ? source.message : "";
       const type = typeof source.type === "string" ? source.type : "validation_error";
       return {
         path: Array.isArray(source.path) ? source.path.map((v) => String(v)) : [],

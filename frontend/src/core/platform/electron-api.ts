@@ -38,5 +38,41 @@ export const electronPlatform = {
     const api = getElectronAPI();
     if (!api) throw new Error("Not in Electron environment");
     api.onStartupStage(callback);
-  }
+  },
+
+  async getRuntimeStatus(): Promise<any> {
+    const api = getElectronAPI();
+    if (!api) throw new Error("Not in Electron environment");
+    return api.getRuntimeStatus();
+  },
+
+  async downloadRuntimeComponent(componentName: string): Promise<any> {
+    const api = getElectronAPI();
+    if (!api) throw new Error("Not in Electron environment");
+    return api.downloadRuntimeComponent(componentName);
+  },
+
+  async retryRuntimeComponent(componentName: string): Promise<any> {
+    const api = getElectronAPI();
+    if (!api) throw new Error("Not in Electron environment");
+    return api.retryRuntimeComponent(componentName);
+  },
+
+  async completeRuntimeOnboarding(): Promise<any> {
+    const api = getElectronAPI();
+    if (!api) throw new Error("Not in Electron environment");
+    return api.completeRuntimeOnboarding();
+  },
+
+  async skipRuntimeComponent(componentName: string): Promise<any> {
+    const api = getElectronAPI();
+    if (!api) throw new Error("Not in Electron environment");
+    return api.skipRuntimeComponent(componentName);
+  },
+
+  onRuntimeDownloadProgress(callback: (data: any) => void): void {
+    const api = getElectronAPI();
+    if (!api) throw new Error("Not in Electron environment");
+    api.onRuntimeDownloadProgress(callback);
+  },
 };

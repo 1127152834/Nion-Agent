@@ -2,11 +2,12 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
-export type RSSContextBlockType = "mainEntry" | "mainFeed";
+export type RSSContextBlockType = "mainEntry" | "mainFeed" | "selectedText";
 
-const SPECIAL_BLOCK_TYPES = new Set<RSSContextBlockType>([
+const SINGLE_INSTANCE_BLOCK_TYPES = new Set<RSSContextBlockType>([
   "mainEntry",
   "mainFeed",
+  "selectedText",
 ]);
 
 const noop = () => undefined;
@@ -20,6 +21,7 @@ export interface RSSContextBlock {
     url?: string;
     summary?: string;
     feed_id?: string;
+    entry_id?: string;
   };
 }
 
@@ -44,8 +46,8 @@ export function RSSContextProvider({
 
   const addBlock = useCallback((block: RSSContextBlock) => {
     setBlocks((previous) => {
-      const filtered = SPECIAL_BLOCK_TYPES.has(block.type)
-        ? previous.filter((item) => !SPECIAL_BLOCK_TYPES.has(item.type))
+      const filtered = SINGLE_INSTANCE_BLOCK_TYPES.has(block.type)
+        ? previous.filter((item) => item.type !== block.type)
         : previous.filter((item) => item.id !== block.id);
       return [...filtered, block];
     });

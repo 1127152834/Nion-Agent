@@ -1,4 +1,4 @@
-import { StarFilledIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import { StarFilledIcon } from "@radix-ui/react-icons";
 
 import { Button } from "@/components/ui/button";
 import { NumberTicker } from "@/components/ui/number-ticker";
@@ -27,7 +27,6 @@ export function Header() {
           className="group relative z-10"
         >
           <a href="https://github.com/huanxi/nion" target="_blank">
-            <GitHubLogoIcon className="size-4" />
             Star on GitHub
             {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
               env.GITHUB_OAUTH_TOKEN && <StarCounter />}

@@ -36,12 +36,13 @@ source "$PYTHON_DIR/bin/activate"
 echo "Upgrading pip to version $PIP_VERSION..."
 pip install --upgrade "pip==$PIP_VERSION"
 
-# Install backend dependencies with extras
+# Install backend dependencies with extras.
+# Use non-editable install so packaged runtime does not depend on source absolute paths.
 echo "Installing backend dependencies..."
 if [ -n "$BACKEND_EXTRAS" ]; then
-  uv pip install -e ".[$BACKEND_EXTRAS]"
+  uv pip install ".[$BACKEND_EXTRAS]"
 else
-  uv pip install -e "."
+  uv pip install "."
 fi
 
 # Verify installation

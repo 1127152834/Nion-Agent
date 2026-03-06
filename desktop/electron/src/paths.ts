@@ -8,6 +8,10 @@ export interface DesktopRuntimePaths {
   appDataDir: string;
   logsDir: string;
   runtimeDir: string;
+  runtimeManifestPath: string;
+  runtimeStatePath: string;
+  runtimeOptionalDir: string;
+  frontendServerEntry: string | null;
   pythonExecutable: string | null;
   skillsPath: string;
   backendCwd: string;
@@ -36,31 +40,56 @@ function resolveDesktopAppDataDir(): string {
 }
 
 function resolveRepoRoot(): string {
+  if (app.isPackaged) {
+    return process.resourcesPath;
+  }
   // 从 desktop/electron/dist 回到项目根目录
   return path.resolve(__dirname, "..", "..", "..");
+}
+
+function resolvePackagedPythonExecutable(runtimeCoreDir: string): string {
+  if (process.platform === "win32") {
+    return path.join(runtimeCoreDir, "python", "Scripts", "python.exe");
+  }
+  return path.join(runtimeCoreDir, "python", "bin", "python3");
 }
 
 export function resolveRuntimePaths(): DesktopRuntimePaths {
   const repoRoot = resolveRepoRoot();
   const appDataDir = resolveDesktopAppDataDir();
   const logsDir = ensureDir(path.join(appDataDir, "logs", "desktop"));
+  const runtimeStateDir = ensureDir(path.join(appDataDir, "runtime"));
+  const runtimeOptionalDir = ensureDir(path.join(runtimeStateDir, "optional"));
 
-  // 开发模式：使用项目目录
-  // 打包模式：使用 resources 目录（后续实现）
   const runtimeDir = app.isPackaged
     ? path.join(process.resourcesPath, "runtime")
     : path.join(repoRoot, "desktop", "runtime");
+  const runtimeManifestPath = path.join(runtimeDir, "manifest.json");
 
-  const pythonExecutable = null; // 开发模式使用系统 uv
+  const runtimeCoreDir = path.join(runtimeDir, "core");
+  const pythonExecutable = app.isPackaged
+    ? resolvePackagedPythonExecutable(runtimeCoreDir)
+    : null;
+  const frontendCwd = app.isPackaged
+    ? path.join(runtimeCoreDir, "frontend")
+    : path.join(repoRoot, "frontend");
+  const backendCwd = app.isPackaged
+    ? path.join(runtimeCoreDir, "backend")
+    : path.join(repoRoot, "backend");
+  const frontendServerEntry = app.isPackaged
+    ? path.join(frontendCwd, "server.js")
+    : null;
   const skillsPath = path.join(repoRoot, "skills");
-  const backendCwd = path.join(repoRoot, "backend");
-  const frontendCwd = path.join(repoRoot, "frontend");
 
   return {
     repoRoot,
     appDataDir,
     logsDir,
     runtimeDir,
+    runtimeManifestPath,
+    runtimeStatePath: path.join(runtimeStateDir, "state.json"),
+    runtimeOptionalDir,
+    frontendServerEntry,
     pythonExecutable,
     skillsPath,
     backendCwd,

@@ -37,24 +37,28 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     select: selectArtifact,
     selectedArtifact,
   } = useArtifacts();
+  const threadArtifacts = useMemo(
+    () => thread.values.artifacts ?? [],
+    [thread.values.artifacts],
+  );
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   useEffect(() => {
-    setArtifacts(thread.values.artifacts);
+    setArtifacts(threadArtifacts);
     if (
       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
       autoSelectFirstArtifact
     ) {
-      if (thread?.values?.artifacts?.length > 0) {
+      if (threadArtifacts.length > 0) {
         setAutoSelectFirstArtifact(false);
-        selectArtifact(thread.values.artifacts[0]!);
+        selectArtifact(threadArtifacts[0]!);
       }
     }
   }, [
     autoSelectFirstArtifact,
     selectArtifact,
     setArtifacts,
-    thread.values.artifacts,
+    threadArtifacts,
   ]);
 
   const artifactPanelOpen = useMemo(() => {
@@ -76,6 +80,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
 
   return (
     <ResizablePanelGroup
+      id="workspace-chat-panel-group"
       orientation="horizontal"
       defaultLayout={{ chat: 100, artifacts: 0 }}
       groupRef={layoutRef}
@@ -84,6 +89,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
         {children}
       </ResizablePanel>
       <ResizableHandle
+        id="workspace-chat-panel-handle"
         className={cn(
           "opacity-33 hover:opacity-100",
           !artifactPanelOpen && "pointer-events-none opacity-0",
@@ -114,7 +120,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                 <span className="font-medium">{t.common.directoryTree}</span>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">
-                    {thread.values.artifacts?.length ?? 0}
+                    {artifacts.length}
                     {t.common.filesSuffix}
                   </span>
                   <Button
@@ -129,7 +135,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                 </div>
               </div>
               <ArtifactDirectoryTree
-                files={thread.values.artifacts ?? []}
+                files={artifacts}
                 selectedPath={selectedArtifact}
                 onOpenFile={(path) => {
                   selectArtifact(path);

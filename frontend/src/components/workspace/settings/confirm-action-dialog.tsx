@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { useI18n } from "@/core/i18n/hooks";
 
 type ConfirmActionDialogProps = {
   open: boolean;
@@ -27,12 +28,14 @@ export function ConfirmActionDialog({
   onOpenChange,
   title,
   description,
-  cancelText = "Cancel",
-  confirmText = "Confirm",
+  cancelText,
+  confirmText,
   confirmVariant = "default",
   confirmDisabled = false,
   onConfirm,
 }: ConfirmActionDialogProps) {
+  const { t } = useI18n();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -46,7 +49,7 @@ export function ConfirmActionDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
           >
-            {cancelText}
+            {cancelText ?? t.common.cancel}
           </Button>
           <Button
             type="button"
@@ -56,7 +59,7 @@ export function ConfirmActionDialog({
               onConfirm();
             }}
           >
-            {confirmText}
+            {confirmText ?? t.common.save}
           </Button>
         </DialogFooter>
       </DialogContent>

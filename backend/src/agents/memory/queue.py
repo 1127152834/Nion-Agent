@@ -84,7 +84,7 @@ class MemoryUpdateQueue:
     def _process_queue(self) -> None:
         """Process all queued conversation contexts."""
         # Import here to avoid circular dependency
-        from src.agents.memory.updater import MemoryUpdater
+        from src.agents.memory.memory import update_memory_from_conversation
 
         with self._lock:
             if self._processing:
@@ -103,12 +103,10 @@ class MemoryUpdateQueue:
         print(f"Processing {len(contexts_to_process)} queued memory updates")
 
         try:
-            updater = MemoryUpdater()
-
             for context in contexts_to_process:
                 try:
                     print(f"Updating memory for thread {context.thread_id}")
-                    success = updater.update_memory(
+                    success = update_memory_from_conversation(
                         messages=context.messages,
                         thread_id=context.thread_id,
                         agent_name=context.agent_name,

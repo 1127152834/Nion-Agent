@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import {
   WorkspaceBody,
   WorkspaceContainer,
-  WorkspaceHeader,
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
 import { type RSSEntryFilter, useRSSEntry } from "@/core/rss";
@@ -54,7 +53,6 @@ export default function RSSEntryDetailPage() {
 
   return (
     <WorkspaceContainer>
-      <WorkspaceHeader />
       <WorkspaceBody className="min-h-0">
         <div className="grid size-full min-h-0 grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)]">
           <FeedList

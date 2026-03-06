@@ -17,7 +17,7 @@ mkdir -p "$RELEASE_DIR"
 cd "$SCRIPT_DIR"
 tar -czf "$RELEASE_DIR/$BUNDLE_NAME" \
   --exclude='release' \
-  python/ backend/ frontend/
+  python/ backend/ frontend/ core/ optional/ manifest.json
 
 # Calculate SHA256
 cd "$RELEASE_DIR"

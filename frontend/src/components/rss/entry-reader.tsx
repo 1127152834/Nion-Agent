@@ -5,30 +5,23 @@ import {
   BookmarkIcon,
   CheckIcon,
   Loader2Icon,
-  SparklesIcon,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   useRSSContext,
   useRSSEntry,
-  useSummarizeRSSEntry,
-  useTranslateRSSEntry,
+  useRSSFeed,
   useUpdateRSSEntry,
 } from "@/core/rss";
 import { formatTimeAgo } from "@/core/utils/datetime";
 import { cn } from "@/lib/utils";
 
+import { FloatingEntryAssistant } from "./assistant";
 import { TextSelectionToolbar, type TextSelectionInfo } from "./text-selection-toolbar";
 
 function sanitizeHTML(raw: string): string {
@@ -148,22 +141,20 @@ export function EntryReader({
   entryId: string;
   className?: string;
 }) {
-  const router = useRouter();
   const { t } = useI18n();
   const { entry, isLoading, error } = useRSSEntry(entryId);
+  const { feed } = useRSSFeed(entry?.feed_id);
   const { addBlock, removeBlock } = useRSSContext();
   const updateEntryMutation = useUpdateRSSEntry();
-  const summarizeEntryMutation = useSummarizeRSSEntry();
-  const translateEntryMutation = useTranslateRSSEntry();
 
   const contentHostRef = useRef<HTMLDivElement | null>(null);
   const shadowRootRef = useRef<ShadowRoot | null>(null);
   const didAutoMarkReadRef = useRef<string | null>(null);
-  const [textSelection, setTextSelection] = useState<TextSelectionInfo | null>(
-    null,
-  );
-  const [generatedSummary, setGeneratedSummary] = useState("");
-  const [generatedTranslation, setGeneratedTranslation] = useState("");
+
+  const [textSelection, setTextSelection] = useState<TextSelectionInfo | null>(null);
+  const [assistantPrefillRequest, setAssistantPrefillRequest] = useState<
+    { id: number; prompt: string } | null
+  >(null);
 
   const articleContent = useMemo(
     () => entry?.content ?? entry?.description ?? "",
@@ -189,27 +180,43 @@ export function EntryReader({
     if (!entry) {
       return;
     }
+
     addBlock({
       id: "mainEntry",
       type: "mainEntry",
       value: entry.id,
       metadata: {
+        entry_id: entry.id,
         title: entry.title,
         url: entry.url,
         summary: entry.description,
         feed_id: entry.feed_id,
       },
     });
+
+    addBlock({
+      id: "mainFeed",
+      type: "mainFeed",
+      value: entry.feed_id,
+      metadata: {
+        feed_id: entry.feed_id,
+        title: feed?.title,
+        url: feed?.site_url ?? undefined,
+        summary: feed?.description ?? undefined,
+      },
+    });
+
     return () => {
       removeBlock("mainEntry");
+      removeBlock("mainFeed");
     };
-  }, [addBlock, entry, removeBlock]);
+  }, [addBlock, entry, feed?.description, feed?.site_url, feed?.title, removeBlock]);
 
   useEffect(() => {
     setTextSelection(null);
-    setGeneratedSummary("");
-    setGeneratedTranslation("");
-  }, [entryId]);
+    setAssistantPrefillRequest(null);
+    removeBlock("selectedText");
+  }, [entryId, removeBlock]);
 
   useEffect(() => {
     const host = contentHostRef.current;
@@ -275,6 +282,7 @@ export function EntryReader({
     shadowRoot.addEventListener("mouseup", selectionHandler);
     shadowRoot.addEventListener("keyup", selectionHandler);
     window.addEventListener("scroll", clearSelectionOnScroll, true);
+
     return () => {
       shadowRoot.removeEventListener("click", clickHandler);
       shadowRoot.removeEventListener("mouseup", selectionHandler);
@@ -283,77 +291,32 @@ export function EntryReader({
     };
   }, [articleContent]);
 
-  const openChatWithPrompt = useCallback(
-    (prompt: string) => {
-      const query = new URLSearchParams();
-      query.set("prefill", prompt);
-      router.push(`/workspace/chats/new?${query.toString()}`);
-    },
-    [router],
-  );
-
-  const handleAskAIFromSelection = useCallback(
-    (selectedText: string) => {
-      openChatWithPrompt(
-        t.rssReader.askAIPrompt.replace("{text}", selectedText),
-      );
-      setTextSelection(null);
-    },
-    [openChatWithPrompt, t.rssReader.askAIPrompt],
-  );
-
-  const handleSummarizeSelection = useCallback(
-    (selectedText: string) => {
-      openChatWithPrompt(
-        t.rssReader.summarizePrompt.replace("{text}", selectedText),
-      );
-      setTextSelection(null);
-    },
-    [openChatWithPrompt, t.rssReader.summarizePrompt],
-  );
-
-  const handleTranslateSelection = useCallback(
-    (selectedText: string) => {
-      openChatWithPrompt(
-        t.rssReader.translatePrompt.replace("{text}", selectedText),
-      );
-      setTextSelection(null);
-    },
-    [openChatWithPrompt, t.rssReader.translatePrompt],
-  );
-
-  const handleGenerateSummary = useCallback(async () => {
+  const pushSelectionToAssistant = (text: string, template: string) => {
     if (!entry) {
       return;
     }
-    try {
-      const response = await summarizeEntryMutation.mutateAsync(entry.id);
-      setGeneratedSummary(response.summary);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t.rssReader.summaryFailed,
-      );
-    }
-  }, [entry, summarizeEntryMutation, t.rssReader.summaryFailed]);
 
-  const handleGenerateTranslation = useCallback(async () => {
-    if (!entry) {
-      return;
-    }
-    try {
-      const response = await translateEntryMutation.mutateAsync({
-        entryId: entry.id,
-        request: {
-          target_language: "zh-cn",
-        },
-      });
-      setGeneratedTranslation(response.content);
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : t.rssReader.translationFailed,
-      );
-    }
-  }, [entry, t.rssReader.translationFailed, translateEntryMutation]);
+    const prompt = template.replace("{text}", text);
+
+    addBlock({
+      id: "selectedText",
+      type: "selectedText",
+      value: text,
+      metadata: {
+        entry_id: entry.id,
+        feed_id: entry.feed_id,
+        title: entry.title,
+        url: entry.url,
+        summary: entry.description,
+      },
+    });
+
+    setAssistantPrefillRequest({
+      id: Date.now(),
+      prompt,
+    });
+    setTextSelection(null);
+  };
 
   const handleToggleRead = async () => {
     if (!entry) {
@@ -364,9 +327,11 @@ export function EntryReader({
         entryId: entry.id,
         request: { read: !entry.read },
       });
-    } catch (error) {
+    } catch (updateError) {
       toast.error(
-        error instanceof Error ? error.message : t.rssReader.entryUpdateFailed,
+        updateError instanceof Error
+          ? updateError.message
+          : t.rssReader.entryUpdateFailed,
       );
     }
   };
@@ -380,9 +345,11 @@ export function EntryReader({
         entryId: entry.id,
         request: { starred: !entry.starred },
       });
-    } catch (error) {
+    } catch (updateError) {
       toast.error(
-        error instanceof Error ? error.message : t.rssReader.entryUpdateFailed,
+        updateError instanceof Error
+          ? updateError.message
+          : t.rssReader.entryUpdateFailed,
       );
     }
   };
@@ -405,135 +372,64 @@ export function EntryReader({
   }
 
   return (
-    <>
-      <ResizablePanelGroup
-        orientation="horizontal"
-        defaultLayout={{ article: 62, ai: 38 }}
-        className={cn("size-full", className)}
-      >
-        <ResizablePanel id="article" className="min-w-0">
-          <ScrollArea className="size-full">
-            <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
-              <header className="space-y-3">
-                <h1 className="text-2xl leading-tight font-semibold">
-                  {entry.title}
-                </h1>
-                <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-                  <span>{formatTimeAgo(entry.published_at)}</span>
-                  {entry.author && (
-                    <>
-                      <span>·</span>
-                      <span>{entry.author}</span>
-                    </>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleToggleRead()}
-                  >
-                    <CheckIcon className="size-4" />
-                    {entry.read ? t.rssReader.markUnread : t.rssReader.markRead}
-                  </Button>
-                  <Button
-                    variant={entry.starred ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => void handleToggleStarred()}
-                  >
-                    <BookmarkIcon className="size-4" />
-                    {entry.starred ? t.rssReader.unstar : t.rssReader.star}
-                  </Button>
-                  <Button variant="ghost" size="sm" asChild>
-                    <a href={entry.url} target="_blank" rel="noreferrer noopener">
-                      <ArrowUpRightIcon className="size-4" />
-                      {t.rssReader.openOriginal}
-                    </a>
-                  </Button>
-                </div>
-              </header>
-
-              <div
-                ref={contentHostRef}
-                className="bg-card min-h-[50vh] rounded-2xl border px-6 py-8 shadow-xs"
-              />
+    <div className={cn("relative size-full", className)}>
+      <ScrollArea className="size-full">
+        <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6 pb-24">
+          <header className="space-y-3">
+            <h1 className="text-3xl leading-tight font-semibold">{entry.title}</h1>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+              <span>{formatTimeAgo(entry.published_at)}</span>
+              {entry.author && (
+                <>
+                  <span>·</span>
+                  <span>{entry.author}</span>
+                </>
+              )}
             </div>
-          </ScrollArea>
-        </ResizablePanel>
-        <ResizableHandle className="opacity-40 hover:opacity-100" />
-        <ResizablePanel id="ai" className="min-w-0">
-          <div className="bg-muted/30 flex size-full flex-col border-l">
-            <div className="border-b px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <SparklesIcon className="text-primary size-4" />
-                {t.rssReader.aiPanelTitle}
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => void handleToggleRead()}>
+                <CheckIcon className="size-4" />
+                {entry.read ? t.rssReader.markUnread : t.rssReader.markRead}
+              </Button>
+              <Button
+                variant={entry.starred ? "default" : "outline"}
+                size="sm"
+                onClick={() => void handleToggleStarred()}
+              >
+                <BookmarkIcon className="size-4" />
+                {entry.starred ? t.rssReader.unstar : t.rssReader.star}
+              </Button>
+              <Button variant="ghost" size="sm" asChild>
+                <a href={entry.url} target="_blank" rel="noreferrer noopener">
+                  <ArrowUpRightIcon className="size-4" />
+                  {t.rssReader.openOriginal}
+                </a>
+              </Button>
             </div>
-            <div className="min-h-0 flex-1">
-              <ScrollArea className="size-full">
-                <div className="space-y-4 p-4">
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    {t.rssReader.aiPanelDescription}
-                  </p>
+          </header>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void handleGenerateSummary()}
-                      disabled={summarizeEntryMutation.isPending}
-                    >
-                      {summarizeEntryMutation.isPending && (
-                        <Loader2Icon className="size-3.5 animate-spin" />
-                      )}
-                      {t.rssReader.generateSummary}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void handleGenerateTranslation()}
-                      disabled={translateEntryMutation.isPending}
-                    >
-                      {translateEntryMutation.isPending && (
-                        <Loader2Icon className="size-3.5 animate-spin" />
-                      )}
-                      {t.rssReader.generateTranslation}
-                    </Button>
-                  </div>
+          <div
+            ref={contentHostRef}
+            className="bg-card min-h-[60vh] rounded-2xl border px-8 py-10 shadow-xs"
+          />
+        </div>
+      </ScrollArea>
 
-                  {generatedSummary && (
-                    <section className="bg-background rounded-xl border p-3">
-                      <h3 className="mb-2 text-sm font-semibold">
-                        {t.rssReader.summaryTitle}
-                      </h3>
-                      <div className="text-muted-foreground whitespace-pre-wrap text-sm leading-relaxed">
-                        {generatedSummary}
-                      </div>
-                    </section>
-                  )}
-
-                  {generatedTranslation && (
-                    <section className="bg-background rounded-xl border p-3">
-                      <h3 className="mb-2 text-sm font-semibold">
-                        {t.rssReader.translationTitle}
-                      </h3>
-                      <div className="text-muted-foreground whitespace-pre-wrap text-sm leading-relaxed">
-                        {generatedTranslation}
-                      </div>
-                    </section>
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-          </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
       <TextSelectionToolbar
         selection={textSelection}
-        onAskAI={handleAskAIFromSelection}
-        onSummarize={handleSummarizeSelection}
-        onTranslate={handleTranslateSelection}
+        onAskAI={(text) => pushSelectionToAssistant(text, t.rssReader.askAIPrompt)}
+        onSummarize={(text) =>
+          pushSelectionToAssistant(text, t.rssReader.summarizePrompt)
+        }
+        onTranslate={(text) =>
+          pushSelectionToAssistant(text, t.rssReader.translatePrompt)
+        }
       />
-    </>
+
+      <FloatingEntryAssistant
+        entry={entry}
+        prefillRequest={assistantPrefillRequest}
+      />
+    </div>
   );
 }

@@ -118,6 +118,11 @@ export function useThreadStream({
       extraContext?: Record<string, unknown>,
     ) => {
       const text = message.text.trim();
+      const implicitMentions =
+        message.implicitMentions?.filter(
+          (item): item is NonNullable<PromptInputMessage["implicitMentions"]>[number] =>
+            Boolean(item?.mention && item?.kind && item?.value),
+        ) ?? [];
 
       // Capture current count before showing optimistic messages
       prevMsgCountRef.current = thread.messages.length;
@@ -132,12 +137,18 @@ export function useThreadStream({
       );
 
       // Create optimistic human message (shown immediately)
+      const optimisticAdditionalKwargs: Record<string, unknown> = {};
+      if (optimisticFiles.length > 0) {
+        optimisticAdditionalKwargs.files = optimisticFiles;
+      }
+      if (implicitMentions.length > 0) {
+        optimisticAdditionalKwargs.implicit_mentions = implicitMentions;
+      }
       const optimisticHumanMsg: Message = {
         type: "human",
         id: `opt-human-${Date.now()}`,
         content: text ? [{ type: "text", text }] : "",
-        additional_kwargs:
-          optimisticFiles.length > 0 ? { files: optimisticFiles } : {},
+        additional_kwargs: optimisticAdditionalKwargs,
       };
 
       const newOptimistic: Message[] = [optimisticHumanMsg];
@@ -221,7 +232,10 @@ export function useThreadStream({
                   return [
                     {
                       ...humanMessage,
-                      additional_kwargs: { files: uploadedFiles },
+                      additional_kwargs: {
+                        ...(humanMessage.additional_kwargs as Record<string, unknown>),
+                        files: uploadedFiles,
+                      },
                     },
                     ...messages.slice(1),
                   ];
@@ -251,14 +265,34 @@ export function useThreadStream({
           }),
         );
 
-        const rssContext = rssContextBlocks.map((block) => ({
-          type: block.type,
-          entry_id: block.type === "mainEntry" ? block.value : undefined,
-          feed_id: block.type === "mainFeed" ? block.value : block.metadata?.feed_id,
-          title: block.metadata?.title,
-          url: block.metadata?.url,
-          summary: block.metadata?.summary,
-        }));
+        const rssContext = rssContextBlocks.map((block) => {
+          if (block.type === "selectedText") {
+            return {
+              type: block.type,
+              selected_text: block.value,
+              entry_id: block.metadata?.entry_id,
+              feed_id: block.metadata?.feed_id,
+              title: block.metadata?.title,
+              url: block.metadata?.url,
+              summary: block.metadata?.summary,
+            };
+          }
+
+          return {
+            type: block.type,
+            entry_id:
+              block.type === "mainEntry"
+                ? block.value
+                : block.metadata?.entry_id,
+            feed_id:
+              block.type === "mainFeed"
+                ? block.value
+                : block.metadata?.feed_id,
+            title: block.metadata?.title,
+            url: block.metadata?.url,
+            summary: block.metadata?.summary,
+          };
+        });
 
         const runtimeContext: Record<string, unknown> = {
           ...extraContext,
@@ -272,6 +306,14 @@ export function useThreadStream({
           runtimeContext.rss_context = rssContext;
         }
 
+        const messageAdditionalKwargs: Record<string, unknown> = {};
+        if (filesForSubmit.length > 0) {
+          messageAdditionalKwargs.files = filesForSubmit;
+        }
+        if (implicitMentions.length > 0) {
+          messageAdditionalKwargs.implicit_mentions = implicitMentions;
+        }
+
         await thread.submit(
           {
             messages: [
@@ -283,8 +325,7 @@ export function useThreadStream({
                     text,
                   },
                 ],
-                additional_kwargs:
-                  filesForSubmit.length > 0 ? { files: filesForSubmit } : {},
+                additional_kwargs: messageAdditionalKwargs,
               },
             ],
           },

@@ -55,6 +55,7 @@ export function ArtifactFileDetail({
   threadId: string;
 }) {
   const { t } = useI18n();
+  const installSkillFailedText = t.artifacts.fileDetail.installSkillFailed;
   const { artifacts, setOpen, select } = useArtifacts();
   const isWriteFile = useMemo(() => {
     return filepathFromProps.startsWith("write-file:");
@@ -115,15 +116,15 @@ export function ArtifactFileDetail({
       if (result.success) {
         toast.success(result.message);
       } else {
-        toast.error(result.message ?? "Failed to install skill");
+        toast.error(result.message ?? installSkillFailedText);
       }
     } catch (error) {
       console.error("Failed to install skill:", error);
-      toast.error("Failed to install skill");
+      toast.error(installSkillFailedText);
     } finally {
       setIsInstalling(false);
     }
-  }, [threadId, filepath, isInstalling]);
+  }, [threadId, filepath, isInstalling, installSkillFailedText]);
   return (
     <Artifact className={cn(className)}>
       <ArtifactHeader className="px-2">
@@ -134,7 +135,7 @@ export function ArtifactFileDetail({
             ) : (
               <Select value={filepath} onValueChange={select}>
                 <SelectTrigger className="border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0">
-                  <SelectValue placeholder="Select a file" />
+                  <SelectValue placeholder={t.artifacts.fileDetail.selectFile} />
                 </SelectTrigger>
                 <SelectContent className="select-none">
                   <SelectGroup>
@@ -207,7 +208,7 @@ export function ArtifactFileDetail({
                     await navigator.clipboard.writeText(displayContent ?? "");
                     toast.success(t.clipboard.copiedToClipboard);
                   } catch (error) {
-                    toast.error("Failed to copy to clipboard");
+                    toast.error(t.artifacts.fileDetail.copyFailed);
                     console.error(error);
                   }
                 }}

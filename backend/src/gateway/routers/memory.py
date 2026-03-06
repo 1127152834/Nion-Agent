@@ -1,9 +1,11 @@
 """Memory API router for retrieving and managing global memory data."""
 
+from typing import Any
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from src.agents.memory.updater import get_memory_data, reload_memory_data
+from src.agents.memory.memory import get_memory_data, reload_memory_data
 from src.config.memory_config import get_memory_config
 
 router = APIRouter(prefix="/api", tags=["memory"])
@@ -46,11 +48,18 @@ class Fact(BaseModel):
 class MemoryResponse(BaseModel):
     """Response model for memory data."""
 
-    version: str = Field(default="1.0", description="Memory schema version")
+    version: str = Field(default="2.0", description="Memory schema version")
     lastUpdated: str = Field(default="", description="Last update timestamp")
     user: UserContext = Field(default_factory=UserContext)
     history: HistoryContext = Field(default_factory=HistoryContext)
     facts: list[Fact] = Field(default_factory=list)
+    items: list[dict[str, Any]] = Field(default_factory=list, description="V2 item-layer memories")
+    categories: dict[str, list[dict[str, Any]]] = Field(
+        default_factory=dict,
+        description="V2 category index",
+    )
+    resources: list[dict[str, Any]] = Field(default_factory=list, description="V2 raw resources")
+    legacy: dict[str, Any] | None = Field(default=None, description="Legacy memory payload")
 
 
 class MemoryConfigResponse(BaseModel):
@@ -63,6 +72,18 @@ class MemoryConfigResponse(BaseModel):
     fact_confidence_threshold: float = Field(..., description="Minimum confidence threshold for facts")
     injection_enabled: bool = Field(..., description="Whether memory injection is enabled")
     max_injection_tokens: int = Field(..., description="Maximum tokens for memory injection")
+    vector_weight: float = Field(..., description="Hybrid search vector score weight")
+    bm25_weight: float = Field(..., description="Hybrid search BM25 score weight")
+    bm25_k1: float = Field(..., description="BM25 k1 parameter")
+    bm25_b: float = Field(..., description="BM25 b parameter")
+    proactive_enabled: bool = Field(..., description="Whether dual-mode retriever is enabled")
+    evolution_enabled: bool = Field(..., description="Whether self-evolving engine is enabled")
+    compression_threshold: int = Field(..., description="Compression threshold for evolution")
+    merge_similarity_threshold: float = Field(..., description="Merge similarity threshold")
+    staleness_threshold_days: int = Field(..., description="Staleness threshold in days")
+    max_items_before_compress: int = Field(..., description="Item count threshold for compression")
+    redundancy_threshold: float = Field(..., description="Redundancy threshold for compression")
+    min_category_usage: int = Field(..., description="Minimum category usage for optimization")
 
 
 class MemoryStatusResponse(BaseModel):
@@ -169,6 +190,18 @@ async def get_memory_config_endpoint() -> MemoryConfigResponse:
         fact_confidence_threshold=config.fact_confidence_threshold,
         injection_enabled=config.injection_enabled,
         max_injection_tokens=config.max_injection_tokens,
+        vector_weight=config.vector_weight,
+        bm25_weight=config.bm25_weight,
+        bm25_k1=config.bm25_k1,
+        bm25_b=config.bm25_b,
+        proactive_enabled=config.proactive_enabled,
+        evolution_enabled=config.evolution_enabled,
+        compression_threshold=config.compression_threshold,
+        merge_similarity_threshold=config.merge_similarity_threshold,
+        staleness_threshold_days=config.staleness_threshold_days,
+        max_items_before_compress=config.max_items_before_compress,
+        redundancy_threshold=config.redundancy_threshold,
+        min_category_usage=config.min_category_usage,
     )
 
 
@@ -196,6 +229,18 @@ async def get_memory_status() -> MemoryStatusResponse:
             fact_confidence_threshold=config.fact_confidence_threshold,
             injection_enabled=config.injection_enabled,
             max_injection_tokens=config.max_injection_tokens,
+            vector_weight=config.vector_weight,
+            bm25_weight=config.bm25_weight,
+            bm25_k1=config.bm25_k1,
+            bm25_b=config.bm25_b,
+            proactive_enabled=config.proactive_enabled,
+            evolution_enabled=config.evolution_enabled,
+            compression_threshold=config.compression_threshold,
+            merge_similarity_threshold=config.merge_similarity_threshold,
+            staleness_threshold_days=config.staleness_threshold_days,
+            max_items_before_compress=config.max_items_before_compress,
+            redundancy_threshold=config.redundancy_threshold,
+            min_category_usage=config.min_category_usage,
         ),
         data=MemoryResponse(**memory_data),
     )

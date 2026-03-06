@@ -30,7 +30,7 @@ export default async function RootLayout({
       suppressContentEditableWarning
       suppressHydrationWarning
     >
-      <body>
+      <body suppressHydrationWarning>
         <PluginInitializer />
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
           <I18nProvider initialLocale={locale}>{children}</I18nProvider>

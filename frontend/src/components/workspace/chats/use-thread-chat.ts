@@ -1,29 +1,33 @@
 "use client";
 
-import { useParams, usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { uuid } from "@/core/utils/uuid";
 
 export function useThreadChat() {
   const { thread_id: threadIdFromPath } = useParams<{ thread_id: string }>();
-  const pathname = usePathname();
 
   const searchParams = useSearchParams();
+  const isRouteNewThread = threadIdFromPath === "new";
+  const newThreadIdRef = useRef<string | null>(null);
   const [threadId, setThreadId] = useState(() => {
-    return threadIdFromPath === "new" ? uuid() : threadIdFromPath;
+    return isRouteNewThread ? "new" : threadIdFromPath;
   });
 
-  const [isNewThread, setIsNewThread] = useState(
-    () => threadIdFromPath === "new",
-  );
+  const [isNewThread, setIsNewThread] = useState(() => isRouteNewThread);
 
   useEffect(() => {
-    if (pathname.endsWith("/new")) {
+    if (isRouteNewThread) {
       setIsNewThread(true);
-      setThreadId(uuid());
+      newThreadIdRef.current ??= uuid();
+      setThreadId(newThreadIdRef.current);
+      return;
     }
-  }, [pathname]);
+    newThreadIdRef.current = null;
+    setIsNewThread(false);
+    setThreadId(threadIdFromPath);
+  }, [isRouteNewThread, threadIdFromPath]);
   const isMock = searchParams.get("mock") === "true";
   return { threadId, isNewThread, setIsNewThread, isMock };
 }

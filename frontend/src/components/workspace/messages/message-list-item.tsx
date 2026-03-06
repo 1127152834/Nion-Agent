@@ -107,6 +107,60 @@ function MessageImage({
   );
 }
 
+type ImplicitMention = {
+  kind: "context" | "skill" | "mcp";
+  value: string;
+  mention: string;
+};
+
+function isImplicitMention(value: unknown): value is ImplicitMention {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as Partial<ImplicitMention>;
+  const validKind =
+    candidate.kind === "context" ||
+    candidate.kind === "skill" ||
+    candidate.kind === "mcp";
+  return (
+    validKind &&
+    typeof candidate.value === "string" &&
+    typeof candidate.mention === "string"
+  );
+}
+
+function stripImplicitMentionSuffix(
+  content: string,
+  implicitMentions: ImplicitMention[],
+): string {
+  if (!content || implicitMentions.length === 0) {
+    return content;
+  }
+  const mentionLine = implicitMentions.map((item) => item.mention).join(" ");
+  if (!mentionLine) {
+    return content;
+  }
+  const normalized = content.trimEnd();
+  const suffix = `\n\n${mentionLine}`;
+  if (normalized.endsWith(suffix)) {
+    return normalized.slice(0, -suffix.length).trimEnd();
+  }
+  return content;
+}
+
+function implicitMentionDisplayLabel(item: ImplicitMention): string {
+  if (item.kind === "skill") {
+    return `/${item.value}`;
+  }
+  if (item.kind === "mcp") {
+    return `@${item.value}`;
+  }
+  const normalized = item.value.replace(/\/$/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  const basename = parts[parts.length - 1] ?? normalized;
+  return `@${basename || item.value}`;
+}
+
 function MessageContent_({
   className,
   message,
@@ -130,6 +184,13 @@ function MessageContent_({
 
   const rawContent = extractContentFromMessage(message);
   const reasoningContent = extractReasoningContentFromMessage(message);
+  const implicitMentions = useMemo(() => {
+    const rawMentions = message.additional_kwargs?.implicit_mentions;
+    if (!Array.isArray(rawMentions)) {
+      return [] as ImplicitMention[];
+    }
+    return rawMentions.filter(isImplicitMention);
+  }, [message.additional_kwargs?.implicit_mentions]);
 
   const files = useMemo(() => {
     const files = message.additional_kwargs?.files;
@@ -145,14 +206,31 @@ function MessageContent_({
 
   const contentToDisplay = useMemo(() => {
     if (isHuman) {
-      return rawContent ? stripUploadedFilesTag(rawContent) : "";
+      const stripped = rawContent ? stripUploadedFilesTag(rawContent) : "";
+      return stripImplicitMentionSuffix(stripped, implicitMentions);
     }
     return rawContent ?? "";
-  }, [rawContent, isHuman]);
+  }, [implicitMentions, rawContent, isHuman]);
 
   const filesList =
     files && files.length > 0 && thread_id ? (
       <RichFilesList files={files} threadId={thread_id} />
+    ) : null;
+
+  const implicitMentionTags =
+    isHuman && implicitMentions.length > 0 ? (
+      <div className="flex flex-wrap justify-end gap-1.5">
+        {implicitMentions.map((item, index) => (
+          <Badge
+            key={`${item.kind}:${item.value}:${index}`}
+            variant="secondary"
+            className="max-w-72 truncate text-[11px]"
+            title={item.mention}
+          >
+            {implicitMentionDisplayLabel(item)}
+          </Badge>
+        ))}
+      </div>
     ) : null;
 
   // Uploading state: mock AI message shown while files upload
@@ -196,6 +274,7 @@ function MessageContent_({
     return (
       <div className={cn("ml-auto flex flex-col gap-2", className)}>
         {filesList}
+        {implicitMentionTags}
         {messageResponse && (
           <AIElementMessageContent className="w-fit">
             {messageResponse}

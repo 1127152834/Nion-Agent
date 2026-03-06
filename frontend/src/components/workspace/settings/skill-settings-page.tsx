@@ -58,7 +58,7 @@ export function SkillSettingsPage({ onClose }: { onClose?: () => void } = {}) {
           {isLoading ? (
             <div className="text-muted-foreground text-sm">{t.common.loading}</div>
           ) : error ? (
-            <div>Error: {error.message}</div>
+            <div>{error.message}</div>
           ) : (
             <SkillSettingsList skills={skills} onClose={onClose} />
           )}
@@ -76,7 +76,7 @@ function SkillSettingsList({
   onClose?: () => void;
 }) {
   const { t, locale } = useI18n();
-  const m = t.migration.settings?.skillSettings;
+  const copy = t.settings.skillPage;
   const router = useRouter();
   const [filter, setFilter] = useState<string>("public");
   const [pendingDeleteSkillName, setPendingDeleteSkillName] = useState<string | null>(null);
@@ -105,7 +105,7 @@ function SkillSettingsList({
 
     const filename = file.name.toLowerCase();
     if (!filename.endsWith(".skill") && !filename.endsWith(".zip")) {
-      toast.error(m?.uploadFormatError ?? "Please upload a .skill or .zip package");
+      toast.error(copy.uploadFormatError);
       return;
     }
 
@@ -114,14 +114,14 @@ function SkillSettingsList({
       {
         onSuccess: (result) => {
           toast.success(
-            (m?.skillInstalled ?? "Skill \"{name}\" installed").replaceAll("{name}", result.skill_name),
+            copy.skillInstalled.replaceAll("{name}", result.skill_name),
           );
         },
         onError: (error) => {
           toast.error(
             error instanceof Error
               ? error.message
-              : (m?.uploadFailed ?? "Failed to upload skill"),
+              : copy.uploadFailed,
           );
         },
       },
@@ -135,14 +135,14 @@ function SkillSettingsList({
       { skillName: pendingDeleteSkillName },
       {
         onSuccess: () => {
-          toast.success(m?.skillDeleted ?? "Skill deleted");
+          toast.success(copy.skillDeleted);
           setPendingDeleteSkillName(null);
         },
         onError: (error) => {
           toast.error(
             error instanceof Error
               ? error.message
-              : (m?.deleteFailed ?? "Failed to delete skill"),
+              : copy.deleteFailed,
           );
         },
       },
@@ -171,7 +171,7 @@ function SkillSettingsList({
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onSelect={handleCreateSkill}>
                 <SparklesIcon className="size-4 text-muted-foreground" />
-                {m?.createViaChat ?? "Create skill via chat"}
+                {copy.createViaChat}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={handleUploadMenuClick}
@@ -179,12 +179,12 @@ function SkillSettingsList({
               >
                 <UploadIcon className="size-4 text-muted-foreground" />
                 {uploadingSkillArchive
-                  ? (m?.uploading ?? "Uploading...")
-                  : (m?.uploadPackage ?? "Upload skill package")}
+                  ? copy.uploading
+                  : copy.uploadPackage}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setImportDialogOpen(true)}>
                 <DownloadIcon className="size-4 text-muted-foreground" />
-                {m?.importFromAgents ?? "Import skills from other agents"}
+                {copy.importFromAgents}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -245,13 +245,13 @@ function SkillSettingsList({
             setPendingDeleteSkillName(null);
           }
         }}
-        title={m?.deleteConfirmTitle ?? "Confirm Skill Deletion"}
+        title={copy.deleteConfirmTitle}
         description={
-          (m?.deleteConfirmDescription ?? "Delete skill \"{name}\"? This action cannot be undone.")
+          copy.deleteConfirmDescription
             .replaceAll("{name}", pendingDeleteSkillName ?? "")
         }
-        cancelText={m?.cancelAction ?? "Cancel"}
-        confirmText={m?.confirmDeleteAction ?? "Delete"}
+        cancelText={copy.cancelAction}
+        confirmText={copy.confirmDeleteAction}
         confirmDisabled={deletingSkill}
         onConfirm={handleConfirmDeleteSkill}
         confirmVariant="destructive"

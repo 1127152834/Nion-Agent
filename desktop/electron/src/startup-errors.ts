@@ -53,7 +53,7 @@ export function getStartupError(code: StartupFailureCode, error?: Error): Startu
       return {
         code,
         title: "Port Conflict",
-        message: "Required ports are already in use. Please close other applications using ports 2024, 8001, or 3000.",
+        message: "Required ports are already in use. Please close other applications using ports 2024, 8001, 3000, or 2026.",
         actions: [
           {
             id: "retry_startup",

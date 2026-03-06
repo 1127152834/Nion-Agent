@@ -2,9 +2,9 @@ import { isElectron } from "@/core/platform";
 import { env } from "@/env";
 
 export function getBackendBaseURL() {
-  // Electron 模式：优先使用环境变量，其次回退到本地网关
+  // Electron 模式：优先使用环境变量，其次回退到同源代理入口
   if (isElectron()) {
-    return env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "http://localhost:8001";
+    return env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "http://localhost:2026";
   }
 
   if (env.NEXT_PUBLIC_BACKEND_BASE_URL) {
@@ -15,9 +15,9 @@ export function getBackendBaseURL() {
 }
 
 export function getLangGraphBaseURL(isMock?: boolean) {
-  // Electron 模式：优先使用环境变量，其次回退到本地 LangGraph
+  // Electron 模式：优先使用环境变量，其次回退到同源代理入口
   if (isElectron()) {
-    return env.NEXT_PUBLIC_LANGGRAPH_BASE_URL ?? "http://localhost:2024";
+    return env.NEXT_PUBLIC_LANGGRAPH_BASE_URL ?? "http://localhost:2026/api/langgraph";
   }
 
   if (env.NEXT_PUBLIC_LANGGRAPH_BASE_URL) {

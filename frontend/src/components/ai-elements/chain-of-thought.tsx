@@ -1,6 +1,7 @@
 "use client";
 
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
+import { useI18n } from "@/core/i18n/hooks";
 import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
@@ -86,6 +87,7 @@ export type ChainOfThoughtHeaderProps = ComponentProps<
 
 export const ChainOfThoughtHeader = memo(
   ({ className, children, icon, ...props }: ChainOfThoughtHeaderProps) => {
+    const { t } = useI18n();
     const { isOpen, setIsOpen } = useChainOfThought();
 
     return (
@@ -99,7 +101,7 @@ export const ChainOfThoughtHeader = memo(
         >
           {icon ?? <BrainIcon className="size-4" />}
           <span className="flex-1 text-left">
-            {children ?? "Chain of Thought"}
+            {children ?? t.common.thinking}
           </span>
           <ChevronDownIcon
             className={cn(

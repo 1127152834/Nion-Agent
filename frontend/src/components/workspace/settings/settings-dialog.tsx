@@ -4,6 +4,7 @@ import {
   BellIcon,
   InfoIcon,
   BrainIcon,
+  Link2Icon,
   PaletteIcon,
   SparklesIcon,
   WrenchIcon,
@@ -21,6 +22,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { AboutSettingsPage } from "@/components/workspace/settings/about-settings-page";
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
+import { ChannelSettingsPage } from "@/components/workspace/settings/channel-settings-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
@@ -35,6 +37,7 @@ type SettingsSection =
   | "models"
   | "memory"
   | "tools"
+  | "channels"
   | "skills"
   | "sandbox"
   | "notification"
@@ -81,6 +84,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
         icon: BrainIcon,
       },
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
+      { id: "channels", label: t.settings.sections.channels, icon: Link2Icon },
       { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
       { id: "sandbox", label: t.settings.sandbox?.title ?? "Sandbox", icon: BoxIcon },
       { id: "about", label: t.settings.sections.about, icon: InfoIcon },
@@ -90,6 +94,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.models?.title,
       t.settings.sections.memory,
       t.settings.sections.tools,
+      t.settings.sections.channels,
       t.settings.sections.skills,
       t.settings.sandbox?.title,
       t.settings.sections.notification,
@@ -142,6 +147,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               {activeSection === "models" && <ModelSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}
+              {activeSection === "channels" && <ChannelSettingsPage />}
               {activeSection === "skills" && (
                 <SkillSettingsPage
                   onClose={() => props.onOpenChange?.(false)}

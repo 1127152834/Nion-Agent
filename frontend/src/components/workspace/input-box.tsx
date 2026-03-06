@@ -51,8 +51,8 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
-import { getLocalizedSkillDescription } from "@/core/skills/i18n";
 import { useSkills } from "@/core/skills/hooks";
+import { getLocalizedSkillDescription } from "@/core/skills/i18n";
 import type { AgentThreadContext } from "@/core/threads";
 import { cn } from "@/lib/utils";
 
@@ -80,7 +80,6 @@ type InputMode = "flash" | "thinking" | "pro" | "ultra";
 
 // Mention system types
 type MentionTrigger = "@" | "/";
-type MentionAtSource = "context" | "mcp";
 
 interface MentionOption {
   id: string;
@@ -127,15 +126,6 @@ function basename(path: string): string {
   const normalized = normalizePath(path).replace(/\/$/, "");
   const parts = normalized.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? normalized;
-}
-
-function dirname(path: string): string {
-  const normalized = normalizePath(path).replace(/\/$/, "");
-  const index = normalized.lastIndexOf("/");
-  if (index <= 0) {
-    return "/";
-  }
-  return normalized.slice(0, index);
 }
 
 function buildPathMentionOptions(paths: string[]): MentionOption[] {
@@ -393,10 +383,68 @@ function rankMentionOption(option: MentionOption, normalizedQuery: string): numb
   return 0;
 }
 
-function removeLooseMentionTriggers(value: string): string {
-  return value
-    .replace(/(^|[\s\n])@(?=$|[\s\n])/g, "$1")
-    .replace(/(^|[\s\n])\/(?=$|[\s\n])/g, "$1");
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasInlineMention(text: string, mention: string): boolean {
+  const pattern = new RegExp(`(^|\\s)${escapeRegExp(mention)}(?=\\s|$)`);
+  return pattern.test(text);
+}
+
+function buildSubmissionPayload(
+  text: string,
+  selectedSkills: string[],
+  selectedContexts: SelectedContextTag[],
+  selectedMcpTools: string[],
+): {
+  text: string;
+  implicitMentions: NonNullable<PromptInputMessage["implicitMentions"]>;
+} {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { text: trimmed, implicitMentions: [] };
+  }
+
+  const implicitMentions: NonNullable<PromptInputMessage["implicitMentions"]> = [];
+  const seenMentions = new Set<string>();
+
+  const appendImplicitMention = (
+    kind: "context" | "skill" | "mcp",
+    value: string,
+    mention: string,
+  ) => {
+    if (hasInlineMention(trimmed, mention) || seenMentions.has(mention)) {
+      return;
+    }
+    seenMentions.add(mention);
+    implicitMentions.push({ kind, value, mention });
+  };
+
+  for (const context of selectedContexts) {
+    const mention = `@${context.value}`;
+    appendImplicitMention("context", context.value, mention);
+  }
+
+  for (const skill of selectedSkills) {
+    const mention = `/${skill}`;
+    appendImplicitMention("skill", skill, mention);
+  }
+
+  for (const tool of selectedMcpTools) {
+    const mention = `@${tool}`;
+    appendImplicitMention("mcp", tool, mention);
+  }
+
+  if (implicitMentions.length === 0) {
+    return { text: trimmed, implicitMentions: [] };
+  }
+
+  const mentionLine = implicitMentions.map((item) => item.mention).join(" ");
+  return {
+    text: `${trimmed}\n\n${mentionLine}`,
+    implicitMentions,
+  };
 }
 
 function readRecentModels(): string[] {
@@ -473,13 +521,14 @@ export function InputBox({
   onStop?: () => void;
 }) {
   const { t } = useI18n();
+  const mentionLabels = t.migration.workspace?.inputBox;
   const searchParams = useSearchParams();
+  const [hydrated, setHydrated] = useState(false);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const { models } = useModels();
 
   // Mention system state
   const [mentionState, setMentionState] = useState<MentionState | null>(null);
-  const [mentionAtSource, setMentionAtSource] = useState<MentionAtSource>("context");
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [selectedContexts, setSelectedContexts] = useState<SelectedContextTag[]>([]);
   const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([]);
@@ -490,7 +539,15 @@ export function InputBox({
   });
   const [mcpSelectorOpen, setMcpSelectorOpen] = useState(false);
   const [mcpSelectorQuery, setMcpSelectorQuery] = useState("");
+  const [contextSelectorOpen, setContextSelectorOpen] = useState(false);
+  const [contextSelectorQuery, setContextSelectorQuery] = useState("");
+  const [skillSelectorOpen, setSkillSelectorOpen] = useState(false);
+  const [skillSelectorQuery, setSkillSelectorQuery] = useState("");
   const [recentModelNames, setRecentModelNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   // Load recent models on mount
   useEffect(() => {
@@ -542,7 +599,7 @@ export function InputBox({
     }
     const source =
       mentionState.trigger === "@"
-        ? (mentionAtSource === "context" ? fileMentionOptions : mcpMentionOptions)
+        ? fileMentionOptions
         : skillMentionOptions;
     const normalizedQuery = mentionState.query.trim().toLowerCase();
     return source
@@ -559,7 +616,7 @@ export function InputBox({
       })
       .slice(0, 80)
       .map((item) => item.option);
-  }, [fileMentionOptions, mcpMentionOptions, mentionAtSource, mentionState, skillMentionOptions]);
+  }, [fileMentionOptions, mentionState, skillMentionOptions]);
 
   // Group mention options with recent items
   const mentionGroups = useMemo<MentionGroup[]>(() => {
@@ -583,7 +640,7 @@ export function InputBox({
     if (recentOptions.length > 0) {
       groups.push({
         id: "recent",
-        label: t.migration.workspace?.inputBox?.recentLabel ?? "Recent",
+        label: mentionLabels?.recentLabel ?? "Recent",
         options: recentOptions.slice(0, RECENT_MENTION_LIMIT),
       });
     }
@@ -592,40 +649,32 @@ export function InputBox({
       if (remaining.length > 0) {
         groups.push({
           id: "skills",
-          label: t.migration.workspace?.inputBox?.allSkillsLabel ?? "All skills",
+          label: mentionLabels?.allSkillsLabel ?? "All skills",
           options: remaining.slice(0, 40),
         });
       }
     } else {
       const directories = remaining.filter((item) => item.kind === "directory");
       const files = remaining.filter((item) => item.kind === "file");
-      const mcpTools = remaining.filter((item) => item.kind === "mcp");
 
       if (directories.length > 0) {
         groups.push({
           id: "directories",
-          label: t.migration.workspace?.inputBox?.directoriesLabel ?? "Directories",
+          label: mentionLabels?.directoriesLabel ?? "Directories",
           options: directories.slice(0, 20),
         });
       }
       if (files.length > 0) {
         groups.push({
           id: "files",
-          label: t.migration.workspace?.inputBox?.filesLabel ?? "Files",
+          label: mentionLabels?.filesLabel ?? "Files",
           options: files.slice(0, 20),
-        });
-      }
-      if (mcpTools.length > 0) {
-        groups.push({
-          id: "mcp",
-          label: t.migration.workspace?.inputBox?.mcpToolsLabel ?? "MCP Tools",
-          options: mcpTools.slice(0, 20),
         });
       }
     }
 
     return groups;
-  }, [filteredMentionOptions, mentionState, recentMentions, t]);
+  }, [filteredMentionOptions, mentionLabels, mentionState, recentMentions]);
 
   // Filter MCP options for selector
   const filteredMcpSelectorOptions = useMemo(() => {
@@ -645,12 +694,70 @@ export function InputBox({
       .map((item) => item.option);
   }, [mcpMentionOptions, mcpSelectorQuery]);
 
+  const filteredContextSelectorOptions = useMemo(() => {
+    const normalizedQuery = contextSelectorQuery.trim().toLowerCase();
+    return fileMentionOptions
+      .map((option) => ({
+        option,
+        score: rankMentionOption(option, normalizedQuery),
+      }))
+      .filter((item) => item.score > 0 || !normalizedQuery)
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return b.score - a.score;
+        }
+        return a.option.value.localeCompare(b.option.value);
+      })
+      .map((item) => item.option);
+  }, [contextSelectorQuery, fileMentionOptions]);
+
+  const filteredSkillSelectorOptions = useMemo(() => {
+    const normalizedQuery = skillSelectorQuery.trim().toLowerCase();
+    return skillMentionOptions
+      .map((option) => ({
+        option,
+        score: rankMentionOption(option, normalizedQuery),
+      }))
+      .filter((item) => item.score > 0 || !normalizedQuery)
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return b.score - a.score;
+        }
+        return a.option.value.localeCompare(b.option.value);
+      })
+      .map((item) => item.option);
+  }, [skillMentionOptions, skillSelectorQuery]);
+
   const toggleMcpTool = useCallback((value: string) => {
     setSelectedMcpTools((prev) => {
       if (prev.includes(value)) {
         return prev.filter((item) => item !== value);
       }
       return [...prev, value];
+    });
+  }, []);
+
+  const toggleContextOption = useCallback((option: MentionOption) => {
+    if (option.kind !== "file" && option.kind !== "directory") {
+      return;
+    }
+    setSelectedContexts((prev) => {
+      if (prev.some((item) => item.value === option.value)) {
+        return prev.filter((item) => item.value !== option.value);
+      }
+      return [
+        ...prev,
+        { value: option.value, kind: option.kind === "directory" ? "directory" : "file" },
+      ];
+    });
+  }, []);
+
+  const toggleSkillOption = useCallback((skill: string) => {
+    setSelectedSkills((prev) => {
+      if (prev.includes(skill)) {
+        return prev.filter((item) => item !== skill);
+      }
+      return [...prev, skill];
     });
   }, []);
 
@@ -683,15 +790,6 @@ export function InputBox({
         return prev;
       }
       return [...prev, { value, kind }];
-    });
-  }, []);
-
-  const addSelectedMcpTool = useCallback((value: string) => {
-    setSelectedMcpTools((prev) => {
-      if (prev.includes(value)) {
-        return prev;
-      }
-      return [...prev, value];
     });
   }, []);
 
@@ -747,14 +845,10 @@ export function InputBox({
       textInput.setInput(nextValue);
       pushRecentMention(mentionState.trigger, option.value);
       if (mentionState.trigger === "@") {
-        if (option.kind === "mcp") {
-          addSelectedMcpTool(option.value);
-        } else {
-          addSelectedContext(
-            option.value,
-            option.kind === "directory" ? "directory" : "file",
-          );
-        }
+        addSelectedContext(
+          option.value,
+          option.kind === "directory" ? "directory" : "file",
+        );
       } else {
         addSelectedSkill(option.value);
       }
@@ -772,7 +866,6 @@ export function InputBox({
     },
     [
       addSelectedContext,
-      addSelectedMcpTool,
       addSelectedSkill,
       focusMessageInput,
       mentionState,
@@ -829,12 +922,6 @@ export function InputBox({
     if (event.key === "Escape") {
       event.preventDefault();
       setMentionState(null);
-      return;
-    }
-
-    if (mentionState.trigger === "@" && event.key === "Tab") {
-      event.preventDefault();
-      setMentionAtSource((current) => (current === "context" ? "mcp" : "context"));
       return;
     }
 
@@ -999,13 +1086,38 @@ export function InputBox({
         onStop?.();
         return;
       }
-      if (!message.text) {
+      const submissionPayload = buildSubmissionPayload(
+        message.text,
+        selectedSkills,
+        selectedContexts,
+        selectedMcpTools,
+      );
+      if (!submissionPayload.text) {
         return;
       }
-      onSubmit?.(message);
+      onSubmit?.({
+        ...message,
+        text: submissionPayload.text,
+        implicitMentions:
+          submissionPayload.implicitMentions.length > 0
+            ? submissionPayload.implicitMentions
+            : undefined,
+      });
     },
-    [onSubmit, onStop, status],
+    [onSubmit, onStop, selectedContexts, selectedMcpTools, selectedSkills, status],
   );
+
+  if (!hydrated) {
+    return (
+      <div
+        className={cn(
+          "bg-background/5 border-border/70 min-h-24 w-full rounded-xl border px-3 py-3",
+          className,
+        )}
+      />
+    );
+  }
+
   return (
     <PromptInput
       className={cn(
@@ -1045,50 +1157,12 @@ export function InputBox({
           <div className="bg-background border-border mx-2 overflow-hidden rounded-lg border shadow-lg">
             <div className="border-border/70 border-b px-3 py-2">
               <span className="text-muted-foreground text-xs">
-                {mentionState.trigger === "@"
-                  ? (t.migration.workspace?.inputBox?.mentionHintAt ?? "↑↓ select · Tab switch · Enter apply")
-                  : (t.migration.workspace?.inputBox?.mentionHintSlash ?? "↑↓ select · Enter apply")}
+                {mentionLabels?.mentionHintSlash ?? "↑↓ select · Enter apply"}
               </span>
             </div>
-            {mentionState.trigger === "@" && (
-              <div className="px-3 pb-1 pt-2">
-                <div className="bg-muted/70 inline-flex items-center gap-1 rounded-lg p-1">
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-md px-2 py-1 text-xs transition-colors",
-                      mentionAtSource === "context"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      setMentionAtSource("context");
-                    }}
-                  >
-                    {t.migration.workspace?.inputBox?.contextLabel ?? "Context"}
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "rounded-md px-2 py-1 text-xs transition-colors",
-                      mentionAtSource === "mcp"
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      setMentionAtSource("mcp");
-                    }}
-                  >
-                    MCP
-                  </button>
-                </div>
-              </div>
-            )}
             {mentionGroups.length === 0 ? (
               <div className="text-muted-foreground px-3 py-2 text-xs">
-                {t.migration.workspace?.inputBox?.noMatches ?? "No matches"}
+                {mentionLabels?.noMatches ?? "No matches"}
               </div>
             ) : (
               <div className="max-h-60 overflow-auto p-1">
@@ -1158,23 +1232,19 @@ export function InputBox({
                 <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
                   Tab
                 </kbd>
-                <span>
-                  {mentionState.trigger === "@"
-                    ? (t.migration.workspace?.inputBox?.switchLabel ?? "Switch")
-                    : (t.migration.workspace?.inputBox?.completeLabel ?? "Complete")}
-                </span>
+                <span>{mentionLabels?.completeLabel ?? "Complete"}</span>
                 <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
                   ↑↓
                 </kbd>
-                <span>{t.migration.workspace?.inputBox?.navigateLabel ?? "Navigate"}</span>
+                <span>{mentionLabels?.navigateLabel ?? "Navigate"}</span>
                 <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
                   Enter
                 </kbd>
-                <span>{t.migration.workspace?.inputBox?.selectLabel ?? "Select"}</span>
+                <span>{mentionLabels?.selectLabel ?? "Select"}</span>
                 <kbd className="bg-background border-border/80 text-foreground rounded-md border px-2 py-0.5 font-mono text-[11px] leading-4 shadow-xs">
                   Esc
                 </kbd>
-                <span>{t.migration.workspace?.inputBox?.closeLabel ?? "Close"}</span>
+                <span>{mentionLabels?.closeLabel ?? "Close"}</span>
               </div>
             </div>
           </div>
@@ -1234,22 +1304,132 @@ export function InputBox({
             </PromptInputActionMenuContent>
           </PromptInputActionMenu> */}
           <AddAttachmentsButton className="px-2!" />
-          <PromptInputButton
-            className="gap-1! px-2! text-xs"
-            onClick={() => insertMentionTrigger("@")}
-            disabled={disabled}
+          <DropdownMenu
+            open={contextSelectorOpen}
+            onOpenChange={(open) => {
+              setContextSelectorOpen(open);
+              if (!open) setContextSelectorQuery("");
+            }}
           >
-            <span>@</span>
-            <span>{t.migration.workspace?.inputBox?.contextLabel ?? "Context"}</span>
-          </PromptInputButton>
-          <PromptInputButton
-            className="gap-1! px-2! text-xs"
-            onClick={() => insertMentionTrigger("/")}
-            disabled={disabled}
+            <DropdownMenuTrigger asChild>
+              <PromptInputButton className="gap-1! px-2! text-xs" disabled={disabled}>
+                <span>@</span>
+                <span>{mentionLabels?.contextLabel ?? "Context"}</span>
+                {selectedContexts.length > 0 && (
+                  <span className="bg-foreground text-background inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-semibold">
+                    {selectedContexts.length}
+                  </span>
+                )}
+              </PromptInputButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-96">
+              <div className="p-2">
+                <input
+                  type="text"
+                  placeholder={mentionLabels?.contextLabel ?? "Context"}
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={contextSelectorQuery}
+                  onChange={(e) => setContextSelectorQuery(e.target.value)}
+                />
+              </div>
+              <div className="max-h-60 overflow-auto">
+                {filteredContextSelectorOptions.length === 0 ? (
+                  <div className="text-muted-foreground px-3 py-2 text-xs">
+                    {mentionLabels?.noMatches ?? "No matches"}
+                  </div>
+                ) : (
+                  filteredContextSelectorOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.id}
+                      className="flex items-start gap-2 px-3 py-2"
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        toggleContextOption(option);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedContexts.some((item) => item.value === option.value)}
+                        onChange={() => toggleContextOption(option)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-xs font-medium">{option.label}</div>
+                        {option.description && (
+                          <div className="text-muted-foreground text-[11px]">
+                            {option.description}
+                          </div>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu
+            open={skillSelectorOpen}
+            onOpenChange={(open) => {
+              setSkillSelectorOpen(open);
+              if (!open) setSkillSelectorQuery("");
+            }}
           >
-            <SparklesIcon className="size-3" />
-            <span>{t.migration.workspace?.inputBox?.skillLabel ?? "Skill"}</span>
-          </PromptInputButton>
+            <DropdownMenuTrigger asChild>
+              <PromptInputButton className="gap-1! px-2! text-xs" disabled={disabled}>
+                <SparklesIcon className="size-3" />
+                <span>{mentionLabels?.skillLabel ?? "Skill"}</span>
+                {selectedSkills.length > 0 && (
+                  <span className="bg-foreground text-background inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-semibold">
+                    {selectedSkills.length}
+                  </span>
+                )}
+              </PromptInputButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80">
+              <div className="p-2">
+                <input
+                  type="text"
+                  placeholder={mentionLabels?.skillLabel ?? "Skill"}
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={skillSelectorQuery}
+                  onChange={(e) => setSkillSelectorQuery(e.target.value)}
+                />
+              </div>
+              <div className="max-h-60 overflow-auto">
+                {filteredSkillSelectorOptions.length === 0 ? (
+                  <div className="text-muted-foreground px-3 py-2 text-xs">
+                    {mentionLabels?.noMatches ?? "No matches"}
+                  </div>
+                ) : (
+                  filteredSkillSelectorOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.id}
+                      className="flex items-start gap-2 px-3 py-2"
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        toggleSkillOption(option.value);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedSkills.includes(option.value)}
+                        onChange={() => toggleSkillOption(option.value)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-xs font-medium">{option.label}</div>
+                        {option.description && (
+                          <div className="text-muted-foreground text-[11px]">
+                            {option.description}
+                          </div>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <DropdownMenu
             open={mcpSelectorOpen}
             onOpenChange={(open) => {
@@ -1272,7 +1452,7 @@ export function InputBox({
               <div className="p-2">
                 <input
                   type="text"
-                  placeholder={t.migration.workspace?.inputBox?.searchMcpTools ?? "Search MCP tools..."}
+                  placeholder={mentionLabels?.searchMcpTools ?? "Search MCP tools..."}
                   className="bg-background border-border text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   value={mcpSelectorQuery}
                   onChange={(e) => setMcpSelectorQuery(e.target.value)}
@@ -1281,7 +1461,7 @@ export function InputBox({
               <div className="max-h-60 overflow-auto">
                 {filteredMcpSelectorOptions.length === 0 ? (
                   <div className="text-muted-foreground px-3 py-2 text-xs">
-                    {t.migration.workspace?.inputBox?.noMcpTools ?? "No MCP tools available"}
+                    {mentionLabels?.noMcpTools ?? "No MCP tools available"}
                   </div>
                 ) : (
                   filteredMcpSelectorOptions.map((option) => (
@@ -1611,7 +1791,7 @@ export function InputBox({
                 {recentModels.length > 0 && (
                   <>
                     <DropdownMenuLabel className="text-muted-foreground px-2 py-1.5 text-xs">
-                      {t.migration.workspace?.inputBox?.recentModelsLabel ?? "Recent"}
+                      {mentionLabels?.recentModelsLabel ?? "Recent"}
                     </DropdownMenuLabel>
                     {recentModels.map((m) => (
                       <ModelSelectorItem
@@ -1634,7 +1814,7 @@ export function InputBox({
                 )}
                 {remainingModels.length > 0 && recentModels.length > 0 && (
                   <DropdownMenuLabel className="text-muted-foreground px-2 py-1.5 text-xs">
-                    {t.migration.workspace?.inputBox?.allModelsLabel ?? "All Models"}
+                    {mentionLabels?.allModelsLabel ?? "All Models"}
                   </DropdownMenuLabel>
                 )}
                 {(recentModels.length > 0 ? remainingModels : models).map((m) => (

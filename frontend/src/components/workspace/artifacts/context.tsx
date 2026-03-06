@@ -26,7 +26,7 @@ interface ArtifactsProviderProps {
 }
 
 export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
-  const [artifacts, setArtifacts] = useState<string[]>([]);
+  const [artifacts, setArtifactsState] = useState<string[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<string | null>(null);
   const [autoSelect, setAutoSelect] = useState(true);
   const [open, setOpen] = useState(
@@ -52,7 +52,23 @@ export function ArtifactsProvider({ children }: ArtifactsProviderProps) {
 
   const value: ArtifactsContextType = {
     artifacts,
-    setArtifacts,
+    setArtifacts: (nextArtifacts: string[]) => {
+      setArtifactsState((previous) => {
+        if (previous.length === nextArtifacts.length) {
+          let same = true;
+          for (let index = 0; index < previous.length; index += 1) {
+            if (previous[index] !== nextArtifacts[index]) {
+              same = false;
+              break;
+            }
+          }
+          if (same) {
+            return previous;
+          }
+        }
+        return nextArtifacts;
+      });
+    },
 
     open,
     autoOpen,

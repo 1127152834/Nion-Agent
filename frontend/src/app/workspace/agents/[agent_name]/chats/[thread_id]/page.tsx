@@ -7,8 +7,10 @@ import { useCallback } from "react";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { AgentWelcome } from "@/components/workspace/agent-welcome";
-import { ArtifactCenter } from "@/components/workspace/artifact-center";
-import { WorkingDirectoryTrigger } from "@/components/workspace/artifacts";
+import {
+  ArtifactTrigger,
+  WorkingDirectoryTrigger,
+} from "@/components/workspace/artifacts";
 import { ChatBox, useThreadChat } from "@/components/workspace/chats";
 import { InputBox } from "@/components/workspace/input-box";
 import { MessageList } from "@/components/workspace/messages";
@@ -83,9 +85,49 @@ export default function AgentChatPage() {
     <ThreadContext.Provider value={{ thread }}>
       <ChatBox threadId={threadId}>
         <div className="relative flex size-full min-h-0 justify-between">
+          <header
+            className={cn(
+              "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center gap-2 px-4",
+              isNewThread
+                ? "bg-background/0 backdrop-blur-none"
+                : "bg-background/80 shadow-xs backdrop-blur",
+            )}
+          >
+            {/* Agent badge */}
+            <div className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1">
+              <BotIcon className="text-primary h-3.5 w-3.5" />
+              <span className="text-xs font-medium">
+                {agent?.name ?? agent_name}
+              </span>
+            </div>
+
+            <div className="flex w-full items-center text-sm font-medium">
+              <ThreadTitle threadId={threadId} thread={thread} />
+            </div>
+            <div className="mr-4 flex items-center">
+              <Tooltip content={t.agents.newChat}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    router.push(`/workspace/agents/${agent_name}/chats/new`);
+                  }}
+                >
+                  <PlusSquare /> {t.agents.newChat}
+                </Button>
+              </Tooltip>
+              <WorkingDirectoryTrigger />
+              <ArtifactTrigger />
+            </div>
+          </header>
+
           <main className="flex min-h-0 max-w-full grow flex-col">
             <div className="flex size-full justify-center">
-              <MessageList className="size-full" threadId={threadId} thread={thread} />
+              <MessageList
+                className={cn("size-full", !isNewThread && "pt-10")}
+                threadId={threadId}
+                thread={thread}
+              />
             </div>
 
             <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
@@ -109,33 +151,6 @@ export default function AgentChatPage() {
                     />
                   </div>
                 </div>
-                {!isNewThread && (
-                  <div className="bg-background/70 mb-2 flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 backdrop-blur">
-                    <div className="flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1">
-                      <BotIcon className="text-primary h-3.5 w-3.5" />
-                      <span className="text-xs font-medium">
-                        {agent?.name ?? agent_name}
-                      </span>
-                    </div>
-                    <div className="min-w-0 grow text-sm font-medium">
-                      <ThreadTitle threadId={threadId} thread={thread} />
-                    </div>
-                    <Tooltip content={t.agents.newChat}>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          router.push(`/workspace/agents/${agent_name}/chats/new`);
-                        }}
-                      >
-                        <PlusSquare />
-                        {t.agents.newChat}
-                      </Button>
-                    </Tooltip>
-                    <WorkingDirectoryTrigger />
-                    <ArtifactCenter threadId={threadId} />
-                  </div>
-                )}
 
                 <InputBox
                   className={cn("bg-background/5 w-full -translate-y-4")}

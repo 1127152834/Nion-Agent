@@ -1,0 +1,79 @@
+ M Makefile
+ M backend/src/agents/lead_agent/prompt.py
+ M desktop/electron/electron-builder.yml
+ M desktop/electron/package.json
+ M desktop/electron/src/i18n.ts
+ M desktop/electron/src/main.ts
+ M desktop/electron/src/paths.ts
+ M desktop/electron/src/preload.ts
+ M desktop/electron/src/process-manager.ts
+ M desktop/electron/src/startup-errors.ts
+ M desktop/runtime/build-python-runtime.sh
+ M desktop/runtime/create-runtime-bundle.sh
+ M frontend/src/app/layout.tsx
+ M frontend/src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx
+ M frontend/src/app/workspace/chats/[thread_id]/page.tsx
+ M frontend/src/app/workspace/layout.tsx
+ M frontend/src/app/workspace/rss/entries/[entry_id]/page.tsx
+ M frontend/src/components/ai-elements/chain-of-thought.tsx
+ M frontend/src/components/rss/entry-reader.tsx
+ M frontend/src/components/rss/index.ts
+ M frontend/src/components/rss/text-selection-toolbar.tsx
+ M frontend/src/components/workspace/artifact-center/artifact-center.tsx
+ M frontend/src/components/workspace/artifacts/artifact-file-detail.tsx
+ M frontend/src/components/workspace/artifacts/artifact-file-list.tsx
+ M frontend/src/components/workspace/artifacts/context.tsx
+ M frontend/src/components/workspace/artifacts/working-directory-trigger.tsx
+ M frontend/src/components/workspace/chats/chat-box.tsx
+ M frontend/src/components/workspace/chats/use-thread-chat.ts
+ M frontend/src/components/workspace/input-box.tsx
+ M frontend/src/components/workspace/settings/about-settings-page.tsx
+ M frontend/src/components/workspace/settings/config-validation-errors.tsx
+ M frontend/src/components/workspace/settings/configuration/config-save-bar.tsx
+ M frontend/src/components/workspace/settings/configuration/field-tip.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/environment-variables-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/memory-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/models-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/rss-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/sandbox-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/subagents-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/summarization-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/title-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/tools-section.tsx
+ M frontend/src/components/workspace/settings/confirm-action-dialog.tsx
+ M frontend/src/components/workspace/settings/model-settings-page.tsx
+ M frontend/src/components/workspace/settings/settings-dialog.tsx
+ M frontend/src/components/workspace/settings/skill-import-dialog.tsx
+ M frontend/src/components/workspace/settings/skill-settings-page.tsx
+ M frontend/src/components/workspace/settings/tool-settings-page.tsx
+ M frontend/src/components/workspace/settings/use-config-editor.ts
+ M frontend/src/components/workspace/settings/workbench-plugins-page.tsx
+ M frontend/src/components/workspace/thread-title.tsx
+ M frontend/src/components/workspace/todo-list.tsx
+ M frontend/src/components/workspace/workspace-header.tsx
+ M frontend/src/components/workspace/workspace-nav-menu.tsx
+ M frontend/src/core/config/index.ts
+ M frontend/src/core/i18n/locales/en-US.ts
+ M frontend/src/core/i18n/locales/types.ts
+ M frontend/src/core/i18n/locales/zh-CN.ts
+ M frontend/src/core/platform/electron-api.ts
+ M frontend/src/core/rss/context.tsx
+ M frontend/src/core/rss/index.ts
+ M frontend/src/core/threads/hooks.ts
+ M frontend/src/typings/electron.d.ts
+?? .folo-reference/
+?? .rollback-backups/
+?? desktop/electron/build/icon.icns
+?? desktop/electron/build/icon.ico
+?? desktop/electron/build/icon.png
+?? desktop/electron/src/local-proxy.ts
+?? desktop/electron/src/runtime-manager.ts
+?? desktop/runtime/core/
+?? desktop/runtime/manifest.json
+?? desktop/runtime/optional/
+?? desktop/runtime/prepare-runtime-core.sh
+?? docs/SCHEDULED_TASKS_PLAN.md
+?? docs/WORKING_DIRECTORY_IMPLEMENTATION_PLAN.md
+?? frontend/src/components/rss/assistant/
+?? frontend/src/components/workspace/runtime-onboarding-overlay.tsx
+?? frontend/src/core/rss/assistant-session.ts

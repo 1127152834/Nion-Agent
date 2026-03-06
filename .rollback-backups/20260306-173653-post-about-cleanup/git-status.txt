@@ -1,0 +1,173 @@
+MM AGENTS.md
+MM CLAUDE.md
+ M Makefile
+M  README.md
+M  backend/pyproject.toml
+ M backend/src/agents/lead_agent/prompt.py
+M  backend/src/agents/memory/__init__.py
+A  backend/src/agents/memory/config.py
+A  backend/src/agents/memory/evolving/__init__.py
+A  backend/src/agents/memory/evolving/scheduler.py
+A  backend/src/agents/memory/evolving/self_evolver.py
+A  backend/src/agents/memory/intention/__init__.py
+A  backend/src/agents/memory/intention/intention_predictor.py
+A  backend/src/agents/memory/layers/__init__.py
+A  backend/src/agents/memory/layers/category.py
+A  backend/src/agents/memory/layers/item.py
+A  backend/src/agents/memory/layers/resource.py
+A  backend/src/agents/memory/linking/__init__.py
+A  backend/src/agents/memory/linking/memory_linker.py
+A  backend/src/agents/memory/memory.py
+A  backend/src/agents/memory/proactive/__init__.py
+A  backend/src/agents/memory/proactive/context_loader.py
+A  backend/src/agents/memory/proactive/dual_mode.py
+A  backend/src/agents/memory/proactive/patterns.py
+M  backend/src/agents/memory/prompt.py
+M  backend/src/agents/memory/queue.py
+A  backend/src/agents/memory/search/__init__.py
+A  backend/src/agents/memory/search/bm25.py
+A  backend/src/agents/memory/search/embeddings.py
+A  backend/src/agents/memory/search/hybrid.py
+A  backend/src/agents/memory/search/vector_store.py
+A  backend/src/agents/memory/soul/__init__.py
+A  backend/src/agents/memory/soul/heartbeat.py
+A  backend/src/agents/memory/soul/identity_cascade.py
+A  backend/src/agents/memory/soul/workspace.py
+A  backend/src/agents/memory/storage/__init__.py
+A  backend/src/agents/memory/storage/manager.py
+A  backend/src/agents/memory/types.py
+A  backend/src/channels/__init__.py
+A  backend/src/channels/bridge_service.py
+A  backend/src/channels/connection_service.py
+A  backend/src/channels/db.py
+A  backend/src/channels/event_broker.py
+A  backend/src/channels/incoming_service.py
+A  backend/src/channels/plugins/__init__.py
+A  backend/src/channels/plugins/dingtalk/__init__.py
+A  backend/src/channels/plugins/dingtalk/adapter.py
+A  backend/src/channels/plugins/dingtalk/card_renderer.py
+A  backend/src/channels/plugins/dingtalk/media_sender.py
+A  backend/src/channels/plugins/dingtalk/pairing_flow.py
+A  backend/src/channels/plugins/dingtalk/plugin.py
+A  backend/src/channels/repository.py
+A  backend/src/channels/runtime_manager.py
+A  backend/src/channels/webhook_service.py
+M  backend/src/config/memory_config.py
+M  backend/src/gateway/app.py
+M  backend/src/gateway/routers/__init__.py
+A  backend/src/gateway/routers/channels.py
+M  backend/src/gateway/routers/memory.py
+A  backend/src/gateway/schemas/channels.py
+A  backend/tests/test_memory_v2_layers_phase2.py
+A  backend/tests/test_memory_v2_phase1.py
+A  backend/tests/test_memory_v2_phase3.py
+A  backend/tests/test_memory_v2_phase4.py
+A  backend/tests/test_memory_v2_phase5.py
+A  backend/tests/test_memory_v2_phase6_extra.py
+M  backend/uv.lock
+ M desktop/electron/electron-builder.yml
+ M desktop/electron/package.json
+ M desktop/electron/src/i18n.ts
+M  desktop/electron/src/main.ts
+ M desktop/electron/src/paths.ts
+ M desktop/electron/src/preload.ts
+M  desktop/electron/src/process-manager.ts
+ M desktop/electron/src/startup-errors.ts
+ M desktop/runtime/build-python-runtime.sh
+ M desktop/runtime/create-runtime-bundle.sh
+A  docs/CODEX_PROMPT.md
+A  docs/MEMORY_SYSTEM_CODEX_GUIDE.md
+A  docs/MEMORY_SYSTEM_IMPLEMENTATION_PLAN.md
+A  docs/MEMORY_SYSTEM_UPGRADE_PLAN.md
+ M frontend/src/app/layout.tsx
+M  frontend/src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx
+M  frontend/src/app/workspace/chats/[thread_id]/page.tsx
+ M frontend/src/app/workspace/layout.tsx
+M  frontend/src/app/workspace/rss/discover/category/[category]/page.tsx
+M  frontend/src/app/workspace/rss/discover/page.tsx
+M  frontend/src/app/workspace/rss/entries/[entry_id]/page.tsx
+M  frontend/src/app/workspace/rss/entries/page.tsx
+ M frontend/src/components/ai-elements/chain-of-thought.tsx
+ M frontend/src/components/ai-elements/prompt-input.tsx
+M  frontend/src/components/landing/header.tsx
+M  frontend/src/components/landing/sections/community-section.tsx
+ M frontend/src/components/rss/entry-reader.tsx
+ M frontend/src/components/rss/index.ts
+ M frontend/src/components/rss/text-selection-toolbar.tsx
+ D frontend/src/components/workspace/artifact-center/artifact-center.tsx
+ D frontend/src/components/workspace/artifact-center/index.ts
+ D frontend/src/components/workspace/artifact-center/workbench-modal.tsx
+M  frontend/src/components/workspace/artifacts/artifact-directory-tree.tsx
+ M frontend/src/components/workspace/artifacts/artifact-file-detail.tsx
+M  frontend/src/components/workspace/artifacts/artifact-file-list.tsx
+A  frontend/src/components/workspace/artifacts/artifact-trigger.tsx
+M  frontend/src/components/workspace/artifacts/context.tsx
+M  frontend/src/components/workspace/artifacts/index.ts
+M  frontend/src/components/workspace/artifacts/working-directory-trigger.tsx
+MM frontend/src/components/workspace/chats/chat-box.tsx
+ M frontend/src/components/workspace/chats/use-thread-chat.ts
+ D frontend/src/components/workspace/github-icon.tsx
+ M frontend/src/components/workspace/input-box.tsx
+ M frontend/src/components/workspace/messages/message-list-item.tsx
+ D frontend/src/components/workspace/settings/about-content.ts
+MM frontend/src/components/workspace/settings/about-settings-page.tsx
+ D frontend/src/components/workspace/settings/about.md
+A  frontend/src/components/workspace/settings/channel-settings-page.tsx
+ M frontend/src/components/workspace/settings/config-validation-errors.tsx
+ M frontend/src/components/workspace/settings/configuration/config-save-bar.tsx
+ M frontend/src/components/workspace/settings/configuration/field-tip.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/environment-variables-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/memory-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/models-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/rss-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/sandbox-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/subagents-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/summarization-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/title-section.tsx
+ M frontend/src/components/workspace/settings/configuration/sections/tools-section.tsx
+ M frontend/src/components/workspace/settings/confirm-action-dialog.tsx
+ M frontend/src/components/workspace/settings/model-settings-page.tsx
+M  frontend/src/components/workspace/settings/settings-dialog.tsx
+ M frontend/src/components/workspace/settings/skill-import-dialog.tsx
+ M frontend/src/components/workspace/settings/skill-settings-page.tsx
+ M frontend/src/components/workspace/settings/tool-settings-page.tsx
+ M frontend/src/components/workspace/settings/use-config-editor.ts
+ M frontend/src/components/workspace/settings/workbench-plugins-page.tsx
+ M frontend/src/components/workspace/thread-title.tsx
+ M frontend/src/components/workspace/todo-list.tsx
+MM frontend/src/components/workspace/workspace-container.tsx
+M  frontend/src/components/workspace/workspace-header.tsx
+M  frontend/src/components/workspace/workspace-nav-menu.tsx
+A  frontend/src/core/channels/api.ts
+A  frontend/src/core/channels/channel-realtime-hooks.ts
+A  frontend/src/core/channels/channel-realtime-provider.tsx
+A  frontend/src/core/channels/channel-realtime-types.ts
+A  frontend/src/core/channels/hooks.ts
+A  frontend/src/core/channels/index.ts
+A  frontend/src/core/channels/types.ts
+ M frontend/src/core/config/index.ts
+MM frontend/src/core/i18n/locales/en-US.ts
+MM frontend/src/core/i18n/locales/types.ts
+MM frontend/src/core/i18n/locales/zh-CN.ts
+ M frontend/src/core/platform/electron-api.ts
+ M frontend/src/core/rss/context.tsx
+ M frontend/src/core/rss/index.ts
+ M frontend/src/core/threads/hooks.ts
+M  frontend/src/env.js
+ M frontend/src/typings/electron.d.ts
+?? .folo-reference/
+?? .rollback-backups/
+?? desktop/electron/build/icon.icns
+?? desktop/electron/build/icon.ico
+?? desktop/electron/build/icon.png
+?? desktop/electron/src/local-proxy.ts
+?? desktop/electron/src/runtime-manager.ts
+?? desktop/runtime/core/
+?? desktop/runtime/manifest.json
+?? desktop/runtime/optional/
+?? desktop/runtime/prepare-runtime-core.sh
+?? docs/SCHEDULED_TASKS_PLAN.md
+?? docs/WORKING_DIRECTORY_IMPLEMENTATION_PLAN.md
+?? frontend/src/components/rss/assistant/
+?? frontend/src/components/workspace/runtime-onboarding-overlay.tsx
+?? frontend/src/core/rss/assistant-session.ts

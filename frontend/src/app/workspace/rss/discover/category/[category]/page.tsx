@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import {
   WorkspaceBody,
   WorkspaceContainer,
-  WorkspaceHeader,
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
 
@@ -37,7 +36,6 @@ export default function RSSDiscoverCategoryPage() {
 
   return (
     <WorkspaceContainer>
-      <WorkspaceHeader />
       <WorkspaceBody className="min-h-0">
         <div className="flex size-full min-h-0 flex-col">
           <div className="border-b px-4 py-3">

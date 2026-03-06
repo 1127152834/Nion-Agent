@@ -40,28 +40,13 @@ export function EnvironmentVariablesSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const m = t.migration.settings?.configSections?.environmentVariables;
+  const copy = t.settings.configSections.environmentVariables;
   const [showValues, setShowValues] = useState(false);
 
   const runtimeEnv = asObject(config.runtime_env);
   const entries: Array<[string, string]> = Object.entries(runtimeEnv).map(
     ([key, value]) => [key, toEnvValue(value)],
   );
-
-  const copy = {
-    title: m?.title ?? "Environment variables",
-    subtitle: m?.subtitle ?? "Add keys and runtime parameters needed by your project.",
-    key: m?.key ?? "Key",
-    value: m?.value ?? "Value",
-    add: m?.add ?? "Add variable",
-    remove: m?.remove ?? "Remove",
-    show: m?.show ?? "Show values",
-    hide: m?.hide ?? "Hide values",
-    empty: m?.empty ?? "No environment variables yet. Click Add variable to start.",
-    invalidKey: m?.invalidKey ?? "Invalid key format. Use letters, digits, and underscore; cannot start with a digit.",
-    reservedKey: m?.reservedKey ?? "NEXT_PUBLIC_* and BETTER_AUTH_* must stay in .env and are not supported here.",
-    invalidConfigStorage: m?.invalidConfigStorage ?? "NION_CONFIG_STORAGE only supports auto or sqlite; file mode is disabled.",
-  };
 
   const updateEntries = (nextEntries: Array<[string, string]>) => {
     const normalized: Record<string, string> = {};
