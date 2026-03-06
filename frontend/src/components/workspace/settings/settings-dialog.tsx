@@ -9,7 +9,6 @@ import {
   WrenchIcon,
   BotIcon,
   BoxIcon,
-  DatabaseIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -25,7 +24,6 @@ import { AppearanceSettingsPage } from "@/components/workspace/settings/appearan
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
-import { RetrievalSettingsPage } from "@/components/workspace/settings/retrieval-settings-page";
 import { SandboxSettingsPage } from "@/components/workspace/settings/sandbox-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
@@ -39,7 +37,6 @@ type SettingsSection =
   | "tools"
   | "skills"
   | "sandbox"
-  | "retrieval"
   | "notification"
   | "about";
 
@@ -86,7 +83,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
       { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
       { id: "sandbox", label: t.settings.sandbox?.title ?? "Sandbox", icon: BoxIcon },
-      { id: "retrieval", label: t.settings.retrieval?.title ?? "Retrieval", icon: DatabaseIcon },
       { id: "about", label: t.settings.sections.about, icon: InfoIcon },
     ],
     [
@@ -96,7 +92,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.sections.tools,
       t.settings.sections.skills,
       t.settings.sandbox?.title,
-      t.settings.retrieval?.title,
       t.settings.sections.notification,
       t.settings.sections.about,
     ],
@@ -153,7 +148,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 />
               )}
               {activeSection === "sandbox" && <SandboxSettingsPage />}
-              {activeSection === "retrieval" && <RetrievalSettingsPage />}
               {activeSection === "notification" && <NotificationSettingsPage />}
               {activeSection === "about" && <AboutSettingsPage />}
             </div>

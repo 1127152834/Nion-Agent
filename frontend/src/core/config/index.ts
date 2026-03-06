@@ -1,14 +1,10 @@
+import { isElectron } from "@/core/platform";
 import { env } from "@/env";
 
-// 检测是否在 Electron 环境中
-function isElectron(): boolean {
-  return typeof window !== "undefined" && "electronAPI" in window;
-}
-
 export function getBackendBaseURL() {
-  // Electron 模式：使用本地服务
+  // Electron 模式：优先使用环境变量，其次回退到本地网关
   if (isElectron()) {
-    return "http://localhost:8001";
+    return env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "http://localhost:8001";
   }
 
   if (env.NEXT_PUBLIC_BACKEND_BASE_URL) {
@@ -19,9 +15,9 @@ export function getBackendBaseURL() {
 }
 
 export function getLangGraphBaseURL(isMock?: boolean) {
-  // Electron 模式：使用本地服务
+  // Electron 模式：优先使用环境变量，其次回退到本地 LangGraph
   if (isElectron()) {
-    return "http://localhost:2024";
+    return env.NEXT_PUBLIC_LANGGRAPH_BASE_URL ?? "http://localhost:2024";
   }
 
   if (env.NEXT_PUBLIC_LANGGRAPH_BASE_URL) {

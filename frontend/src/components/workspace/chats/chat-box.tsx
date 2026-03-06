@@ -1,20 +1,20 @@
-import { FilesIcon, XIcon } from "lucide-react";
+import { XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
-import { ConversationEmptyState } from "@/components/ai-elements/conversation";
 import { Button } from "@/components/ui/button";
 import {
   ResizableHandle,
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import {
+  ArtifactDirectoryTree,
   ArtifactFileDetail,
-  ArtifactFileList,
   useArtifacts,
 } from "../artifacts";
 import { useThread } from "../messages/context";
@@ -26,6 +26,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   children,
   threadId,
 }) => {
+  const { t } = useI18n();
   const { thread } = useThread();
   const layoutRef = useRef<GroupImperativeHandle>(null);
   const {
@@ -108,38 +109,33 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               threadId={threadId}
             />
           ) : (
-            <div className="relative flex size-full justify-center">
-              <div className="absolute top-1 right-1 z-30">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setArtifactsOpen(false);
-                  }}
-                >
-                  <XIcon />
-                </Button>
-              </div>
-              {thread.values.artifacts?.length === 0 ? (
-                <ConversationEmptyState
-                  icon={<FilesIcon />}
-                  title="No artifact selected"
-                  description="Select an artifact to view its details"
-                />
-              ) : (
-                <div className="flex size-full max-w-(--container-width-sm) flex-col justify-center p-4 pt-8">
-                  <header className="shrink-0">
-                    <h2 className="text-lg font-medium">Artifacts</h2>
-                  </header>
-                  <main className="min-h-0 grow">
-                    <ArtifactFileList
-                      className="max-w-(--container-width-sm) p-4 pt-12"
-                      files={thread.values.artifacts ?? []}
-                      threadId={threadId}
-                    />
-                  </main>
+            <div className="flex size-full min-w-0 flex-col rounded-lg border">
+              <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
+                <span className="font-medium">{t.common.directoryTree}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">
+                    {thread.values.artifacts?.length ?? 0}
+                    {t.common.filesSuffix}
+                  </span>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setArtifactsOpen(false);
+                    }}
+                  >
+                    <XIcon className="size-4" />
+                  </Button>
                 </div>
-              )}
+              </div>
+              <ArtifactDirectoryTree
+                files={thread.values.artifacts ?? []}
+                selectedPath={selectedArtifact}
+                onOpenFile={(path) => {
+                  selectArtifact(path);
+                  setArtifactsOpen(true);
+                }}
+              />
             </div>
           )}
         </div>

@@ -1,6 +1,31 @@
 import http from "node:http";
 import net from "node:net";
 
+export async function isPortInUse(port: number): Promise<boolean> {
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const socket = new net.Socket();
+      socket.setTimeout(500);
+
+      socket.once("connect", () => {
+        socket.destroy();
+        resolve();
+      });
+
+      socket.once("timeout", () => {
+        socket.destroy();
+        reject(new Error("Timeout"));
+      });
+
+      socket.once("error", reject);
+      socket.connect(port, "127.0.0.1");
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function waitForPort(
   port: number,
   timeoutMs: number = 30000

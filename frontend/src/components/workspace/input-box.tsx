@@ -336,12 +336,10 @@ function resolveMentionState(value: string, caret: number): MentionState | null 
 
     // 如果找到触发字符
     if (char === '@' || char === '/') {
-      // 检查触发字符前面是否是空格或字符串开头
-      if (i === 0 || /\s/.test(value.charAt(i - 1))) {
-        triggerIndex = i;
-        trigger = char as MentionTrigger;
-        break;
-      }
+      // 允许在任何位置触发提及
+      triggerIndex = i;
+      trigger = char as MentionTrigger;
+      break;
     }
   }
 

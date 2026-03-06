@@ -4,7 +4,10 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { ArtifactTrigger } from "@/components/workspace/artifacts";
+import {
+  ArtifactTrigger,
+  WorkingDirectoryTrigger,
+} from "@/components/workspace/artifacts";
 import {
   ChatBox,
   useSpecificChatMode,
@@ -104,7 +107,8 @@ export default function ChatPage() {
             <div className="flex w-full items-center text-sm font-medium">
               <ThreadTitle threadId={threadId} thread={thread} />
             </div>
-            <div>
+            <div className="flex items-center gap-1">
+              <WorkingDirectoryTrigger />
               <ArtifactTrigger />
             </div>
           </header>

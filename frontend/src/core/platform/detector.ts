@@ -2,8 +2,18 @@
  * 检测当前运行环境
  */
 export function isElectron(): boolean {
-  // 检查是否在 Electron 环境中
-  return typeof window !== "undefined" && "electronAPI" in window;
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  // preload 显式注入
+  if ("electronAPI" in window && window.electronAPI !== undefined) {
+    return true;
+  }
+
+  // 兜底：部分场景下 preload 注入晚于早期模块执行
+  const userAgent = window.navigator?.userAgent?.toLowerCase() ?? "";
+  return userAgent.includes("electron");
 }
 
 export function isWeb(): boolean {

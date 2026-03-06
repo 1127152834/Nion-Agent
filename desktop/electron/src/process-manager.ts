@@ -1,7 +1,7 @@
 import { ChildProcess, spawn } from "node:child_process";
 import { createWriteStream, WriteStream } from "node:fs";
 import path from "node:path";
-import { waitForHttp, waitForPort } from "./health";
+import { isPortInUse, waitForHttp, waitForPort } from "./health";
 import type { DesktopRuntimePaths } from "./paths";
 
 // 关键：只管理 3 个服务（没有 contextdb）
@@ -41,6 +41,11 @@ export class DesktopProcessManager {
       this.notifyStage("runtime.assign-ports");
       this.ports = await this.assignPorts();
       this.notifySuccess("runtime.assign-ports");
+
+      // 阶段 1.5：校验端口可用（避免误连旧进程导致前端配置错乱）
+      this.notifyStage("runtime.check-ports");
+      await this.checkPortsAvailable();
+      this.notifySuccess("runtime.check-ports");
 
       // 阶段 2：检查依赖
       this.notifyStage("runtime.check-dependencies");
@@ -90,6 +95,27 @@ export class DesktopProcessManager {
     const pnpmCheck = spawnSync("pnpm", ["--version"], { stdio: "ignore" });
     if (pnpmCheck.error || pnpmCheck.status !== 0) {
       throw new Error("pnpm not found. Please install: npm install -g pnpm");
+    }
+  }
+
+  private async checkPortsAvailable(): Promise<void> {
+    if (!this.ports) {
+      throw new Error("Ports not assigned");
+    }
+
+    const checks = await Promise.all([
+      isPortInUse(this.ports.langgraphPort),
+      isPortInUse(this.ports.gatewayPort),
+      isPortInUse(this.ports.frontendPort)
+    ]);
+    const inUsePorts = [
+      checks[0] ? this.ports.langgraphPort : null,
+      checks[1] ? this.ports.gatewayPort : null,
+      checks[2] ? this.ports.frontendPort : null
+    ].filter((port): port is number => port !== null);
+
+    if (inUsePorts.length > 0) {
+      throw new Error(`Port conflict detected: ${inUsePorts.join(", ")}`);
     }
   }
 
@@ -177,8 +203,9 @@ export class DesktopProcessManager {
 
     this.services.set("frontend", { name: "frontend", child, logStream, logPath });
 
-    // 等待服务启动
+    // 等待服务启动（HTTP 层可访问）
     await waitForPort(this.ports!.frontendPort, 60000);
+    await waitForHttp(`http://localhost:${this.ports!.frontendPort}`, 30000);
   }
 
   async shutdown(): Promise<void> {

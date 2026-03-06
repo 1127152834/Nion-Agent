@@ -198,6 +198,12 @@ export interface Translations {
     discoverCategoryBoardTitle: string;
     discoverCategoryBoardDescription: string;
     discoverExploreCategory: string;
+    discoverFeaturedSectionTitle: string;
+    discoverFeaturedSectionDescription: string;
+    discoverSortLabel: string;
+    discoverSortFeatured: string;
+    discoverSortTitle: string;
+    discoverSortSite: string;
     rsshubTool: string;
     rsshubDialogTitle: string;
     rsshubDialogDescription: string;

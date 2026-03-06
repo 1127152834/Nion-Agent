@@ -6,6 +6,7 @@ import { DesktopProcessManager, type DesktopRuntimePorts } from "./process-manag
 let mainWindow: BrowserWindow | null = null;
 let runtimePaths: DesktopRuntimePaths | null = null;
 let processManager: DesktopProcessManager | null = null;
+let runtimePorts: DesktopRuntimePorts | null = null;
 let startupInProgress = false;
 let isShuttingDown = false;
 
@@ -25,7 +26,7 @@ if (!gotTheLock) {
 app.on("ready", async () => {
   try {
     runtimePaths = resolveRuntimePaths();
-    await startupRuntime();
+    runtimePorts = await startupRuntime();
     createMainWindow();
   } catch (error) {
     console.error("Startup failed:", error);
@@ -109,8 +110,10 @@ function createMainWindow(): void {
     }
   });
 
+  const frontendPort = runtimePorts?.frontendPort ?? 3000;
+
   // 加载前端应用
-  mainWindow.loadURL("http://localhost:3000");
+  mainWindow.loadURL(`http://localhost:${frontendPort}`);
 
   // 开发模式打开 DevTools
   if (!app.isPackaged) {

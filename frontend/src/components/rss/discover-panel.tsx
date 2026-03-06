@@ -35,7 +35,7 @@ import {
   useRSSFeeds,
   useRSSHubRoutes,
 } from "@/core/rss";
-import type { OPMLSource } from "@/core/rss";
+import type { OPMLSource, RSSDiscoverSource } from "@/core/rss";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_VISUALS: Record<
@@ -83,6 +83,8 @@ const CATEGORY_VISUALS: Record<
     gradientTo: "#d97706",
   },
 };
+
+type DiscoverSortMode = "featured" | "title" | "site";
 
 function normalizeURL(value: string) {
   const normalized = value.trim().toLowerCase();
@@ -143,6 +145,7 @@ export function DiscoverPanel({
     new Set(),
   );
   const [importingOPML, setImportingOPML] = useState(false);
+  const [sortMode, setSortMode] = useState<DiscoverSortMode>("featured");
 
   const { categories, sources, isLoading, isRefetching, refetch, error } =
     useRSSDiscoverSources({
@@ -203,6 +206,54 @@ export function DiscoverPanel({
     () => categories.filter((item) => item.id !== "all"),
     [categories],
   );
+
+  const sortedSources = useMemo(() => {
+    const items = [...sources];
+    const compareTitle = (a: RSSDiscoverSource, b: RSSDiscoverSource) =>
+      a.title.localeCompare(b.title, "zh-Hans-CN", {
+        sensitivity: "base",
+      });
+    const compareSite = (a: RSSDiscoverSource, b: RSSDiscoverSource) =>
+      a.site_url.localeCompare(b.site_url, "zh-Hans-CN", {
+        sensitivity: "base",
+      });
+
+    switch (sortMode) {
+      case "title":
+        items.sort(compareTitle);
+        break;
+      case "site":
+        items.sort(compareSite);
+        break;
+      default:
+        items.sort((a, b) => {
+          if (a.featured !== b.featured) {
+            return a.featured ? -1 : 1;
+          }
+          return compareTitle(a, b);
+        });
+        break;
+    }
+
+    return items;
+  }, [sortMode, sources]);
+
+  const featuredSources = useMemo(
+    () => sortedSources.filter((item) => item.featured).slice(0, 4),
+    [sortedSources],
+  );
+
+  const displaySources = useMemo(() => {
+    if (
+      category !== "all" &&
+      !keyword.trim() &&
+      featuredSources.length > 0
+    ) {
+      const featuredIds = new Set(featuredSources.map((item) => item.id));
+      return sortedSources.filter((item) => !featuredIds.has(item.id));
+    }
+    return sortedSources;
+  }, [category, featuredSources, keyword, sortedSources]);
 
   useEffect(() => {
     setKeywordInput(keyword);
@@ -336,6 +387,74 @@ export function DiscoverPanel({
     } finally {
       setImportingOPML(false);
     }
+  };
+
+  const renderSourceCard = (
+    source: RSSDiscoverSource,
+    keyPrefix = "",
+    featuredCard = false,
+  ) => {
+    const subscribedFeed = subscribedFeedMap.get(normalizeURL(source.feed_url));
+    return (
+      <Card
+        key={`${keyPrefix}${source.id}`}
+        className={cn("gap-3 py-4", featuredCard && "border-primary/30 bg-primary/5")}
+      >
+        <CardHeader className="space-y-2 px-4">
+          <div className="flex items-start justify-between gap-2">
+            <CardTitle className="line-clamp-2 text-base">{source.title}</CardTitle>
+            {source.featured && (
+              <Badge variant="secondary" className="gap-1">
+                <SparklesIcon className="size-3" />
+                {t.rssReader.discoverFeatured}
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground line-clamp-3 text-sm">
+            {source.description}
+          </p>
+        </CardHeader>
+
+        <CardContent className="space-y-3 px-4">
+          <div className="flex flex-wrap gap-1.5">
+            {source.tags.map((tag) => (
+              <Badge key={`${source.id}-${tag}`} variant="outline">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+
+          <div className="text-muted-foreground space-y-1 text-xs">
+            <div className="truncate">{source.site_url}</div>
+            <div className="truncate">{source.feed_url}</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              className="flex-1"
+              variant={subscribedFeed ? "secondary" : "default"}
+              onClick={() => void handleSubscribe(source)}
+              disabled={addFeedMutation.isPending || !!subscribedFeed}
+            >
+              {subscribedFeed
+                ? t.rssReader.discoverSubscribed
+                : t.rssReader.subscribe}
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <a
+                href={source.site_url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={t.rssReader.openOriginal}
+              >
+                <ExternalLinkIcon className="size-4" />
+              </a>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -658,19 +777,51 @@ export function DiscoverPanel({
           </section>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
-          {categories.map((item) => (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {categories.map((item) => (
+              <Button
+                key={item.id}
+                size="sm"
+                variant={category === item.id ? "default" : "outline"}
+                onClick={() => onCategoryChange(item.id)}
+                className="rounded-full"
+              >
+                {item.label}
+                <span className="text-xs tabular-nums">{item.count}</span>
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-muted-foreground mr-1 text-xs">
+              {t.rssReader.discoverSortLabel}
+            </span>
             <Button
-              key={item.id}
               size="sm"
-              variant={category === item.id ? "default" : "outline"}
-              onClick={() => onCategoryChange(item.id)}
-              className="rounded-full"
+              variant={sortMode === "featured" ? "default" : "outline"}
+              className="h-7 rounded-full px-2 text-xs"
+              onClick={() => setSortMode("featured")}
             >
-              {item.label}
-              <span className="text-xs tabular-nums">{item.count}</span>
+              {t.rssReader.discoverSortFeatured}
             </Button>
-          ))}
+            <Button
+              size="sm"
+              variant={sortMode === "title" ? "default" : "outline"}
+              className="h-7 rounded-full px-2 text-xs"
+              onClick={() => setSortMode("title")}
+            >
+              {t.rssReader.discoverSortTitle}
+            </Button>
+            <Button
+              size="sm"
+              variant={sortMode === "site" ? "default" : "outline"}
+              className="h-7 rounded-full px-2 text-xs"
+              onClick={() => setSortMode("site")}
+            >
+              {t.rssReader.discoverSortSite}
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -687,71 +838,30 @@ export function DiscoverPanel({
             {t.rssReader.discoverEmpty}
           </div>
         ) : (
-          <div className="grid min-h-0 grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-3">
-            {sources.map((source) => {
-              const subscribedFeed = subscribedFeedMap.get(
-                normalizeURL(source.feed_url),
-              );
-              return (
-                <Card key={source.id} className="gap-3 py-4">
-                  <CardHeader className="space-y-2 px-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="line-clamp-2 text-base">
-                        {source.title}
-                      </CardTitle>
-                      {source.featured && (
-                        <Badge variant="secondary" className="gap-1">
-                          <SparklesIcon className="size-3" />
-                          {t.rssReader.discoverFeatured}
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-muted-foreground line-clamp-3 text-sm">
-                      {source.description}
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+            {category !== "all" &&
+              !keyword.trim() &&
+              featuredSources.length > 0 && (
+                <section className="space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">
+                      {t.rssReader.discoverFeaturedSectionTitle}
+                    </h3>
+                    <p className="text-muted-foreground text-xs">
+                      {t.rssReader.discoverFeaturedSectionDescription}
                     </p>
-                  </CardHeader>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {featuredSources.map((source) =>
+                      renderSourceCard(source, "featured-", true),
+                    )}
+                  </div>
+                </section>
+              )}
 
-                  <CardContent className="space-y-3 px-4">
-                    <div className="flex flex-wrap gap-1.5">
-                      {source.tags.map((tag) => (
-                        <Badge key={`${source.id}-${tag}`} variant="outline">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <div className="text-muted-foreground space-y-1 text-xs">
-                      <div className="truncate">{source.site_url}</div>
-                      <div className="truncate">{source.feed_url}</div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        className="flex-1"
-                        variant={subscribedFeed ? "secondary" : "default"}
-                        onClick={() => void handleSubscribe(source)}
-                        disabled={addFeedMutation.isPending || !!subscribedFeed}
-                      >
-                        {subscribedFeed
-                          ? t.rssReader.discoverSubscribed
-                          : t.rssReader.subscribe}
-                      </Button>
-                      <Button asChild size="sm" variant="outline">
-                        <a
-                          href={source.site_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={t.rssReader.openOriginal}
-                        >
-                          <ExternalLinkIcon className="size-4" />
-                        </a>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+            <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {displaySources.map((source) => renderSourceCard(source))}
+            </div>
           </div>
         )}
       </div>

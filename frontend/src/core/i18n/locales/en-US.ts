@@ -268,6 +268,13 @@ export const enUS: Translations = {
     discoverCategoryBoardDescription:
       "Jump into a category and browse curated RSS resources quickly.",
     discoverExploreCategory: "Open",
+    discoverFeaturedSectionTitle: "Category highlights",
+    discoverFeaturedSectionDescription:
+      "Featured feeds recommended first in this category.",
+    discoverSortLabel: "Sort",
+    discoverSortFeatured: "Featured",
+    discoverSortTitle: "Title",
+    discoverSortSite: "Site",
     rsshubTool: "RSSHub",
     rsshubDialogTitle: "Generate feed via RSSHub",
     rsshubDialogDescription:
