@@ -47,6 +47,8 @@ export interface Translations {
     description: string;
     createYourOwnSkill: string;
     createYourOwnSkillDescription: string;
+    createYourOwnPlugin: string;
+    createYourOwnPluginDescription: string;
   };
 
   // Clipboard
@@ -61,6 +63,7 @@ export interface Translations {
   inputBox: {
     placeholder: string;
     createSkillPrompt: string;
+    createPluginPrompt: string;
     addAttachments: string;
     mode: string;
     flashMode: string;
@@ -83,6 +86,7 @@ export interface Translations {
     searchModels: string;
     surpriseMe: string;
     surpriseMePrompt: string;
+    temporaryChat: string;
     suggestions: {
       suggestion: string;
       prompt: string;
@@ -316,6 +320,9 @@ export interface Translations {
     loadingEntry: string;
     loadingMore: string;
     loadMoreHint: string;
+    feedKeyboardHint: string;
+    entryKeyboardHint: string;
+    entryDetailKeyboardHint: string;
     filterAll: string;
     filterUnread: string;
     filterStarred: string;
@@ -339,6 +346,32 @@ export interface Translations {
     backToList: string;
     aiPanelTitle: string;
     aiPanelDescription: string;
+    aiPanelBadge: string;
+    aiWelcomeTitle: string;
+    aiWelcomeDescription: string;
+    aiContextEntry: string;
+    aiContextFeed: string;
+    aiContextEmpty: string;
+    aiSendFailed: string;
+    shortcutToggleAssistant: string;
+    shortcutNewAssistantChat: string;
+    shortcutCloseAssistant: string;
+    quickPromptSummaryLabel: string;
+    quickPromptSummaryPrompt: string;
+    quickPromptTakeawayLabel: string;
+    quickPromptTakeawayPrompt: string;
+    quickPromptTranslateLabel: string;
+    quickPromptTranslatePrompt: string;
+    newAssistantChatLabel: string;
+    aiSummaryCardDescription: string;
+    openAssistant: string;
+    aiPanelHeaderNewChat: string;
+    aiPanelSubtitle: string;
+    aiComposerPlaceholder: string;
+    aiComposerSkill: string;
+    aiComposerNoSkill: string;
+    aiComposerTool: string;
+    aiComposerNoTool: string;
     assistantFloatingDescription: string;
     assistantOpen: string;
     assistantNewChat: string;
@@ -408,6 +441,7 @@ export interface Translations {
     sections: {
       appearance: string;
       memory: string;
+      embedding: string;
       tools: string;
       channels: string;
       skills: string;
@@ -433,6 +467,7 @@ export interface Translations {
       [key: string]: Record<string, any>;
     };
     modelPage: Record<string, any>;
+    channelPage: Record<string, any>;
     skillImportDialog: Record<string, any>;
     skillPage: Record<string, any>;
     toolPage: Record<string, any>;
@@ -442,6 +477,7 @@ export interface Translations {
       description: string;
       empty: string;
       rawJson: string;
+      hub: Record<string, string>;
       markdown: {
         overview: string;
         userContext: string;
@@ -537,6 +573,8 @@ export interface Translations {
       pluginInstalled: string;
       pluginDeleted: string;
       deleteFailed: string;
+      noDescription: string;
+      authorBy: string;
       deleteConfirmTitle: string;
       deleteConfirmDescription: string;
       cancelAction: string;

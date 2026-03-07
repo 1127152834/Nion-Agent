@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
 from src.gateway.path_utils import resolve_thread_virtual_path
@@ -156,3 +156,130 @@ async def get_artifact(thread_id: str, path: str, request: Request) -> FileRespo
         return PlainTextResponse(content=actual_path.read_text(), media_type=mime_type)
 
     return Response(content=actual_path.read_bytes(), media_type=mime_type, headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_filename}"})
+
+
+@router.put(
+    "/threads/{thread_id}/artifacts/{path:path}",
+    summary="Write Artifact File",
+    description="Write content to an artifact file. Creates parent directories if needed.",
+)
+async def write_artifact(
+    thread_id: str,
+    path: str,
+    content: str = Body(..., media_type="text/plain"),
+) -> dict:
+    """Write content to an artifact file.
+
+    Args:
+        thread_id: The thread ID.
+        path: The artifact path with virtual prefix.
+        content: The file content to write.
+
+    Returns:
+        Success response with file path.
+
+    Raises:
+        HTTPException:
+            - 400 if path is invalid
+            - 403 if access denied (path traversal detected)
+    """
+    actual_path = resolve_thread_virtual_path(thread_id, path)
+
+    if not actual_path:
+        raise HTTPException(status_code=400, detail=f"Invalid path: {path}")
+
+    # Create parent directories if they don't exist
+    actual_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write content to file
+    actual_path.write_text(content, encoding="utf-8")
+
+    logger.info(f"Wrote artifact: thread_id={thread_id}, path={path}, actual_path={actual_path}")
+
+    return {"success": True, "path": path}
+
+
+@router.delete(
+    "/threads/{thread_id}/artifacts/{path:path}",
+    summary="Delete Artifact File",
+    description="Delete an artifact file.",
+)
+async def delete_artifact(
+    thread_id: str,
+    path: str,
+) -> dict:
+    """Delete an artifact file.
+
+    Args:
+        thread_id: The thread ID.
+        path: The artifact path with virtual prefix.
+
+    Returns:
+        Success response.
+
+    Raises:
+        HTTPException:
+            - 400 if path is invalid or not a file
+            - 403 if access denied (path traversal detected)
+            - 404 if file not found
+    """
+    actual_path = resolve_thread_virtual_path(thread_id, path)
+
+    if not actual_path:
+        raise HTTPException(status_code=400, detail=f"Invalid path: {path}")
+
+    if not actual_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {path}")
+
+    if not actual_path.is_file():
+        raise HTTPException(status_code=400, detail=f"Path is not a file: {path}")
+
+    # Delete the file
+    actual_path.unlink()
+
+    logger.info(f"Deleted artifact: thread_id={thread_id}, path={path}, actual_path={actual_path}")
+
+    return {"success": True}
+
+
+@router.get(
+    "/threads/{thread_id}/artifacts",
+    summary="List Artifact Files",
+    description="List files in an artifact directory.",
+)
+async def list_artifacts(
+    thread_id: str,
+    dir: str = Query(..., description="Directory path to list"),
+) -> dict:
+    """List files in an artifact directory.
+
+    Args:
+        thread_id: The thread ID.
+        dir: The directory path with virtual prefix.
+
+    Returns:
+        List of file paths relative to the directory.
+
+    Raises:
+        HTTPException:
+            - 400 if path is invalid or not a directory
+            - 403 if access denied (path traversal detected)
+            - 404 if directory not found
+    """
+    actual_path = resolve_thread_virtual_path(thread_id, dir)
+
+    if not actual_path:
+        raise HTTPException(status_code=400, detail=f"Invalid directory path: {dir}")
+
+    if not actual_path.exists():
+        raise HTTPException(status_code=404, detail=f"Directory not found: {dir}")
+
+    if not actual_path.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {dir}")
+
+    # List all files in the directory
+    files = [str(f.relative_to(actual_path)) for f in actual_path.iterdir()]
+
+    logger.info(f"Listed artifacts: thread_id={thread_id}, dir={dir}, actual_path={actual_path}, count={len(files)}")
+
+    return {"files": files}

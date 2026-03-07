@@ -136,7 +136,7 @@ export async function loadInstalledPlugin(
   // Note: In production, this should be done in a Web Worker for isolation
   const module = await loadPluginModule(mainFile, files);
 
-  return module.default as WorkbenchPlugin;
+  return module.default;
 }
 
 /**
@@ -281,6 +281,48 @@ async function deleteInstalledPluginMetadata(pluginId: string): Promise<void> {
   });
 
   db.close();
+}
+
+/**
+ * Update installed plugin metadata
+ */
+export async function updateInstalledPluginMetadata(
+  pluginId: string,
+  updates: Partial<InstalledPlugin>,
+): Promise<InstalledPlugin> {
+  const db = await openDB();
+  const tx = db.transaction([STORE_METADATA], "readwrite");
+  const store = tx.objectStore(STORE_METADATA);
+
+  return new Promise((resolve, reject) => {
+    const getRequest = store.get(pluginId);
+
+    getRequest.onsuccess = () => {
+      const existing = getRequest.result;
+      if (!existing) {
+        reject(new Error(`Plugin ${pluginId} not found`));
+        db.close();
+        return;
+      }
+
+      const updated = { ...existing, ...updates };
+      const putRequest = store.put(updated, pluginId);
+
+      putRequest.onsuccess = () => {
+        resolve(updated);
+        db.close();
+      };
+      putRequest.onerror = () => {
+        reject(putRequest.error);
+        db.close();
+      };
+    };
+
+    getRequest.onerror = () => {
+      reject(getRequest.error);
+      db.close();
+    };
+  });
 }
 
 /**

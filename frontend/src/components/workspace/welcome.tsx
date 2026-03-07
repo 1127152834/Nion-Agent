@@ -39,6 +39,8 @@ export function Welcome({
       <div className="text-2xl font-bold">
         {searchParams.get("mode") === "skill" ? (
           `✨ ${t.welcome.createYourOwnSkill} ✨`
+        ) : searchParams.get("mode") === "workbench-plugin" ? (
+          `🔌 ${t.welcome.createYourOwnPlugin} 🔌`
         ) : (
           <div className="flex items-center gap-2">
             <div className={cn("inline-block", !waved ? "animate-wave" : "")}>
@@ -56,6 +58,16 @@ export function Welcome({
             </pre>
           ) : (
             <p>{t.welcome.createYourOwnSkillDescription}</p>
+          )}
+        </div>
+      ) : searchParams.get("mode") === "workbench-plugin" ? (
+        <div className="text-muted-foreground text-sm">
+          {t.welcome.createYourOwnPluginDescription.includes("\n") ? (
+            <pre className="font-sans whitespace-pre">
+              {t.welcome.createYourOwnPluginDescription}
+            </pre>
+          ) : (
+            <p>{t.welcome.createYourOwnPluginDescription}</p>
           )}
         </div>
       ) : (

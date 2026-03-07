@@ -13,11 +13,19 @@ export function useSpecificChatMode() {
   const searchParams = useSearchParams();
   const promptInputController = usePromptInputController();
   const inputInitialValue = useMemo(() => {
-    if (threadIdFromPath !== "new" || searchParams.get("mode") !== "skill") {
-      return undefined;
-    }
-    return t.inputBox.createSkillPrompt;
-  }, [threadIdFromPath, searchParams, t.inputBox.createSkillPrompt]);
+    if (threadIdFromPath !== "new") return undefined;
+
+    const mode = searchParams.get("mode");
+    if (mode === "skill") return t.inputBox.createSkillPrompt;
+    if (mode === "workbench-plugin") return t.inputBox.createPluginPrompt;
+
+    return undefined;
+  }, [
+    threadIdFromPath,
+    searchParams,
+    t.inputBox.createSkillPrompt,
+    t.inputBox.createPluginPrompt,
+  ]);
   const lastInitialValueRef = useRef<string | undefined>(undefined);
   const setInputRef = useRef(promptInputController.textInput.setInput);
   setInputRef.current = promptInputController.textInput.setInput;

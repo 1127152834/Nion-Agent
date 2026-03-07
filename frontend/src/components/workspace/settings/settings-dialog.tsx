@@ -4,6 +4,7 @@ import {
   BellIcon,
   InfoIcon,
   BrainIcon,
+  DatabaseIcon,
   Link2Icon,
   PaletteIcon,
   SparklesIcon,
@@ -26,9 +27,11 @@ import { ChannelSettingsPage } from "@/components/workspace/settings/channel-set
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
+import { RetrievalSettingsPage } from "@/components/workspace/settings/retrieval-settings-page";
 import { SandboxSettingsPage } from "@/components/workspace/settings/sandbox-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
+import { WorkbenchPluginsPage } from "@/components/workspace/settings/workbench-plugins-page";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
@@ -36,11 +39,13 @@ type SettingsSection =
   | "appearance"
   | "models"
   | "memory"
+  | "embedding"
   | "tools"
   | "channels"
   | "skills"
   | "sandbox"
   | "notification"
+  | "workbench-plugins"
   | "about";
 
 type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
@@ -49,7 +54,7 @@ type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
 
 export function SettingsDialog(props: SettingsDialogProps) {
   const { defaultSection = "appearance", ...dialogProps } = props;
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [activeSection, setActiveSection] =
     useState<SettingsSection>(defaultSection);
 
@@ -83,9 +88,18 @@ export function SettingsDialog(props: SettingsDialogProps) {
         label: t.settings.sections.memory,
         icon: BrainIcon,
       },
+      {
+        id: "embedding",
+        label:
+          t.settings.sections.embedding
+          ?? t.settings.retrieval?.title
+          ?? (locale === "zh-CN" ? "检索模型" : "Retrieval"),
+        icon: DatabaseIcon,
+      },
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
       { id: "channels", label: t.settings.sections.channels, icon: Link2Icon },
       { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
+      { id: "workbench-plugins", label: t.settings.workbenchPlugins?.title ?? "Workbench plugins", icon: BoxIcon },
       { id: "sandbox", label: t.settings.sandbox?.title ?? "Sandbox", icon: BoxIcon },
       { id: "about", label: t.settings.sections.about, icon: InfoIcon },
     ],
@@ -93,12 +107,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.sections.appearance,
       t.settings.models?.title,
       t.settings.sections.memory,
+      t.settings.sections.embedding,
+      t.settings.retrieval?.title,
       t.settings.sections.tools,
       t.settings.sections.channels,
       t.settings.sections.skills,
+      t.settings.workbenchPlugins?.title,
       t.settings.sandbox?.title,
       t.settings.sections.notification,
       t.settings.sections.about,
+      locale,
     ],
   );
   return (
@@ -146,10 +164,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "models" && <ModelSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}
+              {activeSection === "embedding" && <RetrievalSettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}
               {activeSection === "channels" && <ChannelSettingsPage />}
               {activeSection === "skills" && (
                 <SkillSettingsPage
+                  onClose={() => props.onOpenChange?.(false)}
+                />
+              )}
+              {activeSection === "workbench-plugins" && (
+                <WorkbenchPluginsPage
                   onClose={() => props.onOpenChange?.(false)}
                 />
               )}

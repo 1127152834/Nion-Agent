@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 
 import { initializeBuiltInPlugins } from "@/plugins";
 
@@ -10,7 +10,12 @@ import { initializeBuiltInPlugins } from "@/plugins";
  */
 export function PluginInitializer() {
   useEffect(() => {
-    initializeBuiltInPlugins();
+    // Expose React to global scope for plugins
+    if (typeof window !== "undefined") {
+      (window as any).React = React;
+    }
+
+    void initializeBuiltInPlugins();
   }, []);
 
   return null;

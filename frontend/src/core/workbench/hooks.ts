@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { InstalledPlugin, WorkbenchPlugin } from "./types";
 import {
   installPlugin,
   listInstalledPlugins,
   loadInstalledPlugin,
   uninstallPlugin,
+  updateInstalledPluginMetadata,
 } from "./loader";
 import { getWorkbenchRegistry } from "./registry";
+import type { InstalledPlugin, WorkbenchPlugin } from "./types";
 
 /**
  * Query key factory
@@ -103,26 +104,20 @@ export function useTogglePlugin() {
       enabled: boolean;
     }) => {
       const registry = getWorkbenchRegistry();
-      const installed = registry.getInstalled(pluginId);
 
-      if (!installed) {
-        throw new Error(`Plugin ${pluginId} not found`);
-      }
+      // Update IndexedDB metadata
+      const updated = await updateInstalledPluginMetadata(pluginId, { enabled });
 
-      // Update metadata
-      installed.enabled = enabled;
-      registry.registerInstalled(installed);
-
-      // If enabling, load and register the plugin
       if (enabled) {
         const plugin = await loadInstalledPlugin(pluginId);
         registry.register(plugin);
+        registry.registerInstalled(updated);
       } else {
-        // If disabling, unregister from active plugins
         registry.unregister(pluginId);
+        registry.unregisterInstalled(pluginId);
       }
 
-      return installed;
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
