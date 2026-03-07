@@ -67,7 +67,12 @@ export function SummarizationSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const copy = t.settings.configSections.summarization;
+  const settingsLike = t.settings as {
+    configSections?: {
+      summarization?: Record<string, any>;
+    };
+  };
+  const copy = (settingsLike.configSections?.summarization ?? {});
   const summarization = asObject(config.summarization);
   const triggerList = normalizeTriggerList(summarization.trigger);
   const keep = asObject(summarization.keep);

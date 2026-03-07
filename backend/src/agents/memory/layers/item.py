@@ -135,9 +135,24 @@ class ItemLayer:
         if not isinstance(relations, list):
             relations = []
 
+        # Validate and truncate content if too long (max 10MB)
+        content = str(raw.get("content", ""))
+        max_content_length = 10 * 1024 * 1024  # 10MB
+        if len(content) > max_content_length:
+            import logging
+            logging.warning(f"Content too long ({len(content)} bytes), truncating to {max_content_length}")
+            content = content[:max_content_length]
+
+        # Generate unique ID with full UUID to avoid collisions
+        item_id = raw.get("id")
+        if not item_id:
+            item_id = f"item_{uuid.uuid4().hex}"
+        else:
+            item_id = str(item_id)
+
         return {
-            "id": str(raw.get("id") or f"item_{uuid.uuid4().hex[:8]}"),
-            "content": str(raw.get("content", "")),
+            "id": item_id,
+            "content": content,
             "category": self._normalize_category(raw.get("category")),
             "confidence": float(raw.get("confidence", 0.5)),
             "entities": entities,
@@ -148,21 +163,57 @@ class ItemLayer:
         }
 
     def _load_items(self) -> dict[str, dict[str, Any]]:
+        """Load items from file with error handling."""
         if not self._items_file.exists():
             return {}
 
-        with open(self._items_file, encoding="utf-8") as f:
-            items = json.load(f)
-        return {item["id"]: item for item in items}
+        try:
+            with open(self._items_file, encoding="utf-8") as f:
+                items = json.load(f)
+
+            if not isinstance(items, list):
+                import logging
+                logging.error(f"Invalid items file format: expected list, got {type(items)}")
+                return {}
+
+            return {item["id"]: item for item in items if isinstance(item, dict) and "id" in item}
+        except (json.JSONDecodeError, OSError) as e:
+            import logging
+            logging.error(f"Failed to load items: {e}")
+            return {}
 
     def _save_items(self) -> None:
+        """Save items to file with atomic write to prevent corruption."""
+        import tempfile
+        import os
+
         ordered = sorted(
             self._items.values(),
             key=lambda item: item.get("created_at", ""),
             reverse=True,
         )
-        with open(self._items_file, "w", encoding="utf-8") as f:
-            json.dump(ordered, f, indent=2, ensure_ascii=False)
+
+        # Write to temporary file first
+        fd, temp_path = tempfile.mkstemp(
+            dir=self._storage_dir,
+            prefix='.items_',
+            suffix='.json.tmp'
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(ordered, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())  # Ensure data is written to disk
+
+            # Atomic rename
+            os.replace(temp_path, self._items_file)
+        except Exception:
+            # Clean up temp file on error
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
 
     def _rebuild_bm25_index(self) -> None:
         docs: list[str] = []
@@ -173,26 +224,66 @@ class ItemLayer:
         self._bm25.fit(docs)
 
     def _embed_text(self, text: str) -> list[float]:
+        """Generate embedding with error handling."""
         if self._embedding_provider is None:
             return self._fallback_embedding(text)
-        return self._embedding_provider.embed(text)
+
+        try:
+            return self._embedding_provider.embed(text)
+        except Exception as e:
+            import logging
+            logging.warning(f"Embedding generation failed, using fallback: {e}")
+            return self._fallback_embedding(text)
 
     def store(self, item: dict[str, Any] | Any) -> dict[str, Any]:
-        """Store one structured memory item and its embedding."""
+        """Store one structured memory item and its embedding.
+
+        Uses optimistic locking: prepare data outside lock, then update atomically.
+        """
+        # Prepare data outside lock (expensive operations)
         normalized = self._normalize_item(item)
         embedding = self._embed_text(normalized["content"])
 
+        # Quick atomic update inside lock
         with self._lock:
+            # Check if item already exists
+            existing = self._items.get(normalized["id"])
+
+            # Update memory
             self._items[normalized["id"]] = normalized
-            self._vector_store.add_vector(
-                id=normalized["id"],
-                content=normalized["content"],
-                embedding=embedding,
-                category=normalized["category"],
-                metadata={"confidence": normalized["confidence"]},
-            )
-            self._save_items()
-            self._rebuild_bm25_index()
+
+            # Save to disk first (if this fails, we can rollback memory)
+            try:
+                self._save_items()
+            except Exception as e:
+                # Rollback memory on save failure
+                if existing is not None:
+                    self._items[normalized["id"]] = existing
+                else:
+                    self._items.pop(normalized["id"], None)
+                raise
+
+            # Update vector store (after successful file save)
+            try:
+                self._vector_store.add_vector(
+                    id=normalized["id"],
+                    content=normalized["content"],
+                    embedding=embedding,
+                    category=normalized["category"],
+                    metadata={"confidence": normalized["confidence"]},
+                )
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to add vector: {e}")
+                # Don't rollback - file is already saved
+
+            # Rebuild BM25 index (can be slow, but not critical)
+            try:
+                self._rebuild_bm25_index()
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to rebuild BM25 index: {e}")
+                # Don't rollback - file and vector are already saved
 
         return normalized
 
@@ -260,11 +351,35 @@ class ItemLayer:
             if item_id not in self._items:
                 return False
 
+            # Backup item for rollback
+            backup = self._items[item_id]
+
+            # Remove from memory
             self._items.pop(item_id, None)
-            if hasattr(self._vector_store, "delete_vector"):
-                self._vector_store.delete_vector(item_id)
-            self._save_items()
-            self._rebuild_bm25_index()
+
+            # Save to disk first
+            try:
+                self._save_items()
+            except Exception as e:
+                # Rollback on save failure
+                self._items[item_id] = backup
+                raise
+
+            # Delete from vector store
+            try:
+                if hasattr(self._vector_store, "delete_vector"):
+                    self._vector_store.delete_vector(item_id)
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to delete vector: {e}")
+
+            # Rebuild BM25 index
+            try:
+                self._rebuild_bm25_index()
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to rebuild BM25 index: {e}")
+
             return True
 
     def update_access(self, item_id: str) -> bool:
@@ -282,7 +397,26 @@ class ItemLayer:
 
     def close(self) -> None:
         """Close underlying resources."""
-        self._vector_store.close()
+        try:
+            if hasattr(self._vector_store, 'close'):
+                self._vector_store.close()
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to close vector store: {e}")
+
+        try:
+            if hasattr(self._bm25, 'close'):
+                self._bm25.close()
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to close BM25: {e}")
+
+        try:
+            if hasattr(self._hybrid_search, 'close'):
+                self._hybrid_search.close()
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to close hybrid search: {e}")
 
 
 __all__ = ["ItemLayer"]

@@ -14,6 +14,7 @@ class SandboxConfig(BaseModel):
 
     Common options:
         use: Class path of the sandbox provider (required)
+        python_path: Path to Python executable (for LocalSandbox). If not set, uses system Python from PATH.
 
     AioSandboxProvider specific options:
         image: Docker image to use (default: enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest)
@@ -29,6 +30,10 @@ class SandboxConfig(BaseModel):
     use: str = Field(
         ...,
         description="Class path of the sandbox provider (e.g. src.sandbox.local:LocalSandboxProvider)",
+    )
+    python_path: str | None = Field(
+        default=None,
+        description="Path to Python executable (for LocalSandbox). If not set, uses system Python from PATH. Can use $NION_PYTHON_PATH environment variable.",
     )
     image: str | None = Field(
         default=None,

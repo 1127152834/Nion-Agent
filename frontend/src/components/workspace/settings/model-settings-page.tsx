@@ -18,7 +18,7 @@ import { useConfigEditor } from "./use-config-editor";
 
 export function ModelSettingsPage() {
   const { t } = useI18n();
-  const copy = t.settings.modelPage;
+  const m = t.settings.modelPage;
   const [activeView, setActiveView] = useState<ModelSettingsChildView>("providers");
   const {
     draftConfig,
@@ -50,15 +50,15 @@ export function ModelSettingsPage() {
   const defaultModelLabel = useMemo(() => {
     const first = models[0];
     if (!first) {
-      return copy.notSet;
+      return m?.notSet ?? "Not set";
     }
     return (
       asString(first.display_name).trim()
       || asString(first.name).trim()
       || asString(first.model).trim()
-      || copy.unnamedModel
+      || (m?.unnamedModel ?? "Unnamed model")
     );
-  }, [copy.notSet, copy.unnamedModel, models]);
+  }, [m?.notSet, m?.unnamedModel, models]);
 
   const viewTabs: {
     id: ModelSettingsChildView;
@@ -69,15 +69,15 @@ export function ModelSettingsPage() {
   }[] = [
     {
       id: "providers",
-      label: copy.providersLabel,
-      subtitle: copy.providersSubtitle,
+      label: m?.providersLabel ?? "Providers",
+      subtitle: m?.providersSubtitle ?? "Connection and auth",
       count: providers.length,
       icon: Building2Icon,
     },
     {
       id: "models",
-      label: copy.modelsLabel,
-      subtitle: copy.modelsSubtitle,
+      label: m?.modelsLabel ?? "Models",
+      subtitle: m?.modelsSubtitle ?? "Catalog and capabilities",
       count: models.length,
       icon: Layers3Icon,
     },
@@ -92,7 +92,7 @@ export function ModelSettingsPage() {
         <div className="text-muted-foreground text-sm">{t.common.loading}</div>
       ) : error ? (
         <div className="text-destructive text-sm">
-          {error instanceof Error ? error.message : copy.loadConfigFailed}
+          {error instanceof Error ? error.message : (m?.loadConfigFailed ?? "Failed to load config")}
         </div>
       ) : (
         <div className="space-y-4">
@@ -137,7 +137,7 @@ export function ModelSettingsPage() {
                 </div>
                 <div className="min-w-0">
                   <div className="text-muted-foreground text-[11px]">
-                    {copy.defaultModelLabel}
+                    {m?.defaultModelLabel ?? "Default model"}
                   </div>
                   <div className="truncate text-sm font-semibold">{defaultModelLabel}</div>
                 </div>
@@ -145,7 +145,7 @@ export function ModelSettingsPage() {
             </div>
 
             <div className="text-muted-foreground px-1 pt-2 text-xs">
-              {copy.helperText}
+              {m?.helperText ?? "Set up provider connection first, then add models from catalog or manually."}
             </div>
           </div>
 

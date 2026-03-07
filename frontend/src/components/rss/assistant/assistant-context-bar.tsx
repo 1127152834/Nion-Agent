@@ -1,102 +1,77 @@
 "use client";
 
-import { FileTextIcon, RssIcon, RotateCcwIcon, XIcon } from "lucide-react";
+import { KeyboardIcon } from "lucide-react";
+import { useMemo } from "react";
 
-import { Button } from "@/components/ui/button";
 import { useI18n } from "@/core/i18n/hooks";
-import type { RSSContextBlock } from "@/core/rss";
+import { useRSSContext } from "@/core/rss";
 import { cn } from "@/lib/utils";
 
-function truncate(value: string, max = 56) {
-  if (value.length <= max) {
-    return value;
-  }
-  return `${value.slice(0, max)}...`;
+function formatShortcutLabel(isMac: boolean, key: string) {
+  return isMac ? `⌘ ${key}` : `Ctrl ${key}`;
 }
 
-function labelForBlock(block: RSSContextBlock) {
-  switch (block.type) {
-    case "mainEntry":
-      return block.metadata?.title ?? block.value;
-    case "mainFeed":
-      return block.metadata?.title ?? block.value;
-    case "selectedText":
-      return truncate(block.value.replace(/\s+/g, " ").trim() || "选中文本");
-    default:
-      return block.value;
-  }
-}
-
-function iconForBlock(block: RSSContextBlock) {
-  switch (block.type) {
-    case "mainEntry":
-      return <FileTextIcon className="size-3.5" />;
-    case "mainFeed":
-      return <RssIcon className="size-3.5" />;
-    case "selectedText":
-      return <span className="text-xs font-semibold">“</span>;
-    default:
-      return null;
-  }
-}
-
-export function AssistantContextBar({
-  blocks,
-  onRemoveSelectedText,
-  onRestoreSelectedText,
-  hasRestorableSelectedText,
-  className,
-}: {
-  blocks: RSSContextBlock[];
-  onRemoveSelectedText: () => void;
-  onRestoreSelectedText: () => void;
-  hasRestorableSelectedText: boolean;
-  className?: string;
-}) {
+export function AssistantContextBar({ className }: { className?: string }) {
   const { t } = useI18n();
+  const { blocks } = useRSSContext();
+
+  const isMac = useMemo(() => {
+    if (typeof navigator === "undefined") {
+      return false;
+    }
+    return /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+  }, []);
+
+  const labels = useMemo(() => {
+    return blocks.map((block) => {
+      if (block.type === "mainEntry") {
+        return {
+          id: block.id,
+          text: `${t.rssReader.aiContextEntry}: ${block.metadata?.title ?? block.value}`,
+        };
+      }
+      return {
+        id: block.id,
+        text: `${t.rssReader.aiContextFeed}: ${block.metadata?.title ?? block.value}`,
+      };
+    });
+  }, [blocks, t.rssReader.aiContextEntry, t.rssReader.aiContextFeed]);
 
   return (
-    <div
-      className={cn(
-        "bg-muted/40 flex items-center gap-2 overflow-x-auto border-b px-3 py-2",
-        className,
-      )}
-    >
-      {blocks.map((block) => (
-        <div
-          key={block.id}
-          className={cn(
-            "bg-background text-foreground flex max-w-[260px] shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs",
-            block.type === "selectedText" && "border-primary/40 bg-primary/5",
-          )}
-          title={labelForBlock(block)}
-        >
-          {iconForBlock(block)}
-          <span className="truncate">{labelForBlock(block)}</span>
-          {block.type === "selectedText" && (
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground inline-flex items-center"
-              onClick={onRemoveSelectedText}
-              aria-label="移除选中文本上下文"
+    <div className={cn("border-t px-3 py-2", className)}>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {labels.length > 0 ? (
+          labels.map((item) => (
+            <span
+              key={item.id}
+              className="bg-muted text-muted-foreground inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-[11px]"
+              title={item.text}
             >
-              <XIcon className="size-3.5" />
-            </button>
-          )}
-        </div>
-      ))}
+              {item.text}
+            </span>
+          ))
+        ) : (
+          <span className="text-muted-foreground text-[11px]">
+            {t.rssReader.aiContextEmpty}
+          </span>
+        )}
+      </div>
 
-      {hasRestorableSelectedText && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 shrink-0 px-2 text-xs"
-          onClick={onRestoreSelectedText}
-        >
-          <RotateCcwIcon className="size-3.5" />
-          {t.rssReader.assistantRestoreSelection}
-        </Button>
-      )}
+      <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-[11px]">
+        <KeyboardIcon className="size-3.5" />
+        <span className="rounded border px-1.5 py-0.5 font-medium">
+          {formatShortcutLabel(isMac, "I")}
+        </span>
+        <span>{t.rssReader.shortcutToggleAssistant}</span>
+        <span className="rounded border px-1.5 py-0.5 font-medium">
+          {formatShortcutLabel(isMac, "N")}
+        </span>
+        <span>{t.rssReader.shortcutNewAssistantChat}</span>
+        <span className="rounded border px-1.5 py-0.5 font-medium">
+          {formatShortcutLabel(isMac, "W")}
+        </span>
+        <span>{t.rssReader.shortcutCloseAssistant}</span>
+      </div>
     </div>
   );
 }

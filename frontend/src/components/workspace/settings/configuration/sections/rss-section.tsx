@@ -46,7 +46,12 @@ export function RSSSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const section = t.settings.configSections.rss as Record<string, any>;
+  const settingsLike = t.settings as {
+    configSections?: {
+      rss?: Record<string, any>;
+    };
+  };
+  const section = (settingsLike.configSections?.rss ?? {});
 
   const rss = asObject(config.rss);
   const learning = asObject(rss.learning);

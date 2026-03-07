@@ -274,6 +274,8 @@ export interface Translations {
     discoverPreviewRecentEntries: string;
     subscriptionsNavTitle: string;
     discoverNavDescription: string;
+    discoverSources: string;
+    discoverCategories: string;
     subscriptionsNavDescription: string;
     goToDiscover: string;
     backToSubscriptions: string;
@@ -328,6 +330,7 @@ export interface Translations {
     filterStarred: string;
     markRead: string;
     markUnread: string;
+    statusRead: string;
     star: string;
     unstar: string;
     askAI: string;

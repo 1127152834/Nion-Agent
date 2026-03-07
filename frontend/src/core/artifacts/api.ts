@@ -10,6 +10,9 @@ const artifactGroupsBaseURL = (threadId: string) =>
 
 export async function loadArtifactGroups(threadId: string): Promise<ArtifactGroup[]> {
   const response = await fetch(artifactGroupsBaseURL(threadId));
+  if (response.status === 404) {
+    return [];
+  }
   if (!response.ok) {
     throw new Error(`Failed to load artifact groups (${response.status})`);
   }

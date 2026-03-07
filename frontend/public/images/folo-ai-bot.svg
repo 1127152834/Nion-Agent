@@ -1,0 +1,44 @@
+<svg width="180" height="140" viewBox="0 0 180 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="head" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(90 66) rotate(90) scale(58)">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#D9D9D9"/>
+    </radialGradient>
+    <linearGradient id="visor" x1="54" y1="57" x2="126" y2="82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#131313"/>
+      <stop offset="1" stop-color="#222222"/>
+    </linearGradient>
+    <linearGradient id="eye" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#12F2FF"/>
+      <stop offset="1" stop-color="#09B9C9"/>
+    </linearGradient>
+    <linearGradient id="earL" x1="25" y1="63" x2="43" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F1903D"/>
+      <stop offset="1" stop-color="#E06B14"/>
+    </linearGradient>
+    <linearGradient id="earR" x1="137" y1="63" x2="155" y2="76" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F1903D"/>
+      <stop offset="1" stop-color="#E06B14"/>
+    </linearGradient>
+    <linearGradient id="top" x1="83" y1="30" x2="97" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7B22"/>
+      <stop offset="1" stop-color="#DD4D08"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M28 72L45 60L38 83L28 72Z" fill="url(#earL)"/>
+  <path d="M152 72L135 60L142 83L152 72Z" fill="url(#earR)"/>
+
+  <circle cx="90" cy="69" r="56" fill="url(#head)"/>
+  <circle cx="90" cy="69" r="55" stroke="#D6D6D6" stroke-width="2"/>
+
+  <rect x="80" y="18" width="20" height="22" rx="7" fill="url(#top)"/>
+
+  <rect x="48" y="50" width="84" height="40" rx="18" fill="url(#visor)"/>
+  <rect x="48.8" y="50.8" width="82.4" height="38.4" rx="17.2" stroke="#3B3B3B" stroke-opacity="0.6" stroke-width="1.6"/>
+
+  <rect x="67" y="58" width="10" height="24" rx="5" fill="url(#eye)"/>
+  <rect x="103" y="58" width="10" height="24" rx="5" fill="url(#eye)"/>
+
+  <circle cx="90" cy="69" r="67" fill="url(#head)" opacity="0.06"/>
+</svg>

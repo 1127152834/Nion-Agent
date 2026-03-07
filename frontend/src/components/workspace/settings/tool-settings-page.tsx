@@ -171,8 +171,77 @@ function MCPServerItem({
 }
 
 export function ToolSettingsPage() {
-  const { t } = useI18n();
-  const copy = t.settings.toolPage as Record<string, any>;
+  const { t, locale } = useI18n();
+  const fallbackCopy = locale === "zh-CN"
+    ? {
+      builtInTitle: "内置工具",
+      builtInDesc: "管理内置工具预设。",
+      mcpTitle: "MCP 服务",
+      mcpDesc: "管理 MCP 连接状态与可用工具。",
+      addServer: "添加服务",
+      create: "创建",
+      creating: "创建中...",
+      cancel: "取消",
+      serverName: "服务名称",
+      serverNamePlaceholder: "my-server",
+      serverDesc: "描述",
+      serverDescPlaceholder: "可选描述",
+      serverType: "服务类型",
+      command: "命令",
+      commandPlaceholder: "python -m mcp_server",
+      args: "参数",
+      argsPlaceholder: "--port 8080",
+      url: "地址",
+      urlPlaceholder: "https://example.com/sse",
+      enabled: "启用",
+      remove: "删除",
+      probeDisabled: "服务已禁用",
+      probeTesting: "正在检测连接...",
+      probeRetry: "重试",
+      probeFailed: "连接失败",
+      probeConnected: "连接成功",
+      toolsLabel: "可用工具",
+      emptyServer: "暂无 MCP 服务",
+      loadConfigFailed: "加载配置失败",
+    }
+    : {
+      builtInTitle: "Built-in tools",
+      builtInDesc: "Manage built-in tool presets.",
+      mcpTitle: "MCP servers",
+      mcpDesc: "Manage MCP connection status and available tools.",
+      addServer: "Add server",
+      create: "Create",
+      creating: "Creating...",
+      cancel: "Cancel",
+      serverName: "Server name",
+      serverNamePlaceholder: "my-server",
+      serverDesc: "Description",
+      serverDescPlaceholder: "Optional description",
+      serverType: "Server type",
+      command: "Command",
+      commandPlaceholder: "python -m mcp_server",
+      args: "Arguments",
+      argsPlaceholder: "--port 8080",
+      url: "URL",
+      urlPlaceholder: "https://example.com/sse",
+      enabled: "Enabled",
+      remove: "Remove",
+      probeDisabled: "Server is disabled",
+      probeTesting: "Checking connection...",
+      probeRetry: "Retry",
+      probeFailed: "Connection failed",
+      probeConnected: "Connected",
+      toolsLabel: "Tools",
+      emptyServer: "No MCP servers",
+      loadConfigFailed: "Failed to load config",
+    };
+  const settingsLike = t.settings as {
+    toolPage?: Partial<typeof fallbackCopy>;
+  };
+  const copy: typeof fallbackCopy = {
+    ...fallbackCopy,
+    ...(settingsLike.toolPage ?? {}),
+  };
   const {
     config: mcpConfig,
     isLoading: mcpLoading,
@@ -417,7 +486,15 @@ export function ToolSettingsPage() {
                   name={name}
                   config={config}
                   mcpDisabled={mcpDisabled}
-                  copy={copy as any}
+                  copy={{
+                    remove: copy.remove,
+                    probeDisabled: copy.probeDisabled,
+                    probeTesting: copy.probeTesting,
+                    probeRetry: copy.probeRetry,
+                    probeFailed: copy.probeFailed,
+                    probeConnected: copy.probeConnected,
+                    toolsLabel: copy.toolsLabel,
+                  }}
                   onToggle={(serverName, enabled) =>
                     enableMCPServer({ serverName, enabled })
                   }

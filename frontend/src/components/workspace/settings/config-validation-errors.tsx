@@ -9,6 +9,17 @@ export function ConfigValidationErrors({
   errors: ConfigValidateErrorItem[];
 }) {
   const { t } = useI18n();
+  const settingsLike = t.settings as unknown as {
+    validation?: {
+      rootLabel?: string;
+      validationFailed?: string;
+    };
+  };
+  const validationCopy = {
+    rootLabel: "root",
+    validationFailed: "Validation failed",
+    ...(settingsLike.validation ?? {}),
+  };
 
   if (errors.length === 0) {
     return null;
@@ -19,9 +30,9 @@ export function ConfigValidationErrors({
       {errors.map((item, index) => (
         <div key={`${item.path.join(".")}-${index}`}>
           <span className="font-medium">
-            {item.path.join(".") || t.settings.validation.rootLabel}
+            {item.path.join(".") || validationCopy.rootLabel}
           </span>{" "}
-          {item.message || t.settings.validation.validationFailed}
+          {item.message || validationCopy.validationFailed}
         </div>
       ))}
     </div>

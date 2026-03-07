@@ -41,6 +41,33 @@ type KeyTestState = {
 
 type WebProviderId = "web_search" | "web_fetch";
 
+type ToolSectionCopy = {
+  title: string;
+  subtitle: string;
+  webConfigTitle: string;
+  webConfigSubtitle: string;
+  tavilyApiKey: string;
+  jinaApiKey: string;
+  placeholderApiKey: string;
+  show: string;
+  hide: string;
+  testingKey: string;
+  keyTestSuccess: string;
+  keyTestFailed: string;
+  keyTestMissing: string;
+  keyTestNetwork: string;
+  keyTestUnsupported: string;
+  keyTestInvalid: string;
+  keyTestInvalidCleared: string;
+  timeout: string;
+  maxResults: string;
+  hintEn: string;
+  hintZh: string;
+  customInfoTemplate: string;
+  presetTitles: Record<ToolPreset["id"], string>;
+  presetDescriptions: Record<ToolPreset["id"], string>;
+};
+
 const TOOL_PRESETS: ToolPreset[] = [
   {
     id: "web_search",
@@ -154,8 +181,114 @@ export function ToolsSection({
   onChange: (next: ConfigDraft) => void;
   disabled?: boolean;
 }) {
-  const { t } = useI18n();
-  const section = t.settings.configSections.tools as Record<string, any>;
+  const { t, locale } = useI18n();
+  const fallbackSection: ToolSectionCopy = locale === "zh-CN"
+    ? {
+      title: "工具",
+      subtitle: "配置内置工具与 Web 供应商。",
+      webConfigTitle: "Web 供应商配置",
+      webConfigSubtitle: "配置 Web 搜索工具所需密钥。",
+      tavilyApiKey: "Tavily API Key",
+      jinaApiKey: "Jina API Key",
+      placeholderApiKey: "请输入 API Key",
+      show: "显示",
+      hide: "隐藏",
+      testingKey: "测试中...",
+      keyTestSuccess: "密钥校验成功",
+      keyTestFailed: "密钥校验失败",
+      keyTestMissing: "请先填写 API Key",
+      keyTestNetwork: "校验时网络异常",
+      keyTestUnsupported: "该供应商不支持连通性探测",
+      keyTestInvalid: "API Key 无效",
+      keyTestInvalidCleared: "当前密钥无效，已清空",
+      timeout: "超时（秒）",
+      maxResults: "最大结果数",
+      hintEn: "仅启用你真正需要的工具。",
+      hintZh: "仅启用你真正需要的工具。",
+      customInfoTemplate: "已配置 {count} 个自定义工具",
+      presetTitles: {
+        web_search: "网络搜索",
+        web_fetch: "网页抓取",
+        image_search: "图片搜索",
+        ls: "目录列表",
+        read_file: "读取文件",
+        write_file: "写入文件",
+        str_replace: "字符串替换",
+        bash: "Bash 执行",
+      },
+      presetDescriptions: {
+        web_search: "允许代理搜索网络。",
+        web_fetch: "抓取网页内容。",
+        image_search: "搜索图片参考。",
+        ls: "列出工作目录树。",
+        read_file: "读取文件内容。",
+        write_file: "创建或覆盖文件。",
+        str_replace: "替换文件中的文本片段。",
+        bash: "在沙箱中执行命令。",
+      },
+    }
+    : {
+      title: "Tools",
+      subtitle: "Configure built-in tools and web providers.",
+      webConfigTitle: "Web provider config",
+      webConfigSubtitle: "Configure API keys for web search tools.",
+      tavilyApiKey: "Tavily API key",
+      jinaApiKey: "Jina API key",
+      placeholderApiKey: "Enter API key",
+      show: "Show",
+      hide: "Hide",
+      testingKey: "Testing key...",
+      keyTestSuccess: "Key validation succeeded",
+      keyTestFailed: "Key validation failed",
+      keyTestMissing: "API key is required",
+      keyTestNetwork: "Network error while testing key",
+      keyTestUnsupported: "This provider does not support key probe",
+      keyTestInvalid: "Invalid API key",
+      keyTestInvalidCleared: "Current key is invalid and has been cleared",
+      timeout: "Timeout (seconds)",
+      maxResults: "Max results",
+      hintEn: "Enable only tools you actually need.",
+      hintZh: "Enable only tools you actually need.",
+      customInfoTemplate: "{count} custom tools configured",
+      presetTitles: {
+        web_search: "Web Search",
+        web_fetch: "Web Fetch",
+        image_search: "Image Search",
+        ls: "List Directory",
+        read_file: "Read File",
+        write_file: "Write File",
+        str_replace: "String Replace",
+        bash: "Bash",
+      },
+      presetDescriptions: {
+        web_search: "Allow agent to search the web.",
+        web_fetch: "Fetch webpage content.",
+        image_search: "Search images for references.",
+        ls: "List workspace directory tree.",
+        read_file: "Read file content.",
+        write_file: "Create or overwrite files.",
+        str_replace: "Replace text in files.",
+        bash: "Execute shell commands in sandbox.",
+      },
+    };
+  const settingsLike = t.settings as unknown as {
+    configSections?: {
+      tools?: Partial<ToolSectionCopy>;
+    };
+  };
+  const sectionRaw = settingsLike.configSections?.tools ?? {};
+  const section: ToolSectionCopy = {
+    ...fallbackSection,
+    ...sectionRaw,
+    presetTitles: {
+      ...fallbackSection.presetTitles,
+      ...(sectionRaw.presetTitles ?? {}),
+    },
+    presetDescriptions: {
+      ...fallbackSection.presetDescriptions,
+      ...(sectionRaw.presetDescriptions ?? {}),
+    },
+  };
 
   const tools = asArray(config.tools);
   const [secretVisible, setSecretVisible] = useState<{
@@ -195,7 +328,7 @@ export function ToolsSection({
     }).length;
   }, [tools]);
 
-  const copy: Record<string, any> = {
+  const copy: ToolSectionCopy & { customInfo: string } = {
     ...section,
     customInfo:
       customToolCount > 0

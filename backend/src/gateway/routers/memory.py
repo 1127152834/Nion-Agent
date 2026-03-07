@@ -2,10 +2,16 @@
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.agents.memory.memory import get_memory_data, reload_memory_data
+from src.agents.memory.memory import (
+    delete_memory_fact,
+    get_memory_data,
+    pin_memory_fact,
+    reload_memory_data,
+    update_memory_fact,
+)
 from src.config.memory_config import get_memory_config
 
 router = APIRouter(prefix="/api", tags=["memory"])
@@ -43,6 +49,31 @@ class Fact(BaseModel):
     confidence: float = Field(default=0.5, description="Confidence score (0-1)")
     createdAt: str = Field(default="", description="Creation timestamp")
     source: str = Field(default="unknown", description="Source thread ID")
+    pinned: bool = Field(default=False, description="Whether this fact is pinned")
+    inaccurate: bool = Field(default=False, description="Whether this fact is flagged inaccurate")
+
+
+class FactUpdateRequest(BaseModel):
+    """Request model for patching a memory fact."""
+
+    content: str | None = Field(default=None, description="Updated fact content")
+    category: str | None = Field(default=None, description="Updated fact category")
+    confidence: float | None = Field(default=None, description="Updated confidence score (0-1)")
+    pinned: bool | None = Field(default=None, description="Pinned state")
+    inaccurate: bool | None = Field(default=None, description="Inaccurate marker")
+
+
+class PinFactRequest(BaseModel):
+    """Request model for pin/unpin operation."""
+
+    pinned: bool | None = Field(default=None, description="When omitted, toggles pinned state")
+
+
+class DeleteFactResponse(BaseModel):
+    """Response model for fact deletion."""
+
+    success: bool = Field(..., description="Whether deletion succeeded")
+    id: str = Field(..., description="Deleted fact ID")
 
 
 class MemoryResponse(BaseModel):
@@ -244,3 +275,46 @@ async def get_memory_status() -> MemoryStatusResponse:
         ),
         data=MemoryResponse(**memory_data),
     )
+
+
+@router.patch(
+    "/memory/facts/{fact_id}",
+    response_model=Fact,
+    summary="Patch Memory Fact",
+    description="Update one memory fact field(s), such as content/category/confidence/inaccurate.",
+)
+async def patch_memory_fact(fact_id: str, request: FactUpdateRequest) -> Fact:
+    payload = request.model_dump(exclude_none=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="No fact fields provided for update.")
+
+    updated = update_memory_fact(fact_id=fact_id, updates=payload)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Fact not found: {fact_id}")
+    return Fact(**updated)
+
+
+@router.post(
+    "/memory/facts/{fact_id}/pin",
+    response_model=Fact,
+    summary="Pin or Unpin Memory Fact",
+    description="Set or toggle the pinned state of one memory fact.",
+)
+async def toggle_memory_fact_pin(fact_id: str, request: PinFactRequest) -> Fact:
+    updated = pin_memory_fact(fact_id=fact_id, pinned=request.pinned)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Fact not found: {fact_id}")
+    return Fact(**updated)
+
+
+@router.delete(
+    "/memory/facts/{fact_id}",
+    response_model=DeleteFactResponse,
+    summary="Delete Memory Fact",
+    description="Delete one memory fact by ID.",
+)
+async def remove_memory_fact(fact_id: str) -> DeleteFactResponse:
+    success = delete_memory_fact(fact_id=fact_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Fact not found: {fact_id}")
+    return DeleteFactResponse(success=True, id=fact_id)

@@ -172,6 +172,15 @@ tools:
 sandbox:
   use: src.sandbox.local:LocalSandboxProvider
 
+  # Optional: Path to Python executable (for LocalSandbox)
+  # If not set, uses system Python from PATH
+  # Desktop app automatically sets $NION_PYTHON_PATH to bundled Python
+  # python_path: $NION_PYTHON_PATH
+
+  # Or specify a custom Python path:
+  # python_path: /usr/local/bin/python3
+  # python_path: /opt/homebrew/bin/python3
+
 # Option 2: Container-based AIO Sandbox
 # Executes commands in isolated containers (Docker or Apple Container)
 # On macOS: Automatically prefers Apple Container if available, falls back to Docker
@@ -326,3 +335,32 @@ memory:
   fact_confidence_threshold: 0.7 # Minimum confidence for storing facts
   injection_enabled: true # Whether to inject memory into system prompt
   max_injection_tokens: 2000 # Maximum tokens for memory injection
+
+# ============================================================================
+# Embedding Models Configuration
+# ============================================================================
+# Configure vector embedding models for the memory system
+# Supports three providers: local (sentence-transformers), OpenAI API, and custom OpenAI-compatible APIs
+
+embedding:
+  enabled: true
+  provider: local # local | openai | custom
+
+  # Local embedding models (sentence-transformers)
+  # Models are automatically downloaded on first use to ~/.cache/torch/sentence_transformers/
+  local:
+    model: all-MiniLM-L6-v2 # Preset options: all-MiniLM-L6-v2, paraphrase-multilingual-MiniLM-L12-v2, all-mpnet-base-v2, paraphrase-multilingual-mpnet-base-v2
+    device: cpu # cpu | cuda | mps (Apple Silicon)
+
+  # OpenAI embedding API
+  openai:
+    model: text-embedding-3-small # Preset options: text-embedding-3-small, text-embedding-3-large, text-embedding-ada-002
+    api_key: $OPENAI_API_KEY # Use environment variable
+    dimension: 1536 # Optional: 64-3072 for text-embedding-3-* models
+
+  # Custom OpenAI-compatible embedding API
+  custom:
+    model: "" # Your model identifier
+    api_base: "" # API endpoint URL
+    api_key: "" # Optional: API key if required
+    dimension: 1536 # Vector dimension

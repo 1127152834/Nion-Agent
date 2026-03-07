@@ -7,10 +7,12 @@ export function getBackendBaseURL() {
     return env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "http://localhost:2026";
   }
 
+  // Web 模式：优先使用环境变量，其次回退到本地后端端口
   if (env.NEXT_PUBLIC_BACKEND_BASE_URL) {
     return env.NEXT_PUBLIC_BACKEND_BASE_URL;
   } else {
-    return "";
+    // 默认使用本地后端端口，开发环境下通常运行在 8001
+    return "http://localhost:8001";
   }
 }
 

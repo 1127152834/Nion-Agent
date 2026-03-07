@@ -74,13 +74,22 @@ export function WorkspaceHeader({ className }: { className?: string }) {
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton
-            isActive={pathname === "/workspace/chats/new"}
+            isActive={pathname === "/workspace/chats" || pathname.startsWith("/workspace/chats/")}
             asChild
           >
-            <Link className="text-muted-foreground" href="/workspace/chats/new">
-              <MessageSquarePlus size={16} />
-              <span>{t.sidebar.newChat}</span>
-            </Link>
+            {pathname === "/workspace/chats" || pathname.startsWith("/workspace/chats/") ? (
+              // 在对话页面时，显示"新对话"按钮
+              <Link className="text-muted-foreground" href="/workspace/chats/new">
+                <MessageSquarePlus size={16} />
+                <span>{t.sidebar.newChat}</span>
+              </Link>
+            ) : (
+              // 在其他页面时，显示"对话列表"按钮
+              <Link className="text-muted-foreground" href="/workspace/chats">
+                <MessageSquarePlus size={16} />
+                <span>{t.sidebar.chats}</span>
+              </Link>
+            )}
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

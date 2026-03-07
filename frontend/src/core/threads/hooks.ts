@@ -27,6 +27,8 @@ export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
   context: LocalSettings["context"];
   isMock?: boolean;
+  /** If true, will not attempt to reconnect to existing thread on mount */
+  isNewThread?: boolean;
   onStart?: (threadId: string) => void;
   onFinish?: (state: AgentThreadState) => void;
   onToolEnd?: (event: ToolEndEvent) => void;
@@ -36,6 +38,7 @@ export function useThreadStream({
   threadId,
   context,
   isMock,
+  isNewThread,
   onStart,
   onFinish,
   onToolEnd,
@@ -58,8 +61,22 @@ export function useThreadStream({
     client: getAPIClient(isMock),
     assistantId: "lead_agent",
     threadId: _threadId,
-    reconnectOnMount: true,
-    fetchStateHistory: { limit: 1 },
+    reconnectOnMount: !isNewThread,
+    fetchStateHistory: isNewThread ? false : { limit: 1 },
+    onError: isNewThread
+      ? (error) => {
+          // For new threads, ignore 404 errors as the thread doesn't exist yet
+          if (
+            error instanceof Error &&
+            error.message.includes("Thread with ID") &&
+            error.message.includes("not found")
+          ) {
+            return;
+          }
+          // Re-throw other errors
+          throw error;
+        }
+      : undefined,
     onCreated(meta) {
       setThreadId(meta.thread_id);
       if (!startedRef.current) {

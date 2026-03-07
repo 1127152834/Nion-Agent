@@ -19,8 +19,31 @@ export function ConfigSaveBar({
   onDiscard: () => void;
   onSave: () => void;
 }) {
-  const { t } = useI18n();
-  const copy = t.settings.configSections.saveBar;
+  const { t, locale } = useI18n();
+  const fallbackCopy = locale === "zh-CN"
+    ? {
+      clean: "已保存所有改动",
+      dirty: "有未保存改动",
+      discard: "放弃",
+      save: "保存",
+      saving: "保存中...",
+    }
+    : {
+      clean: "All changes saved",
+      dirty: "Unsaved changes",
+      discard: "Discard",
+      save: "Save",
+      saving: "Saving...",
+    };
+  const settingsLike = t.settings as unknown as {
+    configSections?: {
+      saveBar?: Record<string, string>;
+    };
+  };
+  const copy = {
+    ...fallbackCopy,
+    ...(settingsLike.configSections?.saveBar ?? {}),
+  };
   const isDisabled = disabled ?? false;
   const isSaving = saving ?? false;
 

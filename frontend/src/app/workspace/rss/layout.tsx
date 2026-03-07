@@ -1,5 +1,11 @@
+import { RSSContextProvider } from "@/core/rss";
+
 export default function RSSLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return <div className="size-full">{children}</div>;
+  return (
+    <RSSContextProvider>
+      <div className="size-full">{children}</div>
+    </RSSContextProvider>
+  );
 }

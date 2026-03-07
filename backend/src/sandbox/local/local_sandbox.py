@@ -8,17 +8,19 @@ from src.sandbox.sandbox import Sandbox
 
 
 class LocalSandbox(Sandbox):
-    def __init__(self, id: str, path_mappings: dict[str, str] | None = None):
+    def __init__(self, id: str, path_mappings: dict[str, str] | None = None, python_path: str | None = None):
         """
-        Initialize local sandbox with optional path mappings.
+        Initialize local sandbox with optional path mappings and Python path.
 
         Args:
             id: Sandbox identifier
             path_mappings: Dictionary mapping container paths to local paths
                           Example: {"/mnt/skills": "/absolute/path/to/skills"}
+            python_path: Path to Python executable. If not set, uses system Python from PATH.
         """
         super().__init__(id)
         self.path_mappings = path_mappings or {}
+        self.python_path = python_path
 
     def _resolve_path(self, path: str) -> str:
         """
@@ -106,14 +108,21 @@ class LocalSandbox(Sandbox):
     def _resolve_paths_in_command(self, command: str) -> str:
         """
         Resolve container paths to local paths in a command string.
+        Also replaces python/python3 with configured Python path if set.
 
         Args:
             command: Command string that may contain container paths
 
         Returns:
-            Command with container paths resolved to local paths
+            Command with container paths resolved to local paths and Python replaced
         """
         import re
+
+        # First, replace python/python3 with configured Python path if set
+        if self.python_path:
+            # Replace python3, python at word boundaries
+            command = re.sub(r'\bpython3\b', self.python_path, command)
+            command = re.sub(r'\bpython\b', self.python_path, command)
 
         # Sort mappings by length (longest first) for correct prefix matching
         sorted_mappings = sorted(self.path_mappings.items(), key=lambda x: len(x[0]), reverse=True)

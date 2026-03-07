@@ -123,8 +123,12 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
         if not config.enabled:
             return None
 
+        runtime_context = runtime.context or {}
+        if runtime_context.get("memory_write") is False:
+            return None
+
         # Get thread ID from runtime context
-        thread_id = runtime.context.get("thread_id")
+        thread_id = runtime_context.get("thread_id")
         if not thread_id:
             print("MemoryMiddleware: No thread_id in context, skipping memory update")
             return None

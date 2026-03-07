@@ -1,8 +1,6 @@
 "use client";
 
 import {
-  ArrowRightIcon,
-  CompassIcon,
   EyeIcon,
   ExternalLinkIcon,
   FileUpIcon,
@@ -12,12 +10,12 @@ import {
   SearchIcon,
   SparklesIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -44,52 +42,6 @@ import type {
   RSSHubRoute,
 } from "@/core/rss";
 import { cn } from "@/lib/utils";
-
-const CATEGORY_VISUALS: Record<
-  string,
-  { emoji: string; gradientFrom: string; gradientTo: string }
-> = {
-  programming: {
-    emoji: "💻",
-    gradientFrom: "#0ea5e9",
-    gradientTo: "#0284c7",
-  },
-  ai: {
-    emoji: "🤖",
-    gradientFrom: "#22c55e",
-    gradientTo: "#16a34a",
-  },
-  design: {
-    emoji: "🎨",
-    gradientFrom: "#f97316",
-    gradientTo: "#ea580c",
-  },
-  product: {
-    emoji: "🧭",
-    gradientFrom: "#8b5cf6",
-    gradientTo: "#7c3aed",
-  },
-  news: {
-    emoji: "🗞️",
-    gradientFrom: "#ef4444",
-    gradientTo: "#dc2626",
-  },
-  finance: {
-    emoji: "📈",
-    gradientFrom: "#14b8a6",
-    gradientTo: "#0d9488",
-  },
-  science: {
-    emoji: "🧪",
-    gradientFrom: "#6366f1",
-    gradientTo: "#4f46e5",
-  },
-  chinese: {
-    emoji: "🀄",
-    gradientFrom: "#f59e0b",
-    gradientTo: "#d97706",
-  },
-};
 
 type DiscoverSortMode = "featured" | "title" | "site";
 
@@ -138,6 +90,17 @@ function resolveRSSHubRouteTemplate(
   });
 }
 
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.isContentEditable) {
+    return true;
+  }
+  const tagName = target.tagName.toLowerCase();
+  return tagName === "input" || tagName === "textarea" || tagName === "select";
+}
+
 export function DiscoverPanel({
   keyword,
   category,
@@ -182,6 +145,7 @@ export function DiscoverPanel({
   const [previewData, setPreviewData] = useState<RSSDiscoverPreviewResponse | null>(
     null,
   );
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const { categories, sources, isLoading, isRefetching, refetch, error } =
     useRSSDiscoverSources({
@@ -240,11 +204,6 @@ export function DiscoverPanel({
     });
   }, [opmlFilter, opmlSources]);
 
-  const categoryCards = useMemo(
-    () => categories.filter((item) => item.id !== "all"),
-    [categories],
-  );
-
   const sortedSources = useMemo(() => {
     const items = [...sources];
     const compareTitle = (a: RSSDiscoverSource, b: RSSDiscoverSource) =>
@@ -296,6 +255,26 @@ export function DiscoverPanel({
   useEffect(() => {
     setKeywordInput(keyword);
   }, [keyword]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+      if (event.key !== "/") {
+        return;
+      }
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleSearchSubmit = () => {
     onKeywordChange(keywordInput.trim());
@@ -477,391 +456,430 @@ export function DiscoverPanel({
     return (
       <Card
         key={`${keyPrefix}${source.id}`}
-        className={cn("gap-3 py-4", featuredCard && "border-primary/30 bg-primary/5")}
+        className={cn(
+          "group relative flex flex-col justify-between gap-3 overflow-hidden rounded-xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md",
+          featuredCard
+            ? "border-primary/30 bg-primary/5"
+            : "border-border/60 bg-card/80",
+        )}
       >
-        <CardHeader className="space-y-2 px-4">
+        <div className="space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <CardTitle className="line-clamp-2 text-base">{source.title}</CardTitle>
+            <CardTitle className="line-clamp-1 text-base font-medium">
+              {source.title}
+            </CardTitle>
             {source.featured && (
-              <Badge variant="secondary" className="gap-1">
+              <Badge variant="secondary" className="gap-1 shrink-0">
                 <SparklesIcon className="size-3" />
                 {t.rssReader.discoverFeatured}
               </Badge>
             )}
           </div>
-          <p className="text-muted-foreground line-clamp-3 text-sm">
+          <p className="text-muted-foreground line-clamp-2 text-sm">
             {source.description}
           </p>
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-3 px-4">
-          <div className="flex flex-wrap gap-1.5">
-            {source.tags.map((tag) => (
-              <Badge key={`${source.id}-${tag}`} variant="outline">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-
-          <div className="text-muted-foreground space-y-1 text-xs">
-            <div className="truncate">{source.site_url}</div>
-            <div className="truncate">{source.feed_url}</div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void handlePreviewSource(source)}
-              disabled={previewDiscoverMutation.isPending}
+        <div className="flex items-center gap-2 pt-2">
+          <Button
+            size="sm"
+            className="flex-1"
+            variant={subscribedFeed ? "secondary" : "default"}
+            onClick={() => void handleSubscribe(source)}
+            disabled={addFeedMutation.isPending || !!subscribedFeed}
+          >
+            {subscribedFeed
+              ? t.rssReader.discoverSubscribed
+              : t.rssReader.subscribe}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => void handlePreviewSource(source)}
+            disabled={previewDiscoverMutation.isPending}
+          >
+            <EyeIcon className="size-4" />
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <a
+              href={source.site_url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={t.rssReader.openOriginal}
             >
-              <EyeIcon className="size-4" />
-              {t.rssReader.discoverPreview}
-            </Button>
-            <Button
-              size="sm"
-              className="flex-1"
-              variant={subscribedFeed ? "secondary" : "default"}
-              onClick={() => void handleSubscribe(source)}
-              disabled={addFeedMutation.isPending || !!subscribedFeed}
-            >
-              {subscribedFeed
-                ? t.rssReader.discoverSubscribed
-                : t.rssReader.subscribe}
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <a
-                href={source.site_url}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={t.rssReader.openOriginal}
-              >
-                <ExternalLinkIcon className="size-4" />
-              </a>
-            </Button>
-          </div>
-        </CardContent>
+              <ExternalLinkIcon className="size-4" />
+            </a>
+          </Button>
+        </div>
       </Card>
     );
   };
 
+  // View mode: sources (feeds) vs categories
+  const [viewMode, setViewMode] = useState<"sources" | "categories">(
+    keyword.trim() ? "sources" : "categories",
+  );
+
   return (
-    <section className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <CompassIcon className="text-primary size-4" />
-          <h2 className="text-sm font-semibold">{t.rssReader.discoverTitle}</h2>
+    <section className="relative flex flex-col bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.08),transparent_55%)]">
+      {/* Hero Section - Centered */}
+      <div className="px-6 py-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <h1 className="mb-2 text-3xl font-bold">{t.rssReader.discoverTitle}</h1>
+          <p className="text-sm text-muted-foreground">
+            {t.rssReader.discoverNavDescription}
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-72 max-w-[60vw]">
-            <SearchIcon className="text-muted-foreground absolute top-1/2 left-2 size-4 -translate-y-1/2" />
-            <Input
-              value={keywordInput}
-              onChange={(event) => setKeywordInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  handleSearchSubmit();
-                }
-              }}
-              placeholder={t.rssReader.discoverSearchPlaceholder}
-              className="pl-8"
-            />
-          </div>
-          <Button size="sm" variant="outline" onClick={handleSearchSubmit}>
-            <SearchIcon className="size-4" />
-            {t.common.search}
-          </Button>
+      </div>
 
-          <Dialog open={rsshubOpen} onOpenChange={setRsshubOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                <Link2Icon className="size-4" />
-                {t.rssReader.rsshubTool}
+      {/* Search Section - Centered */}
+      <div className="mx-auto mb-6 w-full max-w-2xl px-6">
+        <div className="rounded-2xl border bg-card p-4 shadow-sm">
+          <div className="flex flex-col gap-3">
+            <div className="relative">
+              <SearchIcon className="text-muted-foreground absolute top-1/2 left-3 size-5 -translate-y-1/2" />
+              <Input
+                ref={searchInputRef}
+                value={keywordInput}
+                onChange={(event) => setKeywordInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleSearchSubmit();
+                  }
+                }}
+                placeholder={t.rssReader.discoverSearchPlaceholder}
+                className="h-12 pl-10 text-base"
+              />
+            </div>
+
+            {/* Tools Row */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button
+                size="sm"
+                variant="default"
+                onClick={handleSearchSubmit}
+                className="rounded-full"
+              >
+                <SearchIcon className="size-4" />
+                {t.common.search}
               </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden">
-              <DialogHeader>
-                <DialogTitle>{t.rssReader.rsshubDialogTitle}</DialogTitle>
-                <DialogDescription>
-                  {t.rssReader.rsshubDialogDescription}
-                </DialogDescription>
-              </DialogHeader>
 
-              <div className="grid gap-3">
-                <Input
-                  value={rsshubInstance}
-                  onChange={(event) => setRsshubInstance(event.target.value)}
-                  placeholder={t.rssReader.rsshubInstancePlaceholder}
-                />
-                <Input
-                  value={rsshubRoute}
-                  onChange={(event) => {
-                    setRsshubRoute(event.target.value);
-                    if (selectedRSSHubRoute?.params.length) {
-                      setSelectedRSSHubRoute(null);
-                      setRsshubRouteParams({});
-                    }
-                  }}
-                  placeholder={t.rssReader.rsshubRoutePlaceholder}
-                  readOnly={Boolean(selectedRSSHubRoute?.params.length)}
-                />
-                {selectedRSSHubRoute && (
-                  <div className="space-y-2 rounded-md border p-3">
-                    <div className="text-xs font-medium">
-                      {t.rssReader.rsshubTemplateLabel}:{" "}
-                      <code>{selectedRSSHubRoute.route_template}</code>
-                    </div>
-                    {selectedRSSHubRoute.params.length === 0 ? (
-                      <div className="text-muted-foreground text-xs">
-                        {t.rssReader.rsshubNoParamsNeeded}
+              <Dialog open={rsshubOpen} onOpenChange={setRsshubOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="rounded-full">
+                    <Link2Icon className="size-4" />
+                    {t.rssReader.rsshubTool}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden">
+                  <DialogHeader>
+                    <DialogTitle>{t.rssReader.rsshubDialogTitle}</DialogTitle>
+                    <DialogDescription>
+                      {t.rssReader.rsshubDialogDescription}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid gap-3">
+                    <Input
+                      value={rsshubInstance}
+                      onChange={(event) => setRsshubInstance(event.target.value)}
+                      placeholder={t.rssReader.rsshubInstancePlaceholder}
+                    />
+                    <Input
+                      value={rsshubRoute}
+                      onChange={(event) => {
+                        setRsshubRoute(event.target.value);
+                        if (selectedRSSHubRoute?.params.length) {
+                          setSelectedRSSHubRoute(null);
+                          setRsshubRouteParams({});
+                        }
+                      }}
+                      placeholder={t.rssReader.rsshubRoutePlaceholder}
+                      readOnly={Boolean(selectedRSSHubRoute?.params.length)}
+                    />
+                    {selectedRSSHubRoute && (
+                      <div className="space-y-2 rounded-md border p-3">
+                        <div className="text-xs font-medium">
+                          {t.rssReader.rsshubTemplateLabel}:{" "}
+                          <code>{selectedRSSHubRoute.route_template}</code>
+                        </div>
+                        {selectedRSSHubRoute.params.length === 0 ? (
+                          <div className="text-muted-foreground text-xs">
+                            {t.rssReader.rsshubNoParamsNeeded}
+                          </div>
+                        ) : (
+                          <div className="grid gap-2 md:grid-cols-2">
+                            {selectedRSSHubRoute.params.map((param) => (
+                              <label
+                                key={`${selectedRSSHubRoute.id}-${param.key}`}
+                                className="grid gap-1"
+                              >
+                                <span className="text-xs font-medium">
+                                  {param.label}
+                                  {param.required && (
+                                    <span className="text-destructive ml-1">*</span>
+                                  )}
+                                </span>
+                                <Input
+                                  value={rsshubRouteParams[param.key] ?? ""}
+                                  onChange={(event) =>
+                                    handleRSSHubParamChange(param.key, event.target.value)
+                                  }
+                                  placeholder={param.placeholder}
+                                  className="h-8"
+                                />
+                                {param.description && (
+                                  <span className="text-muted-foreground text-[11px]">
+                                    {param.description}
+                                  </span>
+                                )}
+                              </label>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="grid gap-2 md:grid-cols-2">
-                        {selectedRSSHubRoute.params.map((param) => (
-                          <label
-                            key={`${selectedRSSHubRoute.id}-${param.key}`}
-                            className="grid gap-1"
+                    )}
+                    <div className="text-muted-foreground rounded-md border px-3 py-2 text-xs">
+                      {t.rssReader.rsshubPreviewLabel}:{" "}
+                      <span className="text-foreground break-all">
+                        {rsshubPreviewURL || "-"}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        value={rsshubKeyword}
+                        onChange={(event) => setRsshubKeyword(event.target.value)}
+                        placeholder={t.rssReader.rsshubSearchPlaceholder}
+                        className="h-8 w-56"
+                      />
+                      <div className="flex flex-wrap items-center gap-1">
+                        {categories.map((item) => (
+                          <Button
+                            key={`rsshub-${item.id}`}
+                            size="sm"
+                            variant={rsshubCategory === item.id ? "default" : "outline"}
+                            className="h-7 rounded-full px-2 text-xs"
+                            onClick={() => setRsshubCategory(item.id)}
                           >
-                            <span className="text-xs font-medium">
-                              {param.label}
-                              {param.required && (
-                                <span className="text-destructive ml-1">*</span>
-                              )}
-                            </span>
-                            <Input
-                              value={rsshubRouteParams[param.key] ?? ""}
-                              onChange={(event) =>
-                                handleRSSHubParamChange(param.key, event.target.value)
-                              }
-                              placeholder={param.placeholder}
-                              className="h-8"
-                            />
-                            {param.description && (
-                              <span className="text-muted-foreground text-[11px]">
-                                {param.description}
-                              </span>
-                            )}
-                          </label>
+                            {item.label}
+                          </Button>
                         ))}
                       </div>
-                    )}
+                    </div>
+                    <div className="h-56 space-y-2 overflow-y-auto rounded-md border p-2">
+                      {rsshubRoutesLoading || rsshubRoutesRefetching ? (
+                        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                          <Loader2Icon className="size-4 animate-spin" />
+                          {t.common.loading}
+                        </div>
+                      ) : rsshubRoutes.length === 0 ? (
+                        <div className="text-muted-foreground text-sm">
+                          {t.rssReader.rsshubNoRoutes}
+                        </div>
+                      ) : (
+                        rsshubRoutes.map((route) => (
+                          <button
+                            key={route.id}
+                            type="button"
+                            onClick={() => handleSelectRSSHubRoute(route)}
+                            className="hover:bg-accent flex w-full flex-col items-start gap-1 rounded-md border px-3 py-2 text-left"
+                          >
+                            <div className="flex w-full items-center justify-between gap-2">
+                              <span className="text-sm font-medium">{route.title}</span>
+                              <Badge variant="outline">{route.category}</Badge>
+                            </div>
+                            <div className="text-muted-foreground text-xs">
+                              {route.description}
+                            </div>
+                            <code className="text-xs">{route.route_template}</code>
+                          </button>
+                        ))
+                      )}
+                    </div>
                   </div>
-                )}
-                <div className="text-muted-foreground rounded-md border px-3 py-2 text-xs">
-                  {t.rssReader.rsshubPreviewLabel}:{" "}
-                  <span className="text-foreground break-all">
-                    {rsshubPreviewURL || "-"}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    value={rsshubKeyword}
-                    onChange={(event) => setRsshubKeyword(event.target.value)}
-                    placeholder={t.rssReader.rsshubSearchPlaceholder}
-                    className="h-8 w-56"
-                  />
-                  <div className="flex flex-wrap items-center gap-1">
-                    {categories.map((item) => (
+
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setRsshubOpen(false)}>
+                      {t.common.cancel}
+                    </Button>
+                    <Button
+                      onClick={() => void handleSubscribeFromRSSHub()}
+                      disabled={
+                        addFeedMutation.isPending ||
+                        !rsshubPreviewURL ||
+                        /:([a-zA-Z0-9_]+)/.test(rsshubRoute)
+                      }
+                    >
+                      {t.rssReader.subscribe}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={opmlOpen} onOpenChange={setOpmlOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="rounded-full">
+                    <FileUpIcon className="size-4" />
+                    {t.rssReader.opmlTool}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[85vh] max-w-4xl overflow-hidden">
+                  <DialogHeader>
+                    <DialogTitle>{t.rssReader.opmlDialogTitle}</DialogTitle>
+                    <DialogDescription>
+                      {t.rssReader.opmlDialogDescription}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid gap-3">
+                    <Input
+                      type="file"
+                      accept=".opml,.xml,text/xml,application/xml"
+                      onChange={(event) =>
+                        void handleParseOPML(event.target.files?.[0] ?? null)
+                      }
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        value={opmlFilter}
+                        onChange={(event) => setOpmlFilter(event.target.value)}
+                        placeholder={t.rssReader.opmlFilterPlaceholder}
+                        className="h-8 w-72"
+                      />
                       <Button
-                        key={`rsshub-${item.id}`}
+                        variant="outline"
                         size="sm"
-                        variant={rsshubCategory === item.id ? "default" : "outline"}
-                        className="h-7 rounded-full px-2 text-xs"
-                        onClick={() => setRsshubCategory(item.id)}
+                        onClick={selectAllFilteredOPML}
+                        disabled={filteredOPMLSources.length === 0}
                       >
-                        {item.label}
+                        {t.rssReader.opmlSelectFiltered}
                       </Button>
-                    ))}
-                  </div>
-                </div>
-                <div className="h-56 space-y-2 overflow-y-auto rounded-md border p-2">
-                  {rsshubRoutesLoading || rsshubRoutesRefetching ? (
-                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                      <Loader2Icon className="size-4 animate-spin" />
-                      {t.common.loading}
-                    </div>
-                  ) : rsshubRoutes.length === 0 ? (
-                    <div className="text-muted-foreground text-sm">
-                      {t.rssReader.rsshubNoRoutes}
-                    </div>
-                  ) : (
-                    rsshubRoutes.map((route) => (
-                      <button
-                        key={route.id}
-                        type="button"
-                        onClick={() => handleSelectRSSHubRoute(route)}
-                        className="hover:bg-accent flex w-full flex-col items-start gap-1 rounded-md border px-3 py-2 text-left"
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearOPMLSelection}
+                        disabled={selectedOPMLFeeds.size === 0}
                       >
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <span className="text-sm font-medium">{route.title}</span>
-                          <Badge variant="outline">{route.category}</Badge>
-                        </div>
-                        <div className="text-muted-foreground text-xs">
-                          {route.description}
-                        </div>
-                        <code className="text-xs">{route.route_template}</code>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setRsshubOpen(false)}>
-                  {t.common.cancel}
-                </Button>
-                <Button
-                  onClick={() => void handleSubscribeFromRSSHub()}
-                  disabled={
-                    addFeedMutation.isPending ||
-                    !rsshubPreviewURL ||
-                    /:([a-zA-Z0-9_]+)/.test(rsshubRoute)
-                  }
-                >
-                  {t.rssReader.subscribe}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={opmlOpen} onOpenChange={setOpmlOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                <FileUpIcon className="size-4" />
-                {t.rssReader.opmlTool}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-h-[85vh] max-w-4xl overflow-hidden">
-              <DialogHeader>
-                <DialogTitle>{t.rssReader.opmlDialogTitle}</DialogTitle>
-                <DialogDescription>
-                  {t.rssReader.opmlDialogDescription}
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid gap-3">
-                <Input
-                  type="file"
-                  accept=".opml,.xml,text/xml,application/xml"
-                  onChange={(event) =>
-                    void handleParseOPML(event.target.files?.[0] ?? null)
-                  }
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    value={opmlFilter}
-                    onChange={(event) => setOpmlFilter(event.target.value)}
-                    placeholder={t.rssReader.opmlFilterPlaceholder}
-                    className="h-8 w-72"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={selectAllFilteredOPML}
-                    disabled={filteredOPMLSources.length === 0}
-                  >
-                    {t.rssReader.opmlSelectFiltered}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearOPMLSelection}
-                    disabled={selectedOPMLFeeds.size === 0}
-                  >
-                    {t.rssReader.opmlClearSelection}
-                  </Button>
-                  <span className="text-muted-foreground text-xs">
-                    {t.rssReader.opmlSelectedCount.replace(
-                      "{count}",
-                      String(selectedOPMLFeeds.size),
-                    )}
-                  </span>
-                </div>
-
-                <div className="h-72 space-y-1 overflow-y-auto rounded-md border p-2">
-                  {parseOPMLMutation.isPending ? (
-                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                      <Loader2Icon className="size-4 animate-spin" />
-                      {t.common.loading}
+                        {t.rssReader.opmlClearSelection}
+                      </Button>
+                      <span className="text-muted-foreground text-xs">
+                        {t.rssReader.opmlSelectedCount.replace(
+                          "{count}",
+                          String(selectedOPMLFeeds.size),
+                        )}
+                      </span>
                     </div>
-                  ) : filteredOPMLSources.length === 0 ? (
-                    <div className="text-muted-foreground text-sm">
-                      {t.rssReader.opmlNoSource}
-                    </div>
-                  ) : (
-                    filteredOPMLSources.map((item) => {
-                      const key = normalizeURL(item.feed_url);
-                      const checked = selectedOPMLFeeds.has(key);
-                      const alreadySubscribed = subscribedFeedMap.has(key);
-                      return (
-                        <label
-                          key={key}
-                          className={cn(
-                            "hover:bg-accent flex cursor-pointer items-start gap-2 rounded-md border px-2 py-2",
-                            alreadySubscribed && "opacity-60",
-                          )}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleOPMLSource(item.feed_url)}
-                            className="mt-1"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <div className="truncate text-sm font-medium">
-                                {item.title}
-                              </div>
-                              {alreadySubscribed && (
-                                <Badge variant="secondary">
-                                  {t.rssReader.discoverSubscribed}
-                                </Badge>
+
+                    <div className="h-72 space-y-1 overflow-y-auto rounded-md border p-2">
+                      {parseOPMLMutation.isPending ? (
+                        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                          <Loader2Icon className="size-4 animate-spin" />
+                          {t.common.loading}
+                        </div>
+                      ) : filteredOPMLSources.length === 0 ? (
+                        <div className="text-muted-foreground text-sm">
+                          {t.rssReader.opmlNoSource}
+                        </div>
+                      ) : (
+                        filteredOPMLSources.map((item) => {
+                          const key = normalizeURL(item.feed_url);
+                          const checked = selectedOPMLFeeds.has(key);
+                          const alreadySubscribed = subscribedFeedMap.has(key);
+                          return (
+                            <label
+                              key={key}
+                              className={cn(
+                                "hover:bg-accent flex cursor-pointer items-start gap-2 rounded-md border px-2 py-2",
+                                alreadySubscribed && "opacity-60",
                               )}
-                            </div>
-                            <div className="text-muted-foreground truncate text-xs">
-                              {item.feed_url}
-                            </div>
-                            {item.site_url && (
-                              <div className="text-muted-foreground truncate text-xs">
-                                {item.site_url}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleOPMLSource(item.feed_url)}
+                                className="mt-1"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="truncate text-sm font-medium">
+                                    {item.title}
+                                  </div>
+                                  {alreadySubscribed && (
+                                    <Badge variant="secondary">
+                                      {t.rssReader.discoverSubscribed}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-muted-foreground truncate text-xs">
+                                  {item.feed_url}
+                                </div>
+                                {item.site_url && (
+                                  <div className="text-muted-foreground truncate text-xs">
+                                    {item.site_url}
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
 
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setOpmlOpen(false)}>
-                  {t.common.cancel}
-                </Button>
-                <Button
-                  onClick={() => void handleImportSelectedOPML()}
-                  disabled={importingOPML || selectedOPMLFeeds.size === 0}
-                >
-                  {importingOPML && <Loader2Icon className="size-4 animate-spin" />}
-                  {t.rssReader.opmlImportSelected}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setOpmlOpen(false)}>
+                      {t.common.cancel}
+                    </Button>
+                    <Button
+                      onClick={() => void handleImportSelectedOPML()}
+                      disabled={importingOPML || selectedOPMLFeeds.size === 0}
+                    >
+                      {importingOPML && <Loader2Icon className="size-4 animate-spin" />}
+                      {t.rssReader.opmlImportSelected}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => void refetch()}
-            disabled={isRefetching}
-            title={t.rssReader.refresh}
-          >
-            <RefreshCwIcon
-              className={cn("size-4", isRefetching && "animate-spin")}
-            />
-          </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void refetch()}
+                disabled={isRefetching}
+                title={t.rssReader.refresh}
+              >
+                <RefreshCwIcon
+                  className={cn("size-4", isRefetching && "animate-spin")}
+                />
+              </Button>
+            </div>
+          </div>
         </div>
-      </header>
+      </div>
+
+      {/* View Toggle - Centered */}
+      {keyword.trim() && (
+        <div className="mb-4 flex justify-center">
+          <div className="inline-flex items-center gap-1 rounded-full border bg-background/80 p-1 backdrop-blur">
+            <Button
+              size="sm"
+              variant={viewMode === "sources" ? "default" : "ghost"}
+              onClick={() => setViewMode("sources")}
+              className="rounded-full"
+            >
+              {t.rssReader.discoverSources}
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "categories" ? "default" : "ghost"}
+              onClick={() => setViewMode("categories")}
+              className="rounded-full"
+            >
+              {t.rssReader.discoverCategories}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden">
@@ -925,62 +943,8 @@ export function DiscoverPanel({
         </DialogContent>
       </Dialog>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
-        {category === "all" && !keyword.trim() && categoryCards.length > 0 && (
-          <section className="space-y-3">
-            <div className="flex items-end justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-semibold">
-                  {t.rssReader.discoverCategoryBoardTitle}
-                </h3>
-                <p className="text-muted-foreground text-xs">
-                  {t.rssReader.discoverCategoryBoardDescription}
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-              {categoryCards.map((item) => {
-                const visual = CATEGORY_VISUALS[item.id] ?? {
-                  emoji: "📰",
-                  gradientFrom: "#64748b",
-                  gradientTo: "#475569",
-                };
-                return (
-                  <button
-                    key={`card-${item.id}`}
-                    type="button"
-                    onClick={() => onCategoryChange(item.id)}
-                    className="group relative overflow-hidden rounded-xl p-0 text-left"
-                    style={{
-                      backgroundImage: `linear-gradient(135deg, ${visual.gradientFrom}, ${visual.gradientTo})`,
-                    }}
-                  >
-                    <div className="absolute -top-2 -right-1 text-5xl opacity-20 transition-transform duration-300 group-hover:scale-110">
-                      {visual.emoji}
-                    </div>
-                    <div className="flex min-h-24 flex-col justify-between p-3">
-                      <div className="text-3xl leading-none">{visual.emoji}</div>
-                      <div className="space-y-0.5">
-                        <div className="text-sm font-semibold text-white">
-                          {item.label}
-                        </div>
-                        <div className="flex items-center justify-between text-xs text-white/90">
-                          <span>{item.count}</span>
-                          <span className="inline-flex items-center gap-1">
-                            {t.rssReader.discoverExploreCategory}
-                            <ArrowRightIcon className="size-3.5" />
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-4 p-4">
+        <div className="bg-background/65 flex flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 backdrop-blur">
           <span className="text-muted-foreground text-xs">
             {t.rssReader.discoverLanguageLabel}
           </span>
@@ -1018,7 +982,7 @@ export function DiscoverPanel({
                 size="sm"
                 variant={category === item.id ? "default" : "outline"}
                 onClick={() => onCategoryChange(item.id)}
-                className="rounded-full"
+                className="h-8 rounded-full px-3"
               >
                 {item.label}
                 <span className="text-xs tabular-nums">{item.count}</span>
@@ -1026,7 +990,7 @@ export function DiscoverPanel({
             ))}
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="bg-background/65 flex items-center gap-1 rounded-full border px-1 py-1 backdrop-blur">
             <span className="text-muted-foreground mr-1 text-xs">
               {t.rssReader.discoverSortLabel}
             </span>
@@ -1071,7 +1035,7 @@ export function DiscoverPanel({
             {t.rssReader.discoverEmpty}
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+          <div className="flex flex-col gap-4">
             {category !== "all" &&
               !keyword.trim() &&
               featuredSources.length > 0 && (
@@ -1092,7 +1056,7 @@ export function DiscoverPanel({
                 </section>
               )}
 
-            <div className="grid min-h-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {displaySources.map((source) => renderSourceCard(source))}
             </div>
           </div>

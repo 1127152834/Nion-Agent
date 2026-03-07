@@ -2,11 +2,16 @@ import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import { resolveRuntimePaths, type DesktopRuntimePaths } from "./paths";
 import { DesktopProcessManager, type DesktopRuntimePorts } from "./process-manager";
+import {
+  RuntimeOptionalComponentsManager,
+  type RuntimeDownloadProgress,
+} from "./runtime-manager";
 
 let mainWindow: BrowserWindow | null = null;
 let runtimePaths: DesktopRuntimePaths | null = null;
 let processManager: DesktopProcessManager | null = null;
 let runtimePorts: DesktopRuntimePorts | null = null;
+let runtimeOptionalComponentsManager: RuntimeOptionalComponentsManager | null = null;
 let startupInProgress = false;
 let isShuttingDown = false;
 
@@ -26,6 +31,7 @@ if (!gotTheLock) {
 app.on("ready", async () => {
   try {
     runtimePaths = resolveRuntimePaths();
+    runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(runtimePaths);
     runtimePorts = await startupRuntime();
     createMainWindow();
   } catch (error) {
@@ -138,6 +144,20 @@ function createMainWindow(): void {
   });
 }
 
+function getRuntimeOptionalManager(): RuntimeOptionalComponentsManager {
+  if (!runtimePaths) {
+    throw new Error("Runtime paths not initialized");
+  }
+  if (!runtimeOptionalComponentsManager) {
+    runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(runtimePaths);
+  }
+  return runtimeOptionalComponentsManager;
+}
+
+function emitRuntimeDownloadProgress(progress: RuntimeDownloadProgress): void {
+  mainWindow?.webContents.send("runtime:download-progress", progress);
+}
+
 // IPC 处理程序
 ipcMain.handle("desktop:get-app-version", () => {
   return app.getVersion();
@@ -153,6 +173,32 @@ ipcMain.handle("desktop:get-platform", () => {
 
 ipcMain.handle("desktop:get-paths", () => {
   return runtimePaths;
+});
+
+ipcMain.handle("desktop:get-runtime-status", () => {
+  return getRuntimeOptionalManager().getStatus();
+});
+
+ipcMain.handle("desktop:download-runtime-component", async (_, componentName: string) => {
+  return getRuntimeOptionalManager().downloadOptionalComponent(
+    componentName,
+    emitRuntimeDownloadProgress,
+  );
+});
+
+ipcMain.handle("desktop:retry-runtime-component", async (_, componentName: string) => {
+  return getRuntimeOptionalManager().retryOptionalComponent(
+    componentName,
+    emitRuntimeDownloadProgress,
+  );
+});
+
+ipcMain.handle("desktop:complete-runtime-onboarding", () => {
+  return getRuntimeOptionalManager().markOnboardingCompleted();
+});
+
+ipcMain.handle("desktop:skip-runtime-component", (_, componentName: string) => {
+  return getRuntimeOptionalManager().markComponentSkipped(componentName);
 });
 
 ipcMain.handle("desktop:open-external", async (_, url: string) => {

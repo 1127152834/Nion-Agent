@@ -169,7 +169,84 @@ class MemoryManager:
             )
         self.evolver = evolver
 
+        # Initialize knowledge graph (optional)
+        self.knowledge_graph_enabled = self.config.get("knowledge_graph_enabled", False)
+        self.entity_recognizer = None
+        self.relation_extractor = None
+        self.graph_builder = None
+        self.graph_query = None
+
+        if self.knowledge_graph_enabled:
+            try:
+                kg_dir = memory_root / "knowledge_graph"
+                entity_module = _load_local_module(
+                    kg_dir / "entity_recognizer.py",
+                    "memory_v2_kg_entity_recognizer",
+                )
+                relation_module = _load_local_module(
+                    kg_dir / "relation_extractor.py",
+                    "memory_v2_kg_relation_extractor",
+                )
+                graph_module = _load_local_module(
+                    kg_dir / "graph_builder.py",
+                    "memory_v2_kg_graph_builder",
+                )
+                query_module = _load_local_module(
+                    kg_dir / "graph_query.py",
+                    "memory_v2_kg_graph_query",
+                )
+
+                self.entity_recognizer = entity_module.EntityRecognizer()
+                self.relation_extractor = relation_module.RelationExtractor(llm=llm)
+                self.graph_builder = graph_module.KnowledgeGraphBuilder()
+                self.graph_query = query_module.GraphQuery(self.graph_builder)
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to initialize knowledge graph: {e}")
+                self.knowledge_graph_enabled = False
+
     def _build_embedding_provider(self, embeddings_module: Any) -> Any:
+        # Try to use global embedding config first
+        try:
+            from src.config import get_app_config
+
+            config = get_app_config()
+            if hasattr(config, "embedding") and config.embedding.enabled:
+                embedding_config = config.embedding
+                provider = embedding_config.provider.lower().strip()
+
+                if provider == "local":
+                    provider_config = embedding_config.local
+                    return embeddings_module.SentenceTransformerEmbedding(
+                        model_name=provider_config.model,
+                    )
+                elif provider == "openai":
+                    provider_config = embedding_config.openai
+                    api_key = provider_config.api_key
+                    # Resolve environment variable if needed
+                    if api_key and api_key.startswith("$"):
+                        import os
+
+                        api_key = os.getenv(api_key[1:])
+                    return embeddings_module.OpenAIEmbedding(
+                        model=provider_config.model,
+                        api_key=api_key,
+                    )
+                elif provider == "custom":
+                    provider_config = embedding_config.custom
+                    api_key = provider_config.api_key or "dummy"
+                    # For custom provider, create a custom OpenAI client
+                    from openai import OpenAI
+
+                    client = OpenAI(api_key=api_key, base_url=provider_config.api_base)
+                    return embeddings_module.OpenAIEmbedding(
+                        model=provider_config.model,
+                        client=client,
+                    )
+        except Exception:
+            pass  # Fall back to runtime_config
+
+        # Fallback to runtime_config (backward compatibility)
         provider = self.runtime_config.embedding_provider.lower().strip()
         try:
             if provider == "openai":
@@ -192,6 +269,32 @@ class MemoryManager:
         """Store one memory item and sync to category layer."""
         stored = self.item_layer.store(item)
         self.category_layer.add_item(stored)
+
+        # Extract entities and relations if knowledge graph is enabled
+        if self.knowledge_graph_enabled and self.entity_recognizer:
+            try:
+                content = stored.get("content", "")
+                if content:
+                    # Extract entities (synchronous)
+                    entities = self.entity_recognizer.extract_entities(content)
+                    stored["entities"] = entities
+
+                    # Extract relations - use background task to avoid event loop issues
+                    if self.relation_extractor and len(entities) >= 2:
+                        # Schedule relation extraction as background task
+                        # For now, skip async relation extraction to avoid deadlock
+                        # TODO: Implement proper background task queue
+                        import logging
+                        logging.debug("Skipping relation extraction to avoid event loop deadlock")
+                        stored["relations"] = []
+
+                    # Add to knowledge graph
+                    if self.graph_builder:
+                        self.graph_builder.add_memory_item(stored)
+            except Exception as e:
+                import logging
+                logging.warning(f"Failed to extract entities/relations: {e}")
+
         return stored
 
     def search(
@@ -328,10 +431,79 @@ class MemoryManager:
                 agent_name=agent_name,
             )
 
+    def query_knowledge_graph(self, entity: str, depth: int = 1) -> dict[str, Any]:
+        """Query knowledge graph for entity context.
+
+        Args:
+            entity: Entity name
+            depth: Maximum distance from entity
+
+        Returns:
+            Dictionary with entity context
+        """
+        if not self.knowledge_graph_enabled or not self.graph_query:
+            return {
+                "enabled": False,
+                "message": "Knowledge graph is not enabled",
+            }
+
+        return self.graph_query.get_entity_context(entity, depth=depth)
+
+    def get_graph_statistics(self) -> dict[str, Any]:
+        """Get knowledge graph statistics.
+
+        Returns:
+            Dictionary with graph statistics
+        """
+        if not self.knowledge_graph_enabled or not self.graph_builder:
+            return {
+                "enabled": False,
+                "num_nodes": 0,
+                "num_edges": 0,
+            }
+
+        stats = self.graph_builder.get_statistics()
+        stats["enabled"] = True
+        return stats
+
     def close(self) -> None:
         """Close underlying resources."""
-        if hasattr(self.item_layer, "close"):
-            self.item_layer.close()
+        import logging
+
+        # Close item layer
+        try:
+            if hasattr(self.item_layer, "close"):
+                self.item_layer.close()
+        except Exception as e:
+            logging.error(f"Failed to close item layer: {e}")
+
+        # Close resource layer (if it has close method)
+        try:
+            if hasattr(self.resource_layer, "close"):
+                self.resource_layer.close()
+        except Exception as e:
+            logging.error(f"Failed to close resource layer: {e}")
+
+        # Close category layer (if it has close method)
+        try:
+            if hasattr(self.category_layer, "close"):
+                self.category_layer.close()
+        except Exception as e:
+            logging.error(f"Failed to close category layer: {e}")
+
+        # Close dual retriever (if it has close method)
+        try:
+            if self.dual_retriever and hasattr(self.dual_retriever, "close"):
+                self.dual_retriever.close()
+        except Exception as e:
+            logging.error(f"Failed to close dual retriever: {e}")
+
+        # Close evolver (if it has close method)
+        try:
+            if self.evolver and hasattr(self.evolver, "close"):
+                self.evolver.close()
+        except Exception as e:
+            logging.error(f"Failed to close evolver: {e}")
 
 
 _manager_registry: dict[str | None, MemoryManager] = {}
@@ -365,20 +537,29 @@ def get_memory_manager(
         if reload:
             existing = _manager_registry.pop(agent_name, None)
             if existing is not None:
-                existing.close()
+                try:
+                    existing.close()
+                except Exception as e:
+                    import logging
+                    logging.error(f"Failed to close existing manager: {e}")
 
         manager = _manager_registry.get(agent_name)
         if manager is not None:
             return manager
 
-        payload = _runtime_payload_from_config()
-        manager = MemoryManager(
-            base_dir=_resolve_manager_base_dir(agent_name),
-            config=payload,
-            enable_legacy=bool(payload.get("fallback_to_v1", True)),
-        )
-        _manager_registry[agent_name] = manager
-        return manager
+        try:
+            payload = _runtime_payload_from_config()
+            manager = MemoryManager(
+                base_dir=_resolve_manager_base_dir(agent_name),
+                config=payload,
+                enable_legacy=bool(payload.get("fallback_to_v1", True)),
+            )
+            _manager_registry[agent_name] = manager
+            return manager
+        except Exception as e:
+            import logging
+            logging.error(f"Failed to create memory manager: {e}")
+            raise
 
 
 def reload_memory_manager(agent_name: str | None = None) -> MemoryManager:
@@ -394,6 +575,69 @@ def get_memory_data(agent_name: str | None = None) -> dict[str, Any]:
 def reload_memory_data(agent_name: str | None = None) -> dict[str, Any]:
     """Reload memory manager and return fresh data."""
     return reload_memory_manager(agent_name=agent_name).get_memory_data(agent_name=agent_name)
+
+
+def update_memory_fact(
+    fact_id: str,
+    updates: dict[str, Any],
+    agent_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Update one legacy fact entry."""
+    try:
+        from src.agents.memory.updater import update_fact
+
+        return update_fact(fact_id=fact_id, updates=updates, agent_name=agent_name)
+    except Exception:
+        updater_module = _load_local_module(
+            Path(__file__).resolve().parent / "updater.py",
+            "memory_v2_legacy_updater",
+        )
+        return updater_module.update_fact(
+            fact_id=fact_id,
+            updates=updates,
+            agent_name=agent_name,
+        )
+
+
+def pin_memory_fact(
+    fact_id: str,
+    pinned: bool | None = None,
+    agent_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Set or toggle pinned state for one legacy fact entry."""
+    try:
+        from src.agents.memory.updater import pin_fact
+
+        return pin_fact(fact_id=fact_id, pinned=pinned, agent_name=agent_name)
+    except Exception:
+        updater_module = _load_local_module(
+            Path(__file__).resolve().parent / "updater.py",
+            "memory_v2_legacy_updater",
+        )
+        return updater_module.pin_fact(
+            fact_id=fact_id,
+            pinned=pinned,
+            agent_name=agent_name,
+        )
+
+
+def delete_memory_fact(fact_id: str, agent_name: str | None = None) -> bool:
+    """Delete one legacy fact entry."""
+    try:
+        from src.agents.memory.updater import delete_fact
+
+        return bool(delete_fact(fact_id=fact_id, agent_name=agent_name))
+    except Exception:
+        updater_module = _load_local_module(
+            Path(__file__).resolve().parent / "updater.py",
+            "memory_v2_legacy_updater",
+        )
+        return bool(
+            updater_module.delete_fact(
+                fact_id=fact_id,
+                agent_name=agent_name,
+            )
+        )
 
 
 def update_memory_from_conversation(
@@ -432,5 +676,8 @@ __all__ = [
     "reload_memory_manager",
     "get_memory_data",
     "reload_memory_data",
+    "update_memory_fact",
+    "pin_memory_fact",
+    "delete_memory_fact",
     "update_memory_from_conversation",
 ]

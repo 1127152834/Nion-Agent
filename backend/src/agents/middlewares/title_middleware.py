@@ -43,18 +43,63 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         # Generate title after first complete exchange
         return len(user_messages) == 1 and len(assistant_messages) >= 1
 
-    def _generate_title(self, state: TitleMiddlewareState) -> str:
-        """Generate a concise title based on the conversation."""
-        config = get_title_config()
+    @staticmethod
+    def _extract_message_text(message) -> str:
+        """Extract plain text from a LangChain message, handling different content formats."""
+        content = getattr(message, "content", "")
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            chunks: list[str] = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text = item.get("text")
+                    if isinstance(text, str):
+                        chunks.append(text)
+            return "\n".join(chunks).strip()
+        return str(content).strip() if content else ""
+
+    def _get_first_exchange_texts(self, state: TitleMiddlewareState) -> tuple[str, str]:
+        """Extract normalized text from the first user/assistant exchange."""
         messages = state.get("messages", [])
 
-        # Get first user message and first assistant response
-        user_msg_content = next((m.content for m in messages if m.type == "human"), "")
-        assistant_msg_content = next((m.content for m in messages if m.type == "ai"), "")
+        # Use _extract_message_text to properly handle different message formats
+        user_msg = ""
+        assistant_msg = ""
 
-        # Ensure content is string (LangChain messages can have list content)
-        user_msg = str(user_msg_content) if user_msg_content else ""
-        assistant_msg = str(assistant_msg_content) if assistant_msg_content else ""
+        for m in messages:
+            if m.type == "human" and not user_msg:
+                user_msg = self._extract_message_text(m)
+            elif m.type == "ai" and not getattr(m, "tool_calls", None) and not assistant_msg:
+                assistant_msg = self._extract_message_text(m)
+
+        return user_msg, assistant_msg
+
+    def _build_fallback_title(self, user_msg: str, assistant_msg: str, max_chars: int) -> str:
+        """Build a deterministic fallback title without LLM calls."""
+        fallback_source = user_msg or assistant_msg
+        if not fallback_source:
+            return "New Conversation"
+
+        fallback_chars = min(max_chars, 50)
+        if len(fallback_source) > fallback_chars:
+            return fallback_source[:fallback_chars].rstrip() + "..."
+        return fallback_source
+
+    def _generate_fast_title(self, state: TitleMiddlewareState) -> str:
+        """Generate a fast deterministic title without blocking on LLM calls."""
+        config = get_title_config()
+        user_msg, _ = self._get_first_exchange_texts(state)
+        return self._build_fallback_title(
+            user_msg=user_msg,
+            assistant_msg="",
+            max_chars=config.max_chars,
+        )
+
+    def _generate_title(self, state: TitleMiddlewareState) -> str:
+        """Generate a concise title based on the conversation using LLM."""
+        config = get_title_config()
+        user_msg, assistant_msg = self._get_first_exchange_texts(state)
 
         # Use a lightweight model to generate title
         model = create_chat_model(thinking_enabled=False)
@@ -82,10 +127,15 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
 
     @override
     def after_agent(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | None:
-        """Generate and set thread title after the first agent response."""
+        """Set a fast title after the first agent response.
+
+        Use fast deterministic title (user's question) to avoid blocking on LLM calls.
+        This ensures the conversation completes without delay from title generation.
+        """
         if self._should_generate_title(state):
-            title = self._generate_title(state)
-            print(f"Generated thread title: {title}")
+            # Use fast title (user's question) to avoid blocking on LLM
+            title = self._generate_fast_title(state)
+            print(f"Generated thread title (fast): {title}")
 
             # Store title in state (will be persisted by checkpointer if configured)
             return {"title": title}

@@ -123,11 +123,17 @@ export class DesktopProcessManager {
     const logPath = path.join(this.paths.logsDir, "langgraph.log");
     const logStream = createWriteStream(logPath, { flags: "a" });
 
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
       NO_COLOR: "1"
     };
+
+    // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量
+    if (this.paths.pythonExecutable) {
+      env.NION_PYTHON_PATH = this.paths.pythonExecutable;
+      console.log(`[LangGraph] Using bundled Python: ${this.paths.pythonExecutable}`);
+    }
 
     const child = spawn(
       "uv",
@@ -152,11 +158,17 @@ export class DesktopProcessManager {
     const logPath = path.join(this.paths.logsDir, "gateway.log");
     const logStream = createWriteStream(logPath, { flags: "a" });
 
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
       NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
       CORS_ORIGINS: `http://localhost:${this.ports!.frontendPort},http://127.0.0.1:${this.ports!.frontendPort}`,
     };
+
+    // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量
+    if (this.paths.pythonExecutable) {
+      env.NION_PYTHON_PATH = this.paths.pythonExecutable;
+      console.log(`[Gateway] Using bundled Python: ${this.paths.pythonExecutable}`);
+    }
 
     const child = spawn(
       "uv",

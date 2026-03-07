@@ -49,7 +49,12 @@ export function TitleSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const copy = t.settings.configSections.title;
+  const settingsLike = t.settings as {
+    configSections?: {
+      title?: Record<string, string>;
+    };
+  };
+  const copy = (settingsLike.configSections?.title ?? {});
   const title = asObject(config.title);
   const models = asArray(config.models);
   const [advancedOpen, setAdvancedOpen] = useState(false);

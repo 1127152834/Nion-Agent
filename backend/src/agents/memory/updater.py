@@ -219,6 +219,74 @@ def _save_memory_to_file(memory_data: dict[str, Any], agent_name: str | None = N
         return False
 
 
+def _find_fact_index(memory_data: dict[str, Any], fact_id: str) -> int:
+    facts = memory_data.get("facts", [])
+    for index, fact in enumerate(facts):
+        if fact.get("id") == fact_id:
+            return index
+    return -1
+
+
+def update_fact(
+    fact_id: str,
+    updates: dict[str, Any],
+    agent_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Update an existing memory fact and persist it.
+
+    Returns:
+        Updated fact dict on success, None when the target fact does not exist
+        or persistence fails.
+    """
+    if not updates:
+        return None
+
+    memory_data = get_memory_data(agent_name)
+    fact_index = _find_fact_index(memory_data, fact_id)
+    if fact_index < 0:
+        return None
+
+    fact = memory_data["facts"][fact_index]
+    for key in ("content", "category", "confidence", "pinned", "inaccurate"):
+        if key in updates and updates[key] is not None:
+            fact[key] = updates[key]
+
+    if not _save_memory_to_file(memory_data, agent_name):
+        return None
+    return fact
+
+
+def pin_fact(
+    fact_id: str,
+    pinned: bool | None = None,
+    agent_name: str | None = None,
+) -> dict[str, Any] | None:
+    """Set or toggle pinned state for a fact."""
+    memory_data = get_memory_data(agent_name)
+    fact_index = _find_fact_index(memory_data, fact_id)
+    if fact_index < 0:
+        return None
+
+    fact = memory_data["facts"][fact_index]
+    next_pinned = (not bool(fact.get("pinned"))) if pinned is None else bool(pinned)
+    fact["pinned"] = next_pinned
+
+    if not _save_memory_to_file(memory_data, agent_name):
+        return None
+    return fact
+
+
+def delete_fact(fact_id: str, agent_name: str | None = None) -> bool:
+    """Delete one fact by ID."""
+    memory_data = get_memory_data(agent_name)
+    fact_index = _find_fact_index(memory_data, fact_id)
+    if fact_index < 0:
+        return False
+
+    del memory_data["facts"][fact_index]
+    return _save_memory_to_file(memory_data, agent_name)
+
+
 class MemoryUpdater:
     """Updates memory using LLM based on conversation context."""
 

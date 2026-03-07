@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.config.extensions_config import ExtensionsConfig
 from src.config.memory_config import load_memory_config_from_dict
 from src.config.model_config import ModelConfig
+from src.config.retrieval_models_config import RetrievalModelsConfig, RetrievalActiveConfig, ActiveEmbeddingConfig, ActiveRerankConfig
 from src.config.sandbox_config import SandboxConfig
 from src.config.skills_config import SkillsConfig
 from src.config.subagents_config import load_subagents_config_from_dict
@@ -28,6 +29,10 @@ class AppConfig(BaseModel):
     tool_groups: list[ToolGroupConfig] = Field(default_factory=list, description="Available tool groups")
     skills: SkillsConfig = Field(default_factory=SkillsConfig, description="Skills configuration")
     extensions: ExtensionsConfig = Field(default_factory=ExtensionsConfig, description="Extensions configuration (MCP servers and skills state)")
+    retrieval_models: RetrievalModelsConfig = Field(
+        default_factory=RetrievalModelsConfig,
+        description="Retrieval models configuration (embedding + rerank)"
+    )
     model_config = ConfigDict(extra="allow", frozen=False)
 
     @classmethod

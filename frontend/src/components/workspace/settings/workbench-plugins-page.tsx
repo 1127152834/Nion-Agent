@@ -43,7 +43,7 @@ import { SettingsSection } from "./settings-section";
 export function WorkbenchPluginsPage({ onClose }: { onClose?: () => void } = {}) {
   const { t } = useI18n();
   const { data: plugins, isLoading, error } = useInstalledPlugins();
-  const copy = t.settings.workbenchPluginsPage;
+  const copy = t.settings.workbenchPlugins;
 
   return (
     <SettingsSection
@@ -82,7 +82,7 @@ function WorkbenchPluginsList({
   onClose?: () => void;
 }) {
   const { t } = useI18n();
-  const copy = t.settings.workbenchPluginsPage;
+  const copy = t.settings.workbenchPlugins;
   const router = useRouter();
   const [filter, setFilter] = useState<string>("installed");
   const [pendingDeletePluginId, setPendingDeletePluginId] = useState<string | null>(null);
@@ -224,7 +224,11 @@ function WorkbenchPluginsList({
                 {plugin.manifest.author && (
                   <span className="text-muted-foreground text-xs">
                     {" "}
-                    • by {plugin.manifest.author}
+                    •{" "}
+                    {copy.authorBy.replaceAll(
+                      "{name}",
+                      plugin.manifest.author,
+                    )}
                   </span>
                 )}
               </ItemDescription>
@@ -279,7 +283,7 @@ function WorkbenchPluginsList({
 
 function EmptyPlugin({ onCreatePlugin }: { onCreatePlugin: () => void }) {
   const { t } = useI18n();
-  const copy = t.settings.workbenchPluginsPage;
+  const copy = t.settings.workbenchPlugins;
   return (
     <Empty>
       <EmptyHeader>

@@ -10,7 +10,6 @@ import {
   rejectPairRequest,
   revokeAuthorizedUser,
   testChannelConnection,
-  updateAuthorizedUserWorkspace,
   upsertChannelConfig,
 } from "./api";
 import type {
@@ -153,26 +152,6 @@ export function useRevokeAuthorizedUser(platform: ChannelPlatform) {
   return useMutation({
     mutationFn: (userId: number) =>
       revokeAuthorizedUser(platform, userId, { handled_by: "ui" }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: keys.users });
-    },
-  });
-}
-
-export function useUpdateAuthorizedUserWorkspace(platform: ChannelPlatform) {
-  const queryClient = useQueryClient();
-  const keys = channelQueryKeys(platform);
-  return useMutation({
-    mutationFn: ({
-      userId,
-      workspaceId,
-    }: {
-      userId: number;
-      workspaceId: string;
-    }) =>
-      updateAuthorizedUserWorkspace(platform, userId, {
-        workspace_id: workspaceId,
-      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.users });
     },

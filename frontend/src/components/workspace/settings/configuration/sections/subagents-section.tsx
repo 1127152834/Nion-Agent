@@ -39,7 +39,12 @@ export function SubagentsSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const copy = t.settings.configSections.subagents;
+  const settingsLike = t.settings as {
+    configSections?: {
+      subagents?: Record<string, string>;
+    };
+  };
+  const copy = (settingsLike.configSections?.subagents ?? {});
 
   const subagents = asObject(config.subagents);
   const agents = asObject(subagents.agents);

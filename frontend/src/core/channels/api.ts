@@ -4,7 +4,6 @@ import type {
   ChannelAuthorizedUser,
   ChannelAuthorizedUserRevokePayload,
   ChannelAuthorizedUserRevokeResult,
-  ChannelAuthorizedUserWorkspaceUpdatePayload,
   ChannelConfig,
   ChannelConfigUpsertPayload,
   ChannelConnectionTestPayload,
@@ -203,21 +202,5 @@ export function revokeAuthorizedUser(
       body: JSON.stringify(payload),
     },
     "Failed to revoke authorized user",
-  );
-}
-
-export function updateAuthorizedUserWorkspace(
-  platform: ChannelPlatform,
-  userId: number,
-  payload: ChannelAuthorizedUserWorkspaceUpdatePayload,
-) {
-  return requestJSON<ChannelAuthorizedUser>(
-    `${getBackendBaseURL()}/api/channels/${platform}/authorized-users/${userId}/workspace`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    },
-    "Failed to update authorized user workspace",
   );
 }

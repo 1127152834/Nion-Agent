@@ -40,7 +40,12 @@ export function EnvironmentVariablesSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const copy = t.settings.configSections.environmentVariables;
+  const settingsLike = t.settings as {
+    configSections?: {
+      environmentVariables?: Record<string, string>;
+    };
+  };
+  const copy = (settingsLike.configSections?.environmentVariables ?? {});
   const [showValues, setShowValues] = useState(false);
 
   const runtimeEnv = asObject(config.runtime_env);

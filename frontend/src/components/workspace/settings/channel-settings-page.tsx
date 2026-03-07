@@ -37,7 +37,6 @@ import {
   useRejectPairRequest,
   useRevokeAuthorizedUser,
   useTestChannelConnection,
-  useUpdateAuthorizedUserWorkspace,
   useUpsertChannelConfig,
   type ChannelMode,
   type ChannelPlatform,
@@ -51,7 +50,6 @@ import { SettingsSection } from "./settings-section";
 type ChannelFormState = {
   enabled: boolean;
   mode: ChannelMode;
-  default_workspace_id: string;
   credentials: Record<string, string>;
 };
 
@@ -65,6 +63,7 @@ type CredentialFieldSpec = {
 };
 
 const PAIR_CODE_SLOT_COUNT = 6;
+const DEFAULT_CHANNEL_WORKSPACE_ID = "default";
 
 const PLATFORM_FIELDS: Record<ChannelPlatform, CredentialFieldSpec[]> = {
   lark: [
@@ -153,6 +152,13 @@ function isFieldRequired(field: CredentialFieldSpec, mode: ChannelMode): boolean
     return false;
   }
   return field.requiredModes.includes(mode);
+}
+
+function getFieldDisplayLabel(
+  field: CredentialFieldSpec,
+  messages: { fieldLabels?: Record<string, string> } | null | undefined,
+): string {
+  return messages?.fieldLabels?.[field.key] ?? field.label;
 }
 
 function stringifyError(error: unknown): string {
@@ -258,7 +264,7 @@ function PairCodeBlock({
   className?: string;
 }) {
   const { locale, t } = useI18n();
-  const m = t.migration.settings?.channel;
+  const m = t.settings.channelPage;
   const createPairingCode = useCreatePairingCode(platform);
   const [ttlMinutes, setTtlMinutes] = useState("10");
   const latestCode = createPairingCode.data;
@@ -376,7 +382,7 @@ function PairCodeBlock({
 
 function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
   const { locale, t } = useI18n();
-  const m = t.migration.settings?.channel;
+  const m = t.settings.channelPage;
   const fields = PLATFORM_FIELDS[platform];
 
   const {
@@ -407,16 +413,12 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
   const approvePairRequest = useApprovePairRequest(platform);
   const rejectPairRequest = useRejectPairRequest(platform);
   const revokeAuthorizedUser = useRevokeAuthorizedUser(platform);
-  const updateAuthorizedUserWorkspace = useUpdateAuthorizedUserWorkspace(platform);
-  const workspaceList: Array<{ workspace_id: string; name?: string }> = [];
 
   const [form, setForm] = useState<ChannelFormState>({
     enabled: false,
     mode: "webhook",
-    default_workspace_id: "default",
     credentials: {},
   });
-  const [authorizedWorkspaceDrafts, setAuthorizedWorkspaceDrafts] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!config) {
@@ -425,23 +427,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
     setForm({
       enabled: Boolean(config.enabled),
       mode: config.mode ?? "webhook",
-      default_workspace_id: config.default_workspace_id ?? "default",
       credentials: { ...config.credentials },
     });
   }, [config]);
-
-  useEffect(() => {
-    if (authorizedUsers.length === 0) {
-      return;
-    }
-    setAuthorizedWorkspaceDrafts((prev) => {
-      const next = { ...prev };
-      for (const user of authorizedUsers) {
-        next[user.id] ??= (user.workspace_id ?? form.default_workspace_id) || "default";
-      }
-      return next;
-    });
-  }, [authorizedUsers, form.default_workspace_id]);
 
   const platformTitle = platform === "lark"
     ? (m?.platformLark ?? "Lark")
@@ -454,7 +442,6 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
   const pairingSectionId = `${platform}-pairing-authorization`;
   const configErrorMessage = stringifyError(configError);
   const runtimeErrorMessage = stringifyError(runtimeError);
-  const effectiveDefaultWorkspace = form.default_workspace_id ?? "default";
   const shouldSubscribeEvents = Boolean(config?.enabled);
   const visibleFields = useMemo(
     () => fields.filter((field) => isFieldVisible(field, form.mode)),
@@ -556,7 +543,10 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
     if (missingRequiredFields.length > 0) {
       toast.error(
         (m?.fillRequiredFieldsFirst ?? "Please fill required fields first: {fields}")
-          .replaceAll("{fields}", missingRequiredFields.map((field) => field.label).join(m?.listDelimiter ?? ", ")),
+          .replaceAll(
+            "{fields}",
+            missingRequiredFields.map((field) => getFieldDisplayLabel(field, m)).join(m?.listDelimiter ?? ", "),
+          ),
       );
       return;
     }
@@ -565,7 +555,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
         enabled: form.enabled,
         mode: form.mode,
         credentials: form.credentials,
-        default_workspace_id: effectiveDefaultWorkspace,
+        default_workspace_id: DEFAULT_CHANNEL_WORKSPACE_ID,
       })
       .then(() => {
         toast.success((m?.platformConfigSaved ?? "{platform} configuration saved").replaceAll("{platform}", platformTitle));
@@ -579,7 +569,10 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
   const onTest = () => {
     if (missingConnectivityFields.length > 0) {
       const names = missingConnectivityFields
-        .map((key) => fields.find((field) => field.key === key)?.label ?? key)
+        .map((key) => {
+          const field = fields.find((candidate) => candidate.key === key);
+          return field ? getFieldDisplayLabel(field, m) : key;
+        })
         .join(m?.listDelimiter ?? ", ");
       toast.error(
         (m?.fillConnectionFieldsFirst ?? "Please fill required fields for connection test: {fields}")
@@ -688,7 +681,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
               key={field.key}
             >
               <div className="flex items-center gap-1.5 text-xs font-medium">
-                <span>{field.label}</span>
+                <span>{getFieldDisplayLabel(field, m)}</span>
                 <Badge
                   variant={isFieldRequired(field, form.mode) ? "default" : "secondary"}
                   className="h-5 px-1.5 text-[10px]"
@@ -727,39 +720,6 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
             </div>
           ))}
 
-          <div className="space-y-1.5 md:col-span-2">
-            <div className="text-xs font-medium">{m?.defaultWorkspaceLabel ?? "Default Workspace"}</div>
-            <Select
-              value={effectiveDefaultWorkspace}
-              onValueChange={(value) =>
-                setForm((prev) => ({
-                  ...prev,
-                  default_workspace_id: value,
-                }))
-              }
-            >
-              <SelectTrigger className="w-[280px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">{m?.defaultWorkspaceOption ?? "Default workspace (default)"}</SelectItem>
-                {workspaceList.map((workspace) =>
-                  workspace.workspace_id === "default" ? null : (
-                    <SelectItem
-                      key={workspace.workspace_id}
-                      value={workspace.workspace_id}
-                    >
-                      {workspace.name} ({workspace.workspace_id})
-                    </SelectItem>
-                  ),
-                )}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-xs">
-              {m?.defaultWorkspaceHint
-                ?? "Newly approved users will bind to this workspace by default; adjust per user later in authorization list."}
-            </p>
-          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -816,7 +776,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
         {missingRequiredFields.length > 0 ? (
           <div className="text-muted-foreground rounded-md border border-dashed px-3 py-2 text-xs">
             {m?.missingRequiredFieldsPrefix ?? "Missing required fields for current mode: "}
-            {missingRequiredFields.map((field) => field.label).join(m?.listDelimiter ?? ", ")}
+            {missingRequiredFields.map((field) => getFieldDisplayLabel(field, m)).join(m?.listDelimiter ?? ", ")}
           </div>
         ) : null}
         {shouldShowPairingGuide ? (
@@ -922,7 +882,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
           <div className="text-sm font-medium">{m?.pairingAuthorizationTitle ?? "Pairing & Authorization"}</div>
           <div className="text-muted-foreground text-xs">
             {m?.pairingAuthorizationDescription
-              ?? "Recommend users send any message in DingTalk first, then approve and bind workspace."}
+              ?? "Recommend users send any message in DingTalk first, then approve authorization."}
           </div>
         </div>
         <div className="grid items-stretch gap-4 xl:grid-cols-[340px_1fr]">
@@ -996,7 +956,6 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                                   requestId: item.id,
                                   payload: {
                                     handled_by: "ui",
-                                    workspace_id: effectiveDefaultWorkspace,
                                   },
                                 })
                                 .then(() => toast.success(m?.approvedToast ?? "Approved and authorized"))
@@ -1050,54 +1009,6 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Select
-                          value={authorizedWorkspaceDrafts[item.id] ?? item.workspace_id ?? "default"}
-                          onValueChange={(value) =>
-                            setAuthorizedWorkspaceDrafts((prev) => ({
-                              ...prev,
-                              [item.id]: value,
-                            }))
-                          }
-                        >
-                          <SelectTrigger className="h-8 w-[220px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="default">{m?.defaultWorkspaceOption ?? "Default workspace (default)"}</SelectItem>
-                            {workspaceList.map((workspace) =>
-                              workspace.workspace_id === "default" ? null : (
-                                <SelectItem
-                                  key={workspace.workspace_id}
-                                  value={workspace.workspace_id}
-                                >
-                                  {workspace.name} ({workspace.workspace_id})
-                                </SelectItem>
-                              ),
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={updateAuthorizedUserWorkspace.isPending}
-                          onClick={() => {
-                            const workspaceId =
-                              authorizedWorkspaceDrafts[item.id] ?? item.workspace_id ?? "default";
-                            void updateAuthorizedUserWorkspace
-                              .mutateAsync({
-                                userId: item.id,
-                                workspaceId,
-                              })
-                              .then(() => toast.success(m?.authorizedWorkspaceUpdatedToast ?? "Authorized user workspace updated"))
-                              .catch((error) =>
-                                toast.error(
-                                  error instanceof Error ? error.message : (m?.updateFailedToast ?? "Update failed"),
-                                ),
-                              );
-                          }}
-                        >
-                          {m?.saveAction ?? "Save"}
-                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1138,7 +1049,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
 
 export function ChannelSettingsPage() {
   const { t } = useI18n();
-  const m = t.migration.settings?.channel;
+  const m = t.settings.channelPage;
   const [activePlatform, setActivePlatform] = useState<ChannelPlatform>("lark");
 
   return (

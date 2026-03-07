@@ -57,7 +57,12 @@ export function SandboxSection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const copy = t.settings.configSections.sandbox;
+  const settingsLike = t.settings as {
+    configSections?: {
+      sandbox?: Record<string, any>;
+    };
+  };
+  const copy = (settingsLike.configSections?.sandbox ?? {});
   const sandbox = asObject(config.sandbox);
   const sandboxUse = asString(sandbox.use);
   const sandboxMode = getSandboxMode(sandboxUse);

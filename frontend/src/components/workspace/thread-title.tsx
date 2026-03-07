@@ -17,8 +17,8 @@ export function ThreadTitle({
 }) {
   const { t } = useI18n();
   const { isNewThread } = useThreadChat();
-  const untitled = t.workspace.threadTitle.untitled;
-  const loading = t.workspace.threadTitle.loading;
+  const untitled = t.pages.untitled;
+  const loading = t.common.loading;
 
   useEffect(() => {
     const pageTitle = isNewThread

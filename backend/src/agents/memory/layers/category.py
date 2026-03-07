@@ -28,13 +28,26 @@ class CategoryLayer:
         self._index_file = self._categories_dir / "categories.json"
         self._lock = Lock()
         self._data = self._load()
+        # Performance optimization: maintain item_id -> category index
+        self._item_to_category: dict[str, str] = self._build_index()
 
     def _load(self) -> dict[str, list[dict[str, Any]]]:
-        if self._index_file.exists():
+        """Load categories from file with error handling."""
+        if not self._index_file.exists():
+            return {category: [] for category in DEFAULT_CATEGORIES}
+
+        try:
             with open(self._index_file, encoding="utf-8") as f:
                 loaded = json.load(f)
-        else:
-            loaded = {}
+
+            if not isinstance(loaded, dict):
+                import logging
+                logging.error(f"Invalid categories file format: expected dict, got {type(loaded)}")
+                return {category: [] for category in DEFAULT_CATEGORIES}
+        except (json.JSONDecodeError, OSError) as e:
+            import logging
+            logging.error(f"Failed to load categories: {e}")
+            return {category: [] for category in DEFAULT_CATEGORIES}
 
         normalized: dict[str, list[dict[str, Any]]] = {
             category: list(loaded.get(category, []))
@@ -48,8 +61,31 @@ class CategoryLayer:
         return normalized
 
     def _save(self) -> None:
-        with open(self._index_file, "w", encoding="utf-8") as f:
-            json.dump(self._data, f, indent=2, ensure_ascii=False)
+        """Save categories to file with atomic write to prevent corruption."""
+        import tempfile
+        import os
+
+        # Write to temporary file first
+        fd, temp_path = tempfile.mkstemp(
+            dir=self._categories_dir,
+            prefix='.categories_',
+            suffix='.json.tmp'
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self._data, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())  # Ensure data is written to disk
+
+            # Atomic rename
+            os.replace(temp_path, self._index_file)
+        except Exception:
+            # Clean up temp file on error
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
 
     def _normalize_category(self, category: str | None) -> str:
         if not category:
@@ -65,22 +101,64 @@ class CategoryLayer:
             "updated_at": datetime.now(UTC).isoformat(),
         }
 
+    def _build_index(self) -> dict[str, str]:
+        """Build item_id -> category index for fast lookups."""
+        index: dict[str, str] = {}
+        for category, items in self._data.items():
+            for item in items:
+                item_id = item.get("id")
+                if item_id:
+                    index[str(item_id)] = category
+        return index
+
     def add_item(self, item: dict[str, Any]) -> dict[str, Any]:
         """Add or replace one item in a category."""
         normalized = self._normalize_item(item)
         category = normalized["category"]
+        item_id = normalized["id"]
 
         with self._lock:
-            # Keep one canonical location per item id across all categories.
-            for existing_category, existing_bucket in list(self._data.items()):
-                self._data[existing_category] = [
-                    entry for entry in existing_bucket if entry.get("id") != normalized["id"]
+            # Use index for fast lookup of existing category
+            old_category = self._item_to_category.get(item_id)
+
+            if old_category and old_category != category:
+                # Remove from old category
+                old_bucket = self._data.get(old_category, [])
+                self._data[old_category] = [
+                    entry for entry in old_bucket if entry.get("id") != item_id
                 ]
 
+            # Add to new category
             bucket = self._data.setdefault(category, [])
+
+            # Remove existing entry in same category (if any)
+            bucket = [entry for entry in bucket if entry.get("id") != item_id]
             bucket.append(normalized)
             self._data[category] = bucket
-            self._save()
+
+            # Update index
+            self._item_to_category[item_id] = category
+
+            # Save to disk
+            try:
+                self._save()
+            except Exception as e:
+                # Rollback on save failure
+                if old_category and old_category != category:
+                    # Restore to old category
+                    self._data[old_category].append(normalized)
+                    self._data[category] = [
+                        entry for entry in self._data[category] if entry.get("id") != item_id
+                    ]
+                    self._item_to_category[item_id] = old_category
+                else:
+                    # Remove from new category
+                    self._data[category] = [
+                        entry for entry in self._data[category] if entry.get("id") != item_id
+                    ]
+                    self._item_to_category.pop(item_id, None)
+                raise
+
         return normalized
 
     def remove_item(self, category: str, item_id: str) -> bool:
@@ -92,22 +170,49 @@ class CategoryLayer:
             filtered = [entry for entry in bucket if entry.get("id") != item_id]
             if len(filtered) == original_len:
                 return False
+
+            # Backup for rollback
+            backup = bucket.copy()
+
             self._data[key] = filtered
-            self._save()
+            self._item_to_category.pop(item_id, None)
+
+            try:
+                self._save()
+            except Exception:
+                # Rollback on save failure
+                self._data[key] = backup
+                self._item_to_category[item_id] = key
+                raise
+
             return True
 
     def remove_item_globally(self, item_id: str) -> bool:
         """Remove one item id from all categories."""
-        removed = False
         with self._lock:
-            for category, bucket in list(self._data.items()):
-                filtered = [entry for entry in bucket if entry.get("id") != item_id]
-                if len(filtered) != len(bucket):
-                    removed = True
-                    self._data[category] = filtered
-            if removed:
+            # Use index for fast lookup
+            category = self._item_to_category.get(item_id)
+            if not category:
+                return False
+
+            # Backup for rollback
+            bucket = self._data.get(category, [])
+            backup = bucket.copy()
+
+            # Remove from category
+            filtered = [entry for entry in bucket if entry.get("id") != item_id]
+            self._data[category] = filtered
+            self._item_to_category.pop(item_id, None)
+
+            try:
                 self._save()
-        return removed
+            except Exception:
+                # Rollback on save failure
+                self._data[category] = backup
+                self._item_to_category[item_id] = category
+                raise
+
+            return True
 
     def get_items(self, category: str) -> list[dict[str, Any]]:
         """Return all items of one category."""

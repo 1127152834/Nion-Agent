@@ -382,6 +382,12 @@
     -webkit-text-fill-color: transparent;
     text-fill-color: transparent;
   }
+
+  /* RSS Reading Assistant - 3D Character Container */
+  .ai-character-container {
+    background: oklch(var(--background));
+    border: 1px solid oklch(var(--border));
+  }
 }
 
 :root {

@@ -47,7 +47,12 @@ export function MemorySection({
   disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const section = t.settings.configSections.memory as Record<string, any>;
+  const settingsLike = t.settings as {
+    configSections?: {
+      memory?: Record<string, any>;
+    };
+  };
+  const section = (settingsLike.configSections?.memory ?? {});
   const isDisabled = disabled ?? false;
   const memory = asObject(config.memory);
   const search = asObject(memory.search);

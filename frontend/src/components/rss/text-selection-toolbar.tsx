@@ -23,14 +23,11 @@ export interface TextSelectionInfo {
   };
 }
 
-const VIEWPORT_PADDING = 8;
+const VIEWPORT_PADDING = 10;
+const DEFAULT_WIDTH = 320;
 
 function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-async function copyToClipboard(value: string) {
-  await navigator.clipboard.writeText(value);
+  return Math.min(Math.max(value, min), max);
 }
 
 export function TextSelectionToolbar({
@@ -53,11 +50,7 @@ export function TextSelectionToolbar({
     if (!copied) {
       return;
     }
-
-    const timer = window.setTimeout(() => {
-      setCopied(false);
-    }, 1200);
-
+    const timer = window.setTimeout(() => setCopied(false), 1500);
     return () => {
       window.clearTimeout(timer);
     };
@@ -68,24 +61,16 @@ export function TextSelectionToolbar({
       return null;
     }
 
-    const estimatedWidth = 270;
-    const estimatedHeight = 44;
-
-    let top = selection.rect.top - estimatedHeight - VIEWPORT_PADDING;
-    if (top < VIEWPORT_PADDING) {
-      top = selection.rect.top + selection.rect.height + VIEWPORT_PADDING;
-    }
-
+    const top = Math.max(selection.rect.top - 52, VIEWPORT_PADDING);
+    const viewportWidth = typeof window === "undefined" ? DEFAULT_WIDTH : window.innerWidth;
+    const maxLeft = Math.max(VIEWPORT_PADDING, viewportWidth - DEFAULT_WIDTH - VIEWPORT_PADDING);
     const left = clamp(
-      selection.rect.left + selection.rect.width / 2,
-      VIEWPORT_PADDING + estimatedWidth / 2,
-      window.innerWidth - VIEWPORT_PADDING - estimatedWidth / 2,
+      selection.rect.left + selection.rect.width / 2 - DEFAULT_WIDTH / 2,
+      VIEWPORT_PADDING,
+      maxLeft,
     );
 
-    return {
-      top,
-      left,
-    };
+    return { top, left };
   }, [selection]);
 
   if (!selection || !position) {
@@ -94,51 +79,51 @@ export function TextSelectionToolbar({
 
   return (
     <div
-      className={cn("pointer-events-none fixed z-[70]", className)}
+      className={cn("pointer-events-none fixed z-50", className)}
       style={{
         top: position.top,
         left: position.left,
-        transform: "translate(-50%, -100%)",
+        width: DEFAULT_WIDTH,
       }}
     >
-      <div className="bg-background/95 pointer-events-auto flex items-center gap-1 rounded-xl border p-1 shadow-xl backdrop-blur">
+      <div className="bg-background/95 pointer-events-auto flex items-center gap-1 rounded-2xl border p-1.5 shadow-xl backdrop-blur">
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1 px-2 text-xs"
+          className="h-8 rounded-full px-2 text-xs"
           onClick={async () => {
-            await copyToClipboard(selection.selectedText);
+            if (!navigator.clipboard) {
+              return;
+            }
+            await navigator.clipboard.writeText(selection.selectedText);
             setCopied(true);
           }}
         >
           {copied ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
           {copied ? t.rssReader.selectionCopied : t.rssReader.selectionCopy}
         </Button>
-
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1 px-2 text-xs"
+          className="h-8 rounded-full px-2 text-xs"
           onClick={() => onAskAI(selection.selectedText)}
         >
           <MessageCircleIcon className="size-3.5" />
           {t.rssReader.askAI}
         </Button>
-
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1 px-2 text-xs"
+          className="h-8 rounded-full px-2 text-xs"
           onClick={() => onSummarize(selection.selectedText)}
         >
           <ScrollTextIcon className="size-3.5" />
           {t.rssReader.summarize}
         </Button>
-
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 gap-1 px-2 text-xs"
+          className="h-8 rounded-full px-2 text-xs"
           onClick={() => onTranslate(selection.selectedText)}
         >
           <LanguagesIcon className="size-3.5" />

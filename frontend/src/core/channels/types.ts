@@ -109,7 +109,3 @@ export interface ChannelAuthorizedUserRevokePayload {
 export interface ChannelAuthorizedUserRevokeResult {
   revoked: boolean;
 }
-
-export interface ChannelAuthorizedUserWorkspaceUpdatePayload {
-  workspace_id?: string;
-}

@@ -12,7 +12,22 @@ from src.channels.runtime_manager import ChannelRuntimeManager
 from src.config.app_config import get_app_config
 from src.config.paths import get_paths
 from src.gateway.config import get_gateway_config
-from src.gateway.routers import agents, artifact_groups, artifacts, channels, config, mcp, memory, models, rss, scheduler, skills, uploads
+from src.gateway.routers import (
+    agents,
+    artifact_groups,
+    artifacts,
+    channels,
+    config,
+    embedding_models,
+    mcp,
+    memory,
+    models,
+    retrieval_models,
+    rss,
+    scheduler,
+    skills,
+    uploads,
+)
 from src.scheduler.service import shutdown_scheduler, startup_scheduler
 
 # Configure logging
@@ -150,6 +165,14 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Scheduled tasks with cron/interval/event triggers and workflow execution",
             },
             {
+                "name": "embedding-models",
+                "description": "Manage embedding models for memory system vector search",
+            },
+            {
+                "name": "retrieval-models",
+                "description": "Manage retrieval models (embedding + rerank) for memory system",
+            },
+            {
                 "name": "health",
                 "description": "Health check and system status endpoints",
             },
@@ -204,6 +227,12 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Scheduler API is mounted at /api/scheduler
     app.include_router(scheduler.router)
+
+    # Embedding models API is mounted at /api/embedding-models
+    app.include_router(embedding_models.router)
+
+    # Retrieval models API is mounted at /api/retrieval-models
+    app.include_router(retrieval_models.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

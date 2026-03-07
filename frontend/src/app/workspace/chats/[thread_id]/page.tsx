@@ -1,13 +1,11 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import {
-  ArtifactTrigger,
-  WorkingDirectoryTrigger,
-} from "@/components/workspace/artifacts";
+import { Button } from "@/components/ui/button";
+import { WorkingDirectoryTrigger } from "@/components/workspace/artifacts";
 import {
   ChatBox,
   useSpecificChatMode,
@@ -19,33 +17,57 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
+import { getAPIClient } from "@/core/api";
+import { getLangGraphBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { useLocalSettings } from "@/core/settings";
-import { useThreadStream } from "@/core/threads/hooks";
+import { useDeleteThread, useThreadStream } from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
   const { t } = useI18n();
+  const router = useRouter();
   const [settings, setSettings] = useLocalSettings();
   const searchParams = useSearchParams();
 
   const { threadId, isNewThread, setIsNewThread, isMock } = useThreadChat();
+  const isTemporaryMode = searchParams.get("mode") === "temporary-chat";
   const prefillPrompt = searchParams.get("prefill")?.trim() ?? "";
   const prefillSentRef = useRef<string | null>(null);
+  const temporaryCleanupTriggeredRef = useRef(false);
   useSpecificChatMode();
 
+  const { mutateAsync: deleteThread } = useDeleteThread();
   const { showNotification } = useNotification();
 
   const [thread, sendMessage] = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: settings.context,
     isMock,
-    onStart: () => {
+    onStart: (startedThreadId) => {
       setIsNewThread(false);
-      history.replaceState(null, "", `/workspace/chats/${threadId}`);
+      history.replaceState(
+        null,
+        "",
+        isTemporaryMode
+          ? `/workspace/chats/${startedThreadId}?mode=temporary-chat`
+          : `/workspace/chats/${startedThreadId}`,
+      );
+      if (isTemporaryMode) {
+        const apiClient = getAPIClient(isMock);
+        void apiClient.threads
+          .updateState(startedThreadId, {
+            values: {
+              session_mode: "temporary_chat",
+            },
+          })
+          .catch((updateError) => {
+            console.error("Failed to mark temporary chat mode:", updateError);
+          });
+      }
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {
@@ -65,15 +87,90 @@ export default function ChatPage() {
     },
   });
 
+  const isTemporarySession = isTemporaryMode || thread.values.session_mode === "temporary_chat";
+
+  const cleanupTemporaryThread = useCallback(
+    async (useKeepalive: boolean) => {
+      if (
+        temporaryCleanupTriggeredRef.current ||
+        !isTemporarySession ||
+        isNewThread ||
+        threadId === "new"
+      ) {
+        return;
+      }
+
+      temporaryCleanupTriggeredRef.current = true;
+
+      if (useKeepalive) {
+        const base = getLangGraphBaseURL(isMock).replace(/\/$/, "");
+        const url = `${base}/threads/${encodeURIComponent(threadId)}`;
+        try {
+          void fetch(url, {
+            method: "DELETE",
+            keepalive: true,
+          });
+        } catch (cleanupError) {
+          console.error("Failed to keepalive-delete temporary thread:", cleanupError);
+        }
+        return;
+      }
+
+      try {
+        await deleteThread({ threadId });
+      } catch (cleanupError) {
+        console.error("Failed to delete temporary thread:", cleanupError);
+      }
+    },
+    [deleteThread, isMock, isNewThread, isTemporarySession, threadId],
+  );
+
+  useEffect(() => {
+    temporaryCleanupTriggeredRef.current = false;
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!isTemporarySession || isNewThread || threadId === "new") {
+      return;
+    }
+
+    const handlePageLeave = () => {
+      void cleanupTemporaryThread(true);
+    };
+    window.addEventListener("pagehide", handlePageLeave);
+    window.addEventListener("beforeunload", handlePageLeave);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageLeave);
+      window.removeEventListener("beforeunload", handlePageLeave);
+      void cleanupTemporaryThread(false);
+    };
+  }, [cleanupTemporaryThread, isNewThread, isTemporarySession, threadId]);
+
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
-      void sendMessage(threadId, message);
+      void sendMessage(
+        threadId,
+        message,
+        isTemporarySession
+          ? {
+              memory_read: true,
+              memory_write: false,
+              session_mode: "temporary_chat",
+            }
+          : undefined,
+      );
     },
-    [sendMessage, threadId],
+    [isTemporarySession, sendMessage, threadId],
   );
   const handleStop = useCallback(async () => {
     await thread.stop();
   }, [thread]);
+
+  const handleEndTemporaryChat = useCallback(async () => {
+    await cleanupTemporaryThread(false);
+    void router.push("/workspace/chats/new");
+  }, [cleanupTemporaryThread, router]);
 
   useEffect(() => {
     if (!isNewThread || !prefillPrompt) {
@@ -84,13 +181,23 @@ export default function ChatPage() {
       return;
     }
     prefillSentRef.current = requestKey;
-    void sendMessage(threadId, {
-      text: prefillPrompt,
-      files: [],
-    }).catch(() => {
+    void sendMessage(
+      threadId,
+      {
+        text: prefillPrompt,
+        files: [],
+      },
+      isTemporarySession
+        ? {
+            memory_read: true,
+            memory_write: false,
+            session_mode: "temporary_chat",
+          }
+        : undefined,
+    ).catch(() => {
       prefillSentRef.current = null;
     });
-  }, [isNewThread, prefillPrompt, sendMessage, threadId]);
+  }, [isNewThread, isTemporarySession, prefillPrompt, sendMessage, threadId]);
 
   return (
     <ThreadContext.Provider value={{ thread, isMock }}>
@@ -109,7 +216,6 @@ export default function ChatPage() {
             </div>
             <div className="flex items-center gap-1">
               <WorkingDirectoryTrigger />
-              <ArtifactTrigger />
             </div>
           </header>
           <main className="flex min-h-0 max-w-full grow flex-col">
@@ -141,6 +247,20 @@ export default function ChatPage() {
                     />
                   </div>
                 </div>
+                {isTemporarySession && !isNewThread ? (
+                  <div className="mb-2 flex items-center justify-end px-1 text-xs">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs"
+                      onClick={() => {
+                        void handleEndTemporaryChat();
+                      }}
+                    >
+                      {t.settings.memory.hub.endTemporary}
+                    </Button>
+                  </div>
+                ) : null}
                 <InputBox
                   className={cn("bg-background/5 w-full -translate-y-4")}
                   threadId={threadId}

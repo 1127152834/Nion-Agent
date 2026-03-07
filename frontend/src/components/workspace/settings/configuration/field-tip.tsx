@@ -20,7 +20,30 @@ export function FieldTip({
   risk?: string;
 }) {
   const { locale, t } = useI18n();
-  const copy = t.settings.configSections.fieldTip;
+  const fallbackCopy = locale === "zh-CN"
+    ? {
+      ariaLabel: "字段提示",
+      recommendedEn: "推荐",
+      recommendedZh: "推荐",
+      riskEn: "风险",
+      riskZh: "风险",
+    }
+    : {
+      ariaLabel: "Field hint",
+      recommendedEn: "Recommended",
+      recommendedZh: "Recommended",
+      riskEn: "Risk",
+      riskZh: "Risk",
+    };
+  const settingsLike = t.settings as unknown as {
+    configSections?: {
+      fieldTip?: Record<string, string>;
+    };
+  };
+  const copy = {
+    ...fallbackCopy,
+    ...(settingsLike.configSections?.fieldTip ?? {}),
+  };
   const primary = locale === "zh-CN" ? zh : en;
   const recommendedLabel = locale === "zh-CN"
     ? copy.recommendedZh

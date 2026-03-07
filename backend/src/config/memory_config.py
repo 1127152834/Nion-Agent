@@ -42,12 +42,12 @@ class MemoryConfig(BaseModel):
         description="Model name to use for memory updates (None = use default model)",
     )
     embedding_provider: str = Field(
-        default="sentence-transformers",
-        description="Embedding backend: sentence-transformers | openai",
+        default="",
+        description="Embedding backend: sentence-transformers | openai (empty = disabled)",
     )
     embedding_model: str = Field(
-        default="all-MiniLM-L6-v2",
-        description="Embedding model name.",
+        default="",
+        description="Embedding model name (empty = disabled).",
     )
     embedding_api_key: str | None = Field(
         default=None,
@@ -61,16 +61,16 @@ class MemoryConfig(BaseModel):
         ),
     )
     vector_weight: float = Field(
-        default=0.5,
+        default=0.0,
         ge=0.0,
         le=1.0,
-        description="Fusion weight for vector similarity scores.",
+        description="Fusion weight for vector similarity scores (0.0 = disabled, pure BM25 mode).",
     )
     bm25_weight: float = Field(
-        default=0.5,
+        default=1.0,
         ge=0.0,
         le=1.0,
-        description="Fusion weight for BM25 scores.",
+        description="Fusion weight for BM25 scores (1.0 = pure BM25 mode).",
     )
     bm25_k1: float = Field(
         default=1.5,
