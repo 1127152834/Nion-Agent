@@ -1,0 +1,264 @@
+### 1b3939cb78b58ad45ae8eb8b3485a78465e54c2a|2026-03-05|fix(chat): handle empty uploaded files case and improve artifact selection logic (#979)
+FILES
+  - backend/src/agents/middlewares/uploads_middleware.py
+  - backend/tests/test_uploads_middleware_core_logic.py
+  - frontend/src/components/workspace/artifacts/context.tsx
+  - frontend/src/components/workspace/chats/chat-box.tsx
+  - frontend/src/core/messages/utils.ts
+OVERLAP
+  - backend/src/agents/middlewares/uploads_middleware.py
+  - backend/tests/test_uploads_middleware_core_logic.py
+  - frontend/src/components/workspace/artifacts/context.tsx
+  - frontend/src/components/workspace/chats/chat-box.tsx
+  - frontend/src/core/messages/utils.ts
+
+### 0c7c96d75e286c7513ea1d0cb9625afe6617dd21|2026-03-05|fix(nginx): use cross-platform local paths for pid and logs (#977)
+FILES
+  - docker/nginx/nginx.local.conf
+OVERLAP
+  - docker/nginx/nginx.local.conf
+
+### 3a5e0b935d2f1b0a5519f3d0eb93e24bf1cd1761|2026-03-06|fix(backend): upgrade langgraph-api to 0.7 and stabilize memory path tests (#984)
+FILES
+  - backend/pyproject.toml
+  - backend/tests/test_custom_agent.py
+  - backend/uv.lock
+OVERLAP
+  - backend/pyproject.toml
+  - backend/uv.lock
+
+### 3e4a24f48bd6bc869805e9351e5599c7bf662764|2026-03-06|fix(subagent): support async MCP tools in subagent executor (#917)
+FILES
+  - backend/src/subagents/executor.py
+  - backend/tests/test_subagent_executor.py
+OVERLAP
+  - backend/src/subagents/executor.py
+  - backend/tests/test_subagent_executor.py
+
+### 28e1257e1eb8b8d1c5b438666d84578f5da26860|2026-03-06|support infoquest (#960)
+FILES
+  - .env.example
+  - README.md
+  - backend/src/community/infoquest/infoquest_client.py
+  - backend/src/community/infoquest/tools.py
+  - backend/tests/test_infoquest_client.py
+  - config.example.yaml
+OVERLAP
+  - README.md
+  - config.example.yaml
+
+### cfae7519022e7e8958a990cd9d92876fa9e83b09|2026-03-06|chore(ci):add copilot instructions file (#996)
+FILES
+  - .github/copilot-instructions.md
+OVERLAP
+
+### 2e90101be83af6df34f961c36e7c3f30addd5cad|2026-03-06|chore(config):comment out the LLM model setting by default (#975)
+FILES
+  - config.example.yaml
+OVERLAP
+  - config.example.yaml
+
+### 9d2144d431a81960936fb9ae313a34f698c4d236|2026-03-06|feat: may_ask (#981)
+FILES
+  - backend/src/gateway/app.py
+  - backend/src/gateway/routers/__init__.py
+  - backend/src/gateway/routers/suggestions.py
+  - backend/tests/test_suggestions_router.py
+  - frontend/src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx
+  - frontend/src/app/workspace/chats/[thread_id]/page.tsx
+  - frontend/src/components/workspace/input-box.tsx
+  - frontend/src/core/i18n/locales/en-US.ts
+  - frontend/src/core/i18n/locales/types.ts
+  - frontend/src/core/i18n/locales/zh-CN.ts
+OVERLAP
+  - backend/src/gateway/app.py
+  - backend/src/gateway/routers/__init__.py
+  - frontend/src/app/workspace/agents/[agent_name]/chats/[thread_id]/page.tsx
+  - frontend/src/app/workspace/chats/[thread_id]/page.tsx
+  - frontend/src/components/workspace/input-box.tsx
+  - frontend/src/core/i18n/locales/en-US.ts
+  - frontend/src/core/i18n/locales/types.ts
+  - frontend/src/core/i18n/locales/zh-CN.ts
+
+### 09325ca28f99cd9eed55d6bc96969432279d2c39|2026-03-06|fix: normalize presented artifact paths (#998)
+FILES
+  - backend/src/tools/builtins/present_file_tool.py
+  - backend/tests/test_present_file_tool_core_logic.py
+OVERLAP
+  - backend/src/tools/builtins/present_file_tool.py
+  - backend/tests/test_present_file_tool_core_logic.py
+
+### d664ae5a4b2e3ae34145f6dbdfc6908d955f6402|2026-03-07|Support langgraph checkpointer (#1005)
+FILES
+  - backend/langgraph.json
+  - backend/pyproject.toml
+  - backend/src/agents/__init__.py
+  - backend/src/agents/checkpointer/__init__.py
+  - backend/src/agents/checkpointer/async_provider.py
+  - backend/src/agents/checkpointer/provider.py
+  - backend/src/client.py
+  - backend/src/config/app_config.py
+  - backend/src/config/checkpointer_config.py
+  - backend/src/config/paths.py
+  - backend/tests/test_checkpointer.py
+  - backend/tests/test_client_live.py
+  - backend/uv.lock
+  - config.example.yaml
+OVERLAP
+  - backend/pyproject.toml
+  - backend/src/client.py
+  - backend/src/config/app_config.py
+  - backend/src/config/paths.py
+  - backend/tests/test_client_live.py
+  - backend/uv.lock
+  - config.example.yaml
+
+### 75b7302000c066bf2ff1ba362ee6a6337d6bfc47|2026-03-08|feat: add IM channels for Feishu, Slack, and Telegram (#1010)
+FILES
+  - .env.example
+  - README.md
+  - backend/CLAUDE.md
+  - backend/docs/TODO.md
+  - backend/pyproject.toml
+  - backend/src/agents/memory/prompt.py
+  - backend/src/agents/memory/updater.py
+  - backend/src/agents/middlewares/memory_middleware.py
+  - backend/src/channels/__init__.py
+  - backend/src/channels/base.py
+  - backend/src/channels/feishu.py
+  - backend/src/channels/manager.py
+  - backend/src/channels/message_bus.py
+  - backend/src/channels/service.py
+  - backend/src/channels/slack.py
+  - backend/src/channels/store.py
+  - backend/src/channels/telegram.py
+  - backend/src/community/infoquest/infoquest_client.py
+  - backend/src/gateway/app.py
+  - backend/src/gateway/routers/channels.py
+  - backend/src/reflection/resolvers.py
+  - backend/src/sandbox/local/local_sandbox.py
+  - backend/src/tools/builtins/present_file_tool.py
+  - backend/tests/test_channels.py
+  - backend/tests/test_client.py
+  - backend/tests/test_infoquest_client.py
+  - backend/tests/test_memory_upload_filtering.py
+  - backend/tests/test_present_file_tool_core_logic.py
+  - backend/tests/test_reflection_resolvers.py
+  - backend/tests/test_suggestions_router.py
+  - backend/tests/test_uploads_router.py
+  - backend/uv.lock
+  - config.example.yaml
+  - skills/public/skill-creator/SKILL.md
+  - skills/public/skill-creator/agents/analyzer.md
+  - skills/public/skill-creator/agents/comparator.md
+  - skills/public/skill-creator/agents/grader.md
+  - skills/public/skill-creator/assets/eval_review.html
+  - skills/public/skill-creator/eval-viewer/generate_review.py
+  - skills/public/skill-creator/eval-viewer/viewer.html
+  - skills/public/skill-creator/references/schemas.md
+  - skills/public/skill-creator/scripts/aggregate_benchmark.py
+  - skills/public/skill-creator/scripts/generate_report.py
+  - skills/public/skill-creator/scripts/improve_description.py
+  - skills/public/skill-creator/scripts/package_skill.py
+  - skills/public/skill-creator/scripts/quick_validate.py
+  - skills/public/skill-creator/scripts/run_eval.py
+  - skills/public/skill-creator/scripts/run_loop.py
+  - skills/public/skill-creator/scripts/utils.py
+OVERLAP
+  - README.md
+  - backend/CLAUDE.md
+  - backend/pyproject.toml
+  - backend/src/agents/memory/prompt.py
+  - backend/src/agents/memory/updater.py
+  - backend/src/agents/middlewares/memory_middleware.py
+  - backend/src/channels/__init__.py
+  - backend/src/gateway/app.py
+  - backend/src/gateway/routers/channels.py
+  - backend/src/reflection/resolvers.py
+  - backend/src/sandbox/local/local_sandbox.py
+  - backend/src/tools/builtins/present_file_tool.py
+  - backend/tests/test_client.py
+  - backend/tests/test_memory_upload_filtering.py
+  - backend/tests/test_present_file_tool_core_logic.py
+  - backend/uv.lock
+  - config.example.yaml
+
+### 511e9eaf5eb3c26f6b530002978e6cd477a90db7|2026-03-08|fix(docker): remove cache_from to prevent missing cache warnings (#1013)
+FILES
+  - docker/docker-compose-dev.yaml
+OVERLAP
+  - docker/docker-compose-dev.yaml
+
+### 3512279ce3be0d30d52160879dac21fef9c40bce|2026-03-08|feat: add thinking settings to compatible anthropic api (#1017)
+FILES
+  - backend/src/config/model_config.py
+  - backend/src/models/factory.py
+  - backend/tests/test_model_factory.py
+  - config.example.yaml
+OVERLAP
+  - backend/src/models/factory.py
+  - config.example.yaml
+
+### cf9af1fe75fd1d3e216286afb57354486cded64a|2026-03-08|Enhance chat UI and compatible anthropic thinking messages (#1018)
+FILES
+  - backend/src/agents/middlewares/title_middleware.py
+  - backend/src/sandbox/local/local_sandbox.py
+  - backend/tests/test_title_middleware_core_logic.py
+  - frontend/src/components/workspace/artifacts/context.tsx
+  - frontend/src/components/workspace/chats/chat-box.tsx
+  - frontend/src/components/workspace/messages/message-list.tsx
+  - frontend/src/components/workspace/thread-title.tsx
+  - frontend/src/core/messages/utils.ts
+  - frontend/src/core/threads/hooks.ts
+OVERLAP
+  - backend/src/agents/middlewares/title_middleware.py
+  - backend/src/sandbox/local/local_sandbox.py
+  - frontend/src/components/workspace/artifacts/context.tsx
+  - frontend/src/components/workspace/chats/chat-box.tsx
+  - frontend/src/components/workspace/thread-title.tsx
+  - frontend/src/core/messages/utils.ts
+  - frontend/src/core/threads/hooks.ts
+
+### 6b5c4fe6dd11f8032aa7f92aa497d5ae09548ffa|2026-03-08|fix(dev): improve gateway startup diagnostics for config errors (#1020)
+FILES
+  - Makefile
+  - README.md
+  - backend/CLAUDE.md
+  - backend/src/gateway/app.py
+OVERLAP
+  - Makefile
+  - README.md
+  - backend/CLAUDE.md
+  - backend/src/gateway/app.py
+
+### 3721c82ba838d59c4e3ad70b4e2466293bb275af|2026-03-08|Update Nginx configuration for uploads and improve thread ID handling (#1023)
+FILES
+  - docker/nginx/nginx.conf
+  - docker/nginx/nginx.local.conf
+  - frontend/src/core/threads/hooks.ts
+OVERLAP
+  - docker/nginx/nginx.conf
+  - docker/nginx/nginx.local.conf
+  - frontend/src/core/threads/hooks.ts
+
+### 8871fca5cbe2d4f9b68139d549b7c2b7f7313a63|2026-03-08|feat: add claude-to-deerflow skill for DeerFlow API integration (#1024)
+FILES
+  - README.md
+  - backend/src/channels/telegram.py
+  - skills/public/claude-to-deerflow/SKILL.md
+  - skills/public/claude-to-deerflow/scripts/chat.sh
+  - skills/public/claude-to-deerflow/scripts/status.sh
+OVERLAP
+  - README.md
+
+### ac1e1915efc098db27ff2b95a2a81a9be2d31904|2026-03-08|feat(channels): make mobile session settings configurable by channel and user (#1021)
+FILES
+  - README.md
+  - backend/src/channels/manager.py
+  - backend/src/channels/service.py
+  - backend/tests/test_channels.py
+  - config.example.yaml
+OVERLAP
+  - README.md
+  - config.example.yaml
+
