@@ -6,6 +6,7 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from src.config.extensions_config import ExtensionsConfig
 from src.config.memory_config import load_memory_config_from_dict
 from src.config.model_config import ModelConfig
@@ -34,6 +35,7 @@ class AppConfig(BaseModel):
         description="Retrieval models configuration (embedding + rerank)"
     )
     model_config = ConfigDict(extra="allow", frozen=False)
+    checkpointer: CheckpointerConfig | None = Field(default=None, description="Checkpointer configuration")
 
     @classmethod
     def resolve_config_path(cls, config_path: str | None = None) -> Path:
@@ -96,6 +98,10 @@ class AppConfig(BaseModel):
         # Load subagents config if present
         if "subagents" in config_data:
             load_subagents_config_from_dict(config_data["subagents"])
+
+        # Load checkpointer config if present
+        if "checkpointer" in config_data:
+            load_checkpointer_config_from_dict(config_data["checkpointer"])
 
         # Load extensions config separately (it's in a different file)
         extensions_config = ExtensionsConfig.from_file()

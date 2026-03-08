@@ -25,6 +25,7 @@ from src.gateway.routers import (
     rss,
     scheduler,
     skills,
+    suggestions,
     uploads,
 )
 from src.scheduler.service import shutdown_scheduler, startup_scheduler
@@ -173,6 +174,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Manage retrieval models (embedding + rerank) for memory system",
             },
             {
+                "name": "suggestions",
+                "description": "Generate follow-up question suggestions for conversations",
+            },
+            {
                 "name": "health",
                 "description": "Health check and system status endpoints",
             },
@@ -233,6 +238,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Retrieval models API is mounted at /api/retrieval-models
     app.include_router(retrieval_models.router)
+
+    # Suggestions API is mounted at /api/threads/{thread_id}/suggestions
+    app.include_router(suggestions.router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

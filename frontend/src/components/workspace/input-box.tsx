@@ -49,6 +49,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
@@ -107,6 +108,11 @@ interface MentionState {
 interface SelectedContextTag {
   value: string;
   kind: "file" | "directory";
+}
+
+interface FollowUpSuggestionMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 interface RecentMentionsState {
@@ -487,6 +493,71 @@ function getResolvedMode(
   return supportsThinking ? "pro" : "flash";
 }
 
+function normalizeFollowUpRole(value: unknown): "user" | "assistant" | null {
+  const role = String(value ?? "").trim().toLowerCase();
+  if (role === "user" || role === "human") {
+    return "user";
+  }
+  if (role === "assistant" || role === "ai") {
+    return "assistant";
+  }
+  return null;
+}
+
+function extractFollowUpText(content: unknown): string {
+  if (typeof content === "string") {
+    return content.trim();
+  }
+  if (Array.isArray(content)) {
+    return content
+      .flatMap((part) => {
+        if (typeof part === "string") {
+          return [part.trim()];
+        }
+        if (typeof part === "object" && part !== null) {
+          const candidate = (part as { text?: unknown }).text;
+          if (typeof candidate === "string") {
+            return [candidate.trim()];
+          }
+        }
+        return [];
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (typeof content === "object" && content !== null) {
+    const candidate = (content as { text?: unknown; content?: unknown }).text
+      ?? (content as { text?: unknown; content?: unknown }).content;
+    if (typeof candidate === "string") {
+      return candidate.trim();
+    }
+  }
+  return "";
+}
+
+function buildFollowUpMessages(messages: unknown[]): FollowUpSuggestionMessage[] {
+  const parsed = messages
+    .map((message) => {
+      if (typeof message !== "object" || message === null) {
+        return null;
+      }
+      const role = normalizeFollowUpRole((message as { type?: unknown; role?: unknown }).type
+        ?? (message as { type?: unknown; role?: unknown }).role);
+      if (!role) {
+        return null;
+      }
+      const content = extractFollowUpText((message as { content?: unknown }).content);
+      if (!content) {
+        return null;
+      }
+      return { role, content };
+    })
+    .filter((item): item is FollowUpSuggestionMessage => Boolean(item));
+
+  return parsed.slice(-8);
+}
+
 export function InputBox({
   className,
   threadId,
@@ -824,6 +895,105 @@ export function InputBox({
 
   // Get text input controller
   const { textInput } = usePromptInputController();
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
+  const [followUpLoading, setFollowUpLoading] = useState(false);
+
+  const followUpMessages = useMemo(
+    () => buildFollowUpMessages(Array.isArray(thread.messages) ? thread.messages : []),
+    [thread.messages],
+  );
+  const followUpFetchKey = useMemo(() => {
+    if (!threadId || followUpMessages.length < 2) {
+      return "";
+    }
+    const lastAssistant = [...followUpMessages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+    if (!lastAssistant) {
+      return "";
+    }
+    return `${threadId}:${followUpMessages.length}:${lastAssistant.content}`;
+  }, [followUpMessages, threadId]);
+
+  useEffect(() => {
+    if (status === "streaming") {
+      setFollowUpSuggestions([]);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (isNewThread || status !== "ready" || !followUpFetchKey) {
+      setFollowUpSuggestions((current) => (current.length === 0 ? current : []));
+      return;
+    }
+
+    const controller = new AbortController();
+    let disposed = false;
+
+    const fetchSuggestions = async () => {
+      setFollowUpLoading(true);
+      try {
+        const response = await fetch(
+          `${getBackendBaseURL()}/api/threads/${threadId}/suggestions`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: followUpMessages,
+              n: 3,
+            }),
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(`suggestions http ${response.status}`);
+        }
+        const payload = (await response.json()) as { suggestions?: unknown };
+        const parsed = Array.isArray(payload.suggestions)
+          ? payload.suggestions
+            .filter((item): item is string => typeof item === "string")
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .slice(0, 3)
+          : [];
+        if (!disposed) {
+          setFollowUpSuggestions(parsed);
+        }
+      } catch {
+        if (!disposed && !controller.signal.aborted) {
+          setFollowUpSuggestions([]);
+        }
+      } finally {
+        if (!disposed) {
+          setFollowUpLoading(false);
+        }
+      }
+    };
+
+    void fetchSuggestions();
+
+    return () => {
+      disposed = true;
+      controller.abort();
+    };
+  }, [followUpFetchKey, followUpMessages, isNewThread, status, threadId]);
+
+  const handleFollowUpSuggestionClick = useCallback(
+    (prompt: string) => {
+      const normalized = prompt.trim();
+      if (!normalized) {
+        return;
+      }
+      textInput.setInput(normalized);
+      setTimeout(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>(
+          "textarea[name='message']",
+        );
+        textarea?.focus();
+      }, 0);
+    },
+    [textInput],
+  );
 
   // Parse mentions for highlighting
   const highlightedMentions = useMemo(() => {
@@ -1972,9 +2142,55 @@ export function InputBox({
           </div>
         )}
       {!isNewThread && (
-        <div className="bg-background absolute right-0 -bottom-[17px] left-0 z-0 h-4"></div>
+        followUpSuggestions.length > 0 ? (
+          <div className="absolute right-0 -bottom-20 left-0 z-0 flex items-center justify-center">
+            <FollowUpSuggestionList
+              suggestions={followUpSuggestions}
+              loading={followUpLoading}
+              onClick={handleFollowUpSuggestionClick}
+            />
+          </div>
+        ) : (
+          <div className="bg-background absolute right-0 -bottom-[17px] left-0 z-0 h-4"></div>
+        )
       )}
     </PromptInput>
+  );
+}
+
+function FollowUpSuggestionList({
+  suggestions,
+  loading,
+  onClick,
+}: {
+  suggestions: string[];
+  loading: boolean;
+  onClick: (suggestion: string) => void;
+}) {
+  const { locale } = useI18n();
+  const loadingText = locale.startsWith("zh") ? "正在生成追问建议..." : "Generating follow-up suggestions...";
+
+  return (
+    <Suggestions className="min-h-16 w-fit items-start">
+      {loading && (
+        <ConfettiButton
+          className="text-muted-foreground cursor-default rounded-full px-4 text-xs font-normal"
+          variant="outline"
+          size="sm"
+          disabled
+        >
+          <SparklesIcon className="size-4" /> {loadingText}
+        </ConfettiButton>
+      )}
+      {suggestions.map((suggestion) => (
+        <Suggestion
+          key={suggestion}
+          icon={LightbulbIcon}
+          suggestion={suggestion}
+          onClick={() => onClick(suggestion)}
+        />
+      ))}
+    </Suggestions>
   );
 }
 
