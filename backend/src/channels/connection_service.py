@@ -23,7 +23,9 @@ class ChannelConnectionService:
             raise ValueError(f"Unsupported channel platform: {platform}")
         if normalized == "lark":
             return self._test_lark(credentials, timeout_seconds=timeout_seconds)
-        return self._test_dingtalk(credentials, timeout_seconds=timeout_seconds)
+        if normalized == "dingtalk":
+            return self._test_dingtalk(credentials, timeout_seconds=timeout_seconds)
+        return self._test_telegram(credentials, timeout_seconds=timeout_seconds)
 
     def _test_lark(self, credentials: dict[str, str], *, timeout_seconds: float) -> dict[str, Any]:
         app_id = str(credentials.get("app_id") or credentials.get("cli_a") or "").strip()
@@ -107,6 +109,46 @@ class ChannelConnectionService:
         msg = str(payload.get("errmsg") or payload.get("message") or "Connection failed")
         return {
             "platform": "dingtalk",
+            "success": False,
+            "message": msg,
+            "latency_ms": latency_ms,
+        }
+
+    def _test_telegram(self, credentials: dict[str, str], *, timeout_seconds: float) -> dict[str, Any]:
+        bot_token = str(credentials.get("bot_token") or "").strip()
+        if not bot_token:
+            return {
+                "platform": "telegram",
+                "success": False,
+                "message": "Missing bot_token",
+                "latency_ms": None,
+            }
+
+        endpoint = f"https://api.telegram.org/bot{bot_token}/getMe"
+        started_at = time.perf_counter()
+        with httpx.Client(timeout=timeout_seconds) as client:
+            response = client.get(endpoint)
+        latency_ms = int((time.perf_counter() - started_at) * 1000)
+        if response.status_code >= 400:
+            return {
+                "platform": "telegram",
+                "success": False,
+                "message": f"HTTP {response.status_code}: {response.text}",
+                "latency_ms": latency_ms,
+            }
+        payload = response.json()
+        if bool(payload.get("ok")):
+            result = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+            username = str(result.get("username") or "").strip()
+            return {
+                "platform": "telegram",
+                "success": True,
+                "message": f"Connection successful{f' (@{username})' if username else ''}",
+                "latency_ms": latency_ms,
+            }
+        msg = str(payload.get("description") or payload.get("message") or "Connection failed")
+        return {
+            "platform": "telegram",
             "success": False,
             "message": msg,
             "latency_ms": latency_ms,

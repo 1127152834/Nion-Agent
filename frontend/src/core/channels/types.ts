@@ -1,4 +1,4 @@
-export type ChannelPlatform = "lark" | "dingtalk";
+export type ChannelPlatform = "lark" | "dingtalk" | "telegram";
 export type ChannelMode = "webhook" | "stream";
 
 export interface ChannelConfig {

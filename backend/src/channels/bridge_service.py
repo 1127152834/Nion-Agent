@@ -2323,6 +2323,61 @@ class ChannelAgentBridgeService:
 
         return api_result
 
+    def _send_telegram_text(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        credentials: dict[str, str],
+    ) -> ChannelDeliveryResult:
+        bot_token = _safe_text(credentials.get("bot_token"))
+        if not bot_token:
+            return ChannelDeliveryResult(
+                delivered=False,
+                message="missing bot_token",
+                delivery_path="telegram.api",
+                render_mode="text",
+            )
+        normalized_chat_id = _safe_text(chat_id)
+        if not normalized_chat_id:
+            return ChannelDeliveryResult(
+                delivered=False,
+                message="missing chat_id",
+                delivery_path="telegram.api",
+                render_mode="text",
+            )
+
+        endpoint = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        with httpx.Client(timeout=15.0) as client:
+            response = client.post(
+                endpoint,
+                json={
+                    "chat_id": normalized_chat_id,
+                    "text": text[:3000],
+                },
+            )
+            if response.status_code >= 400:
+                return ChannelDeliveryResult(
+                    delivered=False,
+                    message=f"send http {response.status_code}",
+                    delivery_path="telegram.api",
+                    render_mode="text",
+                )
+            payload = response.json()
+            if not bool(payload.get("ok")):
+                return ChannelDeliveryResult(
+                    delivered=False,
+                    message=_safe_text(payload.get("description") or "send failed"),
+                    delivery_path="telegram.api",
+                    render_mode="text",
+                )
+        return ChannelDeliveryResult(
+            delivered=True,
+            message="delivered",
+            delivery_path="telegram.api",
+            render_mode="text",
+        )
+
     def _deliver_reply(
         self,
         platform: str,
@@ -2337,6 +2392,8 @@ class ChannelAgentBridgeService:
         if platform == "dingtalk":
             _ = chat_id  # robot webhook does not require chat_id explicitly
             return self._send_dingtalk_text(text=text, credentials=credentials, incoming=incoming)
+        if platform == "telegram":
+            return self._send_telegram_text(chat_id=chat_id, text=text, credentials=credentials)
         return ChannelDeliveryResult(
             delivered=False,
             message="unsupported platform",
@@ -2352,7 +2409,7 @@ class ChannelAgentBridgeService:
         text: str,
     ) -> ChannelDeliveryResult:
         normalized_platform = _safe_text(platform).lower()
-        if normalized_platform not in {"lark", "dingtalk"}:
+        if normalized_platform not in {"lark", "dingtalk", "telegram"}:
             return ChannelDeliveryResult(
                 delivered=False,
                 message="unsupported platform",
@@ -2393,6 +2450,13 @@ class ChannelAgentBridgeService:
                     delivery_path="dingtalk.api",
                     render_mode="text",
                 )
+        if normalized_platform == "telegram" and not chat_id:
+            return ChannelDeliveryResult(
+                delivered=False,
+                message="missing chat_id",
+                delivery_path="telegram.api",
+                render_mode="text",
+            )
 
         return self._deliver_reply(
             normalized_platform,

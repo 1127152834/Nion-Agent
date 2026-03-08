@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ChannelPlatform = Literal["lark", "dingtalk"]
+ChannelPlatform = Literal["lark", "dingtalk", "telegram"]
 ChannelMode = Literal["webhook", "stream"]
 
 

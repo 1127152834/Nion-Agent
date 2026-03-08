@@ -138,6 +138,26 @@ const PLATFORM_FIELDS: Record<ChannelPlatform, CredentialFieldSpec[]> = {
       hintKey: "dingtalkSigningSecret",
     },
   ],
+  telegram: [
+    {
+      key: "bot_token",
+      label: "Bot Token",
+      sensitive: true,
+      requiredModes: ["webhook", "stream"],
+    },
+    {
+      key: "allowed_users",
+      label: "Allowed Users",
+      hintKey: "telegramAllowedUsers",
+    },
+    {
+      key: "secret_token",
+      label: "Secret Token",
+      sensitive: true,
+      modes: ["webhook"],
+      hintKey: "telegramSecretToken",
+    },
+  ],
 };
 
 function isFieldVisible(field: CredentialFieldSpec, mode: ChannelMode): boolean {
@@ -433,11 +453,14 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
 
   const platformTitle = platform === "lark"
     ? (m?.platformLark ?? "Lark")
-    : (m?.platformDingTalk ?? "DingTalk");
-  const platformDocsUrl =
-    platform === "lark"
-      ? "https://open.feishu.cn/document/develop-an-echo-bot/introduction"
-      : "https://open.dingtalk.com/document/orgapp/overview";
+    : platform === "dingtalk"
+      ? (m?.platformDingTalk ?? "DingTalk")
+      : (m?.platformTelegram ?? "Telegram");
+  const platformDocsUrl = platform === "lark"
+    ? "https://open.feishu.cn/document/develop-an-echo-bot/introduction"
+    : platform === "dingtalk"
+      ? "https://open.dingtalk.com/document/orgapp/overview"
+      : "https://core.telegram.org/bots/api";
   const pairCommandLabel = useMemo(() => "/pair 123456", []);
   const pairingSectionId = `${platform}-pairing-authorization`;
   const configErrorMessage = stringifyError(configError);
@@ -460,10 +483,11 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
   );
 
   const missingConnectivityFields = useMemo(() => {
-    const neededKeys =
-      platform === "lark"
-        ? ["app_id", "app_secret"]
-        : ["client_id", "client_secret"];
+    const neededKeys = platform === "lark"
+      ? ["app_id", "app_secret"]
+      : platform === "dingtalk"
+        ? ["client_id", "client_secret"]
+        : ["bot_token"];
     return neededKeys.filter((key) => !(form.credentials[key] ?? "").trim());
   }, [platform, form.credentials]);
   const shouldShowPairingGuide =
@@ -1067,6 +1091,7 @@ export function ChannelSettingsPage() {
         <TabsList variant="line">
           <TabsTrigger value="lark">{m?.platformLark ?? "Lark"}</TabsTrigger>
           <TabsTrigger value="dingtalk">{m?.platformDingTalk ?? "DingTalk"}</TabsTrigger>
+          <TabsTrigger value="telegram">{m?.platformTelegram ?? "Telegram"}</TabsTrigger>
         </TabsList>
       </Tabs>
       <div

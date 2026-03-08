@@ -9,7 +9,7 @@ from typing import Any
 from src.channels.db import ChannelDatabase
 from src.config.paths import Paths
 
-SUPPORTED_CHANNEL_PLATFORMS = {"lark", "dingtalk"}
+SUPPORTED_CHANNEL_PLATFORMS = {"lark", "dingtalk", "telegram"}
 SUPPORTED_CHANNEL_MODES = {"webhook", "stream"}
 
 

@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, status
+from fastapi import APIRouter, HTTPException, Header, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.channels.bridge_service import ChannelAgentBridgeService
@@ -435,7 +435,7 @@ def _handle_webhook(
         event_payload: dict[str, object],
     ) -> None:
         normalized_platform: ChannelPlatform = (
-            event_platform if event_platform in {"lark", "dingtalk"} else platform
+            event_platform if event_platform in {"lark", "dingtalk", "telegram"} else platform
         )
         _publish_channel_event(
             request,
@@ -497,6 +497,34 @@ async def lark_webhook(payload: dict[str, Any], request: Request) -> JSONRespons
 )
 async def dingtalk_webhook(payload: dict[str, Any], request: Request) -> ChannelWebhookResponse:
     return _handle_webhook("dingtalk", payload, request)
+
+
+def _verify_telegram_secret_token(provided_token: str | None) -> None:
+    integration = _repo().get_integration("telegram")
+    credentials = integration.get("credentials", {})
+    expected_token = str(credentials.get("secret_token") or "").strip()
+    if not expected_token:
+        return
+    if str(provided_token or "").strip() != expected_token:
+        raise HTTPException(status_code=403, detail="invalid telegram secret token")
+
+
+@router.post(
+    "/webhooks/telegram",
+    response_model=ChannelWebhookResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Receive telegram webhook",
+)
+async def telegram_webhook(
+    payload: dict[str, Any],
+    request: Request,
+    telegram_secret_token: str | None = Header(
+        default=None,
+        alias="X-Telegram-Bot-Api-Secret-Token",
+    ),
+) -> ChannelWebhookResponse:
+    _verify_telegram_secret_token(telegram_secret_token)
+    return _handle_webhook("telegram", payload, request)
 
 
 @router.get(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -19,6 +21,34 @@ def _safe_int(value: str | None, default_value: int, *, min_value: int, max_valu
     except ValueError:
         return default_value
     return max(min_value, min(max_value, parsed))
+
+
+def _parse_telegram_allowed_users(value: str | None) -> set[str]:
+    raw = (value or "").strip()
+    if not raw:
+        return set()
+
+    tokens: list[str] = []
+    if raw.startswith("[") and raw.endswith("]"):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            tokens = [str(item).strip() for item in parsed]
+
+    if not tokens:
+        tokens = [part.strip() for part in re.split(r"[\s,;]+", raw)]
+
+    normalized: set[str] = set()
+    for token in tokens:
+        if not token:
+            continue
+        try:
+            normalized.add(str(int(token)))
+        except ValueError:
+            normalized.add(token)
+    return normalized
 
 
 @dataclass(slots=True)
@@ -116,6 +146,20 @@ class ChannelInboundService:
         if platform == "dingtalk":
             plugin_result = self._dingtalk_plugin.handle_incoming_event(incoming)
             return ChannelInboundResult(**plugin_result)
+
+        if platform == "telegram":
+            integration = self._repo.get_integration("telegram")
+            credentials = integration.get("credentials", {})
+            allowed_users = _parse_telegram_allowed_users(
+                str(credentials.get("allowed_users") or "")
+            )
+            external_user_id = (incoming.external_user_id or "").strip()
+            if allowed_users and external_user_id and external_user_id not in allowed_users:
+                return ChannelInboundResult(
+                    accepted=True,
+                    action="unauthorized_message_ignored",
+                    message="telegram user not allowed",
+                )
 
         # Keep dedup table bounded (similar to AionUi's in-memory TTL cache cleanup).
         self._repo.cleanup_event_dedup(max_age_seconds=self._event_dedup_ttl_seconds)

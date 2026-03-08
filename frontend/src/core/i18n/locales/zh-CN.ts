@@ -849,6 +849,7 @@ export const zhCN: Translations = {
     channelPage: withFallbackLabels({
       platformLark: "飞书",
       platformDingTalk: "钉钉",
+      platformTelegram: "Telegram",
       channelConfiguration: "通道配置",
       channelConfigurationDescription:
         "填写凭证并测试连接，然后处理配对与授权。",
@@ -935,6 +936,9 @@ export const zhCN: Translations = {
         card_template_id: "Card Template ID",
         webhook_url: "Webhook URL",
         signing_secret: "Signing Secret",
+        bot_token: "Bot Token",
+        allowed_users: "Allowed Users",
+        secret_token: "Secret Token",
       },
       fieldHints: {
         larkVerificationToken: "用于飞书 webhook 事件验签。",
@@ -944,6 +948,8 @@ export const zhCN: Translations = {
         dingtalkCardTemplateId: "钉钉交互卡片模板 ID（可选）。",
         dingtalkWebhookUrl: "在钉钉机器人后台配置的 webhook 回调地址。",
         dingtalkSigningSecret: "用于校验钉钉 webhook 签名的密钥。",
+        telegramAllowedUsers: "可选，限制允许接入的 Telegram 用户 ID（逗号或空格分隔）。",
+        telegramSecretToken: "可选，用于校验 Telegram webhook 请求头中的密钥。",
       },
     }),
     skillImportDialog: withFallbackLabels({

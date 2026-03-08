@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 from collections.abc import Callable
 from contextlib import contextmanager, nullcontext
@@ -10,6 +11,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from urllib.request import getproxies
+
+import httpx
 
 from src.channels.incoming_service import ChannelInboundResult, ChannelInboundService
 from src.channels.repository import SUPPORTED_CHANNEL_PLATFORMS, ChannelRepository
@@ -539,11 +542,133 @@ class _DingTalkStreamDriver:
         on_disconnected(None)
 
 
+class _TelegramStreamDriver:
+    @staticmethod
+    def _parse_allowed_users(credentials: dict[str, str]) -> set[str]:
+        raw = _safe_text(credentials.get("allowed_users"))
+        if not raw:
+            return set()
+
+        tokens: list[str] = []
+        if raw.startswith("[") and raw.endswith("]"):
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, list):
+                tokens = [str(item).strip() for item in parsed]
+        if not tokens:
+            tokens = [part.strip() for part in re.split(r"[\s,;]+", raw)]
+
+        normalized: set[str] = set()
+        for token in tokens:
+            if not token:
+                continue
+            try:
+                normalized.add(str(int(token)))
+            except ValueError:
+                normalized.add(token)
+        return normalized
+
+    def run_forever(
+        self,
+        *,
+        platform: str,
+        credentials: dict[str, str],
+        stop_event: threading.Event,
+        on_connected: Callable[[], None],
+        on_disconnected: Callable[[str | None], None],
+        on_active_users: Callable[[int], None],
+        on_event: Callable[[IncomingWebhookEvent], None],
+    ) -> None:
+        _ = platform
+        bot_token = _safe_text(credentials.get("bot_token"))
+        if not bot_token:
+            raise ChannelStreamFatalError("missing bot_token")
+
+        endpoint = f"https://api.telegram.org/bot{bot_token}/getUpdates"
+        allowed_users = self._parse_allowed_users(credentials)
+        active_users: set[str] = set()
+
+        offset_value = _safe_text(credentials.get("offset"))
+        offset: int | None = None
+        if offset_value:
+            try:
+                offset = int(offset_value)
+            except ValueError:
+                offset = None
+
+        on_connected()
+        timeout = httpx.Timeout(connect=10.0, read=25.0, write=10.0, pool=10.0)
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                while not stop_event.is_set():
+                    params: dict[str, Any] = {
+                        "timeout": 10,
+                        "allowed_updates": json.dumps(
+                            ["message", "edited_message", "channel_post", "callback_query"]
+                        ),
+                    }
+                    if offset is not None:
+                        params["offset"] = offset
+
+                    response = client.get(endpoint, params=params)
+                    if response.status_code >= 400:
+                        error_message = f"http {response.status_code}: {_safe_text(response.text)}"
+                        if response.status_code in {401, 403, 404}:
+                            raise ChannelStreamFatalError(
+                                f"telegram_auth_failed: {error_message}"
+                            )
+                        raise RuntimeError(error_message)
+
+                    payload = response.json()
+                    if not bool(payload.get("ok")):
+                        error_code = int(payload.get("error_code") or 0)
+                        description = _safe_text(
+                            payload.get("description") or "telegram getUpdates failed"
+                        )
+                        if error_code in {401, 403, 404}:
+                            raise ChannelStreamFatalError(
+                                f"telegram_auth_failed: {description}"
+                            )
+                        raise RuntimeError(description)
+
+                    updates = payload.get("result")
+                    if not isinstance(updates, list):
+                        continue
+
+                    for update in updates:
+                        if not isinstance(update, dict):
+                            continue
+                        update_id = update.get("update_id")
+                        if isinstance(update_id, int):
+                            offset = update_id + 1
+                        incoming = extract_incoming_event("telegram", update)
+                        user_id = _safe_text(incoming.external_user_id)
+                        if not user_id or not incoming.chat_id or not incoming.text:
+                            continue
+                        if allowed_users and user_id not in allowed_users:
+                            continue
+                        active_users.add(user_id)
+                        on_active_users(len(active_users))
+                        on_event(incoming)
+        except ChannelStreamFatalError as exc:
+            on_disconnected(str(exc))
+            raise
+        except Exception as exc:
+            on_disconnected(str(exc))
+            raise
+
+        on_disconnected(None)
+
+
 def _default_stream_driver_factory(platform: str) -> ChannelStreamDriver:
     if platform == "lark":
         return _LarkStreamDriver()
     if platform == "dingtalk":
         return _DingTalkStreamDriver()
+    if platform == "telegram":
+        return _TelegramStreamDriver()
     return _UnavailableStreamDriver(platform, "unsupported platform")
 
 

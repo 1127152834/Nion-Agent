@@ -158,6 +158,58 @@ def _extract_dingtalk(payload: dict[str, Any]) -> IncomingWebhookEvent:
     )
 
 
+def _extract_telegram(payload: dict[str, Any]) -> IncomingWebhookEvent:
+    update_id = payload.get("update_id")
+    message = None
+    if isinstance(payload.get("message"), dict):
+        message = payload["message"]
+    elif isinstance(payload.get("edited_message"), dict):
+        message = payload["edited_message"]
+    elif isinstance(payload.get("channel_post"), dict):
+        message = payload["channel_post"]
+    elif isinstance(payload.get("edited_channel_post"), dict):
+        message = payload["edited_channel_post"]
+
+    callback_query = payload.get("callback_query") if isinstance(payload.get("callback_query"), dict) else {}
+    if message is None and isinstance(callback_query.get("message"), dict):
+        message = callback_query["message"]
+
+    sender = message.get("from") if isinstance(message, dict) and isinstance(message.get("from"), dict) else {}
+    if not sender and isinstance(callback_query.get("from"), dict):
+        sender = callback_query["from"]
+
+    chat = message.get("chat") if isinstance(message, dict) and isinstance(message.get("chat"), dict) else {}
+    text = (
+        _extract_text(message.get("text") if isinstance(message, dict) else None)
+        or _extract_text(message.get("caption") if isinstance(message, dict) else None)
+        or _extract_text(callback_query.get("data"))
+    )
+
+    external_user_name = (
+        sender.get("username")
+        or " ".join(
+            part for part in (str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip())
+            if part
+        )
+    )
+    event_id = (
+        update_id
+        or (message.get("message_id") if isinstance(message, dict) else None)
+        or callback_query.get("id")
+    )
+
+    return IncomingWebhookEvent(
+        platform="telegram",
+        event_id=str(event_id).strip() if event_id is not None else None,
+        external_user_id=str(sender.get("id")).strip() if sender.get("id") is not None else None,
+        external_user_name=str(external_user_name).strip() if external_user_name else None,
+        chat_id=str(chat.get("id")).strip() if chat.get("id") is not None else None,
+        conversation_type=str(chat.get("type")).strip() if chat.get("type") else None,
+        session_webhook=None,
+        text=text,
+    )
+
+
 def _extract_simple(platform: str, payload: dict[str, Any]) -> IncomingWebhookEvent:
     sender = payload.get("sender") if isinstance(payload.get("sender"), dict) else {}
     text = _extract_text(payload.get("text"))
@@ -179,6 +231,8 @@ def extract_incoming_event(platform: str, payload: dict[str, Any]) -> IncomingWe
         event = _extract_lark(payload)
     elif normalized == "dingtalk":
         event = _extract_dingtalk(payload)
+    elif normalized == "telegram":
+        event = _extract_telegram(payload)
     else:
         event = _extract_simple(normalized, payload)
 

@@ -761,6 +761,7 @@ export const enUS: Translations = {
     channelPage: withFallbackLabels({
       platformLark: "Lark",
       platformDingTalk: "DingTalk",
+      platformTelegram: "Telegram",
       channelConfiguration: "Channel Configuration",
       channelConfigurationDescription:
         "Fill credentials, verify connectivity, then handle pairing and authorization.",
@@ -852,6 +853,9 @@ export const enUS: Translations = {
         card_template_id: "Card Template ID",
         webhook_url: "Webhook URL",
         signing_secret: "Signing Secret",
+        bot_token: "Bot Token",
+        allowed_users: "Allowed Users",
+        secret_token: "Secret Token",
       },
       fieldHints: {
         larkVerificationToken:
@@ -868,6 +872,10 @@ export const enUS: Translations = {
           "Webhook callback URL configured in DingTalk bot settings.",
         dingtalkSigningSecret:
           "Secret used to verify DingTalk webhook signatures.",
+        telegramAllowedUsers:
+          "Optional allowlist of Telegram user IDs, separated by comma or whitespace.",
+        telegramSecretToken:
+          "Optional secret used to validate Telegram webhook requests.",
       },
     }),
     skillImportDialog: withFallbackLabels({
