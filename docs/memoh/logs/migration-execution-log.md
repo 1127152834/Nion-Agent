@@ -1,0 +1,10 @@
+# Nion × Memoh 迁移执行日志
+
+> 用途：记录从 `Milestone 0` 到 `Phase 7` 收官期间的每一个 Task、review fix、blocker 与阶段收尾动作。
+
+| Date | Phase/Task | Type | Change | Commit | Validation | Result | Risks / Follow-up |
+|---|---|---|---|---|---|---|---|
+| 2026-03-10 | Milestone 0 | baseline-start | bootstrap-memoh-phase-execution-ops | pending | pending | in-progress | 先建立治理文档、模板、脚本与总账本 |
+| 2026-03-10 | Milestone 0 | baseline-verify | bootstrap-memoh-phase-execution-ops | pending | `openspec validate` × 5、`backend pytest`、`frontend pnpm typecheck`、`./scripts/verify-electron.sh`、`git diff --check` | passed-with-blockers | 基线验证为绿，但工作树仍有 117 条在途改动，需先收口再进入 Phase 3 |
+| 2026-03-10 | Milestone 1 | tooling-bootstrap | bootstrap-memoh-phase-execution-ops | pending | templates present、scripts runnable、plan index updated | completed | 流程资产已落地，已进入自检与最终校验 |
+| 2026-03-10 | Milestone 1 | tooling-self-check | bootstrap-memoh-phase-execution-ops | pending | `bash -n scripts/memoh/*.sh`、`./scripts/memoh/task-gate.sh --change bootstrap-memoh-phase-execution-ops --frontend-typecheck`、`./scripts/memoh/stage-closeout.sh --stage milestone-1 --change bootstrap-memoh-phase-execution-ops --frontend-typecheck` | passed | `stage-closeout` 会主动暴露当前工作树脏状态，符合治理预期 |
