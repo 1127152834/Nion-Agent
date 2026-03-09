@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -12,7 +13,11 @@ import {
 } from "@/components/workspace/workspace-container";
 import { useI18n } from "@/core/i18n/hooks";
 import { useThreads } from "@/core/threads/hooks";
-import { pathOfThread, titleOfThread } from "@/core/threads/utils";
+import {
+  isThreadAwaitingResponse,
+  pathOfThread,
+  titleOfThread,
+} from "@/core/threads/utils";
 import { formatTimeAgo } from "@/core/utils/datetime";
 
 export default function ChatsPage() {
@@ -54,7 +59,17 @@ export default function ChatsPage() {
                   >
                     <div className="flex flex-col gap-2 border-b p-4">
                       <div>
-                        <div>{titleOfThread(thread)}</div>
+                        <div className="inline-flex items-center gap-2">
+                          <span>{titleOfThread(thread)}</span>
+                          {isThreadAwaitingResponse(thread) ? (
+                            <Badge
+                              variant="secondary"
+                              className="border-emerald-200 bg-emerald-100 text-[10px] text-emerald-700"
+                            >
+                              {t.chats.awaitingResponse}
+                            </Badge>
+                          ) : null}
+                        </div>
                       </div>
                       {thread.updated_at && (
                         <div className="text-muted-foreground text-sm">

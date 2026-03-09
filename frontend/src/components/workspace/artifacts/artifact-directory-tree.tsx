@@ -27,6 +27,11 @@ type DirectoryTreeNode =
 
 const USER_DATA_PREFIX = "/mnt/user-data/";
 
+interface DirectoryTreeEntry {
+  path: string;
+  type: "file" | "directory";
+}
+
 function normalizeArtifactPath(filepath: string): string {
   if (!filepath.startsWith("write-file:")) {
     return filepath;
@@ -47,7 +52,17 @@ function toDisplayPath(filepath: string): string {
   return normalizedPath.replace(/^\/+/, "");
 }
 
-function buildDirectoryTree(files: string[]): DirectoryTreeNode[] {
+function toDisplayParts(path: string): string[] {
+  const normalizedPath = normalizeArtifactPath(path);
+  const displayPath = toDisplayPath(path);
+  const split = displayPath.split("/").filter(Boolean);
+  if (split.length > 0) {
+    return split;
+  }
+  return [getFileName(normalizedPath)];
+}
+
+function buildDirectoryTree(entries: DirectoryTreeEntry[]): DirectoryTreeNode[] {
   const roots: DirectoryTreeNode[] = [];
 
   const upsertDirectory = (
@@ -89,21 +104,16 @@ function buildDirectoryTree(files: string[]): DirectoryTreeNode[] {
     }
   };
 
-  for (const originalPath of files) {
-    const normalizedOriginalPath = normalizeArtifactPath(originalPath);
-    const displayPath = toDisplayPath(originalPath);
-    const parts =
-      displayPath.split("/").filter(Boolean).length > 0
-        ? displayPath.split("/").filter(Boolean)
-        : [getFileName(normalizedOriginalPath)];
-
+  for (const entry of entries) {
+    const originalPath = entry.path;
+    const parts = toDisplayParts(originalPath);
     let currentChildren = roots;
     let currentKey = "";
 
     for (let index = 0; index < parts.length; index += 1) {
       const part = parts[index]!;
       const nextKey = currentKey ? `${currentKey}/${part}` : part;
-      const isLeaf = index === parts.length - 1;
+      const isLeaf = index === parts.length - 1 && entry.type === "file";
 
       if (isLeaf) {
         const exists = currentChildren.some(
@@ -123,6 +133,10 @@ function buildDirectoryTree(files: string[]): DirectoryTreeNode[] {
       const directory = upsertDirectory(currentChildren, nextKey, part);
       currentChildren = directory.children;
       currentKey = nextKey;
+
+      if (entry.type === "directory" && index === parts.length - 1) {
+        break;
+      }
     }
   }
 
@@ -226,16 +240,25 @@ function DirectoryNodeItem({
 export function ArtifactDirectoryTree({
   className,
   files,
+  directories = [],
   selectedPath,
   onOpenFile,
 }: {
   className?: string;
   files: string[];
+  directories?: string[];
   selectedPath: string | null;
   onOpenFile: (path: string) => void;
 }) {
   const { t } = useI18n();
-  const tree = useMemo(() => buildDirectoryTree(files), [files]);
+  const tree = useMemo(
+    () =>
+      buildDirectoryTree([
+        ...directories.map((path) => ({ path, type: "directory" as const })),
+        ...files.map((path) => ({ path, type: "file" as const })),
+      ]),
+    [directories, files],
+  );
   const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>(
     {},
   );

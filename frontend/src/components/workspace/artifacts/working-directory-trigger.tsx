@@ -8,8 +8,7 @@ import { useArtifacts } from "./context";
 
 export const WorkingDirectoryTrigger = () => {
   const { t } = useI18n();
-  const { artifacts, deselect, setOpen: setArtifactsOpen } = useArtifacts();
-  const artifactsCount = artifacts?.length ?? 0;
+  const { deselect, setOpen: setArtifactsOpen } = useArtifacts();
 
   return (
     <Tooltip content={t.common.browseWorkspace}>
@@ -23,7 +22,6 @@ export const WorkingDirectoryTrigger = () => {
       >
         <FolderIcon />
         {t.common.workingDirectory}
-        {artifactsCount > 0 ? ` (${artifactsCount})` : ""}
       </Button>
     </Tooltip>
   );

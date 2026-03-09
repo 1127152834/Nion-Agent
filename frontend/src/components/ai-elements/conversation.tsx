@@ -12,8 +12,9 @@ export type ConversationProps = ComponentProps<typeof StickToBottom>;
 export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
     className={cn("relative flex-1 overflow-y-hidden", className)}
-    initial="smooth"
-    resize="smooth"
+    // Use instant lock-to-bottom to avoid visible spring rebound while streaming.
+    initial="instant"
+    resize="instant"
     role="log"
     {...props}
   />

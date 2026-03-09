@@ -7,19 +7,20 @@ logger = logging.getLogger(__name__)
 
 
 class JinaClient:
-    def crawl(self, url: str, return_format: str = "html", timeout: int = 10) -> str:
+    def crawl(self, url: str, return_format: str = "html", timeout: int = 10, api_key: str | None = None) -> str:
         headers = {
             "Content-Type": "application/json",
             "X-Return-Format": return_format,
             "X-Timeout": str(timeout),
         }
-        if os.getenv("JINA_API_KEY"):
-            headers["Authorization"] = f"Bearer {os.getenv('JINA_API_KEY')}"
+        effective_api_key = api_key or os.getenv("JINA_API_KEY")
+        if effective_api_key:
+            headers["Authorization"] = f"Bearer {effective_api_key}"
         else:
             logger.warning("Jina API key is not set. Provide your own key to access a higher rate limit. See https://jina.ai/reader for more information.")
         data = {"url": url}
         try:
-            response = requests.post("https://r.jina.ai/", headers=headers, json=data)
+            response = requests.post("https://r.jina.ai/", headers=headers, json=data, timeout=timeout)
 
             if response.status_code != 200:
                 error_message = f"Jina API returned status {response.status_code}: {response.text}"

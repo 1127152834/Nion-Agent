@@ -1,4 +1,8 @@
+import logging
 import os
+import sys
+import threading
+import time
 from pathlib import Path
 from typing import Any, Self
 
@@ -7,10 +11,11 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
+from src.config.config_store import ConfigStoreNotInitializedError, create_config_store
 from src.config.extensions_config import ExtensionsConfig
 from src.config.memory_config import load_memory_config_from_dict
 from src.config.model_config import ModelConfig
-from src.config.retrieval_models_config import RetrievalModelsConfig, RetrievalActiveConfig, ActiveEmbeddingConfig, ActiveRerankConfig
+from src.config.retrieval_models_config import RetrievalModelsConfig
 from src.config.sandbox_config import SandboxConfig
 from src.config.skills_config import SkillsConfig
 from src.config.subagents_config import load_subagents_config_from_dict
@@ -19,10 +24,11 @@ from src.config.title_config import load_title_config_from_dict
 from src.config.tool_config import ToolConfig, ToolGroupConfig
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 class AppConfig(BaseModel):
-    """Config for the Nion application"""
+    """Config for the Nion application."""
 
     models: list[ModelConfig] = Field(default_factory=list, description="Available models")
     sandbox: SandboxConfig = Field(description="Sandbox configuration")
@@ -32,298 +38,397 @@ class AppConfig(BaseModel):
     extensions: ExtensionsConfig = Field(default_factory=ExtensionsConfig, description="Extensions configuration (MCP servers and skills state)")
     retrieval_models: RetrievalModelsConfig = Field(
         default_factory=RetrievalModelsConfig,
-        description="Retrieval models configuration (embedding + rerank)"
+        description="Retrieval models configuration (embedding + rerank)",
     )
     model_config = ConfigDict(extra="allow", frozen=False)
     checkpointer: CheckpointerConfig | None = Field(default=None, description="Checkpointer configuration")
 
     @classmethod
     def resolve_config_path(cls, config_path: str | None = None) -> Path:
-        """Resolve the config file path.
-
-        Priority:
-        1. If provided `config_path` argument, use it.
-        2. If provided `NION_CONFIG_PATH` environment variable, use it.
-        3. Otherwise, first check the `config.yaml` in the current directory, then fallback to `config.yaml` in the parent directory.
-        """
+        """Resolve the config file path."""
         if config_path:
             path = Path(config_path)
             if not Path.exists(path):
                 raise FileNotFoundError(f"Config file specified by param `config_path` not found at {path}")
             return path
-        elif os.getenv("NION_CONFIG_PATH"):
+
+        if os.getenv("NION_CONFIG_PATH"):
             path = Path(os.getenv("NION_CONFIG_PATH"))
             if not Path.exists(path):
-                raise FileNotFoundError(f"Config file specified by environment variable `NION_CONFIG_PATH` not found at {path}")
+                raise FileNotFoundError(
+                    f"Config file specified by environment variable `NION_CONFIG_PATH` not found at {path}"
+                )
             return path
-        else:
-            # Check if the config.yaml is in the current directory
-            path = Path(os.getcwd()) / "config.yaml"
+
+        path = Path(os.getcwd()) / "config.yaml"
+        if not path.exists():
+            path = Path(os.getcwd()).parent / "config.yaml"
             if not path.exists():
-                # Check if the config.yaml is in the parent directory of CWD
-                path = Path(os.getcwd()).parent / "config.yaml"
-                if not path.exists():
-                    raise FileNotFoundError("`config.yaml` file not found at the current directory nor its parent directory")
-            return path
+                raise FileNotFoundError("`config.yaml` file not found at the current directory nor its parent directory")
+        return path
 
     @classmethod
-    def from_file(cls, config_path: str | None = None) -> Self:
-        """Load config from YAML file.
-
-        See `resolve_config_path` for more details.
-
-        Args:
-            config_path: Path to the config file.
-
-        Returns:
-            AppConfig: The loaded config.
-        """
-        resolved_path = cls.resolve_config_path(config_path)
-        with open(resolved_path, encoding="utf-8") as f:
-            config_data = yaml.safe_load(f)
-        config_data = cls.resolve_env_variables(config_data)
-
-        # Load title config if present
+    def _hydrate_auxiliary_configs(cls, config_data: dict[str, Any]) -> None:
+        """Load sub-config singletons from config payload."""
         if "title" in config_data:
             load_title_config_from_dict(config_data["title"])
-
-        # Load summarization config if present
         if "summarization" in config_data:
             load_summarization_config_from_dict(config_data["summarization"])
-
-        # Load memory config if present
         if "memory" in config_data:
             load_memory_config_from_dict(config_data["memory"])
-
-        # Load subagents config if present
         if "subagents" in config_data:
             load_subagents_config_from_dict(config_data["subagents"])
-
-        # Load checkpointer config if present
         if "checkpointer" in config_data:
             load_checkpointer_config_from_dict(config_data["checkpointer"])
 
-        # Load extensions config separately (it's in a different file)
+    @classmethod
+    def _validate_payload(cls, payload: dict[str, Any], *, strict_env: bool) -> Self:
+        resolved_payload = cls.resolve_env_variables(payload, strict=strict_env)
+        cls._hydrate_auxiliary_configs(resolved_payload)
         extensions_config = ExtensionsConfig.from_file()
-        config_data["extensions"] = extensions_config.model_dump()
-
-        result = cls.model_validate(config_data)
-        return result
+        resolved_payload["extensions"] = extensions_config.model_dump()
+        return cls.model_validate(resolved_payload)
 
     @classmethod
-    def from_store(cls) -> Self:
-        """Load config from SQLite database.
+    def from_file(cls, config_path: str | None = None, *, strict_env: bool = False) -> Self:
+        """Load config from YAML file."""
+        resolved_path = cls.resolve_config_path(config_path)
+        with open(resolved_path, encoding="utf-8") as f:
+            payload = yaml.safe_load(f) or {}
+        if not isinstance(payload, dict):
+            raise ValueError("Config file root must be a mapping object")
+        return cls._validate_payload(payload, strict_env=strict_env)
 
-        Returns:
-            AppConfig: The loaded config.
-
-        Raises:
-            Exception: If config store is not initialized or read fails.
-        """
-        from src.config.config_store import create_config_store
-
+    @classmethod
+    def from_store_with_meta(cls, *, strict_env: bool = False) -> tuple[Self, str, Path]:
+        """Load config from SQLite database with version/source metadata."""
         store = create_config_store()
-        config_data, version, db_path = store.read()
-        config_data = cls.resolve_env_variables(config_data)
-
-        # Load title config if present
-        if "title" in config_data:
-            load_title_config_from_dict(config_data["title"])
-
-        # Load summarization config if present
-        if "summarization" in config_data:
-            load_summarization_config_from_dict(config_data["summarization"])
-
-        # Load memory config if present
-        if "memory" in config_data:
-            load_memory_config_from_dict(config_data["memory"])
-
-        # Load subagents config if present
-        if "subagents" in config_data:
-            load_subagents_config_from_dict(config_data["subagents"])
-
-        # Load extensions config separately (it's in a different file)
-        extensions_config = ExtensionsConfig.from_file()
-        config_data["extensions"] = extensions_config.model_dump()
-
-        result = cls.model_validate(config_data)
-        return result
+        payload, version, db_path = store.read()
+        if not isinstance(payload, dict):
+            raise ValueError("Config store root must be a mapping object")
+        config = cls._validate_payload(payload, strict_env=strict_env)
+        return config, version, db_path
 
     @classmethod
-    def from_store_or_file(cls, config_path: str | None = None) -> Self:
-        """Load config from SQLite database or YAML file with automatic migration.
+    def from_store(cls, *, strict_env: bool = False) -> Self:
+        """Load config from SQLite database."""
+        config, _, _ = cls.from_store_with_meta(strict_env=strict_env)
+        return config
 
-        Priority:
-        1. Try to load from SQLite database
-        2. If SQLite doesn't exist, load from config.yaml and migrate to SQLite
-        3. If config.yaml doesn't exist, use default configuration
-
-        Args:
-            config_path: Optional path to config.yaml file (for migration)
-
-        Returns:
-            AppConfig: The loaded config.
-        """
+    @classmethod
+    def from_store_or_file_with_meta(
+        cls,
+        config_path: str | None = None,
+        *,
+        strict_env: bool = False,
+    ) -> tuple[Self, str | None, Path | None, str]:
+        """Load config from store first, fallback only on first initialization paths."""
         from src.config.migration import migrate_config_to_sqlite
 
-        # Try to load from SQLite first
-        try:
-            return cls.from_store()
-        except Exception:
-            # SQLite doesn't exist or failed to load, try migration
-            pass
+        store = create_config_store()
 
-        # Try to migrate from config.yaml
+        # If store already exists, any load failure must be explicit.
+        if store.exists():
+            try:
+                config, version, source_path = cls.from_store_with_meta(strict_env=strict_env)
+                return config, version, source_path, "sqlite"
+            except Exception as exc:  # noqa: BLE001 - explicit fail-fast for existing store
+                raise RuntimeError(f"Config store exists but failed to load: {exc}") from exc
+
+        # Store not initialized: try one-time migration from YAML.
         try:
             yaml_path = cls.resolve_config_path(config_path) if config_path or os.getenv("NION_CONFIG_PATH") else None
             migrated = migrate_config_to_sqlite(yaml_path)
             if migrated:
-                # Migration successful, load from SQLite
-                return cls.from_store()
+                config, version, source_path = cls.from_store_with_meta(strict_env=strict_env)
+                return config, version, source_path, "sqlite"
         except FileNotFoundError:
-            # config.yaml doesn't exist, will use default config
             pass
-        except Exception as e:
-            # Migration failed, fall back to loading from file
-            import logging
+        except Exception as exc:  # noqa: BLE001 - keep startup resilient on first init only
+            logger.warning("Config migration skipped due to error: %s", exc)
 
-            logging.warning(f"Config migration failed: {e}, falling back to YAML file")
-
-        # Fall back to loading from YAML file
+        # First-time fallback to YAML file.
         try:
-            return cls.from_file(config_path)
+            config = cls.from_file(config_path, strict_env=strict_env)
+            source_path = cls.resolve_config_path(config_path)
+            return config, None, source_path, "yaml"
         except FileNotFoundError:
-            # No config file found, use default configuration
-            import logging
-
-            logging.warning("No config file found, using default configuration")
-            # Return minimal default config
-            return cls.model_validate(
-                {
-                    "models": [],
-                    "tools": [],
-                    "tool_groups": [],
-                    "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
-                    "extensions": ExtensionsConfig.from_file().model_dump(),
-                }
-            )
+            logger.warning("No config store and no config.yaml found, bootstrapping minimal default config")
+            payload: dict[str, Any] = {
+                "models": [],
+                "tools": [],
+                "tool_groups": [],
+                "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
+                "checkpointer": {"type": "sqlite", "connection_string": "checkpoints.db"},
+                "extensions": ExtensionsConfig.from_file().model_dump(),
+            }
+            return cls.model_validate(payload), None, None, "default"
 
     @classmethod
-    def resolve_env_variables(cls, config: Any) -> Any:
-        """Recursively resolve environment variables in the config.
+    def from_store_or_file(cls, config_path: str | None = None, *, strict_env: bool = False) -> Self:
+        """Load config from SQLite database or YAML file with migration."""
+        config, _, _, _ = cls.from_store_or_file_with_meta(config_path, strict_env=strict_env)
+        return config
 
-        Environment variables are resolved using the `os.getenv` function. Example: $OPENAI_API_KEY
-
-        Args:
-            config: The config to resolve environment variables in.
-
-        Returns:
-            The config with environment variables resolved.
-        """
+    @classmethod
+    def resolve_env_variables(cls, config: Any, *, strict: bool = True) -> Any:
+        """Recursively resolve environment variables in config."""
         if isinstance(config, str):
             if config.startswith("$"):
                 env_value = os.getenv(config[1:])
                 if env_value is None:
-                    raise ValueError(f"Environment variable {config[1:]} not found for config value {config}")
+                    if strict:
+                        raise ValueError(f"Environment variable {config[1:]} not found for config value {config}")
+                    return config
                 return env_value
             return config
-        elif isinstance(config, dict):
-            return {k: cls.resolve_env_variables(v) for k, v in config.items()}
-        elif isinstance(config, list):
-            return [cls.resolve_env_variables(item) for item in config]
+        if isinstance(config, dict):
+            return {k: cls.resolve_env_variables(v, strict=strict) for k, v in config.items()}
+        if isinstance(config, list):
+            return [cls.resolve_env_variables(item, strict=strict) for item in config]
         return config
 
     def get_model_config(self, name: str) -> ModelConfig | None:
-        """Get the model config by name.
-
-        Args:
-            name: The name of the model to get the config for.
-
-        Returns:
-            The model config if found, otherwise None.
-        """
+        """Get the model config by name."""
         return next((model for model in self.models if model.name == name), None)
 
     def get_tool_config(self, name: str) -> ToolConfig | None:
-        """Get the tool config by name.
-
-        Args:
-            name: The name of the tool to get the config for.
-
-        Returns:
-            The tool config if found, otherwise None.
-        """
+        """Get the tool config by name."""
         return next((tool for tool in self.tools if tool.name == name), None)
 
     def get_tool_group_config(self, name: str) -> ToolGroupConfig | None:
-        """Get the tool group config by name.
-
-        Args:
-            name: The name of the tool group to get the config for.
-
-        Returns:
-            The tool group config if found, otherwise None.
-        """
+        """Get the tool group config by name."""
         return next((group for group in self.tool_groups if group.name == name), None)
 
 
 _app_config: AppConfig | None = None
+_app_config_version: str | None = None
+_app_config_source_path: Path | None = None
+_app_config_source_kind: str = "unknown"
+_app_config_last_error: str | None = None
+_app_config_last_loaded_at: str | None = None
+
+_reload_lock = threading.Lock()
+_last_version_check_at: float = 0.0
+_last_checked_store_version: str | None = None
+_MIN_RELOAD_INTERVAL_SECONDS = float(os.getenv("NION_CONFIG_RELOAD_THROTTLE_SECONDS", "0.8"))
 
 
-def get_app_config() -> AppConfig:
-    """Get the Nion config instance.
+def _detect_process_name(explicit: str | None = None) -> str:
+    if explicit:
+        return explicit
+    if env_name := os.getenv("NION_RUNTIME_PROCESS_NAME"):
+        return env_name
 
-    Returns a cached singleton instance. Use `reload_app_config()` to reload
-    from file, or `reset_app_config()` to clear the cache.
+    argv_text = " ".join(sys.argv).lower()
+    if "langgraph" in argv_text:
+        return "langgraph"
+    if "gateway" in argv_text or "uvicorn" in argv_text:
+        return "gateway"
+    return "runtime"
 
-    Configuration is loaded from SQLite database if available, otherwise
-    from config.yaml with automatic migration to SQLite.
-    """
+
+def _record_runtime_status(process_name: str, *, status: str, reason: str | None) -> None:
+    """Best-effort persistence of process runtime status."""
+    try:
+        store = create_config_store()
+        source_path = str(_app_config_source_path) if _app_config_source_path is not None else "unknown"
+        tools_count = len(_app_config.tools) if _app_config is not None else None
+        store.update_runtime_status(
+            process_name,
+            loaded_version=_app_config_version,
+            source_path=source_path,
+            tools_count=tools_count,
+            status=status,
+            reason=reason,
+        )
+    except Exception as exc:  # noqa: BLE001 - runtime status should not break main flow
+        logger.debug("Failed to record runtime config status: %s", exc)
+
+
+def _set_cached_config(
+    config: AppConfig,
+    *,
+    version: str | None,
+    source_path: Path | None,
+    source_kind: str,
+    process_name: str,
+) -> AppConfig:
+    global _app_config
+    global _app_config_version
+    global _app_config_source_path
+    global _app_config_source_kind
+    global _app_config_last_error
+    global _app_config_last_loaded_at
+
+    _app_config = config
+    _app_config_version = version
+    _app_config_source_path = source_path
+    _app_config_source_kind = source_kind
+    _app_config_last_error = None
+    _app_config_last_loaded_at = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
+
+    logger.info(
+        "Config loaded: source=%s path=%s version=%s tools_count=%d",
+        source_kind,
+        source_path,
+        version,
+        len(config.tools),
+    )
+    _record_runtime_status(process_name, status="ok", reason=None)
+    return config
+
+
+def _load_and_cache(config_path: str | None = None, *, process_name: str | None = None) -> AppConfig:
+    process = _detect_process_name(process_name)
+    try:
+        config, version, source_path, source_kind = AppConfig.from_store_or_file_with_meta(
+            config_path,
+            strict_env=False,
+        )
+        return _set_cached_config(
+            config,
+            version=version,
+            source_path=source_path,
+            source_kind=source_kind,
+            process_name=process,
+        )
+    except Exception as exc:  # noqa: BLE001
+        global _app_config_last_error
+        _app_config_last_error = str(exc)
+        _record_runtime_status(process, status="error", reason=str(exc))
+        raise
+
+
+def get_app_config(*, process_name: str | None = None) -> AppConfig:
+    """Get the cached config, loading it on first access."""
     global _app_config
     if _app_config is None:
-        _app_config = AppConfig.from_store_or_file()
+        return _load_and_cache(process_name=process_name)
     return _app_config
 
 
-def reload_app_config(config_path: str | None = None) -> AppConfig:
-    """Reload the config from storage and update the cached instance.
+def reload_app_config(config_path: str | None = None, *, process_name: str | None = None) -> AppConfig:
+    """Force reload config from store/file and replace cache."""
+    with _reload_lock:
+        return _load_and_cache(config_path, process_name=process_name)
 
-    This is useful when the config has been modified and you want
-    to pick up the changes without restarting the application.
 
-    Configuration is loaded from SQLite database if available, otherwise
-    from config.yaml with automatic migration to SQLite.
+def ensure_latest_app_config(*, process_name: str | None = None) -> AppConfig:
+    """Lazily reload config when SQLite version changed.
 
-    Args:
-        config_path: Optional path to config file. If not provided,
-                     uses the default resolution strategy.
-
-    Returns:
-        The newly loaded AppConfig instance.
+    This is designed for long-running processes (e.g. LangGraph worker) to
+    pick up config changes without restart.
     """
-    global _app_config
-    _app_config = AppConfig.from_store_or_file(config_path)
-    return _app_config
+    global _last_version_check_at
+    global _last_checked_store_version
+
+    process = _detect_process_name(process_name)
+
+    with _reload_lock:
+        current = get_app_config(process_name=process)
+
+        now = time.monotonic()
+        if now - _last_version_check_at < _MIN_RELOAD_INTERVAL_SECONDS:
+            return current
+        _last_version_check_at = now
+
+        store = create_config_store()
+        try:
+            store_version, _ = store.read_version()
+        except ConfigStoreNotInitializedError:
+            return current
+
+        if _app_config_version == store_version:
+            _last_checked_store_version = store_version
+            return current
+
+        logger.info(
+            "Detected config version update: cached=%s store=%s; reloading",
+            _app_config_version,
+            store_version,
+        )
+
+        try:
+            config, version, source_path = AppConfig.from_store_with_meta(strict_env=False)
+            _last_checked_store_version = version
+            return _set_cached_config(
+                config,
+                version=version,
+                source_path=source_path,
+                source_kind="sqlite",
+                process_name=process,
+            )
+        except Exception as exc:  # noqa: BLE001
+            global _app_config_last_error
+            _app_config_last_error = str(exc)
+            _record_runtime_status(process, status="error", reason=str(exc))
+            raise RuntimeError(f"Failed to reload updated config version {store_version}: {exc}") from exc
+
+
+def get_app_config_runtime_status(*, process_name: str | None = None) -> dict[str, Any]:
+    """Return runtime config status for observability."""
+    process = _detect_process_name(process_name)
+
+    store = create_config_store()
+    try:
+        store_version, store_path = store.read_version()
+        store_source_path: str | None = str(store_path)
+    except ConfigStoreNotInitializedError:
+        store_version = None
+        store_source_path = None
+
+    runtime_processes = store.read_runtime_statuses()
+
+    return {
+        "process_name": process,
+        "store_version": store_version,
+        "store_source_path": store_source_path,
+        "loaded_version": _app_config_version,
+        "loaded_source_path": str(_app_config_source_path) if _app_config_source_path is not None else None,
+        "source_kind": _app_config_source_kind,
+        "tools_count": len(_app_config.tools) if _app_config is not None else 0,
+        "loaded_tools": [tool.name for tool in _app_config.tools] if _app_config is not None else [],
+        "last_loaded_at": _app_config_last_loaded_at,
+        "last_error": _app_config_last_error,
+        "runtime_processes": runtime_processes,
+        "is_in_sync": bool(_app_config_version) and _app_config_version == store_version,
+    }
 
 
 def reset_app_config() -> None:
-    """Reset the cached config instance.
-
-    This clears the singleton cache, causing the next call to
-    `get_app_config()` to reload from file. Useful for testing
-    or when switching between different configurations.
-    """
+    """Reset cached config state (mainly for tests)."""
     global _app_config
+    global _app_config_version
+    global _app_config_source_path
+    global _app_config_source_kind
+    global _app_config_last_error
+    global _app_config_last_loaded_at
+    global _last_version_check_at
+    global _last_checked_store_version
+
     _app_config = None
+    _app_config_version = None
+    _app_config_source_path = None
+    _app_config_source_kind = "unknown"
+    _app_config_last_error = None
+    _app_config_last_loaded_at = None
+    _last_version_check_at = 0.0
+    _last_checked_store_version = None
 
 
-def set_app_config(config: AppConfig) -> None:
-    """Set a custom config instance.
-
-    This allows injecting a custom or mock config for testing purposes.
-
-    Args:
-        config: The AppConfig instance to use.
-    """
+def set_app_config(config: AppConfig, *, version: str | None = None, source_path: Path | None = None) -> None:
+    """Inject custom config instance (mainly for tests)."""
     global _app_config
+    global _app_config_version
+    global _app_config_source_path
+    global _app_config_source_kind
+    global _app_config_last_error
+    global _app_config_last_loaded_at
+
     _app_config = config
+    _app_config_version = version
+    _app_config_source_path = source_path
+    _app_config_source_kind = "injected"
+    _app_config_last_error = None
+    _app_config_last_loaded_at = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())

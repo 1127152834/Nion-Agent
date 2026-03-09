@@ -1,4 +1,4 @@
-import { SearchIcon, CheckIcon } from "lucide-react";
+import { CheckIcon } from "lucide-react";
 import {
   Command,
   CommandEmpty,
@@ -43,14 +43,32 @@ export const ModelSelectorContent = ({
 }: ModelSelectorContentProps) => (
   <PopoverContent
     className={cn(
-      "p-0 overflow-hidden",
+      "bg-popover/95 text-popover-foreground w-72 overflow-hidden rounded-xl border-0 p-0 shadow-lg backdrop-blur-sm",
       className
     )}
     align={align}
     sideOffset={sideOffset}
     {...props}
   >
-    <Command className="border-0 bg-transparent">
+    <Command
+      className={cn(
+        "border-0 bg-transparent",
+        "[&_[data-slot=command-input-wrapper]]:h-auto",
+        "[&_[data-slot=command-input-wrapper]]:border-0",
+        "[&_[data-slot=command-input-wrapper]]:gap-0",
+        "[&_[data-slot=command-input-wrapper]]:px-3",
+        "[&_[data-slot=command-input-wrapper]]:py-2",
+        "[&_[data-slot=command-input-wrapper]_svg]:hidden",
+        "[&_[data-slot=command-input]]:bg-background",
+        "[&_[data-slot=command-input]]:h-10",
+        "[&_[data-slot=command-input]]:rounded-md",
+        "[&_[data-slot=command-input]]:border",
+        "[&_[data-slot=command-input]]:border-border",
+        "[&_[data-slot=command-input]]:px-3",
+        "[&_[data-slot=command-input]]:py-2",
+        "[&_[data-slot=command-input]]:pl-3",
+      )}
+    >
       {children}
     </Command>
   </PopoverContent>
@@ -68,30 +86,21 @@ export const ModelSelectorInput = ({
   className,
   ...props
 }: ModelSelectorInputProps) => (
-  <div className="relative flex items-center border-b border-zinc-100 dark:border-zinc-800">
-    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-400" />
-    <CommandInput
-      className={cn(
-        // 简洁搜索框
-        "h-10 pl-9 pr-3",
-        "bg-transparent",
-        "text-sm text-zinc-900 dark:text-zinc-100",
-        "placeholder:text-zinc-400",
-        "border-0 outline-none ring-0",
-        "focus:ring-0 focus:outline-none",
-        "rounded-none",
-        className
-      )}
-      {...props}
-    />
-  </div>
+  <CommandInput
+    className={cn(
+      "text-foreground placeholder:text-muted-foreground text-sm",
+      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden",
+      className
+    )}
+    {...props}
+  />
 );
 
 export type ModelSelectorListProps = ComponentProps<typeof CommandList>;
 
 export const ModelSelectorList = (props: ModelSelectorListProps) => (
   <CommandList
-    className="max-h-[300px] overflow-y-auto"
+    className="max-h-[300px] overflow-y-auto p-1"
     {...props}
   />
 );
@@ -100,7 +109,7 @@ export type ModelSelectorEmptyProps = ComponentProps<typeof CommandEmpty>;
 
 export const ModelSelectorEmpty = (props: ModelSelectorEmptyProps) => (
   <CommandEmpty
-    className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400"
+    className="text-muted-foreground px-3 py-2 text-xs"
     {...props}
   />
 );
@@ -120,20 +129,9 @@ export const ModelSelectorItem = ({
 }: ModelSelectorItemProps) => (
   <CommandItem
     className={cn(
-      // 简洁列表项
-      "relative flex items-center gap-3",
-      "px-3 py-2",
-      "cursor-pointer select-none",
-      "text-sm text-zinc-700 dark:text-zinc-300",
-      // 悬停状态
-      "hover:bg-zinc-100 dark:hover:bg-zinc-800",
-      // 选中状态
-      "data-[selected=true]:bg-zinc-100 dark:data-[selected=true]:bg-zinc-800",
-      "data-[selected=true]:text-zinc-900 dark:data-[selected=true]:text-zinc-100",
-      // 聚焦状态
-      "focus:bg-zinc-100 dark:focus:bg-zinc-800",
-      "focus:outline-none",
-      // 禁用状态
+      "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm",
+      "outline-hidden select-none",
+      "hover:bg-accent/60 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground",
       "data-[disabled=true]:opacity-50 data-[disabled=true]:pointer-events-none",
       className
     )}
@@ -151,7 +149,7 @@ export const ModelSelectorShortcut = ({
 }: ModelSelectorShortcutProps) => (
   <span
     className={cn(
-      "ml-auto text-xs text-zinc-400 dark:text-zinc-500",
+      "text-muted-foreground ml-auto text-xs",
       className
     )}
     {...props}
@@ -163,7 +161,7 @@ export type ModelSelectorSeparatorProps = ComponentProps<
 >;
 
 export const ModelSelectorSeparator = (props: ModelSelectorSeparatorProps) => (
-  <CommandSeparator className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" {...props} />
+  <CommandSeparator className="bg-border my-1 h-px" {...props} />
 );
 
 // 分组标题组件
@@ -174,8 +172,8 @@ export const ModelSelectorGroupTitle = ({
 }: ComponentProps<"div">) => (
   <div
     className={cn(
-      "px-3 py-1.5 text-xs font-medium",
-      "text-zinc-500 dark:text-zinc-400",
+      "px-2 py-1 text-xs font-medium",
+      "text-muted-foreground",
       className
     )}
     {...props}
@@ -235,7 +233,7 @@ export const ModelSelectorName = ({
   <span
     className={cn(
       "flex-1 truncate text-sm font-medium",
-      "text-zinc-900 dark:text-zinc-100",
+      "text-foreground",
       className
     )}
     {...props}
@@ -250,7 +248,7 @@ export const ModelSelectorCheck = ({
   <span
     className={cn(
       "ml-auto flex items-center justify-center",
-      "text-zinc-900 dark:text-zinc-100",
+      "text-foreground",
       className
     )}
     {...props}

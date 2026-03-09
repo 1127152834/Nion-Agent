@@ -1,5 +1,7 @@
 """Unit tests for checkpointer config and singleton factory."""
 
+import importlib
+import types
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -22,6 +24,30 @@ def reset_state():
     yield
     set_checkpointer_config(None)
     reset_checkpointer()
+
+
+def _load_client_module():
+    sys.modules.pop("src.client", None)
+
+    lead_agent_pkg = types.ModuleType("src.agents.lead_agent")
+    lead_agent_pkg.__path__ = []
+    lead_agent_pkg.make_lead_agent = MagicMock()
+
+    lead_agent_agent = types.ModuleType("src.agents.lead_agent.agent")
+    lead_agent_agent._build_middlewares = MagicMock()
+
+    lead_agent_prompt = types.ModuleType("src.agents.lead_agent.prompt")
+    lead_agent_prompt.apply_prompt_template = MagicMock(return_value="")
+
+    with patch.dict(
+        sys.modules,
+        {
+            "src.agents.lead_agent": lead_agent_pkg,
+            "src.agents.lead_agent.agent": lead_agent_agent,
+            "src.agents.lead_agent.prompt": lead_agent_prompt,
+        },
+    ):
+        return importlib.import_module("src.client")
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +97,10 @@ class TestCheckpointerConfig:
 
 
 class TestGetCheckpointer:
-    def test_returns_none_when_not_configured(self):
-        assert get_checkpointer() is None
+    def test_returns_in_memory_saver_when_not_configured(self):
+        from langgraph.checkpoint.memory import InMemorySaver
+
+        assert isinstance(get_checkpointer(), InMemorySaver)
 
     def test_memory_returns_in_memory_saver(self):
         load_checkpointer_config_from_dict({"type": "memory"})
@@ -93,6 +121,11 @@ class TestGetCheckpointer:
         reset_checkpointer()
         cp2 = get_checkpointer()
         assert cp1 is not cp2
+
+    def test_missing_config_uses_singleton_default(self):
+        cp1 = get_checkpointer()
+        cp2 = get_checkpointer()
+        assert cp1 is cp2
 
     def test_sqlite_raises_when_package_missing(self):
         load_checkpointer_config_from_dict({"type": "sqlite", "connection_string": "/tmp/test.db"})
@@ -190,7 +223,8 @@ class TestClientCheckpointerFallback:
         """DeerFlowClient._ensure_agent falls back to get_checkpointer() when checkpointer=None."""
         from langgraph.checkpoint.memory import InMemorySaver
 
-        from src.client import DeerFlowClient
+        client_module = _load_client_module()
+        DeerFlowClient = client_module.DeerFlowClient
 
         load_checkpointer_config_from_dict({"type": "memory"})
 
@@ -207,12 +241,12 @@ class TestClientCheckpointerFallback:
         config_mock.checkpointer = None
 
         with (
-            patch("src.client.get_app_config", return_value=config_mock),
-            patch("src.client.create_agent", side_effect=fake_create_agent),
-            patch("src.client.create_chat_model", return_value=MagicMock()),
-            patch("src.client._build_middlewares", return_value=[]),
-            patch("src.client.apply_prompt_template", return_value=""),
-            patch("src.client.DeerFlowClient._get_tools", return_value=[]),
+            patch.object(client_module, "get_app_config", return_value=config_mock),
+            patch.object(client_module, "create_agent", side_effect=fake_create_agent),
+            patch.object(client_module, "create_chat_model", return_value=MagicMock()),
+            patch.object(client_module, "_build_middlewares", return_value=[]),
+            patch.object(client_module, "apply_prompt_template", return_value=""),
+            patch.object(client_module.DeerFlowClient, "_get_tools", return_value=[]),
         ):
             client = DeerFlowClient(checkpointer=None)
             config = client._get_runnable_config("test-thread")
@@ -223,7 +257,8 @@ class TestClientCheckpointerFallback:
 
     def test_client_explicit_checkpointer_takes_precedence(self):
         """An explicitly provided checkpointer is used even when config checkpointer is set."""
-        from src.client import DeerFlowClient
+        client_module = _load_client_module()
+        DeerFlowClient = client_module.DeerFlowClient
 
         load_checkpointer_config_from_dict({"type": "memory"})
 
@@ -241,12 +276,12 @@ class TestClientCheckpointerFallback:
         config_mock.checkpointer = None
 
         with (
-            patch("src.client.get_app_config", return_value=config_mock),
-            patch("src.client.create_agent", side_effect=fake_create_agent),
-            patch("src.client.create_chat_model", return_value=MagicMock()),
-            patch("src.client._build_middlewares", return_value=[]),
-            patch("src.client.apply_prompt_template", return_value=""),
-            patch("src.client.DeerFlowClient._get_tools", return_value=[]),
+            patch.object(client_module, "get_app_config", return_value=config_mock),
+            patch.object(client_module, "create_agent", side_effect=fake_create_agent),
+            patch.object(client_module, "create_chat_model", return_value=MagicMock()),
+            patch.object(client_module, "_build_middlewares", return_value=[]),
+            patch.object(client_module, "apply_prompt_template", return_value=""),
+            patch.object(client_module.DeerFlowClient, "_get_tools", return_value=[]),
         ):
             client = DeerFlowClient(checkpointer=explicit_cp)
             config = client._get_runnable_config("test-thread")

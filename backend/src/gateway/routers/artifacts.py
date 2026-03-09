@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
 from src.gateway.path_utils import resolve_thread_virtual_path
@@ -166,15 +166,13 @@ async def get_artifact(thread_id: str, path: str, request: Request) -> FileRespo
 async def write_artifact(
     thread_id: str,
     path: str,
-    content: str = Body(..., media_type="text/plain"),
+    request: Request,
 ) -> dict:
     """Write content to an artifact file.
 
     Args:
         thread_id: The thread ID.
         path: The artifact path with virtual prefix.
-        content: The file content to write.
-
     Returns:
         Success response with file path.
 
@@ -191,8 +189,12 @@ async def write_artifact(
     # Create parent directories if they don't exist
     actual_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Write content to file
-    actual_path.write_text(content, encoding="utf-8")
+    content = await request.body()
+    if content is None:
+        content = b""
+
+    # Write content to file (binary-safe; text clients still work via UTF-8 bytes)
+    actual_path.write_bytes(content)
 
     logger.info(f"Wrote artifact: thread_id={thread_id}, path={path}, actual_path={actual_path}")
 

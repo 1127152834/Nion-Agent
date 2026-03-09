@@ -8,14 +8,16 @@ from src.agents.lead_agent.prompt import apply_prompt_template
 from src.agents.middlewares.clarification_middleware import ClarificationMiddleware
 from src.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
 from src.agents.middlewares.memory_middleware import MemoryMiddleware
+from src.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
 from src.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
 from src.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
 from src.agents.middlewares.title_middleware import TitleMiddleware
+from src.agents.middlewares.tool_safety_guard_middleware import ToolSafetyGuardMiddleware
 from src.agents.middlewares.uploads_middleware import UploadsMiddleware
 from src.agents.middlewares.view_image_middleware import ViewImageMiddleware
 from src.agents.thread_state import ThreadState
 from src.config.agents_config import load_agent_config
-from src.config.app_config import get_app_config
+from src.config.app_config import ensure_latest_app_config
 from src.config.summarization_config import get_summarization_config
 from src.models import create_chat_model
 from src.sandbox.middleware import SandboxMiddleware
@@ -25,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def _resolve_model_name(requested_model_name: str | None = None) -> str:
     """Resolve a runtime model name safely, falling back to default if invalid. Returns None if no models are configured."""
-    app_config = get_app_config()
+    app_config = ensure_latest_app_config(process_name="langgraph")
     default_model_name = app_config.models[0].name if app_config.models else None
     if default_model_name is None:
         raise ValueError("No chat models are configured. Please configure at least one model in config.yaml.")
@@ -195,8 +197,9 @@ Being proactive with task management demonstrates thoroughness and ensures all r
     return TodoListMiddleware(system_prompt=system_prompt, tool_description=tool_description)
 
 
-# ThreadDataMiddleware must be before SandboxMiddleware to ensure thread_id is available
-# UploadsMiddleware should be after ThreadDataMiddleware to access thread_id
+# RuntimeProfileMiddleware must run before ThreadDataMiddleware.
+# ThreadDataMiddleware must be before SandboxMiddleware to ensure thread paths are prepared.
+# UploadsMiddleware should be after ThreadDataMiddleware to access resolved thread paths
 # DanglingToolCallMiddleware patches missing ToolMessages before model sees the history
 # SummarizationMiddleware should be early to reduce context before other processing
 # TodoListMiddleware should be before ClarificationMiddleware to allow todo management
@@ -214,7 +217,13 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
     Returns:
         List of middleware instances.
     """
-    middlewares = [ThreadDataMiddleware(), UploadsMiddleware(), SandboxMiddleware(), DanglingToolCallMiddleware()]
+    middlewares = [
+        RuntimeProfileMiddleware(),
+        ThreadDataMiddleware(),
+        UploadsMiddleware(),
+        SandboxMiddleware(),
+        DanglingToolCallMiddleware(),
+    ]
 
     # Add summarization middleware if enabled
     summarization_middleware = _create_summarization_middleware()
@@ -235,7 +244,7 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
 
     # Add ViewImageMiddleware only if the current model supports vision.
     # Use the resolved runtime model_name from make_lead_agent to avoid stale config values.
-    app_config = get_app_config()
+    app_config = ensure_latest_app_config(process_name="langgraph")
     model_config = app_config.get_model_config(model_name) if model_name else None
     if model_config is not None and model_config.supports_vision:
         middlewares.append(ViewImageMiddleware())
@@ -245,6 +254,9 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
     if subagent_enabled:
         max_concurrent_subagents = config.get("configurable", {}).get("max_concurrent_subagents", 3)
         middlewares.append(SubagentLimitMiddleware(max_concurrent=max_concurrent_subagents))
+
+    # Safety guard for host-mode operations
+    middlewares.append(ToolSafetyGuardMiddleware())
 
     # ClarificationMiddleware should always be last
     middlewares.append(ClarificationMiddleware())
@@ -267,6 +279,9 @@ def make_lead_agent(config: RunnableConfig):
     is_bootstrap = cfg.get("is_bootstrap", False)
     agent_name = cfg.get("agent_name")
     rss_context = cfg.get("rss_context")
+    session_mode = cfg.get("session_mode")
+    memory_read = cfg.get("memory_read")
+    memory_write = cfg.get("memory_write")
 
     agent_config = load_agent_config(agent_name) if not is_bootstrap else None
     # Custom agent model or fallback to global/default model resolution
@@ -275,7 +290,7 @@ def make_lead_agent(config: RunnableConfig):
     # Final model name resolution with request override, then agent config, then global default
     model_name = requested_model_name or agent_model_name
 
-    app_config = get_app_config()
+    app_config = ensure_latest_app_config(process_name="langgraph")
     model_config = app_config.get_model_config(model_name) if model_name else None
 
     if model_config is None:
@@ -317,6 +332,9 @@ def make_lead_agent(config: RunnableConfig):
             max_concurrent_subagents=max_concurrent_subagents,
             available_skills=set(["bootstrap"]),
             rss_context=rss_context,
+            session_mode=session_mode,
+            memory_read=memory_read,
+            memory_write=memory_write,
         )
 
         return create_agent(
@@ -337,6 +355,9 @@ def make_lead_agent(config: RunnableConfig):
             max_concurrent_subagents=max_concurrent_subagents,
             agent_name=agent_name,
             rss_context=rss_context,
+            session_mode=session_mode,
+            memory_read=memory_read,
+            memory_write=memory_write,
         ),
         state_schema=ThreadState,
     )

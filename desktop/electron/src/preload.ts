@@ -28,6 +28,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onRuntimeDownloadProgress: (callback: (data: any) => void) => {
     ipcRenderer.on("runtime:download-progress", (_, data) => callback(data));
   },
+
+  // 主机能力（受控）
+  pickHostFile: (options?: { title?: string; defaultPath?: string; kind?: "file" | "directory" }) =>
+    ipcRenderer.invoke("desktop:host-fs:pick", options),
+  readHostFile: (payload: { path: string; encoding?: BufferEncoding }) =>
+    ipcRenderer.invoke("desktop:host-fs:read", payload),
+  writeHostFile: (payload: { path: string; content: string; append?: boolean; encoding?: BufferEncoding }) =>
+    ipcRenderer.invoke("desktop:host-fs:write", payload),
+  startWatchingHostDirectory: (payload: { path: string }) =>
+    ipcRenderer.invoke("desktop:host-fs:watch-start", payload),
+  stopWatchingHostDirectory: (payload: { watchId: string }) =>
+    ipcRenderer.invoke("desktop:host-fs:watch-stop", payload),
+  onHostDirectoryChanged: (callback: (data: any) => void) => {
+    const listener = (_event: unknown, data: any) => callback(data);
+    ipcRenderer.on("desktop:host-fs:watch:event", listener);
+    return () => {
+      ipcRenderer.removeListener("desktop:host-fs:watch:event", listener);
+    };
+  },
+  invokeHostApp: (payload: { action: "open-external" | "show-item-in-folder" | "open-path"; target: string }) =>
+    ipcRenderer.invoke("desktop:host-app:invoke", payload),
 });
 
 // TypeScript 类型定义
@@ -44,6 +65,21 @@ export interface ElectronAPI {
   completeRuntimeOnboarding: () => Promise<any>;
   skipRuntimeComponent: (componentName: string) => Promise<any>;
   onRuntimeDownloadProgress: (callback: (data: any) => void) => void;
+  pickHostFile: (options?: { title?: string; defaultPath?: string; kind?: "file" | "directory" }) => Promise<{ canceled: boolean; path: string | null }>;
+  readHostFile: (payload: { path: string; encoding?: BufferEncoding }) => Promise<{ path: string; content: string; size: number; encoding: BufferEncoding }>;
+  writeHostFile: (payload: { path: string; content: string; append?: boolean; encoding?: BufferEncoding }) => Promise<{ path: string; size: number; append: boolean; encoding: BufferEncoding }>;
+  startWatchingHostDirectory: (payload: { path: string }) => Promise<{ watchId: string }>;
+  stopWatchingHostDirectory: (payload: { watchId: string }) => Promise<{ stopped: boolean }>;
+  onHostDirectoryChanged: (callback: (data: {
+    watchId: string;
+    type: "rename" | "change";
+    path: string;
+    rootPath: string;
+    watchedPath: string;
+    filename: string | null;
+    timestamp: number;
+  }) => void) => () => void;
+  invokeHostApp: (payload: { action: "open-external" | "show-item-in-folder" | "open-path"; target: string }) => Promise<{ success: boolean }>;
 }
 
 declare global {

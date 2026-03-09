@@ -7,7 +7,8 @@ from langgraph.types import Command
 from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
-from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from src.config.paths import VIRTUAL_PATH_PREFIX
+from src.gateway.path_utils import resolve_thread_virtual_path
 
 OUTPUTS_VIRTUAL_PREFIX = f"{VIRTUAL_PATH_PREFIX}/outputs"
 
@@ -16,20 +17,7 @@ def _normalize_presented_filepath(
     runtime: ToolRuntime[ContextT, ThreadState],
     filepath: str,
 ) -> str:
-    """Normalize a presented file path to the `/mnt/user-data/outputs/*` contract.
-
-    Accepts either:
-    - A virtual sandbox path such as `/mnt/user-data/outputs/report.md`
-    - A host-side thread outputs path such as
-      `/app/backend/.deer-flow/threads/<thread>/user-data/outputs/report.md`
-
-    Returns:
-        The normalized virtual path.
-
-    Raises:
-        ValueError: If runtime metadata is missing or the path is outside the
-            current thread's outputs directory.
-    """
+    """Normalize a presented file path to the `/mnt/user-data/outputs/*` contract."""
     if runtime.state is None:
         raise ValueError("Thread runtime state is not available")
 
@@ -47,9 +35,14 @@ def _normalize_presented_filepath(
     virtual_prefix = VIRTUAL_PATH_PREFIX.lstrip("/")
 
     if stripped == virtual_prefix or stripped.startswith(virtual_prefix + "/"):
-        actual_path = get_paths().resolve_virtual_path(thread_id, filepath)
+        actual_path = resolve_thread_virtual_path(thread_id, filepath)
     else:
         actual_path = Path(filepath).expanduser().resolve()
+
+    if not actual_path.exists():
+        raise ValueError(f"File not found: {filepath}")
+    if not actual_path.is_file():
+        raise ValueError(f"Path is not a file: {filepath}")
 
     try:
         relative_path = actual_path.relative_to(outputs_dir)
@@ -59,6 +52,18 @@ def _normalize_presented_filepath(
         ) from exc
 
     return f"{OUTPUTS_VIRTUAL_PREFIX}/{relative_path.as_posix()}"
+
+
+def _normalize_presentable_path(path: str) -> str | None:
+    candidate = path.strip()
+    if not candidate:
+        return None
+
+    prefix = VIRTUAL_PATH_PREFIX.rstrip("/")
+    normalized = candidate if candidate.startswith("/") else f"/{candidate}"
+    if normalized == prefix or normalized.startswith(prefix + "/"):
+        return normalized
+    return None
 
 
 @tool("present_files", parse_docstring=True)
@@ -86,23 +91,49 @@ def present_file_tool(
     Args:
         filepaths: List of absolute file paths to present to the user. **Only** files in `/mnt/user-data/outputs` can be presented.
     """
-    try:
-        normalized_paths = [
-            _normalize_presented_filepath(runtime, filepath) for filepath in filepaths
-        ]
-    except ValueError as exc:
+    has_runtime = bool(
+        runtime is not None
+        and getattr(runtime, "state", None) is not None
+        and isinstance(getattr(runtime, "context", None), dict)
+        and runtime.context.get("thread_id")
+    )
+
+    if has_runtime:
+        try:
+            normalized_paths = [
+                _normalize_presented_filepath(runtime, filepath) for filepath in filepaths
+            ]
+        except ValueError as exc:
+            return Command(
+                update={
+                    "messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]
+                },
+            )
         return Command(
             update={
-                "messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]
+                "artifacts": normalized_paths,
+                "messages": [
+                    ToolMessage("Successfully presented files", tool_call_id=tool_call_id)
+                ],
             },
         )
 
-    # The merge_artifacts reducer will handle merging and deduplication
+    valid_paths: list[str] = []
+    ignored_count = 0
+    for filepath in filepaths:
+        normalized = _normalize_presentable_path(filepath)
+        if normalized is None:
+            ignored_count += 1
+            continue
+        valid_paths.append(normalized)
+
+    message = "Successfully presented files"
+    if ignored_count > 0:
+        message = (
+            "Presented allowed files only. "
+            f"Ignored {ignored_count} path(s) outside {VIRTUAL_PATH_PREFIX}."
+        )
+
     return Command(
-        update={
-            "artifacts": normalized_paths,
-            "messages": [
-                ToolMessage("Successfully presented files", tool_call_id=tool_call_id)
-            ],
-        },
+        update={"artifacts": valid_paths, "messages": [ToolMessage(message, tool_call_id=tool_call_id)]},
     )

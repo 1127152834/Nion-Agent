@@ -56,6 +56,14 @@ def _resolve_sqlite_conn_str(raw: str) -> str:
     return str(resolve_path(raw))
 
 
+def _get_effective_checkpointer_config(config: CheckpointerConfig | None) -> CheckpointerConfig:
+    """Return explicit config or fall back to an in-process default saver."""
+    if config is not None:
+        return config
+    logger.info("Checkpointer: no explicit config found, defaulting to InMemorySaver")
+    return CheckpointerConfig(type="memory")
+
+
 @contextlib.contextmanager
 def _sync_checkpointer_cm(config: CheckpointerConfig) -> Iterator[Checkpointer]:
     """Context manager that creates and tears down a sync checkpointer.
@@ -114,7 +122,7 @@ _checkpointer_ctx = None  # open context manager keeping the connection alive
 def get_checkpointer() -> Checkpointer | None:
     """Return the global sync checkpointer singleton, creating it on first call.
 
-    Returns ``None`` when no checkpointer is configured in *config.yaml*.
+    Falls back to ``InMemorySaver`` when no explicit checkpointer is configured.
 
     Raises:
         ImportError: If the required package for the configured backend is not installed.
@@ -127,9 +135,7 @@ def get_checkpointer() -> Checkpointer | None:
 
     from src.config.checkpointer_config import get_checkpointer_config
 
-    config = get_checkpointer_config()
-    if config is None:
-        return None
+    config = _get_effective_checkpointer_config(get_checkpointer_config())
 
     _checkpointer_ctx = _sync_checkpointer_cm(config)
     _checkpointer = _checkpointer_ctx.__enter__()
@@ -170,10 +176,7 @@ def checkpointer_context() -> Iterator[Checkpointer | None]:
             graph.invoke(input, config={"configurable": {"thread_id": "1"}})
     """
 
-    config = get_app_config()
-    if config.checkpointer is None:
-        yield None
-        return
+    config = _get_effective_checkpointer_config(get_app_config().checkpointer)
 
-    with _sync_checkpointer_cm(config.checkpointer) as saver:
+    with _sync_checkpointer_cm(config) as saver:
         yield saver

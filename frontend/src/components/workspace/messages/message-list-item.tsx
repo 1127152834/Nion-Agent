@@ -1,7 +1,7 @@
 import type { Message } from "@langchain/langgraph-sdk";
-import { FileIcon, Loader2Icon } from "lucide-react";
+import { DownloadIcon, FileIcon, Loader2Icon, SquareArrowOutUpRightIcon } from "lucide-react";
 import { useParams } from "next/navigation";
-import { memo, useMemo, type ImgHTMLAttributes } from "react";
+import { memo, useMemo, useState, type ImgHTMLAttributes } from "react";
 import rehypeKatex from "rehype-katex";
 
 import { Loader } from "@/components/ai-elements/loader";
@@ -18,6 +18,8 @@ import {
 } from "@/components/ai-elements/reasoning";
 import { Task, TaskTrigger } from "@/components/ai-elements/task";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { resolveArtifactURL } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
 import {
@@ -90,20 +92,54 @@ function MessageImage({
   threadId: string;
   maxWidth?: string;
 }) {
+  const { t } = useI18n();
+  const [previewOpen, setPreviewOpen] = useState(false);
   if (!src) return null;
 
-  const imgClassName = cn("overflow-hidden rounded-lg", `max-w-[${maxWidth}]`);
+  const imgClassName = cn("overflow-hidden rounded-lg");
+  const imageStyle = { maxWidth };
 
   if (typeof src !== "string") {
-    return <img className={imgClassName} src={src} alt={alt} {...props} />;
+    return <img className={imgClassName} style={imageStyle} src={src} alt={alt} {...props} />;
   }
 
   const url = src.startsWith("/mnt/") ? resolveArtifactURL(src, threadId) : src;
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer">
-      <img className={imgClassName} src={url} alt={alt} {...props} />
-    </a>
+    <>
+      <button
+        type="button"
+        className="group/image relative cursor-zoom-in"
+        onClick={() => setPreviewOpen(true)}
+      >
+        <img className={imgClassName} style={imageStyle} src={url} alt={alt} {...props} />
+      </button>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-hidden p-3">
+          <div className="mb-2 flex justify-end gap-2">
+            <Button size="sm" variant="secondary" asChild>
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                <SquareArrowOutUpRightIcon className="size-3.5" />
+                {t.common.openInNewWindow}
+              </a>
+            </Button>
+            <Button size="sm" variant="secondary" asChild>
+              <a href={url} download>
+                <DownloadIcon className="size-3.5" />
+                {t.common.download}
+              </a>
+            </Button>
+          </div>
+          <div className="flex max-h-[76vh] items-center justify-center overflow-auto">
+            <img
+              className="h-auto max-h-[74vh] max-w-full object-contain"
+              src={url}
+              alt={alt}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -419,47 +455,65 @@ function RichFileCard({
   if (!file.path) return null;
 
   const fileUrl = resolveArtifactURL(file.path, threadId);
+  const previewPath = file.markdown_virtual_path ?? file.path;
+  const previewUrl = resolveArtifactURL(previewPath, threadId);
 
   if (isImage) {
     return (
-      <a
-        href={fileUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group border-border/40 relative block overflow-hidden rounded-lg border"
-      >
-        <img
-          src={fileUrl}
-          alt={file.filename}
-          className="h-32 w-auto max-w-60 object-cover transition-transform group-hover:scale-105"
-        />
-      </a>
+      <div className="group border-border/40 relative block overflow-hidden rounded-lg border">
+        <a href={fileUrl} target="_blank" rel="noopener noreferrer">
+          <img
+            src={fileUrl}
+            alt={file.filename}
+            className="h-32 w-auto max-w-60 object-cover transition-transform group-hover:scale-105"
+          />
+        </a>
+        <a
+          href={fileUrl}
+          download
+          className="bg-background/85 absolute top-2 right-2 inline-flex size-7 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          <DownloadIcon className="size-3.5" />
+        </a>
+      </div>
     );
   }
 
   return (
-    <div className="bg-background border-border/40 flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 shadow-sm">
-      <div className="flex items-start gap-2">
-        <FileIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-        <span
-          className="text-foreground truncate text-sm font-medium"
-          title={file.filename}
-        >
-          {file.filename}
-        </span>
+    <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+      <div className="bg-background border-border/40 hover:border-border flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 shadow-sm transition-colors">
+        <div className="flex items-start gap-2">
+          <FileIcon className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+          <span
+            className="text-foreground truncate text-sm font-medium"
+            title={file.filename}
+          >
+            {file.filename}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            <Badge
+              variant="secondary"
+              className="rounded px-1.5 py-0.5 text-[10px] font-normal"
+            >
+              {getFileTypeLabel(file.filename)}
+            </Badge>
+            {file.markdown_virtual_path ? (
+              <Badge
+                variant="outline"
+                className="rounded px-1.5 py-0.5 text-[10px] font-normal"
+              >
+                MD
+              </Badge>
+            ) : null}
+          </div>
+          <span className="text-muted-foreground text-[10px]">
+            {formatBytes(file.size)}
+          </span>
+        </div>
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <Badge
-          variant="secondary"
-          className="rounded px-1.5 py-0.5 text-[10px] font-normal"
-        >
-          {getFileTypeLabel(file.filename)}
-        </Badge>
-        <span className="text-muted-foreground text-[10px]">
-          {formatBytes(file.size)}
-        </span>
-      </div>
-    </div>
+    </a>
   );
 }
 

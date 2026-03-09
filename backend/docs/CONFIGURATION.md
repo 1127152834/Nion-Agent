@@ -75,13 +75,15 @@ Configure specific tools available to the agent:
 tools:
   - name: web_search
     group: web
-    use: src.community.tavily.tools:web_search_tool
+    use: src.community.web_search.tools:web_search_tool
+    provider: auto
     max_results: 5
     # api_key: $TAVILY_API_KEY  # Optional
+    # searxng_base_url: http://localhost:8080  # Optional preferred endpoint (otherwise use public pool)
 ```
 
 **Built-in Tools**:
-- `web_search` - Search the web (Tavily)
+- `web_search` - Search the web (auto fallback: Tavily -> SearXNG public instances)
 - `web_fetch` - Fetch web pages (Jina AI)
 - `ls` - List directory contents
 - `read_file` - Read file contents

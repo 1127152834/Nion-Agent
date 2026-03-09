@@ -1,0 +1,54 @@
+{
+  "id": "code-viewer",
+  "name": "Code Viewer",
+  "description": "Frontend project workbench with file tree, editor, build/run controls, and browser preview.",
+  "entry": "index.html",
+  "runtime": "iframe",
+  "targets": [
+    {
+      "kind": "file",
+      "extensions": ["ts", "tsx", "js", "jsx", "json", "css", "scss", "html", "md", "vue", "svelte"],
+      "priority": 95
+    },
+    {
+      "kind": "file",
+      "extensions": ["yml", "yaml", "toml", "lock"],
+      "priority": 70
+    }
+  ],
+  "capabilities": [
+    "file.read",
+    "file.write",
+    "dir.list",
+    "command.run",
+    "command.stop",
+    "log.stream",
+    "toast",
+    "state.persist"
+  ],
+  "fixtures": [
+    "fixtures/sample-project/package.json",
+    "fixtures/sample-project/src/main.tsx"
+  ],
+  "testSpec": {
+    "assertions": [
+      {
+        "type": "entry_exists",
+        "target": "index.html"
+      },
+      {
+        "type": "fixture_exists",
+        "target": "fixtures/sample-project/package.json"
+      }
+    ],
+    "commandSteps": [
+      {
+        "id": "workspace-pwd",
+        "command": "pwd",
+        "cwd": "/mnt/user-data/workspace",
+        "timeout_seconds": 30,
+        "expect_contains": ["/mnt/user-data/workspace"]
+      }
+    ]
+  }
+}

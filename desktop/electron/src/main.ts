@@ -1,6 +1,10 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import type { OpenDialogOptions } from "electron";
+import { promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { resolveRuntimePaths, type DesktopRuntimePaths } from "./paths";
+import { WorkspaceDirectoryWatcher } from "./workspace-directory-watcher";
 import { DesktopProcessManager, type DesktopRuntimePorts } from "./process-manager";
 import {
   RuntimeOptionalComponentsManager,
@@ -14,6 +18,7 @@ let runtimePorts: DesktopRuntimePorts | null = null;
 let runtimeOptionalComponentsManager: RuntimeOptionalComponentsManager | null = null;
 let startupInProgress = false;
 let isShuttingDown = false;
+const workspaceWatchers = new Map<string, { watcher: WorkspaceDirectoryWatcher; senderId: number }>();
 
 // 单实例锁
 const gotTheLock = app.requestSingleInstanceLock();
@@ -59,6 +64,7 @@ app.on("before-quit", async (event) => {
   isShuttingDown = true;
 
   try {
+    await Promise.all([...workspaceWatchers.keys()].map((watchId) => stopWorkspaceWatcher(watchId)));
     if (processManager) {
       await processManager.shutdown();
     }
@@ -101,6 +107,23 @@ async function startupRuntime(): Promise<DesktopRuntimePorts> {
   }
 }
 
+async function stopWorkspaceWatcher(watchId: string): Promise<boolean> {
+  const existing = workspaceWatchers.get(watchId);
+  if (!existing) {
+    return false;
+  }
+  workspaceWatchers.delete(watchId);
+  await existing.watcher.close();
+  return true;
+}
+
+async function stopWorkspaceWatchersForSender(senderId: number): Promise<void> {
+  const watchIds = [...workspaceWatchers.entries()]
+    .filter(([, value]) => value.senderId === senderId)
+    .map(([watchId]) => watchId);
+  await Promise.all(watchIds.map((watchId) => stopWorkspaceWatcher(watchId)));
+}
+
 function createMainWindow(): void {
   const isMac = process.platform === "darwin";
 
@@ -137,6 +160,11 @@ function createMainWindow(): void {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };
+  });
+
+  const senderId = mainWindow.webContents.id;
+  mainWindow.webContents.on("destroyed", () => {
+    void stopWorkspaceWatchersForSender(senderId);
   });
 
   mainWindow.on("closed", () => {
@@ -208,3 +236,160 @@ ipcMain.handle("desktop:open-external", async (_, url: string) => {
 ipcMain.handle("desktop:show-item-in-folder", async (_, fullPath: string) => {
   shell.showItemInFolder(fullPath);
 });
+
+ipcMain.handle(
+  "desktop:host-fs:pick",
+  async (_, options?: { title?: string; defaultPath?: string; kind?: "file" | "directory" }) => {
+    const kind = options?.kind === "directory" ? "directory" : "file";
+    const properties: OpenDialogOptions["properties"] = kind === "directory" ? ["openDirectory"] : ["openFile"];
+    const dialogOptions: OpenDialogOptions = {
+      title: options?.title ?? (kind === "directory" ? "选择目录" : "选择要导入的文件"),
+      defaultPath: options?.defaultPath,
+      properties,
+    };
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions);
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true, path: null };
+    }
+    return { canceled: false, path: result.filePaths[0] };
+  },
+);
+
+ipcMain.handle(
+  "desktop:host-fs:read",
+  async (
+    _,
+    payload: { path: string; encoding?: BufferEncoding },
+  ) => {
+    const targetPath = payload?.path;
+    if (!targetPath || typeof targetPath !== "string") {
+      throw new Error("Invalid path");
+    }
+    const encoding = (payload.encoding ?? "utf-8") as BufferEncoding;
+    const content = await fs.readFile(targetPath, { encoding });
+    const stat = await fs.stat(targetPath);
+    return {
+      path: targetPath,
+      content,
+      size: stat.size,
+      encoding,
+    };
+  },
+);
+
+ipcMain.handle(
+  "desktop:host-fs:write",
+  async (
+    _,
+    payload: { path: string; content: string; append?: boolean; encoding?: BufferEncoding },
+  ) => {
+    const targetPath = payload?.path;
+    if (!targetPath || typeof targetPath !== "string") {
+      throw new Error("Invalid path");
+    }
+    if (typeof payload.content !== "string") {
+      throw new Error("Invalid content");
+    }
+    const append = Boolean(payload.append);
+    const encoding = (payload.encoding ?? "utf-8") as BufferEncoding;
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    if (append) {
+      await fs.appendFile(targetPath, payload.content, { encoding });
+    } else {
+      await fs.writeFile(targetPath, payload.content, { encoding });
+    }
+    const stat = await fs.stat(targetPath);
+    return {
+      path: targetPath,
+      size: stat.size,
+      append,
+      encoding,
+    };
+  },
+);
+
+ipcMain.handle(
+  "desktop:host-fs:watch-start",
+  async (event, payload: { path: string }) => {
+    const targetPath = payload?.path;
+    if (!targetPath || typeof targetPath !== "string") {
+      throw new Error("Invalid watch path");
+    }
+
+    const resolvedPath = path.resolve(targetPath);
+    const stat = await fs.stat(resolvedPath);
+    if (!stat.isDirectory()) {
+      throw new Error(`Watch path is not a directory: ${resolvedPath}`);
+    }
+
+    const watchId = randomUUID();
+    const watcher = new WorkspaceDirectoryWatcher({
+      rootPath: resolvedPath,
+      onChange(change) {
+        if (event.sender.isDestroyed()) {
+          return;
+        }
+        event.sender.send("desktop:host-fs:watch:event", {
+          watchId,
+          ...change,
+        });
+      },
+    });
+
+    await watcher.start();
+    workspaceWatchers.set(watchId, {
+      watcher,
+      senderId: event.sender.id,
+    });
+
+    return { watchId };
+  },
+);
+
+ipcMain.handle(
+  "desktop:host-fs:watch-stop",
+  async (event, payload: { watchId: string }) => {
+    const watchId = payload?.watchId;
+    if (!watchId || typeof watchId !== "string") {
+      throw new Error("Invalid watch id");
+    }
+
+    const existing = workspaceWatchers.get(watchId);
+    if (!existing || existing.senderId !== event.sender.id) {
+      return { stopped: false };
+    }
+
+    await stopWorkspaceWatcher(watchId);
+    return { stopped: true };
+  },
+);
+
+ipcMain.handle(
+  "desktop:host-app:invoke",
+  async (
+    _,
+    payload: { action: "open-external" | "show-item-in-folder" | "open-path"; target: string },
+  ) => {
+    if (!payload || typeof payload.target !== "string") {
+      throw new Error("Invalid invoke payload");
+    }
+    if (payload.action === "open-external") {
+      await shell.openExternal(payload.target);
+      return { success: true };
+    }
+    if (payload.action === "show-item-in-folder") {
+      shell.showItemInFolder(payload.target);
+      return { success: true };
+    }
+    if (payload.action === "open-path") {
+      const errorMessage = await shell.openPath(payload.target);
+      if (errorMessage) {
+        throw new Error(errorMessage);
+      }
+      return { success: true };
+    }
+    throw new Error(`Unsupported host app action: ${String((payload as { action?: string }).action)}`);
+  },
+);

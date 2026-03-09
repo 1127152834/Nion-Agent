@@ -4,6 +4,7 @@ import { useI18n } from "@/core/i18n/hooks";
 
 import { ConfigValidationErrors } from "./config-validation-errors";
 import { ConfigSaveBar } from "./configuration/config-save-bar";
+import { CheckpointerSection } from "./configuration/sections/checkpointer-section";
 import { EnvironmentVariablesSection } from "./configuration/sections/environment-variables-section";
 import { SandboxSection } from "./configuration/sections/sandbox-section";
 import { SettingsSection } from "./settings-section";
@@ -38,6 +39,11 @@ export function SandboxSettingsPage() {
       ) : (
         <div className="space-y-4">
           <SandboxSection
+            config={draftConfig}
+            onChange={onConfigChange}
+            disabled={disabled}
+          />
+          <CheckpointerSection
             config={draftConfig}
             onChange={onConfigChange}
             disabled={disabled}

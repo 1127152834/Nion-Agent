@@ -12,6 +12,8 @@ class ThreadDataMiddlewareState(AgentState):
     """Compatible with the `ThreadState` schema."""
 
     thread_data: NotRequired[ThreadDataState | None]
+    execution_mode: NotRequired[str | None]
+    host_workdir: NotRequired[str | None]
 
 
 class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
@@ -74,6 +76,19 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
         thread_id = runtime.context.get("thread_id")
         if thread_id is None:
             raise ValueError("Thread ID is required in the context")
+
+        execution_mode = str(state.get("execution_mode") or "sandbox")
+        host_workdir = state.get("host_workdir")
+
+        if execution_mode == "host" and isinstance(host_workdir, str) and host_workdir.strip():
+            host_dir = host_workdir.strip()
+            return {
+                "thread_data": {
+                    "workspace_path": host_dir,
+                    "uploads_path": host_dir,
+                    "outputs_path": host_dir,
+                }
+            }
 
         if self._lazy_init:
             # Lazy initialization: only compute paths, don't create directories

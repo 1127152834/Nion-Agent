@@ -18,15 +18,20 @@ from src.gateway.routers import (
     channels,
     config,
     embedding_models,
+    langgraph_proxy,
     mcp,
     memory,
     models,
     retrieval_models,
     rss,
+    runtime_profile,
     scheduler,
     skills,
     suggestions,
+    tools,
     uploads,
+    workbench,
+    workspace,
 )
 from src.scheduler.service import shutdown_scheduler, startup_scheduler
 
@@ -50,7 +55,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Load config and check necessary environment variables at startup
     try:
-        get_app_config()
+        get_app_config(process_name="gateway")
         logger.info("Configuration loaded successfully")
     except Exception as e:
         error_msg = f"Failed to load configuration during gateway startup: {e}"
@@ -150,6 +155,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Upload and manage user files for threads",
             },
             {
+                "name": "runtime-profile",
+                "description": "Thread runtime execution profile (sandbox/host mode)",
+            },
+            {
                 "name": "agents",
                 "description": "Create and manage custom agents with per-agent config and prompts",
             },
@@ -166,6 +175,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
                 "description": "Scheduled tasks with cron/interval/event triggers and workflow execution",
             },
             {
+                "name": "tools",
+                "description": "Tool provider probe and diagnostics endpoints",
+            },
+            {
                 "name": "embedding-models",
                 "description": "Manage embedding models for memory system vector search",
             },
@@ -180,6 +193,14 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
             {
                 "name": "health",
                 "description": "Health check and system status endpoints",
+            },
+            {
+                "name": "workspace",
+                "description": "Thread workspace tree APIs for /mnt/user-data browsing",
+            },
+            {
+                "name": "workbench",
+                "description": "Workbench plugin runtime, command sessions and compatibility tests",
             },
         ],
     )
@@ -203,6 +224,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Models API is mounted at /api/models
     app.include_router(models.router)
 
+    # LangGraph proxy API is mounted at /api/langgraph/*
+    # (desktop runtime does not run nginx)
+    app.include_router(langgraph_proxy.router)
+
     # MCP API is mounted at /api/mcp
     app.include_router(mcp.router)
 
@@ -221,6 +246,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Uploads API is mounted at /api/threads/{thread_id}/uploads
     app.include_router(uploads.router)
 
+    # Runtime profile API is mounted at /api/threads/{thread_id}/runtime-profile
+    app.include_router(runtime_profile.router)
+
     # Agents API is mounted at /api/agents
     app.include_router(agents.router)
 
@@ -233,6 +261,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
     # Scheduler API is mounted at /api/scheduler
     app.include_router(scheduler.router)
 
+
+    # Tools API is mounted at /api/tools
+    app.include_router(tools.router)
+
     # Embedding models API is mounted at /api/embedding-models
     app.include_router(embedding_models.router)
 
@@ -241,6 +273,13 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Suggestions API is mounted at /api/threads/{thread_id}/suggestions
     app.include_router(suggestions.router)
+
+    # Workspace tree API is mounted at /api/threads/{thread_id}/workspace
+    app.include_router(workspace.router)
+
+    # Workbench API is mounted at /api/threads/{thread_id}/workbench and /api/workbench/plugins/*
+    app.include_router(workbench.router)
+    app.include_router(workbench.plugin_router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:

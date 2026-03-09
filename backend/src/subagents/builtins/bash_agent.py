@@ -33,10 +33,12 @@ For each command or group of commands:
 </output_format>
 
 <working_directory>
-You have access to the sandbox environment:
-- User uploads: `/mnt/user-data/uploads`
-- User workspace: `/mnt/user-data/workspace`
-- Output files: `/mnt/user-data/outputs`
+You have access to the same runtime-scoped filesystem contract as the parent agent:
+- Tool-facing uploads path: `/mnt/user-data/uploads`
+- Tool-facing workspace path: `/mnt/user-data/workspace`
+- Tool-facing output path: `/mnt/user-data/outputs`
+- In host mode, these tool-facing paths map to the conversation's bound host working directory
+- If asked about the actual current directory or current filesystem state, verify with tools instead of assuming sandbox paths
 </working_directory>
 """,
     tools=["bash", "ls", "read_file", "write_file", "str_replace"],  # Sandbox tools only

@@ -1,10 +1,12 @@
 """RSS API router."""
 
+from typing import Literal
+
 from fastapi import APIRouter, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from src.database.models.rss import Entry, Feed
-from src.services import rss_ai, rss_discovery, rss_opml, rss_store
+from src.services import rss_ai, rss_discovery, rss_opml, rss_readability, rss_store
 from src.services.rss_parser import RSSParseError, parse_rss_feed
 
 router = APIRouter(prefix="/api/rss", tags=["rss"])
@@ -65,6 +67,16 @@ class TranslateEntryResponse(BaseModel):
     language: str
     content: str
     cached: bool
+
+
+class RSSEntryReadabilityResponse(BaseModel):
+    """Response payload for entry readability extraction."""
+
+    entry_id: str
+    content: str
+    cached: bool
+    status: Literal["success", "error"]
+    message: str | None = None
 
 
 class DiscoverCategoryResponse(BaseModel):
@@ -282,6 +294,66 @@ async def update_entry(entry_id: str, request: UpdateEntryRequest) -> Entry:
         return rss_store.update_entry(entry_id, read=request.read, starred=request.starred)
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
+
+
+@router.post(
+    "/entries/{entry_id}/readability",
+    response_model=RSSEntryReadabilityResponse,
+    summary="Fetch Entry Readability",
+    description="Fetch and cache readability content for an RSS entry when native feed content is missing.",
+)
+async def fetch_entry_readability(entry_id: str) -> RSSEntryReadabilityResponse:
+    entry = rss_store.get_entry(entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
+
+    cached_readability = rss_store.get_readability(entry_id)
+    if (
+        cached_readability is not None
+        and cached_readability.status == "success"
+        and cached_readability.content.strip()
+    ):
+        return RSSEntryReadabilityResponse(
+            entry_id=entry_id,
+            content=cached_readability.content,
+            cached=True,
+            status="success",
+            message=cached_readability.message,
+        )
+
+    try:
+        content = rss_readability.extract_entry_content(entry.url)
+    except rss_readability.RSSReadabilityError as exc:
+        message = str(exc)
+        rss_store.upsert_readability(
+            entry_id=entry_id,
+            url=entry.url,
+            content="",
+            status="error",
+            message=message,
+        )
+        return RSSEntryReadabilityResponse(
+            entry_id=entry_id,
+            content="",
+            cached=False,
+            status="error",
+            message=message,
+        )
+
+    readability_item = rss_store.upsert_readability(
+        entry_id=entry_id,
+        url=entry.url,
+        content=content,
+        status="success",
+        message=None,
+    )
+    return RSSEntryReadabilityResponse(
+        entry_id=entry_id,
+        content=readability_item.content,
+        cached=False,
+        status="success",
+        message=readability_item.message,
+    )
 
 
 @router.post(

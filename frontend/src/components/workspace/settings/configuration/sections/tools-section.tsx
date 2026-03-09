@@ -73,7 +73,7 @@ const TOOL_PRESETS: ToolPreset[] = [
     id: "web_search",
     name: "web_search",
     group: "web",
-    use: "src.community.tavily.tools:web_search_tool",
+    use: "src.community.web_search.tools:web_search_tool",
     title: "Web Search",
     desc: "Allow agent to search the web.",
   },
@@ -187,7 +187,7 @@ export function ToolsSection({
       title: "工具",
       subtitle: "配置内置工具与 Web 供应商。",
       webConfigTitle: "Web 供应商配置",
-      webConfigSubtitle: "配置 Web 搜索工具所需密钥。",
+      webConfigSubtitle: "API Key 为可选项，不填写也可以使用网络能力。",
       tavilyApiKey: "Tavily API Key",
       jinaApiKey: "Jina API Key",
       placeholderApiKey: "请输入 API Key",
@@ -203,8 +203,8 @@ export function ToolsSection({
       keyTestInvalidCleared: "当前密钥无效，已清空",
       timeout: "超时（秒）",
       maxResults: "最大结果数",
-      hintEn: "仅启用你真正需要的工具。",
-      hintZh: "仅启用你真正需要的工具。",
+      hintEn: "Tavily/Jina Key 为可选项；不填写时会自动走内置兜底策略。",
+      hintZh: "Tavily/Jina Key 为可选项；不填写时会自动走内置兜底策略。",
       customInfoTemplate: "已配置 {count} 个自定义工具",
       presetTitles: {
         web_search: "网络搜索",
@@ -231,7 +231,7 @@ export function ToolsSection({
       title: "Tools",
       subtitle: "Configure built-in tools and web providers.",
       webConfigTitle: "Web provider config",
-      webConfigSubtitle: "Configure API keys for web search tools.",
+      webConfigSubtitle: "API keys are optional. Web tools still work without them.",
       tavilyApiKey: "Tavily API key",
       jinaApiKey: "Jina API key",
       placeholderApiKey: "Enter API key",
@@ -247,8 +247,8 @@ export function ToolsSection({
       keyTestInvalidCleared: "Current key is invalid and has been cleared",
       timeout: "Timeout (seconds)",
       maxResults: "Max results",
-      hintEn: "Enable only tools you actually need.",
-      hintZh: "Enable only tools you actually need.",
+      hintEn: "Tavily/Jina keys are optional; built-in fallback is used when keys are empty.",
+      hintZh: "Tavily/Jina keys are optional; built-in fallback is used when keys are empty.",
       customInfoTemplate: "{count} custom tools configured",
       presetTitles: {
         web_search: "Web Search",
@@ -351,6 +351,9 @@ export function ToolsSection({
       group: preset.group,
       use: preset.use,
     } as Record<string, unknown>;
+    if (preset.id === "web_search") {
+      updated.provider = "auto";
+    }
 
     if (patch) {
       for (const [key, value] of Object.entries(patch)) {
@@ -400,7 +403,11 @@ export function ToolsSection({
       return;
     }
     const toolConfig = isSearch ? presetTools.web_search : presetTools.web_fetch;
+
     const rawKey = asString(toolConfig?.api_key).trim();
+    const effectiveSearchProvider = isSearch
+      ? (rawKey ? "tavily" : "searxng")
+      : "tavily";
     const numericValue = isSearch
       ? Number(toInputNumber(toolConfig?.max_results ?? 1))
       : Number(toInputNumber(toolConfig?.timeout ?? 10));
@@ -420,7 +427,9 @@ export function ToolsSection({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          provider: isSearch ? "tavily" : "jina",
+          provider: isSearch
+            ? effectiveSearchProvider
+            : "jina",
           api_key: rawKey || null,
           ...(isSearch
             ? { max_results: Number.isFinite(numericValue) && numericValue > 0 ? Math.floor(numericValue) : 1 }
@@ -528,65 +537,65 @@ export function ToolsSection({
           <p className="text-muted-foreground text-xs">{copy.webConfigSubtitle}</p>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-md border p-3">
-            <div className="mb-1 text-xs font-medium">{copy.tavilyApiKey}</div>
-            <div className="flex items-start gap-2">
-              <div className="relative min-w-0 flex-1">
-                <Input
-                  className="pr-10"
-                  disabled={disabled}
-                  placeholder={copy.placeholderApiKey}
-                  type={secretVisible.web_search ? "text" : "password"}
-                  value={asString(presetTools.web_search?.api_key)}
-                  onChange={(e) => {
-                    const preset = TOOL_PRESETS.find(
-                      (item) => item.id === "web_search",
-                    );
-                    if (!preset) return;
-                    upsertPresetTool(preset, { api_key: e.target.value });
-                    setKeyTestState((prev) => ({
-                      ...prev,
-                      web_search: { status: "idle", message: "" },
-                    }));
-                  }}
-                  onBlur={() => {
-                    if (asString(presetTools.web_search?.api_key).trim()) {
-                      void runKeyTest("web_search");
-                    }
-                  }}
-                />
-                <Button
-                  aria-label={
-                    secretVisible.web_search ? copy.hide : copy.show
-                  }
-                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 p-0"
-                  disabled={disabled}
-                  size="icon-sm"
-                  type="button"
-                  variant="ghost"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                  }}
-                  onClick={() =>
-                    setSecretVisible((prev) => ({
-                      ...prev,
-                      web_search: !prev.web_search,
-                    }))
-                  }
-                >
-                  {secretVisible.web_search ? (
-                    <EyeOffIcon className="size-4" />
-                  ) : (
-                    <EyeIcon className="size-4" />
-                  )}
-                </Button>
-              </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="text-sm font-medium">{copy.tavilyApiKey}</div>
+            <div className="relative min-w-0">
               <Input
-                className="w-[76px] shrink-0 px-2"
+                className="h-10 pr-10"
+                disabled={disabled}
+                placeholder={copy.placeholderApiKey}
+                type={secretVisible.web_search ? "text" : "password"}
+                value={asString(presetTools.web_search?.api_key)}
+                onChange={(e) => {
+                  const preset = TOOL_PRESETS.find(
+                    (item) => item.id === "web_search",
+                  );
+                  if (!preset) return;
+                  upsertPresetTool(preset, { api_key: e.target.value });
+                  setKeyTestState((prev) => ({
+                    ...prev,
+                    web_search: { status: "idle", message: "" },
+                  }));
+                }}
+                onBlur={() => {
+                  if (asString(presetTools.web_search?.api_key).trim()) {
+                    void runKeyTest("web_search");
+                  }
+                }}
+              />
+              <Button
+                aria-label={
+                  secretVisible.web_search ? copy.hide : copy.show
+                }
+                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 p-0"
+                disabled={disabled}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                onClick={() =>
+                  setSecretVisible((prev) => ({
+                    ...prev,
+                    web_search: !prev.web_search,
+                  }))
+                }
+              >
+                {secretVisible.web_search ? (
+                  <EyeOffIcon className="size-4" />
+                ) : (
+                  <EyeIcon className="size-4" />
+                )}
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-muted-foreground text-xs">{copy.maxResults}</div>
+              <Input
+                className="h-10 max-w-[180px]"
                 disabled={disabled}
                 min={1}
-                placeholder={copy.maxResults}
                 type="number"
                 value={toInputNumber(presetTools.web_search?.max_results)}
                 onChange={(e) => {
@@ -607,7 +616,7 @@ export function ToolsSection({
               />
             </div>
             {keyTestState.web_search.status !== "idle" ? (
-              <div className="mt-2 flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs">
                 {keyTestState.web_search.status === "testing" ? (
                   <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
                 ) : (
@@ -634,64 +643,64 @@ export function ToolsSection({
             ) : null}
           </div>
 
-          <div className="rounded-md border p-3">
-            <div className="mb-1 text-xs font-medium">{copy.jinaApiKey}</div>
-            <div className="flex items-start gap-2">
-              <div className="relative min-w-0 flex-1">
-                <Input
-                  className="pr-10"
-                  disabled={disabled}
-                  placeholder={copy.placeholderApiKey}
-                  type={secretVisible.web_fetch ? "text" : "password"}
-                  value={asString(presetTools.web_fetch?.api_key)}
-                  onChange={(e) => {
-                    const preset = TOOL_PRESETS.find(
-                      (item) => item.id === "web_fetch",
-                    );
-                    if (!preset) return;
-                    upsertPresetTool(preset, { api_key: e.target.value });
-                    setKeyTestState((prev) => ({
-                      ...prev,
-                      web_fetch: { status: "idle", message: "" },
-                    }));
-                  }}
-                  onBlur={() => {
-                    if (asString(presetTools.web_fetch?.api_key).trim()) {
-                      void runKeyTest("web_fetch");
-                    }
-                  }}
-                />
-                <Button
-                  aria-label={
-                    secretVisible.web_fetch ? copy.hide : copy.show
-                  }
-                  className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 p-0"
-                  disabled={disabled}
-                  size="icon-sm"
-                  type="button"
-                  variant="ghost"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                  }}
-                  onClick={() =>
-                    setSecretVisible((prev) => ({
-                      ...prev,
-                      web_fetch: !prev.web_fetch,
-                    }))
-                  }
-                >
-                  {secretVisible.web_fetch ? (
-                    <EyeOffIcon className="size-4" />
-                  ) : (
-                    <EyeIcon className="size-4" />
-                  )}
-                </Button>
-              </div>
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="text-sm font-medium">{copy.jinaApiKey}</div>
+            <div className="relative min-w-0">
               <Input
-                className="w-[84px] shrink-0 px-2"
+                className="h-10 pr-10"
+                disabled={disabled}
+                placeholder={copy.placeholderApiKey}
+                type={secretVisible.web_fetch ? "text" : "password"}
+                value={asString(presetTools.web_fetch?.api_key)}
+                onChange={(e) => {
+                  const preset = TOOL_PRESETS.find(
+                    (item) => item.id === "web_fetch",
+                  );
+                  if (!preset) return;
+                  upsertPresetTool(preset, { api_key: e.target.value });
+                  setKeyTestState((prev) => ({
+                    ...prev,
+                    web_fetch: { status: "idle", message: "" },
+                  }));
+                }}
+                onBlur={() => {
+                  if (asString(presetTools.web_fetch?.api_key).trim()) {
+                    void runKeyTest("web_fetch");
+                  }
+                }}
+              />
+              <Button
+                aria-label={
+                  secretVisible.web_fetch ? copy.hide : copy.show
+                }
+                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 p-0"
+                disabled={disabled}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                }}
+                onClick={() =>
+                  setSecretVisible((prev) => ({
+                    ...prev,
+                    web_fetch: !prev.web_fetch,
+                  }))
+                }
+              >
+                {secretVisible.web_fetch ? (
+                  <EyeOffIcon className="size-4" />
+                ) : (
+                  <EyeIcon className="size-4" />
+                )}
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-muted-foreground text-xs">{copy.timeout}</div>
+              <Input
+                className="h-10 max-w-[180px]"
                 disabled={disabled}
                 min={1}
-                placeholder={copy.timeout}
                 type="number"
                 value={toInputNumber(presetTools.web_fetch?.timeout)}
                 onChange={(e) => {
@@ -712,7 +721,7 @@ export function ToolsSection({
               />
             </div>
             {keyTestState.web_fetch.status !== "idle" ? (
-              <div className="mt-2 flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs">
                 {keyTestState.web_fetch.status === "testing" ? (
                   <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
                 ) : (

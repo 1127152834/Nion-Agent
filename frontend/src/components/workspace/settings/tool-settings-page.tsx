@@ -203,6 +203,13 @@ export function ToolSettingsPage() {
       toolsLabel: "可用工具",
       emptyServer: "暂无 MCP 服务",
       loadConfigFailed: "加载配置失败",
+      runtimeTitle: "运行时配置状态",
+      runtimeSource: "生效来源",
+      runtimeVersion: "版本",
+      runtimeInSync: "已与存储版本同步",
+      runtimeOutOfSync: "尚未同步到最新存储版本",
+      runtimeWarnings: "运行时警告",
+      runtimeProcesses: "进程状态",
     }
     : {
       builtInTitle: "Built-in tools",
@@ -234,6 +241,13 @@ export function ToolSettingsPage() {
       toolsLabel: "Tools",
       emptyServer: "No MCP servers",
       loadConfigFailed: "Failed to load config",
+      runtimeTitle: "Runtime config status",
+      runtimeSource: "Source",
+      runtimeVersion: "Version",
+      runtimeInSync: "In sync with storage",
+      runtimeOutOfSync: "Not synced to latest storage version",
+      runtimeWarnings: "Runtime warnings",
+      runtimeProcesses: "Processes",
     };
   const settingsLike = t.settings as {
     toolPage?: Partial<typeof fallbackCopy>;
@@ -252,6 +266,8 @@ export function ToolSettingsPage() {
   const {
     draftConfig,
     validationErrors,
+    validationWarnings,
+    runtimeStatus,
     isLoading,
     error,
     dirty,
@@ -519,12 +535,57 @@ export function ToolSettingsPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {runtimeStatus && (
+                <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-xs">
+                  <div className="text-sm font-medium">{copy.runtimeTitle}</div>
+                  <div className="grid gap-1">
+                    <div>
+                      {copy.runtimeSource}: {runtimeStatus.loaded_source_path || "-"}
+                    </div>
+                    <div>
+                      {copy.runtimeVersion}: {runtimeStatus.loaded_version || "-"} /{" "}
+                      {runtimeStatus.store_version || "-"}
+                    </div>
+                    <div
+                      className={
+                        runtimeStatus.is_in_sync ? "text-emerald-700" : "text-amber-700"
+                      }
+                    >
+                      {runtimeStatus.is_in_sync ? copy.runtimeInSync : copy.runtimeOutOfSync}
+                    </div>
+                  </div>
+
+                  {Object.keys(runtimeStatus.runtime_processes || {}).length > 0 && (
+                    <div className="space-y-1">
+                      <div className="font-medium">{copy.runtimeProcesses}</div>
+                      {Object.entries(runtimeStatus.runtime_processes).map(([name, info]) => (
+                        <div key={name}>
+                          {name}: {info.loaded_version || "-"} ({info.status})
+                          {info.reason ? ` - ${info.reason}` : ""}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {runtimeStatus.warnings.length > 0 && (
+                    <div className="space-y-1 text-amber-800">
+                      <div className="font-medium">{copy.runtimeWarnings}</div>
+                      {runtimeStatus.warnings.map((warning, index) => (
+                        <div key={`runtime-warning-${index}`}>{warning}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <ToolsSection
                 config={draftConfig}
                 onChange={onConfigChange}
                 disabled={disabled}
               />
-              <ConfigValidationErrors errors={validationErrors} />
+              <ConfigValidationErrors
+                errors={validationErrors}
+                warnings={validationWarnings}
+              />
               <ConfigSaveBar
                 dirty={dirty}
                 disabled={disabled}

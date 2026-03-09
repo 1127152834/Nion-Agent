@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  getInstalledPluginFiles,
+  getInstalledPluginMetadataById,
   installPlugin,
   listInstalledPlugins,
   loadInstalledPlugin,
+  runInstalledPluginTest,
   uninstallPlugin,
   updateInstalledPluginMetadata,
 } from "./loader";
 import { getWorkbenchRegistry } from "./registry";
-import type { InstalledPlugin, WorkbenchPlugin } from "./types";
+import type { PluginTestReport } from "./types";
 
 /**
  * Query key factory
@@ -36,6 +39,26 @@ export function usePlugin(pluginId: string) {
   return useQuery({
     queryKey: workbenchKeys.plugin(pluginId),
     queryFn: () => loadInstalledPlugin(pluginId),
+    enabled: !!pluginId,
+  });
+}
+
+/**
+ * Hook to load raw installed plugin package (manifest + files)
+ */
+export function useInstalledPluginPackage(pluginId: string) {
+  return useQuery({
+    queryKey: [...workbenchKeys.plugin(pluginId), "package"],
+    queryFn: async () => {
+      const [metadata, files] = await Promise.all([
+        getInstalledPluginMetadataById(pluginId),
+        getInstalledPluginFiles(pluginId),
+      ]);
+      if (!metadata) {
+        return null;
+      }
+      return { metadata, files };
+    },
     enabled: !!pluginId,
   });
 }
@@ -121,6 +144,28 @@ export function useTogglePlugin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
+    },
+  });
+}
+
+/**
+ * Hook to run plugin compatibility test
+ */
+export function useTestInstalledPlugin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginId,
+      threadId,
+    }: {
+      pluginId: string;
+      threadId?: string;
+    }): Promise<PluginTestReport> => {
+      return runInstalledPluginTest(pluginId, { threadId });
+    },
+    onSuccess: (_report, variables) => {
+      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
+      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugin(variables.pluginId) });
     },
   });
 }

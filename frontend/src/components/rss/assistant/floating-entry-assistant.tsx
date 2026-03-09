@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 
 // Import new assistant components
 import { AICharacter3D } from "./ai-character-3d";
+import { RSSAssistantSpline } from "./ai-spline";
 import { AssistantInput } from "./assistant-input";
 import { AssistantMessage } from "./assistant-message";
 
@@ -292,7 +293,20 @@ export function FloatingEntryAssistant({
   );
 
   if (!open) {
-    return null;
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenChange(true)}
+        className={cn(
+          "fixed right-4 bottom-4 z-50 overflow-hidden rounded-2xl border border-border bg-background shadow-lg transition-transform hover:scale-105 active:scale-95 md:right-6 md:bottom-6",
+          className,
+        )}
+        aria-label={t.rssReader.openAssistant}
+        title={t.rssReader.openAssistant}
+      >
+        <RSSAssistantSpline className="size-16 md:size-[72px]" />
+      </button>
+    );
   }
 
   return (

@@ -10,7 +10,7 @@ Usage (e.g. FastAPI lifespan)::
     from src.agents.checkpointer.async_provider import make_checkpointer
 
     async with make_checkpointer() as checkpointer:
-        app.state.checkpointer = checkpointer  # None if not configured
+        app.state.checkpointer = checkpointer
 
 For sync usage see :mod:`src.agents.checkpointer.provider`.
 """
@@ -27,6 +27,7 @@ from src.agents.checkpointer.provider import (
     POSTGRES_CONN_REQUIRED,
     POSTGRES_INSTALL,
     SQLITE_INSTALL,
+    _get_effective_checkpointer_config,
     _resolve_sqlite_conn_str,
 )
 from src.config.app_config import get_app_config
@@ -94,14 +95,10 @@ async def make_checkpointer() -> AsyncIterator[Checkpointer | None]:
         async with make_checkpointer() as checkpointer:
             app.state.checkpointer = checkpointer
 
-    Yields ``None`` when no checkpointer is configured in *config.yaml*.
+    Falls back to ``InMemorySaver`` when no explicit checkpointer is configured.
     """
 
-    config = get_app_config()
+    config = _get_effective_checkpointer_config(get_app_config().checkpointer)
 
-    if config.checkpointer is None:
-        yield None
-        return
-
-    async with _async_checkpointer(config.checkpointer) as saver:
+    async with _async_checkpointer(config) as saver:
         yield saver

@@ -24,16 +24,17 @@ import {
   loadRetrievalModelsStatus,
   RetrievalApiError,
   setActiveRetrievalModel,
+  setActiveRetrievalPack,
   testRetrievalProviderConnection,
   testRetrievalEmbedding,
   testRetrievalRerank,
-  downloadRetrievalModel,
   downloadRetrievalModelWithProgress,
   importRetrievalModel,
   removeRetrievalModel,
+  deleteRetrievalPack,
   type RetrievalFamily,
+  type RetrievalPackId,
   type RetrievalOperationResponse,
-  type DownloadProgressCallback,
 } from "@/core/retrieval-models/api";
 
 import { ConfigValidationErrors } from "./config-validation-errors";
@@ -62,6 +63,19 @@ type RetrievalModelItem = {
   installed: boolean;
   is_active?: boolean;
   is_configured_active?: boolean;
+};
+
+type RetrievalPackItem = {
+  pack_id: RetrievalPackId;
+  display_name: string;
+  locale?: string;
+  approx_size_bytes: number;
+  installed: boolean;
+  installed_count: number;
+  total_count: number;
+  status: "not_installed" | "partial" | "installed";
+  is_active_pack: boolean;
+  models: RetrievalModelItem[];
 };
 
 type PendingRemove = {
@@ -123,6 +137,11 @@ const FALLBACK_MODEL_CATALOG: Record<RetrievalFamily, Array<{ model_id: string; 
       approx_size_bytes: 32 * 1024 * 1024,
     },
   ],
+};
+
+const PACK_MODEL_MAP: Record<RetrievalPackId, { embedding: string; rerank: string }> = {
+  zh: { embedding: "zh-embedding-lite", rerank: "zh-rerank-lite" },
+  en: { embedding: "en-embedding-lite", rerank: "en-rerank-lite" },
 };
 
 function getDesktopBridge(): DesktopBridge | null {
@@ -194,6 +213,67 @@ function parseStatusModels(statusResponse: RetrievalOperationResponse | null): R
   };
 }
 
+function parseStatusPacks(statusResponse: RetrievalOperationResponse | null): RetrievalPackItem[] {
+  const result = statusResponse?.result;
+  if (!result || typeof result !== "object") {
+    return [];
+  }
+  const packsRaw = (result as { packs?: unknown }).packs;
+  if (!Array.isArray(packsRaw)) {
+    return [];
+  }
+  const parsed: RetrievalPackItem[] = [];
+  for (const item of packsRaw) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const row = item as Record<string, unknown>;
+    const packId = asString(row.pack_id).trim() as RetrievalPackId;
+    if (packId !== "zh" && packId !== "en") {
+      continue;
+    }
+    const rawModels = Array.isArray(row.models) ? row.models : [];
+    const models: RetrievalModelItem[] = [];
+    for (const modelItem of rawModels) {
+      if (!modelItem || typeof modelItem !== "object") {
+        continue;
+      }
+      const modelRow = modelItem as Record<string, unknown>;
+      const modelId = asString(modelRow.model_id).trim();
+      const family = asString(modelRow.family).trim() as RetrievalFamily;
+      if (!modelId || (family !== "embedding" && family !== "rerank")) {
+        continue;
+      }
+      models.push({
+        model_id: modelId,
+        family,
+        display_name: asString(modelRow.display_name).trim() || modelId,
+        approx_size_bytes: Number(modelRow.approx_size_bytes ?? 0),
+        license: typeof modelRow.license === "string" ? modelRow.license : undefined,
+        locale: typeof modelRow.locale === "string" ? modelRow.locale : undefined,
+        installed: Boolean(modelRow.installed),
+        is_active: Boolean(modelRow.is_active),
+        is_configured_active: Boolean(modelRow.is_configured_active),
+      });
+    }
+    const totalCount = Number(row.total_count ?? models.length ?? 0);
+    const installedCount = Number(row.installed_count ?? models.filter((model) => model.installed).length);
+    parsed.push({
+      pack_id: packId,
+      display_name: asString(row.display_name).trim() || packId,
+      locale: asString(row.locale).trim() || undefined,
+      approx_size_bytes: Number(row.approx_size_bytes ?? 0),
+      installed: Boolean(row.installed),
+      installed_count: installedCount,
+      total_count: totalCount,
+      status: (asString(row.status).trim() as RetrievalPackItem["status"]) || "not_installed",
+      is_active_pack: Boolean(row.is_active_pack),
+      models,
+    });
+  }
+  return parsed;
+}
+
 function canUseCredential(value: string): boolean {
   const normalized = value.trim();
   return normalized.length > 0 && !normalized.startsWith("$");
@@ -214,20 +294,28 @@ export function RetrievalSettingsPage() {
     onConfigChange,
     onDiscard,
     onSave,
+    onSaveConfig,
     refetchConfig,
   } = useConfigEditor();
 
-  const [activeTab, setActiveTab] = useState<"embedding" | "rerank" | "testing">("embedding");
+  const [activeTab, setActiveTab] = useState<"packs" | "testing">("packs");
   const [legacyApiMode, setLegacyApiMode] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusResponse, setStatusResponse] = useState<RetrievalOperationResponse | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [packNormalizedToastShown, setPackNormalizedToastShown] = useState(false);
   const [activeAction, setActiveAction] = useState<string>("");
   const [downloadProgress, setDownloadProgress] = useState<{
     modelId: string;
     downloaded: number;
     total: number | null;
     percentage: number | null;
+  } | null>(null);
+  const [packDownloadProgress, setPackDownloadProgress] = useState<{
+    packId: RetrievalPackId;
+    completed: number;
+    total: number;
+    currentModelId: string | null;
   } | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [pendingRemove, setPendingRemove] = useState<PendingRemove | null>(null);
@@ -257,6 +345,19 @@ export function RetrievalSettingsPage() {
   const rerankProvider = useMemo(() => asObject(providers.rerank_api), [providers.rerank_api]);
 
   const parsedModels = useMemo(() => parseStatusModels(statusResponse), [statusResponse]);
+  const parsedPacks = useMemo(() => parseStatusPacks(statusResponse), [statusResponse]);
+  const downloadedPackCount = useMemo(
+    () => parsedPacks.filter((pack) => pack.status !== "not_installed").length,
+    [parsedPacks],
+  );
+  const activePackId = useMemo(() => {
+    const result = statusResponse?.result;
+    if (!result || typeof result !== "object") {
+      return null;
+    }
+    const raw = asString(asObject(result).active_pack_id).trim();
+    return raw === "zh" || raw === "en" ? (raw as RetrievalPackId) : null;
+  }, [statusResponse]);
   const statusProviders = useMemo(() => {
     const result = statusResponse?.result;
     if (!result || typeof result !== "object") {
@@ -278,6 +379,17 @@ export function RetrievalSettingsPage() {
     }
     return false;
   };
+
+  const isFetchTransportError = (err: unknown): boolean => {
+    if (err instanceof RetrievalApiError) {
+      return false;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    return /failed to fetch|network ?error|load failed|err_failed/i.test(message);
+  };
+
+  const shouldUseCompatFallback = (err: unknown): boolean =>
+    isRouteNotFoundError(err) || isFetchTransportError(err);
 
   const isDesktopHandlerMissingError = (err: unknown): boolean => {
     const message = err instanceof Error ? err.message : String(err);
@@ -349,6 +461,48 @@ export function RetrievalSettingsPage() {
       })),
     };
 
+    const inferActivePackId = (): RetrievalPackId | null => {
+      const embeddingModelId = asString(activeEmbedding.model_id).trim();
+      const rerankModelId = asString(activeRerank.model_id).trim();
+      if (
+        asString(activeEmbedding.provider) !== "local_onnx"
+        || asString(activeRerank.provider) !== "local_onnx"
+      ) {
+        return null;
+      }
+      for (const packId of ["zh", "en"] as const) {
+        const member = PACK_MODEL_MAP[packId];
+        if (member.embedding === embeddingModelId && member.rerank === rerankModelId) {
+          return packId;
+        }
+      }
+      return null;
+    };
+
+    const activePackId = inferActivePackId();
+    const packs: RetrievalPackItem[] = (["zh", "en"] as const).map((packId) => {
+      const mapping = PACK_MODEL_MAP[packId];
+      const modelList = [
+        models_by_family.embedding.find((item) => item.model_id === mapping.embedding),
+        models_by_family.rerank.find((item) => item.model_id === mapping.rerank),
+      ].filter((item): item is RetrievalModelItem => Boolean(item));
+      const installedCount = modelList.filter((item) => item.installed).length;
+      const totalCount = 2;
+      const status = installedCount === 0 ? "not_installed" : (installedCount === totalCount ? "installed" : "partial");
+      return {
+        pack_id: packId,
+        display_name: packId === "zh" ? "中文检索包" : "English Retrieval Pack",
+        locale: packId === "zh" ? "zh-CN" : "en-US",
+        approx_size_bytes: modelList.reduce((sum, item) => sum + item.approx_size_bytes, 0),
+        installed: installedCount === totalCount,
+        installed_count: installedCount,
+        total_count: totalCount,
+        status,
+        is_active_pack: activePackId === packId,
+        models: modelList,
+      };
+    });
+
     return {
       status: "degraded",
       latency_ms: 0,
@@ -363,6 +517,9 @@ export function RetrievalSettingsPage() {
           embedding: activeEmbedding,
           rerank: activeRerank,
         },
+        active_pack_id: activePackId,
+        normalization_applied: false,
+        packs,
         models_by_family,
         compatibility_mode: true,
       },
@@ -378,13 +535,13 @@ export function RetrievalSettingsPage() {
       setLegacyApiMode(false);
       return response;
     } catch (err) {
-      if (isRouteNotFoundError(err)) {
+      if (shouldUseCompatFallback(err)) {
         const fallbackResponse = await buildFallbackStatusResponse();
         setStatusResponse(fallbackResponse);
         setLegacyApiMode(true);
         setStatusError(
-          m?.statusApiUnsupported
-            ?? "Current backend does not expose retrieval-model routes. Fallback mode is enabled.",
+          m?.routeMissingCompatApplied
+            ?? "Retrieval route missing. Applied via config compatibility mode.",
         );
         return fallbackResponse;
       }
@@ -399,6 +556,18 @@ export function RetrievalSettingsPage() {
   useEffect(() => {
     void loadStatus();
   }, []);
+
+  useEffect(() => {
+    const result = statusResponse?.result;
+    if (!result || typeof result !== "object") {
+      return;
+    }
+    const normalized = asBoolean(asObject(result).normalization_applied, false);
+    if (normalized && !packNormalizedToastShown) {
+      toast.success(t.settings.retrieval.packNormalizedHint ?? "已自动修正为同语言检索组合。");
+      setPackNormalizedToastShown(true);
+    }
+  }, [packNormalizedToastShown, statusResponse, t.settings.retrieval.packNormalizedHint]);
 
   useEffect(() => {
     if (!desktopBridge?.onRetrievalModelDownloadProgress) {
@@ -462,23 +631,47 @@ export function RetrievalSettingsPage() {
     modelId?: string,
     model?: string,
   ): Promise<boolean> => {
-    updateRetrievalConfig((current) => {
-      const active = asObject(current.active);
-      const target = asObject(active[family]);
-      target.provider = provider;
-      target.model_id = provider === "local_onnx" ? (modelId ?? null) : null;
-      target.model = provider === "local_onnx" ? null : (model ?? null);
-      active[family] = target;
-      return {
-        ...current,
-        active,
-      };
-    });
+    const next = cloneConfig(draftConfig);
+    const retrieval = asObject(next.retrieval_models);
+    const active = asObject(retrieval.active);
+    const target = asObject(active[family]);
+    target.provider = provider;
+    target.model_id = provider === "local_onnx" ? (modelId ?? null) : null;
+    target.model = provider === "local_onnx" ? null : (model ?? null);
+    active[family] = target;
+    retrieval.active = active;
+    next.retrieval_models = retrieval;
 
-    await new Promise<void>((resolve) => {
-      window.setTimeout(() => resolve(), 0);
-    });
-    const saved = await onSave();
+    onConfigChange(next);
+    const saved = await onSaveConfig(next);
+    if (!saved) {
+      return false;
+    }
+    await refetchConfig();
+    await loadStatus();
+    return true;
+  };
+
+  const persistLocalPackThroughConfig = async (packId: RetrievalPackId): Promise<boolean> => {
+    const mapping = PACK_MODEL_MAP[packId];
+    const next = cloneConfig(draftConfig);
+    const retrieval = asObject(next.retrieval_models);
+    const active = asObject(retrieval.active);
+    const embedding = asObject(active.embedding);
+    embedding.provider = "local_onnx";
+    embedding.model_id = mapping.embedding;
+    embedding.model = null;
+    const rerank = asObject(active.rerank);
+    rerank.provider = "local_onnx";
+    rerank.model_id = mapping.rerank;
+    rerank.model = null;
+    active.embedding = embedding;
+    active.rerank = rerank;
+    retrieval.active = active;
+    next.retrieval_models = retrieval;
+
+    onConfigChange(next);
+    const saved = await onSaveConfig(next);
     if (!saved) {
       return false;
     }
@@ -556,7 +749,20 @@ export function RetrievalSettingsPage() {
         try {
           const response = await removeRetrievalModel(modelId);
           if (response.status !== "ok") {
-            throw new Error(response.error_code ?? "remove_failed");
+            const errorCode = response.error_code ?? "remove_failed";
+            if (errorCode === "retrieval_active_model_remove_forbidden") {
+              throw new Error(
+                t.settings.retrieval.packDeleteActiveForbidden
+                  ?? "当前启用组合包不可删除，请先启用另一个组合包。",
+              );
+            }
+            if (errorCode === "retrieval_pack_keep_one_required") {
+              throw new Error(
+                t.settings.retrieval.packDeleteKeepOneRequired
+                  ?? "至少保留一个已下载组合包，请先下载并启用另一个组合包。",
+              );
+            }
+            throw new Error(errorCode);
           }
           await loadStatus();
           return true;
@@ -595,6 +801,193 @@ export function RetrievalSettingsPage() {
         : (err instanceof Error ? err.message : String(err));
       toast.error(`${t.settings.retrieval.operationFailedPrefix}${message}`);
       return false;
+    } finally {
+      setActiveAction("");
+    }
+  };
+
+  const handleSetActivePack = async (
+    packId: RetrievalPackId,
+    options?: { suppressSuccessToast?: boolean; manageAction?: boolean },
+  ): Promise<boolean> => {
+    const suppressSuccessToast = options?.suppressSuccessToast ?? false;
+    const manageAction = options?.manageAction ?? true;
+    if (manageAction) {
+      setActiveAction(`enable-pack:${packId}`);
+    }
+    try {
+      if (legacyApiMode) {
+        const ok = await persistLocalPackThroughConfig(packId);
+        if (ok) {
+          if (!suppressSuccessToast) {
+            toast.success(t.settings.retrieval.setActiveSuccess);
+          }
+          return true;
+        }
+      }
+      const response = await setActiveRetrievalPack(packId);
+      if (response.status !== "ok") {
+        throw new Error(response.error_code ?? "set_active_pack_failed");
+      }
+      if (!suppressSuccessToast) {
+        const migrationResult = response.result?.migration;
+        if (migrationResult && typeof migrationResult === "object" && "migrated" in migrationResult && migrationResult.migrated === true) {
+          toast.success(t.settings.retrieval.migrationSuccess);
+        } else {
+          toast.success(t.settings.retrieval.setActiveSuccess);
+        }
+      }
+      await loadStatus();
+      await refetchConfig();
+      return true;
+    } catch (err) {
+      if (shouldUseCompatFallback(err)) {
+        const ok = await persistLocalPackThroughConfig(packId);
+        if (ok) {
+          setLegacyApiMode(true);
+          setStatusError(
+            m?.routeMissingCompatApplied
+              ?? "Retrieval route missing. Applied via config compatibility mode.",
+          );
+          if (!suppressSuccessToast) {
+            toast.success(t.settings.retrieval.setActiveSuccess);
+          }
+          return true;
+        }
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`${t.settings.retrieval.operationFailedPrefix}${message}`);
+      return false;
+    } finally {
+      if (manageAction) {
+        setActiveAction("");
+      }
+    }
+  };
+
+  const downloadSingleModelForPack = async (modelId: string): Promise<boolean> => {
+    if (desktopBridge?.downloadRetrievalModel) {
+      try {
+        const result = await desktopBridge.downloadRetrievalModel(modelId);
+        if (result?.success === false) {
+          throw new Error(result.message ?? "download_failed");
+        }
+        return true;
+      } catch (err) {
+        const message = isDesktopHandlerMissingError(err)
+          ? (m?.desktopModelActionUnsupported
+            ?? "This desktop runtime does not support model actions yet. Please restart or upgrade desktop.")
+          : (err instanceof Error ? err.message : String(err));
+        toast.error(`${t.settings.retrieval.operationFailedPrefix}${message}`);
+        return false;
+      }
+    }
+
+    setDownloadProgress({ modelId, downloaded: 0, total: null, percentage: null });
+    try {
+      const response = await downloadRetrievalModelWithProgress(modelId, (progress) => {
+        setDownloadProgress({
+          modelId,
+          downloaded: progress.downloaded,
+          total: progress.total,
+          percentage: progress.percentage,
+        });
+      });
+      if (response.status !== "ok") {
+        throw new Error(response.error_code ?? "download_failed");
+      }
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`${t.settings.retrieval.operationFailedPrefix}${message}`);
+      return false;
+    } finally {
+      setDownloadProgress(null);
+    }
+  };
+
+  const handleDownloadAndEnablePack = async (packId: RetrievalPackId) => {
+    setActiveAction(`download-enable-pack:${packId}`);
+    try {
+      const mapping = PACK_MODEL_MAP[packId];
+      const modelIds = [mapping.embedding, mapping.rerank];
+      const pack = parsedPacks.find((item) => item.pack_id === packId);
+      const installedModelIds = new Set(
+        (pack?.models ?? [])
+          .filter((item) => item.installed)
+          .map((item) => item.model_id),
+      );
+      const pendingModelIds = modelIds.filter((modelId) => !installedModelIds.has(modelId));
+
+      setPackDownloadProgress({
+        packId,
+        completed: 0,
+        total: pendingModelIds.length,
+        currentModelId: pendingModelIds[0] ?? null,
+      });
+
+      for (const [index, modelId] of pendingModelIds.entries()) {
+        setPackDownloadProgress({
+          packId,
+          completed: index,
+          total: pendingModelIds.length,
+          currentModelId: modelId,
+        });
+        const ok = await downloadSingleModelForPack(modelId);
+        if (!ok) {
+          return;
+        }
+      }
+
+      setPackDownloadProgress({
+        packId,
+        completed: pendingModelIds.length,
+        total: pendingModelIds.length,
+        currentModelId: null,
+      });
+
+      await loadStatus();
+      const activated = await handleSetActivePack(packId, {
+        suppressSuccessToast: true,
+        manageAction: false,
+      });
+      if (activated) {
+        await refetchConfig();
+        toast.success(t.settings.retrieval.packDownloadAndEnableSuccess ?? "组合下载并启用成功。");
+        return;
+      }
+    } finally {
+      setPackDownloadProgress(null);
+      setDownloadProgress(null);
+      setActiveAction("");
+    }
+  };
+
+  const handleDeletePack = async (packId: RetrievalPackId) => {
+    setActiveAction(`delete-pack:${packId}`);
+    try {
+      const response = await deleteRetrievalPack(packId);
+      if (response.status !== "ok") {
+        const errorCode = response.error_code ?? "delete_pack_failed";
+        if (errorCode === "retrieval_active_model_remove_forbidden") {
+          throw new Error(
+            t.settings.retrieval.packDeleteActiveForbidden
+              ?? "当前启用组合包不可删除，请先启用另一个组合包。",
+          );
+        }
+        if (errorCode === "retrieval_pack_keep_one_required") {
+          throw new Error(
+            t.settings.retrieval.packDeleteKeepOneRequired
+              ?? "至少保留一个已下载组合包，请先下载并启用另一个组合包。",
+          );
+        }
+        throw new Error(errorCode);
+      }
+      await loadStatus();
+      toast.success(t.settings.retrieval.packDeleteSuccess ?? "组合包已删除。");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`${t.settings.retrieval.operationFailedPrefix}${message}`);
     } finally {
       setActiveAction("");
     }
@@ -950,6 +1343,142 @@ export function RetrievalSettingsPage() {
     }
   };
 
+  const renderPackCards = () => {
+    if (parsedPacks.length === 0) {
+      return <div className="text-muted-foreground text-sm">{t.settings.retrieval.noModels}</div>;
+    }
+
+    return (
+      <div className="space-y-3">
+        {parsedPacks.map((pack) => {
+          const isBusy = activeAction !== "";
+          const isPackDownloading = activeAction === `download-enable-pack:${pack.pack_id}`;
+          const isPackEnabling = activeAction === `enable-pack:${pack.pack_id}`;
+          const isPackDeleting = activeAction === `delete-pack:${pack.pack_id}`;
+          const packDownloadMeta = packDownloadProgress?.packId === pack.pack_id
+            ? packDownloadProgress
+            : null;
+          const currentDownloadModel = packDownloadMeta?.currentModelId
+            ? pack.models.find((item) => item.model_id === packDownloadMeta.currentModelId)
+            : null;
+          const packDownloadStatusText = packDownloadMeta?.currentModelId
+            ? progressByModel[packDownloadMeta.currentModelId]
+            : "";
+          const packByteProgress = packDownloadMeta?.currentModelId
+            && downloadProgress?.modelId === packDownloadMeta.currentModelId
+            ? downloadProgress
+            : null;
+          const canEnable = pack.status === "installed" && !pack.is_active_pack && !isBusy;
+          const canDownloadAndEnable = !isBusy && pack.status !== "installed";
+          const canDelete = !isBusy
+            && pack.status !== "not_installed"
+            && !pack.is_active_pack
+            && downloadedPackCount > 1;
+          const statusLabel = pack.status === "installed"
+            ? t.settings.retrieval.statusInstalled
+            : t.settings.retrieval.statusNotInstalled;
+
+          return (
+            <div key={pack.pack_id} className="space-y-3 rounded-md border p-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold">{pack.display_name}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {pack.pack_id.toUpperCase()} · {pack.locale ?? "--"} · {formatSize(pack.approx_size_bytes)}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={pack.status === "installed" ? "default" : "secondary"}>
+                    {statusLabel}
+                  </Badge>
+                  {pack.is_active_pack ? <Badge variant="outline">{t.settings.retrieval.statusActive}</Badge> : null}
+                </div>
+              </div>
+
+              <div className="text-muted-foreground text-xs">
+                {pack.models.map((model) => `${model.family === "embedding" ? t.settings.retrieval.tabEmbedding : t.settings.retrieval.tabRerank}: ${model.display_name}`).join(" · ")}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {pack.status !== "installed" ? (
+                  <Button
+                    size="sm"
+                    disabled={!canDownloadAndEnable}
+                    onClick={() => {
+                      void handleDownloadAndEnablePack(pack.pack_id);
+                    }}
+                  >
+                    {isPackDownloading ? <Loader2Icon className="mr-1 size-4 animate-spin" /> : <DownloadIcon className="mr-1 size-4" />}
+                    {t.settings.retrieval.packActionDownloadAndEnable ?? "下载并启用"}
+                  </Button>
+                ) : pack.is_active_pack ? (
+                  <Button size="sm" disabled>
+                    {t.settings.retrieval.actionEnabled}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    disabled={!canEnable}
+                    onClick={() => {
+                      void handleSetActivePack(pack.pack_id);
+                    }}
+                  >
+                    {isPackEnabling ? <Loader2Icon className="mr-1 size-4 animate-spin" /> : null}
+                    {t.settings.retrieval.packActionEnable ?? "启用组合"}
+                  </Button>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!canDelete}
+                  onClick={() => {
+                    void handleDeletePack(pack.pack_id);
+                  }}
+                >
+                  {isPackDeleting ? <Loader2Icon className="mr-1 size-4 animate-spin" /> : <Trash2Icon className="mr-1 size-4" />}
+                  {t.settings.retrieval.packActionDelete ?? "删除组合包"}
+                </Button>
+              </div>
+
+              {packDownloadMeta ? (
+                <div className="space-y-1">
+                  <div className="text-muted-foreground text-xs">
+                    {`下载进度 ${packDownloadMeta.completed}/${packDownloadMeta.total}${
+                      currentDownloadModel ? ` · ${currentDownloadModel.display_name}` : ""
+                    }`}
+                  </div>
+                  {packByteProgress ? (
+                    <div className="space-y-1">
+                      <div className="text-muted-foreground text-xs">
+                        {packByteProgress.percentage !== null
+                          ? `${packByteProgress.percentage}%`
+                          : "0%"}
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded bg-muted">
+                        <div
+                          className="h-full bg-primary transition-all"
+                          style={{
+                            width: packByteProgress.percentage
+                              ? `${packByteProgress.percentage}%`
+                              : "0%",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
+                  {packDownloadStatusText ? (
+                    <div className="text-muted-foreground text-xs">{packDownloadStatusText}</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderModelCards = (family: RetrievalFamily) => {
     const models = parsedModels[family];
     if (models.length === 0) {
@@ -965,8 +1494,8 @@ export function RetrievalSettingsPage() {
           const canDownload = true;
           // Import is always available (backend API with file upload)
           const canImport = true;
-          // Remove is always available (backend API fallback)
-          const canRemove = true;
+          // Active local model cannot be removed until switched away.
+          const canRemove = !model.is_active;
           const isConfiguredActive = Boolean(model.is_configured_active);
 
           return (
@@ -1434,11 +1963,10 @@ export function RetrievalSettingsPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Tabs
               value={activeTab}
-              onValueChange={(value) => setActiveTab(value as "embedding" | "rerank" | "testing")}
+              onValueChange={(value) => setActiveTab(value as "packs" | "testing")}
             >
               <TabsList variant="line">
-                <TabsTrigger value="embedding">{t.settings.retrieval.tabEmbedding}</TabsTrigger>
-                <TabsTrigger value="rerank">{t.settings.retrieval.tabRerank}</TabsTrigger>
+                <TabsTrigger value="packs">{t.settings.retrieval.tabPacks ?? "组合"}</TabsTrigger>
                 <TabsTrigger value="testing">{t.settings.retrieval.tabTesting}</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -1458,10 +1986,17 @@ export function RetrievalSettingsPage() {
             </div>
           </div>
 
-          {activeTab === "embedding" ? (
+          {activeTab === "packs" ? (
             <section className="space-y-3 rounded-lg border p-4">
-              <div className="text-sm font-medium">{t.settings.retrieval.localModelsTitleEmbedding}</div>
-              {renderModelCards("embedding")}
+              <div className="space-y-1">
+                <div className="text-sm font-medium">{t.settings.retrieval.packTitle ?? "检索组合"}</div>
+                {activePackId ? (
+                  <div className="text-muted-foreground text-xs">
+                    {(t.settings.retrieval.activePackHint ?? "当前启用组合：{pack}").replace("{pack}", activePackId.toUpperCase())}
+                  </div>
+                ) : null}
+              </div>
+              {renderPackCards()}
               {!desktopBridge ? (
                 <div className="text-muted-foreground text-xs">{t.settings.retrieval.desktopOnlyHint}</div>
               ) : null}
@@ -1469,29 +2004,23 @@ export function RetrievalSettingsPage() {
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm">
                     <ChevronDownIcon className={`mr-1 size-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
-                    {t.settings.retrieval.advancedTitle}
+                    {t.settings.retrieval.packAdvancedTitle ?? t.settings.retrieval.advancedTitle}
                   </Button>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="pt-2">{renderAdvancedProvider("embedding")}</CollapsibleContent>
-              </Collapsible>
-            </section>
-          ) : null}
-
-          {activeTab === "rerank" ? (
-            <section className="space-y-3 rounded-lg border p-4">
-              <div className="text-sm font-medium">{t.settings.retrieval.localModelsTitleRerank}</div>
-              {renderModelCards("rerank")}
-              {!desktopBridge ? (
-                <div className="text-muted-foreground text-xs">{t.settings.retrieval.desktopOnlyHint}</div>
-              ) : null}
-              <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <ChevronDownIcon className={`mr-1 size-4 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
-                    {t.settings.retrieval.advancedTitle}
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-2">{renderAdvancedProvider("rerank")}</CollapsibleContent>
+                <CollapsibleContent className="pt-2 space-y-4">
+                  <div className="space-y-3 rounded-lg border p-3">
+                    <div className="text-sm font-medium">{t.settings.retrieval.localModelsTitleEmbedding}</div>
+                    {renderModelCards("embedding")}
+                  </div>
+                  <div className="space-y-3 rounded-lg border p-3">
+                    <div className="text-sm font-medium">{t.settings.retrieval.localModelsTitleRerank}</div>
+                    {renderModelCards("rerank")}
+                  </div>
+                  <div className="space-y-2">
+                    {renderAdvancedProvider("embedding")}
+                    {renderAdvancedProvider("rerank")}
+                  </div>
+                </CollapsibleContent>
               </Collapsible>
             </section>
           ) : null}

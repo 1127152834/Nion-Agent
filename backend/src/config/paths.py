@@ -128,6 +128,11 @@ class Paths:
         """Root directory for retrieval models (embedding + rerank models): `{base_dir}/retrieval_models/`."""
         return self.base_dir / "retrieval_models"
 
+    @property
+    def security_dir(self) -> Path:
+        """Root directory for security policy state: `{base_dir}/security/`."""
+        return self.base_dir / "security"
+
     def ensure_thread_dirs(self, thread_id: str) -> None:
         """Create all standard sandbox directories for a thread."""
         self.sandbox_work_dir(thread_id).mkdir(parents=True, exist_ok=True)

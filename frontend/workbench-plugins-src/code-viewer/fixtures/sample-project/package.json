@@ -1,0 +1,8 @@
+{
+  "name": "sample-project",
+  "private": true,
+  "scripts": {
+    "build": "echo build-ok",
+    "dev": "echo dev-ok"
+  }
+}

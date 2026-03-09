@@ -1,4 +1,6 @@
 import re
+import shlex
+from pathlib import Path
 
 from langchain.tools import ToolRuntime, tool
 from langgraph.typing import ContextT
@@ -12,6 +14,42 @@ from src.sandbox.exceptions import (
 )
 from src.sandbox.sandbox import Sandbox
 from src.sandbox.sandbox_provider import get_sandbox_provider
+
+
+def _is_path_in_allowed_thread_dirs(path: str, thread_data: ThreadDataState | None) -> bool:
+    if thread_data is None:
+        return False
+
+    try:
+        target = Path(path).expanduser().resolve(strict=False)
+    except Exception:
+        return False
+
+    allowed_roots: list[Path] = []
+    for key in ("workspace_path", "uploads_path", "outputs_path"):
+        root_value = thread_data.get(key)
+        if not root_value:
+            continue
+        try:
+            allowed_roots.append(Path(root_value).expanduser().resolve(strict=False))
+        except Exception:
+            continue
+
+    if not allowed_roots:
+        return False
+
+    for root in allowed_roots:
+        try:
+            target.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _ensure_local_path_boundary(path: str, thread_data: ThreadDataState | None) -> None:
+    if not _is_path_in_allowed_thread_dirs(path, thread_data):
+        raise PermissionError(f"Access denied: local sandbox path is outside thread boundary: {path}")
 
 
 def replace_virtual_path(path: str, thread_data: ThreadDataState | None) -> str:
@@ -94,6 +132,36 @@ def get_thread_data(runtime: ToolRuntime[ContextT, ThreadState] | None) -> Threa
     if runtime.state is None:
         return None
     return runtime.state.get("thread_data")
+
+
+def get_execution_mode(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
+    """Return thread execution mode: sandbox|host."""
+    if runtime is None or runtime.state is None:
+        return "sandbox"
+    mode = runtime.state.get("execution_mode")
+    if mode == "host":
+        return "host"
+    return "sandbox"
+
+
+def get_command_workdir(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str | None:
+    """Resolve the effective command working directory for the current thread."""
+    thread_data = get_thread_data(runtime)
+    workspace_path = thread_data.get("workspace_path") if thread_data else None
+    if not workspace_path:
+        return None
+
+    if is_local_sandbox(runtime):
+        return workspace_path
+    return f"{VIRTUAL_PATH_PREFIX}/workspace"
+
+
+def prefix_command_with_workdir(command: str, runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
+    """Ensure bash commands start in the thread workspace/host workdir."""
+    cwd = get_command_workdir(runtime)
+    if not cwd:
+        return command
+    return f"cd {shlex.quote(cwd)} && {command}"
 
 
 def is_local_sandbox(runtime: ToolRuntime[ContextT, ThreadState] | None) -> bool:
@@ -244,9 +312,16 @@ def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, com
     try:
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
+        execution_mode = get_execution_mode(runtime)
+        if execution_mode == "sandbox":
+            blocked_prefixes = ("/Users/", "/home/", "/private/", "C:\\", "D:\\", "E:\\")
+            if any(prefix in command for prefix in blocked_prefixes):
+                return "Error: Sandbox mode only allows /mnt/user-data paths. Switch to host mode for host filesystem commands."
+
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             command = replace_virtual_paths_in_command(command, thread_data)
+        command = prefix_command_with_workdir(command, runtime)
         return sandbox.execute_command(command)
     except SandboxError as e:
         return f"Error: {e}"
@@ -265,9 +340,13 @@ def ls_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, path:
     try:
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
+        execution_mode = get_execution_mode(runtime)
+        if execution_mode == "sandbox" and not path.startswith(VIRTUAL_PATH_PREFIX):
+            return "Error: Sandbox mode only allows listing under /mnt/user-data."
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             path = replace_virtual_path(path, thread_data)
+            _ensure_local_path_boundary(path, thread_data)
         children = sandbox.list_dir(path)
         if not children:
             return "(empty)"
@@ -301,9 +380,13 @@ def read_file_tool(
     try:
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
+        execution_mode = get_execution_mode(runtime)
+        if execution_mode == "sandbox" and not path.startswith(VIRTUAL_PATH_PREFIX):
+            return "Error: Sandbox mode only allows reading files under /mnt/user-data."
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             path = replace_virtual_path(path, thread_data)
+            _ensure_local_path_boundary(path, thread_data)
         content = sandbox.read_file(path)
         if not content:
             return "(empty)"
@@ -340,9 +423,13 @@ def write_file_tool(
     try:
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
+        execution_mode = get_execution_mode(runtime)
+        if execution_mode == "sandbox" and not path.startswith(VIRTUAL_PATH_PREFIX):
+            return "Error: Sandbox mode only allows writing files under /mnt/user-data."
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             path = replace_virtual_path(path, thread_data)
+            _ensure_local_path_boundary(path, thread_data)
         sandbox.write_file(path, content, append)
         return "OK"
     except SandboxError as e:
@@ -379,9 +466,13 @@ def str_replace_tool(
     try:
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
+        execution_mode = get_execution_mode(runtime)
+        if execution_mode == "sandbox" and not path.startswith(VIRTUAL_PATH_PREFIX):
+            return "Error: Sandbox mode only allows editing files under /mnt/user-data."
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             path = replace_virtual_path(path, thread_data)
+            _ensure_local_path_boundary(path, thread_data)
         content = sandbox.read_file(path)
         if not content:
             return "OK"

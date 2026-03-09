@@ -2,7 +2,7 @@ import logging
 
 from langchain.tools import BaseTool
 
-from src.config import get_app_config
+from src.config.app_config import ensure_latest_app_config
 from src.reflection import resolve_variable
 from src.tools.builtins import (
     ask_clarification_tool,
@@ -17,6 +17,8 @@ from src.tools.builtins import (
 )
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_WEB_SEARCH_TOOL_USE = "src.community.web_search.tools:web_search_tool"
 
 BUILTIN_TOOLS = [
     present_file_tool,
@@ -54,8 +56,24 @@ def get_available_tools(
     Returns:
         List of available tools.
     """
-    config = get_app_config()
-    loaded_tools = [resolve_variable(tool.use, BaseTool) for tool in config.tools if groups is None or tool.group in groups]
+    config = ensure_latest_app_config(process_name="langgraph")
+    scoped_tools = [tool for tool in config.tools if groups is None or tool.group in groups]
+    loaded_tools: list[BaseTool] = []
+    for tool in scoped_tools:
+        resolved_use = tool.use
+        if tool.name == "web_search" and tool.use != DEFAULT_WEB_SEARCH_TOOL_USE:
+            resolved_use = DEFAULT_WEB_SEARCH_TOOL_USE
+            logger.info("web_search provider remapped to unified fallback implementation")
+        loaded_tools.append(resolve_variable(resolved_use, BaseTool))
+
+    web_group_enabled = groups is None or "web" in groups
+    has_web_search = any(tool.name == "web_search" for tool in scoped_tools)
+    if web_group_enabled and not has_web_search:
+        try:
+            loaded_tools.append(resolve_variable(DEFAULT_WEB_SEARCH_TOOL_USE, BaseTool))
+            logger.info("web_search not configured; injected default fallback web_search tool")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to inject fallback web_search tool: %s", exc)
 
     # Get cached MCP tools if enabled
     # NOTE: We use ExtensionsConfig.from_file() instead of config.extensions

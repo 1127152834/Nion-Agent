@@ -26,6 +26,19 @@ type MessageGroup =
   | AssistantClarificationGroup
   | AssistantSubagentGroup;
 
+export interface ClarificationPayload {
+  status?: "awaiting_user" | "resolved" | string;
+  question: string;
+  clarification_type?: string;
+  context?: string | null;
+  options?: string[];
+  requires_choice?: boolean;
+  tool_call_id?: string | null;
+  asked_at?: string | null;
+  resolved_at?: string | null;
+  resolved_by_message_id?: string | null;
+}
+
 export function groupMessages<T>(
   messages: Message[],
   mapper: (group: MessageGroup) => T,
@@ -225,6 +238,109 @@ export function isClarificationToolMessage(message: Message) {
   return message.type === "tool" && message.name === "ask_clarification";
 }
 
+function normalizeClarificationOptions(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseLegacyClarification(content: string): ClarificationPayload | null {
+  const text = content.trim();
+  if (!text) {
+    return null;
+  }
+
+  const lines = text.split("\n");
+  const optionRegex = /^\s*\d+[.)]\s+(.+)$/;
+  const options: string[] = [];
+  const questionLines: string[] = [];
+  for (const line of lines) {
+    const optionMatch = optionRegex.exec(line);
+    if (optionMatch) {
+      const option = optionMatch[1]?.trim();
+      if (option) {
+        options.push(option);
+      }
+      continue;
+    }
+    questionLines.push(line);
+  }
+
+  const question = questionLines.join("\n").trim();
+  if (!question) {
+    return null;
+  }
+  return {
+    status: "awaiting_user",
+    question,
+    options,
+    requires_choice: options.length > 0,
+  };
+}
+
+export function extractClarificationPayload(message: Message): ClarificationPayload | null {
+  if (!isClarificationToolMessage(message)) {
+    return null;
+  }
+
+  const rawClarification = message.additional_kwargs?.clarification;
+  if (rawClarification && typeof rawClarification === "object") {
+    const payload = rawClarification as Record<string, unknown>;
+    const question = typeof payload.question === "string" ? payload.question.trim() : "";
+    if (question) {
+      return {
+        status: typeof payload.status === "string" ? payload.status : "awaiting_user",
+        question,
+        clarification_type:
+          typeof payload.clarification_type === "string"
+            ? payload.clarification_type
+            : undefined,
+        context:
+          typeof payload.context === "string"
+            ? payload.context
+            : payload.context === null
+              ? null
+              : undefined,
+        options: normalizeClarificationOptions(payload.options),
+        requires_choice:
+          typeof payload.requires_choice === "boolean"
+            ? payload.requires_choice
+            : undefined,
+        tool_call_id:
+          typeof payload.tool_call_id === "string"
+            ? payload.tool_call_id
+            : payload.tool_call_id === null
+              ? null
+              : undefined,
+        asked_at:
+          typeof payload.asked_at === "string"
+            ? payload.asked_at
+            : payload.asked_at === null
+              ? null
+              : undefined,
+        resolved_at:
+          typeof payload.resolved_at === "string"
+            ? payload.resolved_at
+            : payload.resolved_at === null
+              ? null
+              : undefined,
+        resolved_by_message_id:
+          typeof payload.resolved_by_message_id === "string"
+            ? payload.resolved_by_message_id
+            : payload.resolved_by_message_id === null
+              ? null
+              : undefined,
+      };
+    }
+  }
+
+  return parseLegacyClarification(extractTextFromMessage(message));
+}
+
 export function extractPresentFilesFromMessage(message: Message) {
   if (message.type !== "ai" || !hasPresentFiles(message)) {
     return [];
@@ -270,6 +386,11 @@ export interface FileInMessage {
   filename: string;
   size: number; // bytes
   path?: string; // virtual path, may not be set during upload
+  virtual_path?: string;
+  markdown_file?: string;
+  markdown_path?: string;
+  markdown_virtual_path?: string;
+  markdown_artifact_url?: string;
   status?: "uploading" | "uploaded";
 }
 

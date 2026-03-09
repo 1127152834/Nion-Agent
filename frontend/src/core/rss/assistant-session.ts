@@ -6,7 +6,7 @@ const THREAD_MAP_STORAGE_KEY = "nion.rss.assistant.thread-map";
 const PANEL_STATE_STORAGE_KEY = "nion.rss.assistant.panel-state";
 
 const DEFAULT_PANEL_STATE = {
-  visible: false,
+  visible: true,
   width: 440,
   height: 620,
 };
@@ -67,7 +67,10 @@ function readPanelState(): RSSAssistantPanelState {
   try {
     const parsed = JSON.parse(raw) as Partial<RSSAssistantPanelState>;
     return {
-      visible: Boolean(parsed.visible),
+      visible:
+        typeof parsed.visible === "boolean"
+          ? parsed.visible
+          : DEFAULT_PANEL_STATE.visible,
       width:
         typeof parsed.width === "number" && parsed.width >= 360 && parsed.width <= 760
           ? parsed.width

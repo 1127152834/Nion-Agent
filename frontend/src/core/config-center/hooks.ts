@@ -6,8 +6,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { loadConfig, loadConfigSchema, updateConfig, validateConfig } from "./api";
+import { loadConfig, loadConfigRuntimeStatus, loadConfigSchema, updateConfig, validateConfig } from "./api";
 import type {
+  ConfigRuntimeStatusResponse,
   ConfigUpdateRequest,
   ConfigUpdateResponse,
   ConfigValidateRequest,
@@ -27,11 +28,19 @@ export function useConfigCenter({ enabled = true }: { enabled?: boolean } = {}) 
     enabled,
   });
 
+  const runtimeStatusQuery = useQuery({
+    queryKey: ["configCenter", "runtimeStatus"],
+    queryFn: () => loadConfigRuntimeStatus(),
+    enabled,
+    refetchInterval: 5000,
+  });
+
   return {
     configData: configQuery.data ?? null,
     schemaData: schemaQuery.data ?? null,
+    runtimeStatus: runtimeStatusQuery.data ?? null,
     isLoading: configQuery.isLoading || schemaQuery.isLoading,
-    error: configQuery.error ?? schemaQuery.error ?? null,
+    error: configQuery.error ?? schemaQuery.error ?? runtimeStatusQuery.error ?? null,
     refetchConfig: configQuery.refetch,
   };
 }
@@ -51,5 +60,14 @@ export function useUpdateConfig() {
       void queryClient.invalidateQueries({ queryKey: ["configCenter"] });
       void queryClient.invalidateQueries({ queryKey: ["models"] });
     },
+  });
+}
+
+export function useConfigRuntimeStatus({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery<ConfigRuntimeStatusResponse>({
+    queryKey: ["configCenter", "runtimeStatus"],
+    queryFn: () => loadConfigRuntimeStatus(),
+    enabled,
+    refetchInterval: 5000,
   });
 }

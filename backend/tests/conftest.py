@@ -31,3 +31,8 @@ _executor_mock.MAX_CONCURRENT_SUBAGENTS = 3
 _executor_mock.get_background_task_result = MagicMock()
 
 sys.modules["src.subagents.executor"] = _executor_mock
+
+_thread_state_mock = MagicMock()
+_thread_state_mock.SandboxState = MagicMock
+_thread_state_mock.ThreadState = MagicMock
+sys.modules["src.agents.thread_state"] = _thread_state_mock

@@ -27,7 +27,7 @@ import zipfile
 from collections.abc import Generator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -42,6 +42,8 @@ from src.config.paths import get_paths
 from src.models import create_chat_model
 
 logger = logging.getLogger(__name__)
+
+SessionMode = Literal["normal", "temporary_chat"]
 
 
 @dataclass
@@ -105,6 +107,9 @@ class NionClient:
         thinking_enabled: bool = True,
         subagent_enabled: bool = False,
         plan_mode: bool = False,
+        session_mode: SessionMode | None = None,
+        memory_read: bool | None = None,
+        memory_write: bool | None = None,
     ):
         """Initialize the client.
 
@@ -119,6 +124,9 @@ class NionClient:
             thinking_enabled: Enable model's extended thinking.
             subagent_enabled: Enable subagent delegation.
             plan_mode: Enable TodoList middleware for plan mode.
+            session_mode: Default memory session mode for embedded calls.
+            memory_read: Default embedded override for long-term memory reads.
+            memory_write: Default embedded override for long-term memory writes.
         """
         if config_path is not None:
             reload_app_config(config_path)
@@ -129,6 +137,9 @@ class NionClient:
         self._thinking_enabled = thinking_enabled
         self._subagent_enabled = subagent_enabled
         self._plan_mode = plan_mode
+        self._session_mode = session_mode
+        self._memory_read = memory_read
+        self._memory_write = memory_write
 
         # Lazy agent — created on first call, recreated when config changes.
         self._agent = None
@@ -166,6 +177,13 @@ class NionClient:
             Path(fd.name).unlink(missing_ok=True)
             raise
 
+    def _resolve_memory_session_fields(self, overrides: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "session_mode": overrides.get("session_mode", self._session_mode),
+            "memory_read": overrides.get("memory_read", self._memory_read),
+            "memory_write": overrides.get("memory_write", self._memory_write),
+        }
+
     def _get_runnable_config(self, thread_id: str, **overrides) -> RunnableConfig:
         """Build a RunnableConfig for agent invocation."""
         configurable = {
@@ -174,6 +192,7 @@ class NionClient:
             "thinking_enabled": overrides.get("thinking_enabled", self._thinking_enabled),
             "is_plan_mode": overrides.get("plan_mode", self._plan_mode),
             "subagent_enabled": overrides.get("subagent_enabled", self._subagent_enabled),
+            **self._resolve_memory_session_fields(overrides),
         }
         return RunnableConfig(
             configurable=configurable,
@@ -188,6 +207,9 @@ class NionClient:
             cfg.get("thinking_enabled"),
             cfg.get("is_plan_mode"),
             cfg.get("subagent_enabled"),
+            cfg.get("session_mode"),
+            cfg.get("memory_read"),
+            cfg.get("memory_write"),
         )
 
         if self._agent is not None and self._agent_config_key == key:
@@ -197,6 +219,9 @@ class NionClient:
         model_name = cfg.get("model_name")
         subagent_enabled = cfg.get("subagent_enabled", False)
         max_concurrent_subagents = cfg.get("max_concurrent_subagents", 3)
+        session_mode = cfg.get("session_mode")
+        memory_read = cfg.get("memory_read")
+        memory_write = cfg.get("memory_write")
 
         kwargs: dict[str, Any] = {
             "model": create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
@@ -205,6 +230,9 @@ class NionClient:
             "system_prompt": apply_prompt_template(
                 subagent_enabled=subagent_enabled,
                 max_concurrent_subagents=max_concurrent_subagents,
+                session_mode=session_mode,
+                memory_read=memory_read,
+                memory_write=memory_write,
             ),
             "state_schema": ThreadState,
         }
@@ -289,7 +317,8 @@ class NionClient:
             message: User message text.
             thread_id: Thread ID for conversation context. Auto-generated if None.
             **kwargs: Override client defaults (model_name, thinking_enabled,
-                plan_mode, subagent_enabled, recursion_limit).
+                plan_mode, subagent_enabled, session_mode, memory_read,
+                memory_write, recursion_limit).
 
         Yields:
             StreamEvent with one of:
@@ -306,7 +335,13 @@ class NionClient:
         self._ensure_agent(config)
 
         state: dict[str, Any] = {"messages": [HumanMessage(content=message)]}
-        context = {"thread_id": thread_id}
+        configurable = config.get("configurable", {})
+        context = {
+            "thread_id": thread_id,
+            "session_mode": configurable.get("session_mode"),
+            "memory_read": configurable.get("memory_read"),
+            "memory_write": configurable.get("memory_write"),
+        }
 
         seen_ids: set[str] = set()
 
@@ -375,7 +410,8 @@ class NionClient:
         Args:
             message: User message text.
             thread_id: Thread ID for conversation context. Auto-generated if None.
-            **kwargs: Override client defaults (same as stream()).
+            **kwargs: Override client defaults (same as stream(), including
+                `session_mode`, `memory_read`, `memory_write`).
 
         Returns:
             The last AI message text, or empty string if no response.

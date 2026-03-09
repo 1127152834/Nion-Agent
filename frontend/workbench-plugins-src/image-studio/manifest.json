@@ -1,0 +1,35 @@
+{
+  "id": "image-studio",
+  "name": "Image Studio",
+  "description": "Image editing workbench with history, mosaic, doodle, text, crop, and export.",
+  "entry": "index.html",
+  "runtime": "iframe",
+  "targets": [
+    {
+      "kind": "file",
+      "extensions": ["png", "jpg", "jpeg", "webp", "bmp", "gif"],
+      "priority": 98
+    }
+  ],
+  "capabilities": [
+    "file.read",
+    "file.write",
+    "toast",
+    "state.persist"
+  ],
+  "fixtures": [
+    "fixtures/readme.txt"
+  ],
+  "testSpec": {
+    "assertions": [
+      {
+        "type": "entry_exists",
+        "target": "index.html"
+      },
+      {
+        "type": "fixture_exists",
+        "target": "fixtures/readme.txt"
+      }
+    ]
+  }
+}

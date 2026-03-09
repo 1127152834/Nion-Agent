@@ -51,6 +51,9 @@ class TestClientInit:
         assert client._thinking_enabled is True
         assert client._subagent_enabled is False
         assert client._plan_mode is False
+        assert client._session_mode is None
+        assert client._memory_read is None
+        assert client._memory_write is None
         assert client._checkpointer is None
         assert client._agent is None
 
@@ -61,11 +64,17 @@ class TestClientInit:
                 thinking_enabled=False,
                 subagent_enabled=True,
                 plan_mode=True,
+                session_mode="temporary_chat",
+                memory_read=False,
+                memory_write=True,
             )
         assert c._model_name == "gpt-4"
         assert c._thinking_enabled is False
         assert c._subagent_enabled is True
         assert c._plan_mode is True
+        assert c._session_mode == "temporary_chat"
+        assert c._memory_read is False
+        assert c._memory_write is True
 
     def test_custom_config_path(self, mock_app_config):
         with (
@@ -74,6 +83,44 @@ class TestClientInit:
         ):
             NionClient(config_path="/tmp/custom.yaml")
             mock_reload.assert_called_once_with("/tmp/custom.yaml")
+
+
+
+class TestRunnableConfig:
+    def test_includes_memory_session_defaults(self, mock_app_config):
+        with patch("src.client.get_app_config", return_value=mock_app_config):
+            client = NionClient(session_mode="temporary_chat", memory_read=True, memory_write=False)
+
+        config = client._get_runnable_config("t1")
+        configurable = config.get("configurable", {})
+
+        assert configurable["session_mode"] == "temporary_chat"
+        assert configurable["memory_read"] is True
+        assert configurable["memory_write"] is False
+
+    def test_per_call_override_precedes_defaults(self, mock_app_config):
+        with patch("src.client.get_app_config", return_value=mock_app_config):
+            client = NionClient(session_mode="temporary_chat", memory_read=True, memory_write=False)
+
+        config = client._get_runnable_config(
+            "t1",
+            session_mode="normal",
+            memory_read=False,
+            memory_write=True,
+        )
+        configurable = config.get("configurable", {})
+
+        assert configurable["session_mode"] == "normal"
+        assert configurable["memory_read"] is False
+        assert configurable["memory_write"] is True
+
+    def test_missing_memory_session_fields_remain_compatible(self, client):
+        config = client._get_runnable_config("t1")
+        configurable = config.get("configurable", {})
+
+        assert configurable["session_mode"] is None
+        assert configurable["memory_read"] is None
+        assert configurable["memory_write"] is None
 
     def test_checkpointer_stored(self, mock_app_config):
         cp = MagicMock()
@@ -223,6 +270,43 @@ class TestStream:
         assert values_events[-1].data["title"] == "Greeting"
         assert "messages" in values_events[-1].data
 
+
+    def test_stream_passes_memory_session_fields_to_context(self, client):
+        captured = {}
+        ai = AIMessage(content="ok", id="ai-1")
+        agent = MagicMock()
+
+        def fake_stream(state, config, context, stream_mode):
+            captured["configurable"] = config.get("configurable", {})
+            captured["context"] = context
+            yield {"messages": [ai]}
+
+        agent.stream.side_effect = fake_stream
+
+        with (
+            patch.object(client, "_ensure_agent"),
+            patch.object(client, "_agent", agent),
+        ):
+            list(
+                client.stream(
+                    "hi",
+                    thread_id="t3",
+                    session_mode="temporary_chat",
+                    memory_read=True,
+                    memory_write=False,
+                )
+            )
+
+        assert captured["configurable"]["session_mode"] == "temporary_chat"
+        assert captured["configurable"]["memory_read"] is True
+        assert captured["configurable"]["memory_write"] is False
+        assert captured["context"] == {
+            "thread_id": "t3",
+            "session_mode": "temporary_chat",
+            "memory_read": True,
+            "memory_write": False,
+        }
+
     def test_deduplication(self, client):
         """Messages with the same id are not emitted twice."""
         ai = AIMessage(content="Hello!", id="ai-1")
@@ -361,13 +445,37 @@ class TestEnsureAgent:
         """_ensure_agent does not recreate if config key unchanged."""
         mock_agent = MagicMock()
         client._agent = mock_agent
-        client._agent_config_key = (None, True, False, False)
+        client._agent_config_key = (None, True, False, False, None, None, None)
 
         config = client._get_runnable_config("t1")
         client._ensure_agent(config)
 
         # Should still be the same mock — no recreation
         assert client._agent is mock_agent
+
+
+    def test_passes_memory_session_fields_to_prompt(self, client):
+        mock_agent = MagicMock()
+        config = client._get_runnable_config(
+            "t1",
+            session_mode="temporary_chat",
+            memory_read=True,
+            memory_write=False,
+        )
+
+        with (
+            patch("src.client.create_chat_model"),
+            patch("src.client.create_agent", return_value=mock_agent),
+            patch("src.client._build_middlewares", return_value=[]),
+            patch("src.client.apply_prompt_template", return_value="prompt") as prompt_template,
+            patch.object(client, "_get_tools", return_value=[]),
+        ):
+            client._ensure_agent(config)
+
+        kwargs = prompt_template.call_args.kwargs
+        assert kwargs["session_mode"] == "temporary_chat"
+        assert kwargs["memory_read"] is True
+        assert kwargs["memory_write"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -1098,7 +1206,18 @@ class TestScenarioAgentRecreation:
         agents_created = []
 
         def fake_ensure(config):
-            key = tuple(config.get("configurable", {}).get(k) for k in ["model_name", "thinking_enabled", "is_plan_mode", "subagent_enabled"])
+            key = tuple(
+                config.get("configurable", {}).get(k)
+                for k in [
+                    "model_name",
+                    "thinking_enabled",
+                    "is_plan_mode",
+                    "subagent_enabled",
+                    "session_mode",
+                    "memory_read",
+                    "memory_write",
+                ]
+            )
             agents_created.append(key)
             client._agent = agent
 
@@ -1106,7 +1225,36 @@ class TestScenarioAgentRecreation:
             list(client.stream("hi", thread_id="t1"))
             list(client.stream("hi", thread_id="t1", model_name="other-model"))
 
-        # Two different config keys should have been created
+        assert len(agents_created) == 2
+        assert agents_created[0] != agents_created[1]
+
+    def test_memory_session_change_triggers_rebuild(self, client):
+        """Changing memory session fields creates a different embedded agent config."""
+        ai = AIMessage(content="ok", id="ai-1")
+        agent = _make_agent_mock([{"messages": [ai]}])
+
+        agents_created = []
+
+        def fake_ensure(config):
+            key = tuple(
+                config.get("configurable", {}).get(k)
+                for k in [
+                    "model_name",
+                    "thinking_enabled",
+                    "is_plan_mode",
+                    "subagent_enabled",
+                    "session_mode",
+                    "memory_read",
+                    "memory_write",
+                ]
+            )
+            agents_created.append(key)
+            client._agent = agent
+
+        with patch.object(client, "_ensure_agent", side_effect=fake_ensure):
+            list(client.stream("hi", thread_id="t1", session_mode="temporary_chat", memory_write=False))
+            list(client.stream("hi", thread_id="t1", session_mode="normal", memory_write=True))
+
         assert len(agents_created) == 2
         assert agents_created[0] != agents_created[1]
 

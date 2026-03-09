@@ -14,7 +14,7 @@ import {
   useUpdateConfig,
   useValidateConfig,
 } from "@/core/config-center";
-import type { ConfigValidateErrorItem } from "@/core/config-center";
+import type { ConfigValidateErrorItem, ConfigValidateWarningItem } from "@/core/config-center";
 
 type ConfigDraft = Record<string, unknown>;
 
@@ -55,13 +55,42 @@ function extractValidationErrors(detail: unknown): ConfigValidateErrorItem[] | n
     .filter((item): item is ConfigValidateErrorItem => item !== null);
 }
 
+function extractValidationWarnings(detail: unknown): ConfigValidateWarningItem[] | null {
+  if (!detail || typeof detail !== "object") {
+    return null;
+  }
+  const warnings = (detail as { warnings?: unknown }).warnings;
+  if (!Array.isArray(warnings)) {
+    return null;
+  }
+  return warnings
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+      const source = item as {
+        path?: unknown;
+        message?: unknown;
+        type?: unknown;
+      };
+      const message = typeof source.message === "string" ? source.message : "";
+      const type = typeof source.type === "string" ? source.type : "validation_warning";
+      return {
+        path: Array.isArray(source.path) ? source.path.map((v) => String(v)) : [],
+        message,
+        type,
+      } satisfies ConfigValidateWarningItem;
+    })
+    .filter((item): item is ConfigValidateWarningItem => item !== null);
+}
+
 type UseConfigEditorOptions = {
   prepareConfig?: (config: ConfigDraft) => ConfigDraft;
 };
 
 export function useConfigEditor(options: UseConfigEditorOptions = {}) {
   const { prepareConfig } = options;
-  const { configData, isLoading, error, refetchConfig } = useConfigCenter();
+  const { configData, runtimeStatus, isLoading, error, refetchConfig } = useConfigCenter();
   const validateMutation = useValidateConfig();
   const updateMutation = useUpdateConfig();
 
@@ -69,6 +98,7 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
   const [initialConfig, setInitialConfig] = useState<ConfigDraft>({});
   const [draftConfig, setDraftConfig] = useState<ConfigDraft>({});
   const [validationErrors, setValidationErrors] = useState<ConfigValidateErrorItem[]>([]);
+  const [validationWarnings, setValidationWarnings] = useState<ConfigValidateWarningItem[]>([]);
 
   useEffect(() => {
     if (!configData) {
@@ -78,6 +108,7 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
     setInitialConfig(cloneConfig(configData.config));
     setDraftConfig(cloneConfig(configData.config));
     setValidationErrors([]);
+    setValidationWarnings([]);
   }, [configData]);
 
   const dirty = useMemo(
@@ -88,11 +119,13 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
   const onConfigChange = useCallback((next: ConfigDraft) => {
     setDraftConfig(next);
     setValidationErrors([]);
+    setValidationWarnings([]);
   }, []);
 
   const onDiscard = useCallback(() => {
     setDraftConfig(cloneConfig(initialConfig));
     setValidationErrors([]);
+    setValidationWarnings([]);
   }, [initialConfig]);
 
   const prepareDraftConfig = useCallback(() => {
@@ -112,9 +145,11 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
       const result = await validateMutation.mutateAsync({ config: preparedDraft });
       if (!result.valid) {
         setValidationErrors(result.errors ?? []);
+        setValidationWarnings(result.warnings ?? []);
         return false;
       }
       setValidationErrors([]);
+      setValidationWarnings(result.warnings ?? []);
       if (result.config) {
         setDraftConfig(cloneConfig(result.config));
       }
@@ -122,16 +157,21 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
     } catch (err) {
       if (err instanceof ConfigCenterApiError && err.status === 422) {
         const parsedErrors = extractValidationErrors(err.detail);
+        const parsedWarnings = extractValidationWarnings(err.detail);
         if (parsedErrors) {
           setValidationErrors(parsedErrors);
+        }
+        if (parsedWarnings) {
+          setValidationWarnings(parsedWarnings);
         }
       }
       return false;
     }
   }, [draftConfig, prepareDraftConfig, validateMutation]);
 
-  const onSave = useCallback(async () => {
-    const preparedDraft = prepareDraftConfig();
+  const onSaveConfig = useCallback(async (nextConfig: ConfigDraft) => {
+    const baseConfig = cloneConfig(nextConfig);
+    const preparedDraft = prepareConfig ? prepareConfig(baseConfig) : baseConfig;
     if (jsonStable(preparedDraft) !== jsonStable(draftConfig)) {
       setDraftConfig(cloneConfig(preparedDraft));
     }
@@ -144,13 +184,18 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
       setInitialConfig(cloneConfig(result.config));
       setDraftConfig(cloneConfig(result.config));
       setValidationErrors([]);
+      setValidationWarnings(result.warnings ?? []);
       return true;
     } catch (err) {
       if (err instanceof ConfigCenterApiError) {
         if (err.status === 422) {
           const parsedErrors = extractValidationErrors(err.detail);
+          const parsedWarnings = extractValidationWarnings(err.detail);
           if (parsedErrors) {
             setValidationErrors(parsedErrors);
+          }
+          if (parsedWarnings) {
+            setValidationWarnings(parsedWarnings);
           }
         }
         if (err.status === 409) {
@@ -159,12 +204,19 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
       }
       return false;
     }
-  }, [draftConfig, prepareDraftConfig, refetchConfig, updateMutation, version]);
+  }, [draftConfig, prepareConfig, refetchConfig, updateMutation, version]);
+
+  const onSave = useCallback(async () => {
+    const preparedDraft = prepareDraftConfig();
+    return onSaveConfig(preparedDraft);
+  }, [onSaveConfig, prepareDraftConfig]);
 
   return {
     configData,
+    runtimeStatus,
     draftConfig,
     validationErrors,
+    validationWarnings,
     isLoading,
     error,
     dirty,
@@ -175,6 +227,7 @@ export function useConfigEditor(options: UseConfigEditorOptions = {}) {
     onDiscard,
     onValidate,
     onSave,
+    onSaveConfig,
     refetchConfig,
   };
 }

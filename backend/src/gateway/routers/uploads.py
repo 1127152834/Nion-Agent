@@ -7,6 +7,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from src.runtime_profile import RuntimeProfileRepository
 from src.sandbox.sandbox_provider import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
@@ -42,9 +43,20 @@ def get_uploads_dir(thread_id: str) -> Path:
     Returns:
         Path to the uploads directory.
     """
-    base_dir = get_paths().sandbox_uploads_dir(thread_id)
+    profile = RuntimeProfileRepository().read(thread_id)
+    if profile["execution_mode"] == "host" and profile["host_workdir"]:
+        base_dir = Path(profile["host_workdir"])
+    else:
+        base_dir = get_paths().sandbox_uploads_dir(thread_id)
     base_dir.mkdir(parents=True, exist_ok=True)
     return base_dir
+
+
+def _path_for_response(thread_id: str, file_path: Path, uploads_dir: Path) -> str:
+    profile = RuntimeProfileRepository().read(thread_id)
+    if profile["execution_mode"] == "host" and profile["host_workdir"]:
+        return str(file_path)
+    return str(get_paths().sandbox_uploads_dir(thread_id) / file_path.name)
 
 
 async def convert_file_to_markdown(file_path: Path) -> Path | None:
@@ -94,7 +106,6 @@ async def upload_files(
         raise HTTPException(status_code=400, detail="No files provided")
 
     uploads_dir = get_uploads_dir(thread_id)
-    paths = get_paths()
     uploaded_files = []
 
     sandbox_provider = get_sandbox_provider()
@@ -117,7 +128,7 @@ async def upload_files(
             file_path.write_bytes(content)
 
             # Build relative path from backend root
-            relative_path = str(paths.sandbox_uploads_dir(thread_id) / safe_filename)
+            relative_path = _path_for_response(thread_id, file_path, uploads_dir)
             virtual_path = f"{VIRTUAL_PATH_PREFIX}/uploads/{safe_filename}"
 
             # Keep local sandbox source of truth in thread-scoped host storage.
@@ -140,7 +151,7 @@ async def upload_files(
             if file_ext in CONVERTIBLE_EXTENSIONS:
                 md_path = await convert_file_to_markdown(file_path)
                 if md_path:
-                    md_relative_path = str(paths.sandbox_uploads_dir(thread_id) / md_path.name)
+                    md_relative_path = _path_for_response(thread_id, md_path, uploads_dir)
                     md_virtual_path = f"{VIRTUAL_PATH_PREFIX}/uploads/{md_path.name}"
 
                     if sandbox_id != "local":
@@ -183,7 +194,7 @@ async def list_uploaded_files(thread_id: str) -> dict:
     for file_path in sorted(uploads_dir.iterdir()):
         if file_path.is_file():
             stat = file_path.stat()
-            relative_path = str(get_paths().sandbox_uploads_dir(thread_id) / file_path.name)
+            relative_path = _path_for_response(thread_id, file_path, uploads_dir)
             files.append(
                 {
                     "filename": file_path.name,

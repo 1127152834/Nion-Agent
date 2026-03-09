@@ -22,3 +22,20 @@ export function textOfMessage(message: Message) {
 export function titleOfThread(thread: AgentThread) {
   return thread.values?.title ?? "Untitled";
 }
+
+export function isThreadAwaitingResponse(thread: AgentThread) {
+  const clarification = thread.values?.clarification;
+  if (!clarification || clarification.status !== "awaiting_user") {
+    return false;
+  }
+
+  if (clarification.resolved_at || clarification.resolved_by_message_id) {
+    return false;
+  }
+
+  const hasChoice =
+    clarification.requires_choice ??
+    ((clarification.options?.length ?? 0) > 0);
+
+  return hasChoice;
+}

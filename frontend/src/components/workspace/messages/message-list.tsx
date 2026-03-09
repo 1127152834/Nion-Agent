@@ -1,3 +1,4 @@
+import type { Message } from "@langchain/langgraph-sdk";
 import type { BaseStream } from "@langchain/langgraph-sdk/react";
 
 import {
@@ -7,6 +8,7 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import {
   extractContentFromMessage,
+  extractClarificationPayload,
   extractPresentFilesFromMessage,
   extractTextFromMessage,
   groupMessages,
@@ -23,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
+import { ClarificationCard } from "./clarification-card";
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -34,11 +37,13 @@ export function MessageList({
   threadId,
   thread,
   paddingBottom = 160,
+  onClarificationSelect,
 }: {
   className?: string;
   threadId: string;
   thread: BaseStream<AgentThreadState>;
   paddingBottom?: number;
+  onClarificationSelect?: (option: string) => void;
 }) {
   const { t } = useI18n();
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
@@ -49,7 +54,7 @@ export function MessageList({
   }
   return (
     <Conversation
-      className={cn("flex size-full flex-col justify-center", className)}
+      className={cn("flex size-full flex-col", className)}
     >
       <ConversationContent className="mx-auto w-full max-w-(--container-width-md) gap-8 pt-12">
         {groupMessages(messages, (group) => {
@@ -64,6 +69,42 @@ export function MessageList({
           } else if (group.type === "assistant:clarification") {
             const message = group.messages[0];
             if (message && hasContent(message)) {
+              const clarification = extractClarificationPayload(message);
+              if (clarification?.question) {
+                const hasChoice =
+                  clarification.requires_choice ??
+                  ((clarification.options?.length ?? 0) > 0);
+
+                if (hasChoice) {
+                  return (
+                    <ClarificationCard
+                      key={group.id}
+                      clarification={clarification}
+                      isLoading={thread.isLoading}
+                      onSelectOption={onClarificationSelect}
+                    />
+                  );
+                }
+
+                const clarificationText = [
+                  clarification.context?.trim() ?? "",
+                  clarification.question,
+                ]
+                  .filter(Boolean)
+                  .join("\n\n");
+                const assistantLikeMessage: Message = {
+                  type: "ai",
+                  id: message.id ?? `${group.id}-clarification`,
+                  content: clarificationText,
+                };
+                return (
+                  <MessageListItem
+                    key={group.id}
+                    message={assistantLikeMessage}
+                    isLoading={thread.isLoading}
+                  />
+                );
+              }
               return (
                 <MarkdownContent
                   key={group.id}

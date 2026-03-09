@@ -51,6 +51,19 @@ class RetrievalProviderConnectionTestRequest(BaseModel):
     model: str | None = Field(default=None)
 
 
+class RetrievalSetActivePackRequest(BaseModel):
+    pack_id: str = Field(..., min_length=1)
+
+
+class RetrievalDownloadPackRequest(BaseModel):
+    pack_id: str = Field(..., min_length=1)
+    activate_after_download: bool = Field(default=False)
+
+
+class RetrievalRemovePackRequest(BaseModel):
+    pack_id: str = Field(..., min_length=1)
+
+
 def _latency_ms(started_at: float) -> int:
     return max(0, int((time.perf_counter() - started_at) * 1000))
 
@@ -185,6 +198,33 @@ async def set_active_model(request: RetrievalSetActiveModelRequest) -> Retrieval
 
 
 @router.post(
+    "/set-active-pack",
+    response_model=RetrievalOperationResponse,
+    summary="Set active local retrieval pack",
+)
+async def set_active_pack(request: RetrievalSetActivePackRequest) -> RetrievalOperationResponse:
+    started_at = time.perf_counter()
+    service = RetrievalModelsService()
+    try:
+        result = service.set_active_pack(request.pack_id)
+    except RetrievalModelsError as error:
+        return _degraded_response(started_at, error)
+    except Exception as error:  # noqa: BLE001
+        logger.exception("set-active-pack failed unexpectedly")
+        return _degraded_response(
+            started_at,
+            RetrievalModelsError(str(error), error_code="retrieval_models_error"),
+        )
+    latency = _latency_ms(started_at)
+    return RetrievalOperationResponse(
+        status="ok",
+        latency_ms=latency,
+        error_code=None,
+        result=result,
+    )
+
+
+@router.post(
     "/test-provider-connection",
     response_model=RetrievalOperationResponse,
     summary="Test third-party retrieval provider connection",
@@ -219,6 +259,63 @@ class RetrievalRemoveModelRequest(BaseModel):
 
 class RetrievalImportModelRequest(BaseModel):
     model_id: str = Field(..., min_length=1)
+
+
+@router.post(
+    "/download-pack",
+    response_model=RetrievalOperationResponse,
+    summary="Download a retrieval pack",
+)
+async def download_pack(request: RetrievalDownloadPackRequest) -> RetrievalOperationResponse:
+    started_at = time.perf_counter()
+    service = RetrievalModelsService()
+    try:
+        result = await service.download_pack(
+            pack_id=request.pack_id,
+            activate_after_download=request.activate_after_download,
+        )
+    except RetrievalModelsError as error:
+        return _degraded_response(started_at, error)
+    except Exception as error:  # noqa: BLE001
+        logger.exception("download-pack failed unexpectedly")
+        return _degraded_response(
+            started_at,
+            RetrievalModelsError(str(error), error_code="retrieval_models_error"),
+        )
+    latency = _latency_ms(started_at)
+    return RetrievalOperationResponse(
+        status="ok",
+        latency_ms=latency,
+        error_code=None,
+        result=result,
+    )
+
+
+@router.post(
+    "/remove-pack",
+    response_model=RetrievalOperationResponse,
+    summary="Delete downloaded models in a retrieval pack",
+)
+async def remove_pack(request: RetrievalRemovePackRequest) -> RetrievalOperationResponse:
+    started_at = time.perf_counter()
+    service = RetrievalModelsService()
+    try:
+        result = await service.remove_pack(pack_id=request.pack_id)
+    except RetrievalModelsError as error:
+        return _degraded_response(started_at, error)
+    except Exception as error:  # noqa: BLE001
+        logger.exception("remove-pack failed unexpectedly")
+        return _degraded_response(
+            started_at,
+            RetrievalModelsError(str(error), error_code="retrieval_models_error"),
+        )
+    latency = _latency_ms(started_at)
+    return RetrievalOperationResponse(
+        status="ok",
+        latency_ms=latency,
+        error_code=None,
+        result=result,
+    )
 
 
 @router.post(

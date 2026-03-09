@@ -93,11 +93,14 @@ export type TextInputContext = {
 export type PromptInputControllerProps = {
   textInput: TextInputContext;
   attachments: AttachmentsContext;
+  submitText: (text: string) => void;
   /** INTERNAL: Allows PromptInput to register its file textInput + "open" callback */
   __registerFileInput: (
     ref: RefObject<HTMLInputElement | null>,
     open: () => void,
   ) => void;
+  /** INTERNAL: Allows PromptInput to register submit handler */
+  __registerSubmitText: (submit: (text: string) => void) => void;
 };
 
 const PromptInputController = createContext<PromptInputControllerProps | null>(
@@ -118,7 +121,7 @@ export const usePromptInputController = () => {
 };
 
 // Optional variants (do NOT throw). Useful for dual-mode components.
-const useOptionalPromptInputController = () =>
+export const useOptionalPromptInputController = () =>
   useContext(PromptInputController);
 
 export const useProviderAttachments = () => {
@@ -156,6 +159,7 @@ export function PromptInputProvider({
   >([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const openRef = useRef<() => void>(() => {});
+  const submitTextRef = useRef<(text: string) => void>(() => {});
 
   const add = useCallback((files: File[] | FileList) => {
     const incoming = Array.from(files);
@@ -236,6 +240,14 @@ export function PromptInputProvider({
     [],
   );
 
+  const __registerSubmitText = useCallback((submit: (text: string) => void) => {
+    submitTextRef.current = submit;
+  }, []);
+
+  const submitText = useCallback((text: string) => {
+    submitTextRef.current(text);
+  }, []);
+
   const controller = useMemo<PromptInputControllerProps>(
     () => ({
       textInput: {
@@ -244,9 +256,11 @@ export function PromptInputProvider({
         clear: clearInput,
       },
       attachments,
+      submitText,
       __registerFileInput,
+      __registerSubmitText,
     }),
-    [textInput, clearInput, attachments, __registerFileInput],
+    [textInput, clearInput, attachments, submitText, __registerFileInput, __registerSubmitText],
   );
 
   return (
@@ -607,6 +621,26 @@ export const PromptInput = ({
   useEffect(() => {
     if (!usingProvider) return;
     controller.__registerFileInput(inputRef, () => inputRef.current?.click());
+  }, [usingProvider, controller]);
+
+  useEffect(() => {
+    if (!usingProvider) return;
+    controller.__registerSubmitText((text: string) => {
+      controller.textInput.setInput(text);
+      requestAnimationFrame(() => {
+        const form = formRef.current;
+        if (!form) {
+          return;
+        }
+        const submitButton = form.querySelector(
+          'button[type="submit"]',
+        ) as HTMLButtonElement | null;
+        if (submitButton?.disabled) {
+          return;
+        }
+        form.requestSubmit();
+      });
+    });
   }, [usingProvider, controller]);
 
   // Note: File input cannot be programmatically set for security reasons

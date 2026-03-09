@@ -1,4 +1,4 @@
-import { XIcon } from "lucide-react";
+import { FolderIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
@@ -8,7 +8,9 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
+import { useWorkspaceLiveSync, useWorkspaceTree } from "@/core/artifacts";
 import { useI18n } from "@/core/i18n/hooks";
+import { useDesktopRuntime } from "@/core/platform/hooks";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -42,24 +44,58 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     () => thread.values.artifacts ?? [],
     [thread.values.artifacts],
   );
+  const artifactsRef = useRef<string[]>(artifacts);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
+  const supportsWorkspaceView = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true";
+  const artifactPanelOpen = artifactsOpen;
+  const { isDesktopRuntime } = useDesktopRuntime();
+
+  const {
+    data: workspaceTree,
+    isLoading: workspaceTreeLoading,
+    isFetching: workspaceTreeFetching,
+    error: workspaceTreeError,
+  } = useWorkspaceTree(threadId, {
+    enabled: artifactPanelOpen && supportsWorkspaceView,
+    root: "/mnt/user-data/workspace",
+    depth: 6,
+    includeHidden: false,
+    maxNodes: 5000,
+    live: artifactPanelOpen && supportsWorkspaceView && !isDesktopRuntime,
+    refetchIntervalMs: 1000,
+  });
+
+  useWorkspaceLiveSync(threadId, {
+    enabled: artifactPanelOpen && supportsWorkspaceView && isDesktopRuntime,
+    root: "/mnt/user-data/workspace",
+  });
+
   useEffect(() => {
-    setArtifacts(threadArtifacts);
-    if (
-      thread.values.artifacts?.length === 0 ||
-      (selectedArtifact && !thread.values.artifacts?.includes(selectedArtifact))
-    ) {
+    artifactsRef.current = artifacts;
+  }, [artifacts]);
+
+  useEffect(() => {
+    const mergedArtifacts = [...threadArtifacts];
+    for (const path of artifactsRef.current) {
+      if (!mergedArtifacts.includes(path)) {
+        mergedArtifacts.push(path);
+      }
+    }
+    setArtifacts(mergedArtifacts);
+    const hasNoArtifacts = mergedArtifacts.length === 0;
+    const selectedMissing =
+      selectedArtifact !== null && !mergedArtifacts.includes(selectedArtifact);
+    if (hasNoArtifacts || selectedMissing) {
       deselect();
     }
     if (
       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
-      autoSelectFirstArtifact
+      autoSelectFirstArtifact &&
+      threadArtifacts.length > 0
     ) {
-      if (threadArtifacts.length > 0) {
-        setAutoSelectFirstArtifact(false);
-        selectArtifact(threadArtifacts[0]!);
-      }
+      setAutoSelectFirstArtifact(false);
+      selectArtifact(threadArtifacts[0]!);
     }
   }, [
     autoSelectFirstArtifact,
@@ -70,22 +106,49 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     threadArtifacts,
   ]);
 
-  const artifactPanelOpen = useMemo(() => {
-    if (env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true") {
-      return artifactsOpen && artifacts?.length > 0;
-    }
-    return artifactsOpen;
-  }, [artifactsOpen, artifacts]);
-
   useEffect(() => {
     if (layoutRef.current) {
-      if (artifactPanelOpen) {
-        layoutRef.current.setLayout(OPEN_MODE);
-      } else {
-        layoutRef.current.setLayout(CLOSE_MODE);
-      }
+      layoutRef.current.setLayout(artifactPanelOpen ? OPEN_MODE : CLOSE_MODE);
     }
   }, [artifactPanelOpen]);
+
+  const workspaceFiles = useMemo(
+    () => workspaceTree?.files.map((entry) => entry.path) ?? [],
+    [workspaceTree?.files],
+  );
+  const workspaceDirectories = useMemo(
+    () => workspaceTree?.directories.map((entry) => entry.path) ?? [],
+    [workspaceTree?.directories],
+  );
+  const panelFiles = supportsWorkspaceView ? workspaceFiles : artifacts;
+  const panelDirectories = supportsWorkspaceView ? workspaceDirectories : [];
+
+  useEffect(() => {
+    if (!selectedArtifact) {
+      return;
+    }
+    if (supportsWorkspaceView) {
+      if (!workspaceTree) {
+        return;
+      }
+      const existingPaths = new Set([...workspaceFiles, ...workspaceDirectories]);
+      if (!existingPaths.has(selectedArtifact)) {
+        deselect();
+      }
+      return;
+    }
+    if (!artifacts.includes(selectedArtifact)) {
+      deselect();
+    }
+  }, [
+    artifacts,
+    deselect,
+    selectedArtifact,
+    supportsWorkspaceView,
+    workspaceDirectories,
+    workspaceFiles,
+    workspaceTree,
+  ]);
 
   return (
     <ResizablePanelGroup
@@ -125,11 +188,17 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
             />
           ) : (
             <div className="flex size-full min-w-0 flex-col rounded-lg border">
-              <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
-                <span className="font-medium">{t.common.directoryTree}</span>
+              <div className="flex items-center justify-between border-b px-3 py-2">
+                <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                  <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+                  <span className="truncate">{t.common.workingDirectory}</span>
+                  {supportsWorkspaceView && workspaceTreeFetching ? (
+                    <span className="bg-emerald-500/75 size-1.5 shrink-0 rounded-full" />
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground">
-                    {artifacts.length}
+                    {panelFiles.length}
                     {t.common.filesSuffix}
                   </span>
                   <Button
@@ -143,14 +212,28 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   </Button>
                 </div>
               </div>
-              <ArtifactDirectoryTree
-                files={artifacts}
-                selectedPath={selectedArtifact}
-                onOpenFile={(path) => {
-                  selectArtifact(path);
-                  setArtifactsOpen(true);
-                }}
-              />
+              {supportsWorkspaceView && workspaceTreeLoading && !workspaceTree ? (
+                <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+                  {t.common.loading}
+                </div>
+              ) : supportsWorkspaceView && workspaceTreeError ? (
+                <div className="text-muted-foreground m-2 rounded-md border border-dashed p-3 text-xs">
+                  {workspaceTreeError.message}
+                </div>
+              ) : (
+                <ArtifactDirectoryTree
+                  files={panelFiles}
+                  directories={panelDirectories}
+                  selectedPath={selectedArtifact}
+                  onOpenFile={(path) => {
+                    if (!artifacts.includes(path)) {
+                      setArtifacts([...artifacts, path]);
+                    }
+                    selectArtifact(path);
+                    setArtifactsOpen(true);
+                  }}
+                />
+              )}
             </div>
           )}
         </div>

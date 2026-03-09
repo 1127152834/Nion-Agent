@@ -106,6 +106,23 @@ LOCAL_PACK_SPECS: tuple[LocalPackSpec, ...] = (
     ),
 )
 
+LOCAL_PACKS_BY_ID: dict[str, LocalPackSpec] = {
+    pack.pack_id: pack for pack in LOCAL_PACK_SPECS
+}
+
+LOCAL_MODEL_TO_PACK_ID: dict[str, str] = {
+    model_id: pack.pack_id
+    for pack in LOCAL_PACK_SPECS
+    for model_id in pack.model_ids
+}
+
+LOCAL_PACK_MODEL_BY_FAMILY: dict[str, dict[str, str]] = {}
+for _pack in LOCAL_PACK_SPECS:
+    family_map: dict[str, str] = {}
+    for _model_id in _pack.model_ids:
+        family_map[LOCAL_MODEL_SPECS[_model_id].family] = _model_id
+    LOCAL_PACK_MODEL_BY_FAMILY[_pack.pack_id] = family_map
+
 
 def _strip_or_none(value: str | None) -> str | None:
     if value is None:
@@ -259,6 +276,68 @@ class RetrievalModelsService:
             "rerank": active.get("rerank", {}),
         }
 
+    def _save_retrieval_config(
+        self,
+        *,
+        config_dict: dict[str, Any],
+        version: str,
+        retrieval_cfg: RetrievalModelsConfig,
+    ) -> str:
+        config_dict["retrieval_models"] = retrieval_cfg.model_dump(exclude_none=True)
+        repo = ConfigRepository()
+        return repo.write(config_dict=config_dict, expected_version=version)
+
+    def _resolve_pack_id_by_model(self, model_id: str | None) -> str | None:
+        if not model_id:
+            return None
+        return LOCAL_MODEL_TO_PACK_ID.get(model_id)
+
+    def _detect_active_local_pack_id(self, cfg: RetrievalModelsConfig) -> str | None:
+        if cfg.active.embedding.provider != "local_onnx" or cfg.active.rerank.provider != "local_onnx":
+            return None
+        embedding_pack = self._resolve_pack_id_by_model(cfg.active.embedding.model_id)
+        rerank_pack = self._resolve_pack_id_by_model(cfg.active.rerank.model_id)
+        if embedding_pack and embedding_pack == rerank_pack:
+            return embedding_pack
+        return None
+
+    def _list_installed_local_pack_ids(
+        self,
+        *,
+        config: RetrievalModelsConfig,
+        registry: dict[str, Any],
+    ) -> list[str]:
+        installed_pack_ids: list[str] = []
+        for pack in LOCAL_PACK_SPECS:
+            for model_id in pack.model_ids:
+                ready, _ = self._is_local_model_ready(
+                    config=config,
+                    registry=registry,
+                    model_id=model_id,
+                )
+                if ready:
+                    installed_pack_ids.append(pack.pack_id)
+                    break
+        return installed_pack_ids
+
+    def _normalize_local_active_pack(self, cfg: RetrievalModelsConfig) -> bool:
+        """Normalize local active selection so embedding/rerank always belong to one pack."""
+        if cfg.active.embedding.provider != "local_onnx" or cfg.active.rerank.provider != "local_onnx":
+            return False
+
+        embedding_pack = self._resolve_pack_id_by_model(cfg.active.embedding.model_id)
+        rerank_pack = self._resolve_pack_id_by_model(cfg.active.rerank.model_id)
+        if not embedding_pack or not rerank_pack or embedding_pack == rerank_pack:
+            return False
+
+        target_rerank_model = LOCAL_PACK_MODEL_BY_FAMILY.get(embedding_pack, {}).get("rerank")
+        if not target_rerank_model or target_rerank_model == cfg.active.rerank.model_id:
+            return False
+
+        cfg.active.rerank.model_id = target_rerank_model
+        cfg.active.rerank.model = None
+        return True
+
     def _cleanup_invalid_active_models(self, cfg: RetrievalModelsConfig, registry: dict[str, Any]) -> bool:
         """Clean up active model configurations that reference uninstalled models.
 
@@ -297,21 +376,30 @@ class RetrievalModelsService:
         cfg = app_config.retrieval_models
         registry = self._load_registry(cfg)
 
-        # Clean up invalid active models and save if needed
+        modified = False
+        normalization_applied = False
         if self._cleanup_invalid_active_models(cfg, registry):
-            from src.config.config_repository import ConfigRepository
+            modified = True
+        if self._normalize_local_active_pack(cfg):
+            modified = True
+            normalization_applied = True
+        if modified:
             repo = ConfigRepository()
             config_dict, version, _ = repo.read()
             if not isinstance(config_dict, dict):
                 config_dict = {}
-            config_dict["retrieval_models"] = cfg.model_dump(exclude_none=True)
-            repo.write(config_dict=config_dict, expected_version=version)
+            self._save_retrieval_config(
+                config_dict=config_dict,
+                version=version,
+                retrieval_cfg=cfg,
+            )
 
         registry_models = registry.get("models", {})
         if not isinstance(registry_models, dict):
             registry_models = {}
 
         active = self._active_selection_from_config(cfg)
+        active_pack_id = self._detect_active_local_pack_id(cfg)
         active_embedding = active.get("embedding", {}) if isinstance(active.get("embedding"), dict) else {}
         active_rerank = active.get("rerank", {}) if isinstance(active.get("rerank"), dict) else {}
 
@@ -404,6 +492,12 @@ class RetrievalModelsService:
                     "installed": installed_count == len(pack.model_ids),
                     "installed_count": installed_count,
                     "total_count": len(pack.model_ids),
+                    "status": (
+                        "installed"
+                        if installed_count == len(pack.model_ids)
+                        else ("not_installed" if installed_count == 0 else "partial")
+                    ),
+                    "is_active_pack": active_pack_id == pack.pack_id,
                     "models": items,
                 }
             )
@@ -413,6 +507,8 @@ class RetrievalModelsService:
             "source_priority": cfg.source_priority,
             "providers": cfg.model_dump().get("providers", {}),
             "active": active,
+            "active_pack_id": active_pack_id,
+            "normalization_applied": normalization_applied,
             "models_by_family": models_by_family,
             "local_models_dir": str(self._resolve_model_root(cfg)),
             "registry_file": str(self._resolve_registry_path(cfg)),
@@ -904,6 +1000,186 @@ class RetrievalModelsService:
             logger.error(f"Memory migration failed: {error}", exc_info=True)
             return {"migrated": False, "reason": "migration_error", "error": str(error)}
 
+    def set_active_pack(self, pack_id: str) -> dict[str, Any]:
+        normalized_pack_id = pack_id.strip().lower()
+        pack = LOCAL_PACKS_BY_ID.get(normalized_pack_id)
+        if pack is None:
+            raise RetrievalModelsError(
+                f"Unknown pack_id: {pack_id}",
+                error_code="retrieval_pack_not_found",
+            )
+
+        family_model_map = LOCAL_PACK_MODEL_BY_FAMILY.get(normalized_pack_id, {})
+        embedding_model_id = family_model_map.get("embedding")
+        rerank_model_id = family_model_map.get("rerank")
+        if not embedding_model_id or not rerank_model_id:
+            raise RetrievalModelsError(
+                f"Pack {normalized_pack_id} is invalid",
+                error_code="retrieval_pack_not_found",
+            )
+
+        repo = ConfigRepository()
+        config_dict, version, _ = repo.read()
+        if not isinstance(config_dict, dict):
+            config_dict = {}
+        retrieval_payload = config_dict.get("retrieval_models", {})
+        retrieval_cfg = RetrievalModelsConfig.model_validate(retrieval_payload)
+        registry = self._load_registry(retrieval_cfg)
+
+        for member_model_id in pack.model_ids:
+            ready, _ = self._is_local_model_ready(
+                config=retrieval_cfg,
+                registry=registry,
+                model_id=member_model_id,
+            )
+            if not ready:
+                raise RetrievalModelsError(
+                    f"Pack {normalized_pack_id} is not ready",
+                    error_code="retrieval_pack_not_ready",
+                )
+
+        previous_embedding_model_id = retrieval_cfg.active.embedding.model_id
+
+        retrieval_cfg.active.embedding.provider = "local_onnx"
+        retrieval_cfg.active.embedding.model_id = embedding_model_id
+        retrieval_cfg.active.embedding.model = None
+        retrieval_cfg.active.rerank.provider = "local_onnx"
+        retrieval_cfg.active.rerank.model_id = rerank_model_id
+        retrieval_cfg.active.rerank.model = None
+
+        new_version = self._save_retrieval_config(
+            config_dict=config_dict,
+            version=version,
+            retrieval_cfg=retrieval_cfg,
+        )
+
+        migration_result = self._migrate_memory_to_vectors(
+            family="embedding",
+            provider="local_onnx",
+            model_id=embedding_model_id,
+            previous_model_id=previous_embedding_model_id,
+        )
+
+        return {
+            "success": True,
+            "pack_id": normalized_pack_id,
+            "active": self._active_selection_from_config(retrieval_cfg),
+            "version": new_version,
+            "migration": migration_result,
+            "message": f"Pack {normalized_pack_id} activated",
+        }
+
+    async def download_pack(self, pack_id: str, *, activate_after_download: bool = False) -> dict[str, Any]:
+        normalized_pack_id = pack_id.strip().lower()
+        pack = LOCAL_PACKS_BY_ID.get(normalized_pack_id)
+        if pack is None:
+            raise RetrievalModelsError(
+                f"Unknown pack_id: {pack_id}",
+                error_code="retrieval_pack_not_found",
+            )
+
+        app_config = get_app_config()
+        cfg = app_config.retrieval_models
+        registry = self._load_registry(cfg)
+        downloaded_models: list[str] = []
+        skipped_models: list[str] = []
+
+        for model_id in pack.model_ids:
+            ready, _ = self._is_local_model_ready(
+                config=cfg,
+                registry=registry,
+                model_id=model_id,
+            )
+            if ready:
+                skipped_models.append(model_id)
+                continue
+            await self.download_model(model_id)
+            downloaded_models.append(model_id)
+            registry = self._load_registry(cfg)
+
+        result: dict[str, Any] = {
+            "success": True,
+            "pack_id": normalized_pack_id,
+            "downloaded_models": downloaded_models,
+            "skipped_models": skipped_models,
+            "activated": False,
+            "message": f"Pack {normalized_pack_id} downloaded",
+        }
+
+        if activate_after_download:
+            active_result = self.set_active_pack(normalized_pack_id)
+            result["activated"] = True
+            result["active"] = active_result.get("active")
+            result["migration"] = active_result.get("migration")
+
+        return result
+
+    async def remove_pack(self, pack_id: str) -> dict[str, Any]:
+        normalized_pack_id = pack_id.strip().lower()
+        pack = LOCAL_PACKS_BY_ID.get(normalized_pack_id)
+        if pack is None:
+            raise RetrievalModelsError(
+                f"Unknown pack_id: {pack_id}",
+                error_code="retrieval_pack_not_found",
+            )
+
+        repo = ConfigRepository()
+        config_dict, _, _ = repo.read()
+        if not isinstance(config_dict, dict):
+            config_dict = {}
+        retrieval_payload = config_dict.get("retrieval_models", {})
+        retrieval_cfg = RetrievalModelsConfig.model_validate(retrieval_payload)
+
+        for model_id in pack.model_ids:
+            spec = LOCAL_MODEL_SPECS[model_id]
+            is_active = (
+                spec.family == "embedding"
+                and retrieval_cfg.active.embedding.provider == "local_onnx"
+                and retrieval_cfg.active.embedding.model_id == model_id
+            ) or (
+                spec.family == "rerank"
+                and retrieval_cfg.active.rerank.provider == "local_onnx"
+                and retrieval_cfg.active.rerank.model_id == model_id
+            )
+            if is_active:
+                raise RetrievalModelsError(
+                    f"Cannot remove active pack: {normalized_pack_id}. Switch active pack first.",
+                    error_code="retrieval_active_model_remove_forbidden",
+                )
+
+        app_config = get_app_config()
+        cfg = app_config.retrieval_models
+        registry = self._load_registry(cfg)
+        installed_pack_ids = self._list_installed_local_pack_ids(config=cfg, registry=registry)
+        if normalized_pack_id in installed_pack_ids and len(installed_pack_ids) <= 1:
+            raise RetrievalModelsError(
+                "At least one downloaded retrieval pack must be kept. Download another pack first.",
+                error_code="retrieval_pack_keep_one_required",
+            )
+        removed_models: list[str] = []
+        skipped_models: list[str] = []
+
+        for model_id in pack.model_ids:
+            ready, _ = self._is_local_model_ready(
+                config=cfg,
+                registry=registry,
+                model_id=model_id,
+            )
+            if not ready:
+                skipped_models.append(model_id)
+                continue
+            await self.remove_model(model_id)
+            removed_models.append(model_id)
+            registry = self._load_registry(cfg)
+
+        return {
+            "success": True,
+            "pack_id": normalized_pack_id,
+            "removed_models": removed_models,
+            "skipped_models": skipped_models,
+            "message": f"Pack {normalized_pack_id} deleted",
+        }
+
     def set_active_model(
         self,
         *,
@@ -930,13 +1206,32 @@ class RetrievalModelsService:
                 error_code="retrieval_provider_invalid",
             )
 
+        if normalized_provider == "local_onnx":
+            if not normalized_model_id:
+                raise RetrievalModelsError("model_id is required", error_code="retrieval_model_invalid")
+            spec = LOCAL_MODEL_SPECS.get(normalized_model_id)
+            if spec is None or spec.family != normalized_family:
+                raise RetrievalModelsError("Invalid local model", error_code="retrieval_model_invalid")
+            pack_id = self._resolve_pack_id_by_model(normalized_model_id)
+            if not pack_id:
+                raise RetrievalModelsError("Invalid local model", error_code="retrieval_model_invalid")
+            result = self.set_active_pack(pack_id)
+            result["mapped_from"] = {
+                "family": normalized_family,
+                "provider": normalized_provider,
+                "model_id": normalized_model_id,
+            }
+            result["message"] = (
+                f"Local model activation is pack-based; pack {pack_id} activated."
+            )
+            return result
+
         repo = ConfigRepository()
         config_dict, version, _ = repo.read()
         if not isinstance(config_dict, dict):
             config_dict = {}
         retrieval_payload = config_dict.get("retrieval_models", {}) if isinstance(config_dict, dict) else {}
         retrieval_cfg = RetrievalModelsConfig.model_validate(retrieval_payload)
-        registry = self._load_registry(retrieval_cfg)
 
         # Store previous model_id for migration detection
         previous_model_id = None
@@ -944,23 +1239,6 @@ class RetrievalModelsService:
             previous_model_id = retrieval_cfg.active.embedding.model_id
         else:
             previous_model_id = retrieval_cfg.active.rerank.model_id
-
-        if normalized_provider == "local_onnx":
-            if not normalized_model_id:
-                raise RetrievalModelsError("model_id is required", error_code="retrieval_model_invalid")
-            spec = LOCAL_MODEL_SPECS.get(normalized_model_id)
-            if spec is None or spec.family != normalized_family:
-                raise RetrievalModelsError("Invalid local model", error_code="retrieval_model_invalid")
-            ready, _ = self._is_local_model_ready(
-                config=retrieval_cfg,
-                registry=registry,
-                model_id=normalized_model_id,
-            )
-            if not ready:
-                raise RetrievalModelsError(
-                    "Local model is not ready",
-                    error_code="retrieval_model_not_ready",
-                )
 
         if normalized_provider == "openai_compatible" and not self._is_embedding_remote_available(retrieval_cfg):
             raise RetrievalModelsError(
@@ -983,8 +1261,11 @@ class RetrievalModelsService:
             retrieval_cfg.active.rerank.model_id = normalized_model_id if normalized_provider == "local_onnx" else None
             retrieval_cfg.active.rerank.model = normalized_model if normalized_provider != "local_onnx" else None
 
-        config_dict["retrieval_models"] = retrieval_cfg.model_dump(exclude_none=True)
-        new_version = repo.write(config_dict=config_dict, expected_version=version)
+        new_version = self._save_retrieval_config(
+            config_dict=config_dict,
+            version=version,
+            retrieval_cfg=retrieval_cfg,
+        )
 
         # Trigger memory migration if enabling vectors for the first time
         migration_result = self._migrate_memory_to_vectors(
@@ -1169,6 +1450,56 @@ class RetrievalModelsService:
         app_config = get_app_config()
         cfg = app_config.retrieval_models
         registry = self._load_registry(cfg)
+        spec = LOCAL_MODEL_SPECS[model_id]
+
+        repo = ConfigRepository()
+        config_dict, _, _ = repo.read()
+        if not isinstance(config_dict, dict):
+            config_dict = {}
+        retrieval_payload = config_dict.get("retrieval_models", {})
+        retrieval_cfg = RetrievalModelsConfig.model_validate(retrieval_payload)
+
+        is_active_local_embedding = (
+            spec.family == "embedding"
+            and retrieval_cfg.active.embedding.provider == "local_onnx"
+            and retrieval_cfg.active.embedding.model_id == model_id
+        )
+        is_active_local_rerank = (
+            spec.family == "rerank"
+            and retrieval_cfg.active.rerank.provider == "local_onnx"
+            and retrieval_cfg.active.rerank.model_id == model_id
+        )
+
+        if is_active_local_embedding or is_active_local_rerank:
+            raise RetrievalModelsError(
+                f"Cannot remove active model: {model_id}. Switch active model first.",
+                error_code="retrieval_active_model_remove_forbidden",
+            )
+
+        if spec.family == "embedding":
+            target_ready, _ = self._is_local_model_ready(
+                config=cfg,
+                registry=registry,
+                model_id=model_id,
+            )
+            if target_ready:
+                installed_embedding_model_ids: list[str] = []
+                for candidate_id, candidate_spec in LOCAL_MODEL_SPECS.items():
+                    if candidate_spec.family != "embedding":
+                        continue
+                    candidate_ready, _ = self._is_local_model_ready(
+                        config=cfg,
+                        registry=registry,
+                        model_id=candidate_id,
+                    )
+                    if candidate_ready:
+                        installed_embedding_model_ids.append(candidate_id)
+
+                if model_id in installed_embedding_model_ids and len(installed_embedding_model_ids) <= 1:
+                    raise RetrievalModelsError(
+                        "At least one local embedding model must be kept. Download another pack first.",
+                        error_code="retrieval_pack_keep_one_required",
+                    )
 
         # Remove file if exists
         model_root = self._resolve_model_root(cfg)
@@ -1185,28 +1516,6 @@ class RetrievalModelsService:
                 # Save registry
                 registry_path = self._resolve_registry_path(cfg)
                 registry_path.write_text(json.dumps(registry, indent=2, ensure_ascii=False), encoding="utf-8")
-
-        # Clear active model if it was using this model
-        spec = LOCAL_MODEL_SPECS[model_id]
-        repo = ConfigRepository()
-        config_dict, version, _ = repo.read()
-        if not isinstance(config_dict, dict):
-            config_dict = {}
-
-        retrieval_payload = config_dict.get("retrieval_models", {})
-        retrieval_cfg = RetrievalModelsConfig.model_validate(retrieval_payload)
-
-        modified = False
-        if spec.family == "embedding" and retrieval_cfg.active.embedding.model_id == model_id:
-            retrieval_cfg.active.embedding.model_id = None
-            modified = True
-        elif spec.family == "rerank" and retrieval_cfg.active.rerank.model_id == model_id:
-            retrieval_cfg.active.rerank.model_id = None
-            modified = True
-
-        if modified:
-            config_dict["retrieval_models"] = retrieval_cfg.model_dump(exclude_none=True)
-            repo.write(config_dict=config_dict, expected_version=version)
 
         return {
             "success": True,

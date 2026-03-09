@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Code Viewer</title>
+    <link rel="stylesheet" href="./assets/main.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="toolbar">
+        <div class="toolbar-left">
+          <button id="buildBtn" class="btn primary">编译</button>
+          <button id="startBtn" class="btn" disabled>启动</button>
+          <button id="saveBtn" class="btn">保存</button>
+          <button id="formatBtn" class="btn">格式化</button>
+        </div>
+        <div class="toolbar-center">
+          <label>
+            Build
+            <input id="buildCmd" class="cmd-input" type="text" />
+          </label>
+          <label>
+            Dev
+            <input id="devCmd" class="cmd-input" type="text" />
+          </label>
+        </div>
+        <div class="toolbar-right">
+          <span id="projectBadge" class="badge">项目识别中</span>
+          <span id="statusText" class="status">Ready</span>
+        </div>
+      </header>
+
+      <div class="split-layout" id="splitLayout">
+        <aside class="panel panel-left" id="leftPanel">
+          <div class="panel-header">
+            <strong>文件树</strong>
+            <div class="header-actions">
+              <input id="treeSearch" class="search-input" placeholder="搜索文件" />
+              <button id="refreshTreeBtn" class="btn tiny">刷新</button>
+              <button id="collapseLeftBtn" class="btn tiny">收起</button>
+            </div>
+          </div>
+          <div id="treeContainer" class="tree-container"></div>
+        </aside>
+
+        <div id="leftDivider" class="divider" data-side="left"></div>
+
+        <main class="panel panel-center">
+          <div id="tabs" class="tabs"></div>
+          <div class="editor-tools">
+            <input id="findInput" class="search-input" placeholder="查找" />
+            <input id="replaceInput" class="search-input" placeholder="替换" />
+            <button id="findNextBtn" class="btn tiny">下一个</button>
+            <button id="replaceOneBtn" class="btn tiny">替换</button>
+            <button id="replaceAllBtn" class="btn tiny">全部替换</button>
+            <span id="activeFileLabel" class="active-file-label">未打开文件</span>
+          </div>
+          <div class="editor-wrap" id="editorWrap">
+            <pre id="lineNumbers" class="line-numbers"></pre>
+            <textarea id="editor" class="editor" spellcheck="false"></textarea>
+          </div>
+        </main>
+
+        <div id="rightDivider" class="divider" data-side="right"></div>
+
+        <aside class="panel panel-right" id="rightPanel">
+          <div class="panel-header">
+            <div>
+              <button id="previewTabBtn" class="btn tiny active">预览</button>
+              <button id="logsTabBtn" class="btn tiny">日志</button>
+            </div>
+            <div class="header-actions">
+              <button id="collapseRightBtn" class="btn tiny">收起</button>
+            </div>
+          </div>
+          <div class="preview-bar" id="previewBar">
+            <input id="previewUrlInput" class="url-input" placeholder="http://localhost:3000" />
+            <button id="openPreviewBtn" class="btn tiny">打开</button>
+          </div>
+          <div id="previewPane" class="pane pane-preview">
+            <iframe id="previewFrame" class="preview-frame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+            <div id="previewError" class="preview-error"></div>
+          </div>
+          <div id="logsPane" class="pane pane-logs hidden">
+            <pre id="logs" class="logs"></pre>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script src="./assets/main.js"></script>
+  </body>
+</html>

@@ -86,7 +86,7 @@ export default function NewAgentPage() {
     await sendMessage(threadId, {
       text: t.agents.nameStepBootstrapMessage.replace("{name}", trimmed),
       files: [],
-    });
+    }, { agent_name: trimmed });
   }, [
     nameInput,
     sendMessage,
@@ -198,6 +198,9 @@ export default function NewAgentPage() {
                 className="size-full pt-10"
                 threadId={threadId}
                 thread={thread}
+                onClarificationSelect={(option) => {
+                  void handleChatSubmit(option);
+                }}
               />
             </div>
 

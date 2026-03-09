@@ -9,6 +9,7 @@ import { getBackendBaseURL } from "@/core/config";
 import type {
   ApiErrorDetail,
   ConfigReadResponse,
+  ConfigRuntimeStatusResponse,
   ConfigSchemaResponse,
   ConfigUpdateRequest,
   ConfigUpdateResponse,
@@ -42,6 +43,11 @@ export async function loadConfig(): Promise<ConfigReadResponse> {
 export async function loadConfigSchema(): Promise<ConfigSchemaResponse> {
   const response = await fetch(`${getBackendBaseURL()}/api/config/schema`);
   return parseOrThrow<ConfigSchemaResponse>(response);
+}
+
+export async function loadConfigRuntimeStatus(): Promise<ConfigRuntimeStatusResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/config/runtime-status`);
+  return parseOrThrow<ConfigRuntimeStatusResponse>(response);
 }
 
 export async function validateConfig(payload: ConfigValidateRequest): Promise<ConfigValidateResponse> {

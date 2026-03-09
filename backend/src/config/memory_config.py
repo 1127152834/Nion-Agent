@@ -56,21 +56,21 @@ class MemoryConfig(BaseModel):
     vector_store_path: str = Field(
         default="",
         description=(
-            "Path to vector storage. If empty, defaults to "
-            "`{base_dir}/memory_v2/vectors.db` in the manager layer."
+            "Path to vector storage. "
+            "This field is retained for compatibility with retrieval settings."
         ),
     )
     vector_weight: float = Field(
-        default=0.0,
+        default=0.5,
         ge=0.0,
         le=1.0,
-        description="Fusion weight for vector similarity scores (0.0 = disabled, pure BM25 mode).",
+        description="Fusion weight for vector similarity scores.",
     )
     bm25_weight: float = Field(
-        default=1.0,
+        default=0.5,
         ge=0.0,
         le=1.0,
-        description="Fusion weight for BM25 scores (1.0 = pure BM25 mode).",
+        description="Fusion weight for BM25 scores.",
     )
     bm25_k1: float = Field(
         default=1.5,

@@ -19,11 +19,25 @@ export interface ArtifactGroup {
 
 export type SessionMode = "normal" | "temporary_chat";
 
+export interface ClarificationState {
+  status?: "awaiting_user" | "resolved" | string;
+  question?: string;
+  clarification_type?: string;
+  context?: string | null;
+  options?: string[];
+  requires_choice?: boolean;
+  tool_call_id?: string | null;
+  asked_at?: string | null;
+  resolved_at?: string | null;
+  resolved_by_message_id?: string | null;
+}
+
 export interface AgentThreadState extends Record<string, unknown> {
   title: string;
   messages: Message[];
   artifacts: string[];
   artifact_groups?: ArtifactGroup[] | null;
+  clarification?: ClarificationState | null;
   todos?: Todo[];
   session_mode?: SessionMode;
 }

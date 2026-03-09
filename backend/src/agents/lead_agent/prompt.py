@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any
 
+from src.agents.memory.policy import resolve_memory_policy
 from src.config.agents_config import load_agent_soul
 from src.skills import load_skills
 
@@ -240,15 +241,21 @@ You: "Deploying to staging..." [proceed]
 {subagent_section}
 
 <working_directory existed="true">
-- User uploads: `/mnt/user-data/uploads` - Files uploaded by the user (automatically listed in context)
-- User workspace: `/mnt/user-data/workspace` - Working directory for temporary files
-- Output files: `/mnt/user-data/outputs` - Final deliverables must be saved here
+- Tool-facing uploads path: `/mnt/user-data/uploads`
+- Tool-facing workspace path: `/mnt/user-data/workspace`
+- Tool-facing output path: `/mnt/user-data/outputs`
+
+**Runtime Rules:**
+- In sandbox mode, those `/mnt/user-data/*` paths refer to the sandbox workspace
+- In host mode, the current conversation may be bound to a real host directory, and the tool-facing `/mnt/user-data/*` paths are mapped to that bound host directory at runtime
+- Never assume the real working directory from memory alone
+- If the user asks which directory you are currently operating in, whether you are in sandbox or host mode, or what files currently exist, you MUST verify it with tools before answering
 
 **File Management:**
 - Uploaded files are automatically listed in the <uploaded_files> section before each request
 - Use `read_file` tool to read uploaded files using their paths from the list
 - For PDF, PPT, Excel, and Word files, converted Markdown versions (*.md) are available alongside originals
-- All temporary work happens in `/mnt/user-data/workspace`
+- Use `/mnt/user-data/workspace` as the default tool-facing work area unless a more specific verified path is needed
 - Final deliverables must be copied to `/mnt/user-data/outputs` and presented using `present_file` tool
 </working_directory>
 
@@ -284,7 +291,13 @@ Recent breakthroughs in language models have also accelerated progress
 """
 
 
-def _get_memory_context(agent_name: str | None = None) -> str:
+def _get_memory_context(
+    agent_name: str | None = None,
+    *,
+    session_mode: str | None = None,
+    memory_read: bool | None = None,
+    memory_write: bool | None = None,
+) -> str:
     """Get memory context for injection into system prompt.
 
     Args:
@@ -294,6 +307,16 @@ def _get_memory_context(agent_name: str | None = None) -> str:
         Formatted memory context string wrapped in XML tags, or empty string if disabled.
     """
     try:
+        policy = resolve_memory_policy(
+            runtime_context={
+                "session_mode": session_mode,
+                "memory_read": memory_read,
+                "memory_write": memory_write,
+            }
+        )
+        if not policy.allow_read:
+            return ""
+
         from src.agents.memory import format_memory_for_injection, get_memory_data
         from src.config.memory_config import get_memory_config
 
@@ -437,9 +460,17 @@ def apply_prompt_template(
     agent_name: str | None = None,
     available_skills: set[str] | None = None,
     rss_context: list[dict[str, Any]] | None = None,
+    session_mode: str | None = None,
+    memory_read: bool | None = None,
+    memory_write: bool | None = None,
 ) -> str:
     # Get memory context
-    memory_context = _get_memory_context(agent_name)
+    memory_context = _get_memory_context(
+        agent_name,
+        session_mode=session_mode,
+        memory_read=memory_read,
+        memory_write=memory_write,
+    )
     rss_context_section = _format_rss_context_section(rss_context)
 
     # Include subagent section only if enabled (from runtime parameter)

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "sonner";
 
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { RuntimeOnboardingOverlay } from "@/components/workspace/runtime-onboarding-overlay";
 import { SchedulerReminderWatcher } from "@/components/workspace/scheduler/scheduler-reminder-watcher";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
@@ -12,6 +12,18 @@ import { RSSContextProvider } from "@/core/rss";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
 
 const queryClient = new QueryClient();
+
+function WorkspaceMobileSidebarTrigger() {
+  const { isMobile, openMobile } = useSidebar();
+
+  if (!isMobile || openMobile) {
+    return null;
+  }
+
+  return (
+    <SidebarTrigger className="fixed top-[calc(var(--desktop-titlebar-safe-area,0px)+12px)] left-3 z-30 size-9 rounded-full border bg-background/90 shadow-sm backdrop-blur md:hidden" />
+  );
+}
 
 export default function WorkspaceLayout({
   children,
@@ -58,6 +70,7 @@ export default function WorkspaceLayout({
         >
           <WorkspaceSidebar />
           <SidebarInset className="min-w-0 pt-[var(--desktop-titlebar-safe-area,0px)]">
+            <WorkspaceMobileSidebarTrigger />
             {children}
           </SidebarInset>
         </SidebarProvider>

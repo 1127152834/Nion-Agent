@@ -6,8 +6,14 @@ import type { ReactNode } from "react";
  */
 export interface Artifact {
   path: string;
+  kind?: "file" | "directory" | "project";
   content?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface WorkbenchPackageFile {
+  content: string;
+  encoding: "text" | "base64";
 }
 
 /**
@@ -41,8 +47,23 @@ export interface WorkbenchContext {
   // File operations (full permissions)
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
+  readBinaryFile(path: string): Promise<{ dataUrl: string; mimeType: string }>;
+  writeBinaryFile(path: string, dataUrl: string, mimeType?: string): Promise<void>;
   deleteFile(path: string): Promise<void>;
   listFiles(dir: string): Promise<string[]>;
+  readDir(path: string): Promise<string[]>;
+
+  // Command operations (thread boundary restricted on backend)
+  runCommand(args: {
+    command: string;
+    cwd?: string;
+    timeoutSeconds?: number;
+  }): Promise<{ sessionId: string }>;
+  stopCommand(sessionId: string): Promise<void>;
+  streamLogs(
+    sessionId: string,
+    onEvent: (event: { event: string; payload: Record<string, unknown> }) => void,
+  ): () => void;
 
   // Network (full permissions)
   fetch(url: string, options?: RequestInit): Promise<Response>;
@@ -66,9 +87,7 @@ export interface WorkbenchContext {
 export interface WorkbenchPlugin {
   id: string;
   name: string;
-  version: string;
   description?: string;
-  author?: string;
   icon?: LucideIcon;
 
   /**
@@ -90,33 +109,97 @@ export interface WorkbenchPlugin {
   onClose?(): void;
 }
 
+export interface WorkbenchTargetRule {
+  kind: "file" | "directory" | "project";
+  extensions?: string[];
+  pathPattern?: string;
+  projectMarkers?: string[];
+  priority?: number;
+}
+
+export interface WorkbenchContribution {
+  commands?: Array<{
+    id: string;
+    title: string;
+    description?: string;
+  }>;
+  toolbarActions?: Array<{
+    id: string;
+    title: string;
+    icon?: string;
+  }>;
+  settingsSchema?: Record<string, unknown>;
+  openWithRules?: WorkbenchTargetRule[];
+}
+
+export interface PluginTestAssertion {
+  type: "entry_exists" | "fixture_exists";
+  target: string;
+}
+
+export interface PluginTestSpec {
+  assertions?: PluginTestAssertion[];
+  commandSteps?: Array<{
+    id?: string;
+    command: string;
+    cwd?: string;
+    timeout_seconds?: number;
+    expect_contains?: string[];
+  }>;
+}
+
 /**
- * Plugin manifest (from manifest.json)
+ * Plugin manifest v2 (from manifest.json)
  */
-export interface PluginManifest {
+export interface WorkbenchPluginManifestV2 {
   id: string;
   name: string;
-  version: string;
+  entry: string;
   description?: string;
-  author?: string;
-  icon?: string;
-  main: string;
-
-  workbench: {
-    fileTypes?: string[];
-    mimeTypes?: string[];
-    priority?: number;
-  };
-
-  dependencies?: Record<string, string>;
+  runtime: "iframe";
+  targets?: WorkbenchTargetRule[];
+  capabilities?: Array<
+    | "file.read"
+    | "file.write"
+    | "file.delete"
+    | "dir.list"
+    | "command.run"
+    | "command.stop"
+    | "log.stream"
+    | "toast"
+    | "preview.open"
+    | "state.persist"
+  >;
+  minHostVersion?: string;
+  fixtures?: string[];
+  contributions?: WorkbenchContribution;
+  testSpec?: PluginTestSpec;
 }
 
 /**
  * Installed plugin metadata
  */
 export interface InstalledPlugin {
-  manifest: PluginManifest;
+  manifest: WorkbenchPluginManifestV2;
   path: string;
   enabled: boolean;
   installedAt: string;
+  verified?: boolean;
+  lastTestReport?: PluginTestReport | null;
+}
+
+export interface PluginTestStepReport {
+  id: string;
+  passed: boolean;
+  message: string;
+  durationMs: number;
+  outputExcerpt?: string;
+}
+
+export interface PluginTestReport {
+  pluginId: string;
+  passed: boolean;
+  executedAt: string;
+  summary: string;
+  steps: PluginTestStepReport[];
 }

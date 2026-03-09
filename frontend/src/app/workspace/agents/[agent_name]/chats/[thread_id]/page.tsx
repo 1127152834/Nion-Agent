@@ -2,32 +2,55 @@
 
 import { BotIcon, PlusSquare } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { AgentWelcome } from "@/components/workspace/agent-welcome";
 import { WorkingDirectoryTrigger } from "@/components/workspace/artifacts";
 import { ChatBox, useThreadChat } from "@/components/workspace/chats";
 import { InputBox } from "@/components/workspace/input-box";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
+import { NewChatStage } from "@/components/workspace/new-chat-stage";
+import { getRuntimeModeCopy, RuntimeModeToggle } from "@/components/workspace/runtime-mode-toggle";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { useAgent } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
+import { platform } from "@/core/platform";
+import { useDesktopRuntime } from "@/core/platform/hooks";
+import { type RuntimeProfile, fetchRuntimeProfile, updateRuntimeProfile } from "@/core/runtime-profile/api";
 import { useLocalSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
+const DEFAULT_RUNTIME_PROFILE: RuntimeProfile = {
+  execution_mode: "sandbox",
+  host_workdir: null,
+  locked: false,
+  updated_at: null,
+};
+
 export default function AgentChatPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [settings, setSettings] = useLocalSettings();
   const router = useRouter();
+  const { isDesktopRuntime } = useDesktopRuntime();
 
   const { agent_name } = useParams<{
     agent_name: string;
@@ -38,15 +61,44 @@ export default function AgentChatPage() {
   const { threadId, isNewThread, setIsNewThread } = useThreadChat();
 
   const { showNotification } = useNotification();
+  const [runtimeProfile, setRuntimeProfile] = useState<RuntimeProfile>(DEFAULT_RUNTIME_PROFILE);
+  const [runtimeProfileLoading, setRuntimeProfileLoading] = useState(false);
+  const [runtimeProfileSaving, setRuntimeProfileSaving] = useState(false);
+  const [hostSetupDialogOpen, setHostSetupDialogOpen] = useState(false);
+  const [hostSetupPreviousProfile, setHostSetupPreviousProfile] = useState<RuntimeProfile | null>(null);
+  const [hostSetupErrorMessage, setHostSetupErrorMessage] = useState<string | null>(null);
+  const [hostSetupCreateBaseDir, setHostSetupCreateBaseDir] = useState<string | null>(null);
+  const [hostSetupCreateInputVisible, setHostSetupCreateInputVisible] = useState(false);
+  const [hostSetupCreateDirName, setHostSetupCreateDirName] = useState("workspace");
+  const [hostSetupCreateSaving, setHostSetupCreateSaving] = useState(false);
+
+  const hostModeCopy = useMemo(() => getRuntimeModeCopy(locale), [locale]);
+  const mapRuntimeProfileError = useCallback(
+    (message: string): string => {
+      if (message.includes("empty directory")) {
+        const foundMatch = /found:\s*([^)]+)/i.exec(message);
+        if (foundMatch?.[1]) {
+          return `${hostModeCopy.hostDirMissing}（检测到：${foundMatch[1]}）`;
+        }
+        return hostModeCopy.hostDirMissing;
+      }
+      if (message.includes("already bound")) {
+        return hostModeCopy.hostDirLocked;
+      }
+      return message;
+    },
+    [hostModeCopy.hostDirLocked, hostModeCopy.hostDirMissing],
+  );
+
   const [thread, sendMessage] = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: { ...settings.context, agent_name: agent_name },
-    onStart: () => {
+    onStart: (startedThreadId) => {
       setIsNewThread(false);
       history.replaceState(
         null,
         "",
-        `/workspace/agents/${agent_name}/chats/${threadId}`,
+        `/workspace/agents/${agent_name}/chats/${startedThreadId}`,
       );
     },
     onFinish: (state) => {
@@ -67,16 +119,328 @@ export default function AgentChatPage() {
     },
   });
 
+  const hostModeMissingDir = runtimeProfile.execution_mode === "host" && !runtimeProfile.host_workdir;
+  const inputDisabled = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
+    || runtimeProfileLoading
+    || runtimeProfileSaving
+    || hostSetupDialogOpen
+    || hostModeMissingDir;
+  const shouldShowInputBox = hostSetupDialogOpen
+    || !isNewThread
+    || runtimeProfile.execution_mode !== "host"
+    || Boolean(runtimeProfile.host_workdir);
+
+  const persistRuntimeProfile = useCallback(
+    async (
+      payload: { execution_mode: "sandbox" | "host"; host_workdir?: string | null },
+      options?: { onError?: (displayMessage: string, rawMessage: string) => void },
+    ): Promise<boolean> => {
+      if (threadId === "new") {
+        setRuntimeProfile((prev) => ({
+          ...prev,
+          execution_mode: payload.execution_mode,
+          host_workdir: payload.execution_mode === "host" ? (payload.host_workdir ?? null) : null,
+        }));
+        return true;
+      }
+      setRuntimeProfileSaving(true);
+      try {
+        const updated = await updateRuntimeProfile(threadId, payload);
+        setRuntimeProfile(updated);
+        return true;
+      } catch (error) {
+        const rawMessage = error instanceof Error ? error.message : hostModeCopy.modeSaveFailed;
+        const displayMessage = mapRuntimeProfileError(rawMessage || hostModeCopy.modeSaveFailed);
+        if (options?.onError) {
+          options.onError(displayMessage || hostModeCopy.modeSaveFailed, rawMessage);
+        } else {
+          toast.error(displayMessage || hostModeCopy.modeSaveFailed);
+        }
+        return false;
+      } finally {
+        setRuntimeProfileSaving(false);
+      }
+    },
+    [hostModeCopy.modeSaveFailed, mapRuntimeProfileError, threadId],
+  );
+
+  const pickHostDirectory = useCallback(async (): Promise<string | null> => {
+    if (!isDesktopRuntime) {
+      toast.error(hostModeCopy.desktopOnly);
+      return null;
+    }
+    if (runtimeProfile.locked) {
+      toast.error(hostModeCopy.locked);
+      return null;
+    }
+    try {
+      const picked = await platform.pickHostFile({
+        title: hostModeCopy.pickDir,
+        defaultPath: runtimeProfile.host_workdir ?? undefined,
+        kind: "directory",
+      });
+      if (picked.canceled || !picked.path) {
+        return null;
+      }
+      return picked.path;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : hostModeCopy.modeSaveFailed;
+      toast.error(message || hostModeCopy.modeSaveFailed);
+      return null;
+    }
+  }, [
+    isDesktopRuntime,
+    hostModeCopy.desktopOnly,
+    hostModeCopy.locked,
+    hostModeCopy.modeSaveFailed,
+    hostModeCopy.pickDir,
+    runtimeProfile.host_workdir,
+    runtimeProfile.locked,
+  ]);
+
+  const handleChooseHostSetupDirectory = useCallback(async () => {
+    setHostSetupErrorMessage(null);
+    setHostSetupCreateBaseDir(null);
+    setHostSetupCreateInputVisible(false);
+
+    const selectedPath = await pickHostDirectory();
+    if (!selectedPath) {
+      return;
+    }
+    const saved = await persistRuntimeProfile({
+      execution_mode: "host",
+      host_workdir: selectedPath,
+    }, {
+      onError: (displayMessage, rawMessage) => {
+        setHostSetupErrorMessage(displayMessage);
+        if (rawMessage.includes("empty directory")) {
+          setHostSetupCreateBaseDir(selectedPath);
+        }
+      },
+    });
+    if (!saved) {
+      return;
+    }
+    setHostSetupPreviousProfile(null);
+    setHostSetupErrorMessage(null);
+    setHostSetupCreateBaseDir(null);
+    setHostSetupCreateInputVisible(false);
+    setHostSetupCreateDirName("workspace");
+    setHostSetupDialogOpen(false);
+  }, [persistRuntimeProfile, pickHostDirectory]);
+
+  const handleCreateWorkspaceFromSelectedDir = useCallback(async () => {
+    if (!hostSetupCreateBaseDir) {
+      return;
+    }
+    const trimmedName = hostSetupCreateDirName.trim();
+    if (!trimmedName) {
+      setHostSetupErrorMessage(locale.startsWith("zh") ? "请输入目录名称。" : "Please enter a folder name.");
+      return;
+    }
+    if (/[\\/]/.test(trimmedName)) {
+      setHostSetupErrorMessage(locale.startsWith("zh") ? "目录名称不能包含 / 或 \\" : "Folder name cannot include / or \\.");
+      return;
+    }
+
+    const normalizedBase = hostSetupCreateBaseDir.replace(/[\\/]+$/, "");
+    const separator = normalizedBase.includes("\\") && !normalizedBase.includes("/") ? "\\" : "/";
+    const workspaceDir = `${normalizedBase}${separator}${trimmedName}`;
+    const placeholderPath = `${workspaceDir}${separator}.gitkeep`;
+
+    setHostSetupCreateSaving(true);
+    setHostSetupErrorMessage(null);
+    try {
+      await platform.writeHostFile({
+        path: placeholderPath,
+        content: "",
+        append: false,
+        encoding: "utf-8",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : hostModeCopy.modeSaveFailed;
+      setHostSetupErrorMessage(message || hostModeCopy.modeSaveFailed);
+      setHostSetupCreateSaving(false);
+      return;
+    }
+
+    const saved = await persistRuntimeProfile({
+      execution_mode: "host",
+      host_workdir: workspaceDir,
+    }, {
+      onError: (displayMessage) => {
+        setHostSetupErrorMessage(displayMessage);
+      },
+    });
+    setHostSetupCreateSaving(false);
+    if (!saved) {
+      return;
+    }
+
+    setHostSetupPreviousProfile(null);
+    setHostSetupErrorMessage(null);
+    setHostSetupCreateBaseDir(null);
+    setHostSetupCreateInputVisible(false);
+    setHostSetupCreateDirName("workspace");
+    setHostSetupDialogOpen(false);
+  }, [
+    hostModeCopy.modeSaveFailed,
+    hostSetupCreateBaseDir,
+    hostSetupCreateDirName,
+    locale,
+    persistRuntimeProfile,
+  ]);
+
+  const handleCancelHostSetup = useCallback(() => {
+    if (hostSetupPreviousProfile) {
+      setRuntimeProfile(hostSetupPreviousProfile);
+    }
+    setHostSetupPreviousProfile(null);
+    setHostSetupErrorMessage(null);
+    setHostSetupCreateBaseDir(null);
+    setHostSetupCreateInputVisible(false);
+    setHostSetupCreateDirName("workspace");
+    setHostSetupDialogOpen(false);
+  }, [hostSetupPreviousProfile]);
+
+  const handleOpenHostSetup = useCallback(() => {
+    setHostSetupPreviousProfile(runtimeProfile);
+    setHostSetupErrorMessage(null);
+    setHostSetupCreateBaseDir(null);
+    setHostSetupCreateInputVisible(false);
+    setHostSetupCreateDirName("workspace");
+    setRuntimeProfile((prev) => ({
+      ...prev,
+      execution_mode: "host",
+    }));
+    setHostSetupDialogOpen(true);
+  }, [runtimeProfile]);
+
+  const handleSwitchMode = useCallback(
+    async (mode: "sandbox" | "host") => {
+      if (runtimeProfile.locked) {
+        toast.error(hostModeCopy.locked);
+        return;
+      }
+      if (mode === runtimeProfile.execution_mode) {
+        if (mode === "host" && !runtimeProfile.host_workdir) {
+          handleOpenHostSetup();
+        }
+        return;
+      }
+      if (mode === "sandbox") {
+        await persistRuntimeProfile({ execution_mode: "sandbox", host_workdir: null });
+        return;
+      }
+      if (runtimeProfile.host_workdir) {
+        await persistRuntimeProfile({
+          execution_mode: "host",
+          host_workdir: runtimeProfile.host_workdir,
+        });
+        return;
+      }
+      handleOpenHostSetup();
+    },
+    [
+      handleOpenHostSetup,
+      hostModeCopy.locked,
+      persistRuntimeProfile,
+      runtimeProfile.execution_mode,
+      runtimeProfile.host_workdir,
+      runtimeProfile.locked,
+    ],
+  );
+
+  useEffect(() => {
+    if (threadId === "new") {
+      setRuntimeProfile(DEFAULT_RUNTIME_PROFILE);
+      setRuntimeProfileLoading(false);
+      setRuntimeProfileSaving(false);
+    }
+  }, [threadId]);
+
+  useEffect(() => {
+    if (!threadId || threadId === "new") {
+      return;
+    }
+    let cancelled = false;
+    setRuntimeProfileLoading(true);
+    void fetchRuntimeProfile(threadId)
+      .then((profile) => {
+        if (!cancelled) {
+          setRuntimeProfile(profile);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : hostModeCopy.modeSaveFailed;
+          toast.error(message || hostModeCopy.modeSaveFailed);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRuntimeProfileLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hostModeCopy.modeSaveFailed, threadId]);
+
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
-      void sendMessage(threadId, message, { agent_name });
+      if (hostModeMissingDir) {
+        toast.error(hostModeCopy.hostDirMissing);
+        return;
+      }
+      void sendMessage(threadId, message, {
+        agent_name,
+        execution_mode: runtimeProfile.execution_mode,
+        host_workdir: runtimeProfile.host_workdir ?? undefined,
+      });
     },
-    [sendMessage, threadId, agent_name],
+    [agent_name, hostModeCopy.hostDirMissing, hostModeMissingDir, runtimeProfile.execution_mode, runtimeProfile.host_workdir, sendMessage, threadId],
+  );
+
+  const handleClarificationSelect = useCallback(
+    (option: string) => {
+      void handleSubmit({
+        text: option,
+        files: [],
+      });
+    },
+    [handleSubmit],
   );
 
   const handleStop = useCallback(async () => {
     await thread.stop();
   }, [thread]);
+
+  const renderRuntimeModeToggle = useCallback(
+    (className: string) => (
+      <RuntimeModeToggle
+        className={className}
+        mode={runtimeProfile.execution_mode}
+        locked={runtimeProfile.locked}
+        saving={runtimeProfileSaving}
+        desktopOnlyDisabled={!isDesktopRuntime}
+        hostDirPath={runtimeProfile.host_workdir}
+        copy={hostModeCopy}
+        onSwitch={(nextMode) => {
+          void handleSwitchMode(nextMode);
+        }}
+      />
+    ),
+    [
+      handleSwitchMode,
+      hostModeCopy,
+      isDesktopRuntime,
+      runtimeProfile.execution_mode,
+      runtimeProfile.host_workdir,
+      runtimeProfile.locked,
+      runtimeProfileSaving,
+    ],
+  );
 
   return (
     <ThreadContext.Provider value={{ thread }}>
@@ -118,62 +482,162 @@ export default function AgentChatPage() {
           </header>
 
           <main className="flex min-h-0 max-w-full grow flex-col">
-            <div className="flex size-full justify-center">
-              <MessageList
-                className={cn("size-full", !isNewThread && "pt-10")}
-                threadId={threadId}
-                thread={thread}
-              />
-            </div>
+            {isNewThread ? (
+              <div className="flex size-full items-center justify-center px-4 pb-16 pt-24 sm:px-6 sm:pb-20">
+                <NewChatStage
+                  hero={<AgentWelcome className="sm:pb-1" agent={agent} agentName={agent_name} />}
+                  controls={renderRuntimeModeToggle("mx-auto")}
+                  composer={
+                    shouldShowInputBox ? (
+                      <InputBox
+                        className="w-full bg-background/72 shadow-[0_34px_80px_-52px_rgba(70,60,41,0.4)] ring-1 ring-black/6 backdrop-blur-xl"
+                        threadId={threadId}
+                        isNewThread={isNewThread}
+                        autoFocus={isNewThread}
+                        status={thread.isLoading ? "streaming" : "ready"}
+                        context={settings.context}
+                        disabled={inputDisabled}
+                        onContextChange={(context) => setSettings("context", context)}
+                        onSubmit={handleSubmit}
+                        onStop={handleStop}
+                      />
+                    ) : null
+                  }
+                  footer={
+                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ? (
+                      <div className="text-muted-foreground/67 text-xs">
+                        {t.common.notAvailableInDemoMode}
+                      </div>
+                    ) : null
+                  }
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex size-full justify-center">
+                  <MessageList
+                    className={cn("size-full", !isNewThread && "pt-10")}
+                    threadId={threadId}
+                    thread={thread}
+                    onClarificationSelect={handleClarificationSelect}
+                  />
+                </div>
+                <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
+                  <div className="relative w-full max-w-(--container-width-md)">
+                    <div className="absolute -top-4 right-0 left-0 z-0">
+                      <div className="absolute right-0 bottom-0 left-0">
+                        <TodoList
+                          className="bg-background/5"
+                          todos={thread.values.todos ?? []}
+                          hidden={
+                            !thread.values.todos || thread.values.todos.length === 0
+                          }
+                        />
+                      </div>
+                    </div>
 
-            <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
-              <div
-                className={cn(
-                  "relative w-full",
-                  isNewThread && "-translate-y-[calc(50vh-96px)]",
-                  isNewThread
-                    ? "max-w-(--container-width-sm)"
-                    : "max-w-(--container-width-md)",
-                )}
-              >
-                <div className="absolute -top-4 right-0 left-0 z-0">
-                  <div className="absolute right-0 bottom-0 left-0">
-                    <TodoList
-                      className="bg-background/5"
-                      todos={thread.values.todos ?? []}
-                      hidden={
-                        !thread.values.todos || thread.values.todos.length === 0
-                      }
-                    />
+                    {shouldShowInputBox ? (
+                      <InputBox
+                        className={cn("bg-background/5 w-full")}
+                        threadId={threadId}
+                        isNewThread={isNewThread}
+                        autoFocus={isNewThread}
+                        status={thread.isLoading ? "streaming" : "ready"}
+                        context={settings.context}
+                        disabled={inputDisabled}
+                        onContextChange={(context) => setSettings("context", context)}
+                        onSubmit={handleSubmit}
+                        onStop={handleStop}
+                      />
+                    ) : null}
+                    {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
+                      <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
+                        {t.common.notAvailableInDemoMode}
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <InputBox
-                  className={cn("bg-background/5 w-full -translate-y-4")}
-                  threadId={threadId}
-                  isNewThread={isNewThread}
-                  autoFocus={isNewThread}
-                  status={thread.isLoading ? "streaming" : "ready"}
-                  context={settings.context}
-                  extraHeader={
-                    isNewThread && (
-                      <AgentWelcome agent={agent} agentName={agent_name} />
-                    )
-                  }
-                  disabled={env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"}
-                  onContextChange={(context) => setSettings("context", context)}
-                  onSubmit={handleSubmit}
-                  onStop={handleStop}
-                />
-                {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && (
-                  <div className="text-muted-foreground/67 w-full translate-y-12 text-center text-xs">
-                    {t.common.notAvailableInDemoMode}
+              </>
+            )}
+          </main>
+        </div>
+        <Dialog
+          open={hostSetupDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              handleCancelHostSetup();
+            }
+          }}
+        >
+          <DialogContent className="max-w-md" showCloseButton={false}>
+            <DialogHeader>
+              <DialogTitle>{hostModeCopy.hostDialogTitle}</DialogTitle>
+              <DialogDescription>{hostModeCopy.hostDialogDescription}</DialogDescription>
+            </DialogHeader>
+            {hostSetupErrorMessage ? (
+              <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+                {hostSetupErrorMessage}
+              </div>
+            ) : null}
+            {hostSetupCreateBaseDir ? (
+              <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2 text-sm">
+                <div className="text-muted-foreground">
+                  {locale.startsWith("zh")
+                    ? "当前目录非空。你可以在该目录下创建一个空目录作为本会话工作空间。"
+                    : "Selected directory is not empty. You can create an empty subfolder and use it as workspace."}
+                </div>
+                {!hostSetupCreateInputVisible ? (
+                  <div className="mt-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setHostSetupCreateInputVisible(true)}
+                    >
+                      {locale.startsWith("zh") ? "创建空目录并使用" : "Create empty folder and use"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-2 flex items-center gap-2">
+                    <Input
+                      value={hostSetupCreateDirName}
+                      onChange={(event) => setHostSetupCreateDirName(event.target.value)}
+                      placeholder={locale.startsWith("zh") ? "输入目录名称（如 workspace）" : "Folder name (e.g. workspace)"}
+                      className="h-9"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        void handleCreateWorkspaceFromSelectedDir();
+                      }}
+                      disabled={hostSetupCreateSaving}
+                    >
+                      {hostSetupCreateSaving
+                        ? (locale.startsWith("zh") ? "创建中..." : "Creating...")
+                        : (locale.startsWith("zh") ? "确定" : "Confirm")}
+                    </Button>
                   </div>
                 )}
               </div>
-            </div>
-          </main>
-        </div>
+            ) : null}
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={handleCancelHostSetup}
+              >
+                {hostModeCopy.hostDialogCancel}
+              </Button>
+              <Button
+                onClick={() => {
+                  void handleChooseHostSetupDirectory();
+                }}
+                variant="outline"
+                disabled={runtimeProfileSaving || hostSetupCreateSaving}
+              >
+                {hostModeCopy.hostDialogChooseDir}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </ChatBox>
     </ThreadContext.Provider>
   );

@@ -16,6 +16,7 @@ import {
   listRSSEntries,
   listRSSFeeds,
   parseRSSOPML,
+  fetchRSSEntryReadability,
   refreshRSSFeed,
   summarizeRSSEntry,
   translateRSSEntry,
@@ -176,6 +177,12 @@ export function useUpdateRSSEntry() {
 export function useSummarizeRSSEntry() {
   return useMutation({
     mutationFn: (entryId: string) => summarizeRSSEntry(entryId),
+  });
+}
+
+export function useRSSEntryReadability() {
+  return useMutation({
+    mutationFn: (entryId: string) => fetchRSSEntryReadability(entryId),
   });
 }
 

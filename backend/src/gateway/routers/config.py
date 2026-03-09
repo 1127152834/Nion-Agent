@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from src.config.config_repository import ConfigRepository, ConfigValidationError, VersionConflictError
 from src.gateway.schemas import (
     ConfigReadResponse,
+    ConfigRuntimeStatusResponse,
     ConfigSchemaResponse,
     ConfigSectionSchema,
     ConfigUpdateRequest,
@@ -15,6 +16,7 @@ from src.gateway.schemas import (
     ConfigValidateErrorItem,
     ConfigValidateRequest,
     ConfigValidateResponse,
+    ConfigValidateWarningItem,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,7 @@ def _build_schema() -> ConfigSchemaResponse:
         "models": ConfigSectionSchema(title="Models", description="Configure available LLM models."),
         "tools": ConfigSectionSchema(title="Tools", description="Configure tools and tool groups."),
         "sandbox": ConfigSectionSchema(title="Sandbox", description="Configure sandbox provider and runtime options."),
+        "checkpointer": ConfigSectionSchema(title="Checkpointer", description="Configure thread state persistence backend and connection settings."),
         "title": ConfigSectionSchema(title="Title", description="Configure automatic title generation."),
         "summarization": ConfigSectionSchema(title="Summarization", description="Configure conversation summarization behavior."),
         "subagents": ConfigSectionSchema(title="Subagents", description="Configure subagent timeout defaults and overrides."),
@@ -38,6 +41,7 @@ def _build_schema() -> ConfigSchemaResponse:
         "models",
         "tools",
         "sandbox",
+        "checkpointer",
         "title",
         "summarization",
         "subagents",
@@ -121,10 +125,18 @@ async def validate_config(request: ConfigValidateRequest) -> ConfigValidateRespo
     """Validate configuration without saving."""
     repo = ConfigRepository()
     payload = _resolve_config_payload(request.config, request.yaml_text)
-    errors = [ConfigValidateErrorItem(**item) for item in repo.validate(payload)]
+    errors_raw, warnings_raw = repo.validate_with_warnings(payload)
+    errors = [ConfigValidateErrorItem(**item) for item in errors_raw]
+    warnings = [ConfigValidateWarningItem(**item) for item in warnings_raw]
     if errors:
-        return ConfigValidateResponse(valid=False, errors=errors)
-    return ConfigValidateResponse(valid=True, errors=[], config=payload, yaml_text=_to_yaml_text(payload))
+        return ConfigValidateResponse(valid=False, errors=errors, warnings=warnings)
+    return ConfigValidateResponse(
+        valid=True,
+        errors=[],
+        warnings=warnings,
+        config=payload,
+        yaml_text=_to_yaml_text(payload),
+    )
 
 
 @router.put(
@@ -139,13 +151,15 @@ async def update_config(request: ConfigUpdateRequest) -> ConfigUpdateResponse:
     payload = _resolve_config_payload(request.config, request.yaml_text)
 
     try:
-        new_version = repo.write(config_dict=payload, expected_version=request.version)
+        new_version, warnings_raw = repo.write_with_warnings(config_dict=payload, expected_version=request.version)
+        warnings = [ConfigValidateWarningItem(**item) for item in warnings_raw]
         config, _, source_path = repo.read()
         return ConfigUpdateResponse(
             version=new_version,
             source_path=str(source_path),
             yaml_text=_to_yaml_text(config),
             config=config,
+            warnings=warnings,
         )
     except VersionConflictError as exc:
         raise HTTPException(
@@ -161,8 +175,37 @@ async def update_config(request: ConfigUpdateRequest) -> ConfigUpdateResponse:
             detail={
                 "message": "Config validation failed",
                 "errors": exc.errors,
+                "warnings": exc.warnings,
             },
         ) from exc
     except Exception as exc:
         logger.error("Failed to update config: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to update config") from exc
+
+
+@router.get(
+    "/config/runtime-status",
+    response_model=ConfigRuntimeStatusResponse,
+    summary="Get Runtime Config Status",
+    description="Retrieve runtime/store version alignment and per-process loaded config status.",
+)
+async def get_runtime_status() -> ConfigRuntimeStatusResponse:
+    """Get runtime config status for observability and troubleshooting."""
+    repo = ConfigRepository()
+    status_payload = repo.get_runtime_status()
+    runtime_warnings: list[str] = []
+
+    runtime_processes = status_payload.get("runtime_processes", {})
+    if isinstance(runtime_processes, dict):
+        for process_name, process_info in runtime_processes.items():
+            if not isinstance(process_info, dict):
+                continue
+            if process_info.get("status") == "error":
+                reason = process_info.get("reason") or "unknown runtime load error"
+                runtime_warnings.append(f"{process_name}: {reason}")
+
+    if not status_payload.get("is_in_sync"):
+        runtime_warnings.append("Current process config version is not in sync with storage version")
+
+    status_payload["warnings"] = runtime_warnings
+    return ConfigRuntimeStatusResponse(**status_payload)

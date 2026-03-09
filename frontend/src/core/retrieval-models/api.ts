@@ -9,6 +9,7 @@ export type RetrievalOperationResponse = {
 
 export type RetrievalFamily = "embedding" | "rerank";
 export type RetrievalProvider = "local_onnx" | "openai_compatible" | "rerank_api";
+export type RetrievalPackId = "zh" | "en";
 
 export type SetActiveModelPayload = {
   family: RetrievalFamily;
@@ -77,6 +78,17 @@ export async function setActiveRetrievalModel(payload: SetActiveModelPayload): P
   return parseResponse(response);
 }
 
+export async function setActiveRetrievalPack(packId: RetrievalPackId): Promise<RetrievalOperationResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/retrieval-models/set-active-pack`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ pack_id: packId }),
+  });
+  return parseResponse(response);
+}
+
 export async function testRetrievalProviderConnection(
   payload: TestProviderConnectionPayload,
 ): Promise<RetrievalOperationResponse> {
@@ -126,6 +138,20 @@ export async function downloadRetrievalModel(modelId: string): Promise<Retrieval
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ model_id: modelId }),
+  });
+  return parseResponse(response);
+}
+
+export async function downloadRetrievalPack(
+  packId: RetrievalPackId,
+  activateAfterDownload = false,
+): Promise<RetrievalOperationResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/retrieval-models/download-pack`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ pack_id: packId, activate_after_download: activateAfterDownload }),
   });
   return parseResponse(response);
 }
@@ -213,6 +239,20 @@ export async function removeRetrievalModel(modelId: string): Promise<RetrievalOp
   });
   return parseResponse(response);
 }
+
+export async function deleteRetrievalPack(packId: RetrievalPackId): Promise<RetrievalOperationResponse> {
+  const response = await fetch(`${getBackendBaseURL()}/api/retrieval-models/remove-pack`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ pack_id: packId }),
+  });
+  return parseResponse(response);
+}
+
+// Backward-compatible alias.
+export const removeRetrievalPack = deleteRetrievalPack;
 
 export async function importRetrievalModel(
   modelId: string,

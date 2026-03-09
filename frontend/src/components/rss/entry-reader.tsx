@@ -16,8 +16,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   useRSSContext,
+  useRSSAssistantPanelState,
   useRSSEntryThreadSession,
   useRSSEntry,
+  useRSSEntryReadability,
   useSummarizeRSSEntry,
   useTranslateRSSEntry,
   useUpdateRSSEntry,
@@ -166,12 +168,14 @@ export function EntryReader({
   const { entry, isLoading, error } = useRSSEntry(entryId);
   const { addBlock, removeBlock } = useRSSContext();
   const updateEntryMutation = useUpdateRSSEntry();
+  const { mutateAsync: fetchReadability } = useRSSEntryReadability();
   const summarizeEntryMutation = useSummarizeRSSEntry();
   const translateEntryMutation = useTranslateRSSEntry();
 
   const contentHostRef = useRef<HTMLDivElement | null>(null);
   const shadowRootRef = useRef<ShadowRoot | null>(null);
   const didAutoMarkReadRef = useRef<string | null>(null);
+  const didAutoReadabilityRef = useRef<string | null>(null);
 
   const [textSelection, setTextSelection] = useState<TextSelectionInfo | null>(
     null,
@@ -184,6 +188,7 @@ export function EntryReader({
     setThreadId: setPersistedThreadId,
     clearThread,
   } = useRSSEntryThreadSession(entryId);
+  const { panelState, updatePanelState } = useRSSAssistantPanelState();
   const [assistantVisible, setAssistantVisible] = useState(true);
   const [assistantThreadId, setAssistantThreadId] = useState(
     () => persistedThreadId ?? uuid(),
@@ -194,27 +199,52 @@ export function EntryReader({
   const [pendingPrompt, setPendingPrompt] = useState<AssistantPendingPrompt | null>(
     null,
   );
+  const [readabilityContent, setReadabilityContent] = useState("");
+  const [readabilityStatus, setReadabilityStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const [readabilityMessage, setReadabilityMessage] = useState("");
+
+  const setAssistantVisibility = useCallback(
+    (next: boolean | ((value: boolean) => boolean)) => {
+      setAssistantVisible((previous) => {
+        const value = typeof next === "function" ? next(previous) : next;
+        updatePanelState({ visible: value });
+        return value;
+      });
+    },
+    [updatePanelState],
+  );
 
   const articleContent = useMemo(
-    () => entry?.content ?? entry?.description ?? "",
-    [entry?.content, entry?.description],
+    () => {
+      const directContent = entry?.content ?? "";
+      if (directContent.trim()) {
+        return directContent;
+      }
+      if (readabilityContent.trim()) {
+        return readabilityContent;
+      }
+      return entry?.description ?? "";
+    },
+    [entry?.content, entry?.description, readabilityContent],
   );
 
   const queuePromptToAssistant = useCallback((prompt: string) => {
-    setAssistantVisible(true);
+    setAssistantVisibility(true);
     setPendingPrompt({
       id: uuid(),
       text: prompt,
     });
-  }, []);
+  }, [setAssistantVisibility]);
 
   const resetAssistantThread = useCallback(() => {
     clearThread();
     setAssistantThreadId(uuid());
     setIsNewAssistantThread(true);
     setPendingPrompt(null);
-    setAssistantVisible(true);
-  }, [clearThread]);
+    setAssistantVisibility(true);
+  }, [clearThread, setAssistantVisibility]);
 
   useEffect(() => {
     if (!entry || entry.read || didAutoMarkReadRef.current === entry.id) {
@@ -284,7 +314,60 @@ export function EntryReader({
     setGeneratedSummary("");
     setGeneratedTranslation("");
     setPendingPrompt(null);
+    setReadabilityContent("");
+    setReadabilityStatus("idle");
+    setReadabilityMessage("");
+    didAutoReadabilityRef.current = null;
   }, [entryId]);
+
+  useEffect(() => {
+    setAssistantVisible(panelState.visible);
+  }, [panelState.visible]);
+
+  useEffect(() => {
+    if (!entry) {
+      return;
+    }
+    if ((entry.content ?? "").trim()) {
+      return;
+    }
+    if (didAutoReadabilityRef.current === entry.id) {
+      return;
+    }
+    didAutoReadabilityRef.current = entry.id;
+    let active = true;
+    setReadabilityStatus("loading");
+    setReadabilityMessage("");
+    void fetchReadability(entry.id)
+      .then((response) => {
+        if (!active) {
+          return;
+        }
+        if (response.status === "success" && response.content.trim()) {
+          setReadabilityContent(response.content);
+          setReadabilityStatus("success");
+          setReadabilityMessage("");
+          return;
+        }
+        setReadabilityContent("");
+        setReadabilityStatus("error");
+        setReadabilityMessage(response.message ?? t.rssReader.readabilityFailed);
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        setReadabilityContent("");
+        setReadabilityStatus("error");
+        setReadabilityMessage(
+          error instanceof Error ? error.message : t.rssReader.readabilityFailed,
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [entry, fetchReadability, t.rssReader.readabilityFailed]);
 
   useEffect(() => {
     if (persistedThreadId) {
@@ -379,7 +462,7 @@ export function EntryReader({
 
       if (key === "i") {
         event.preventDefault();
-        setAssistantVisible((value) => !value);
+        setAssistantVisibility((value) => !value);
         return;
       }
 
@@ -394,7 +477,7 @@ export function EntryReader({
 
       if (key === "w" && assistantVisible) {
         event.preventDefault();
-        setAssistantVisible(false);
+        setAssistantVisibility(false);
       }
     };
 
@@ -402,7 +485,7 @@ export function EntryReader({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [assistantVisible, resetAssistantThread]);
+  }, [assistantVisible, resetAssistantThread, setAssistantVisibility]);
 
   const handleAskAIFromSelection = useCallback(
     (selectedText: string) => {
@@ -566,7 +649,7 @@ export function EntryReader({
                 <Button
                   variant={assistantVisible ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setAssistantVisible((value) => !value)}
+                  onClick={() => setAssistantVisibility((value) => !value)}
                 >
                   <SparklesIcon className="size-4" />
                   {t.rssReader.aiPanelTitle}
@@ -631,6 +714,21 @@ export function EntryReader({
               </section>
             )}
 
+            {!entry.content.trim() && readabilityStatus === "loading" && (
+              <section className="bg-card rounded-2xl border p-4">
+                <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                  <Loader2Icon className="size-4 animate-spin" />
+                  {t.rssReader.readabilityLoading}
+                </div>
+              </section>
+            )}
+
+            {!entry.content.trim() && readabilityStatus === "error" && (
+              <section className="rounded-2xl border border-orange-300/60 bg-orange-50/60 p-4 text-sm text-orange-900 dark:border-orange-800/60 dark:bg-orange-950/30 dark:text-orange-200">
+                {readabilityMessage || t.rssReader.readabilityFailed}
+              </section>
+            )}
+
             <div
               ref={contentHostRef}
               className="bg-card min-h-[56vh] rounded-2xl border px-6 py-8 shadow-xs"
@@ -645,7 +743,7 @@ export function EntryReader({
         isNewThread={isNewAssistantThread}
         entryTitle={entry.title}
         pendingPrompt={pendingPrompt}
-        onOpenChange={setAssistantVisible}
+        onOpenChange={setAssistantVisibility}
         onNewThread={resetAssistantThread}
         onThreadStarted={handleAssistantThreadStarted}
         onPendingPromptConsumed={(id) => {

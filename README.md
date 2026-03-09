@@ -15,6 +15,8 @@
 - 配置中心：运行时可视化配置，配置持久化到本地 SQLite
 - 上传与产物链路：文件上传、解析、产物访问与下载能力完整闭环
 - 上下文存储：支持 workspace/thread 级上下文沉淀与召回
+- 临时会话保护：`temporary_chat` 默认允许读取长期记忆但禁止写回，避免污染长期记忆文件
+- 嵌入式会话契约：`NionClient` 与 scheduler workflow 也支持 `session_mode` / `memory_read` / `memory_write`，与 Web 聊天入口保持一致
 
 ---
 

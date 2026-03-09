@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import HTTPException
 
 from src.config.paths import get_paths
+from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
 
 
 def resolve_thread_virtual_path(thread_id: str, virtual_path: str) -> Path:
@@ -21,8 +22,13 @@ def resolve_thread_virtual_path(thread_id: str, virtual_path: str) -> Path:
     Raises:
         HTTPException: If the path is invalid or outside allowed directories.
     """
+    repository = RuntimeProfileRepository()
+    profile = repository.read(thread_id)
+
     try:
+        if profile["execution_mode"] == "host" and profile["host_workdir"]:
+            return repository.resolve_host_virtual_path(virtual_path, profile["host_workdir"])
         return get_paths().resolve_virtual_path(thread_id, virtual_path)
-    except ValueError as e:
+    except (RuntimeProfileValidationError, ValueError) as e:
         status = 403 if "traversal" in str(e) else 400
         raise HTTPException(status_code=status, detail=str(e))

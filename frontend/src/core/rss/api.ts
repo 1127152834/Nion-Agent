@@ -16,6 +16,7 @@ import type {
   RSSEntryListResponse,
   ListRSSEntriesParams,
   RSSEntrySummaryResponse,
+  RSSEntryReadabilityResponse,
   RSSEntryTranslationResponse,
   TranslateRSSEntryRequest,
   UpdateRSSEntryRequest,
@@ -229,6 +230,28 @@ export async function summarizeRSSEntry(
   }
   if (!payload) {
     throw new Error("Invalid response when summarizing RSS entry");
+  }
+  return payload;
+}
+
+export async function fetchRSSEntryReadability(
+  entryId: string,
+): Promise<RSSEntryReadabilityResponse> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/rss/entries/${encodeURIComponent(entryId)}/readability`,
+    {
+      method: "POST",
+    },
+  );
+  const payload = (await parseJSONOrNull(response)) as RSSEntryReadabilityResponse | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to fetch entry readability (${response.status})`,
+    );
+  }
+  if (!payload) {
+    throw new Error("Invalid response when fetching entry readability");
   }
   return payload;
 }

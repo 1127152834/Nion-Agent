@@ -59,6 +59,19 @@ class Translation(BaseModel):
     updated_at: datetime = Field(..., description="Last update time")
 
 
+class ReadabilityContent(BaseModel):
+    """Readability extraction cache for an entry."""
+
+    id: str = Field(..., description="Readability cache identifier")
+    entry_id: str = Field(..., description="Entry ID")
+    url: str = Field(..., description="Entry source URL")
+    content: str = Field(default="", description="Extracted readability HTML content")
+    status: str = Field(default="success", description="Extraction status")
+    message: str | None = Field(default=None, description="Optional status message")
+    created_at: datetime = Field(..., description="Creation time")
+    updated_at: datetime = Field(..., description="Last update time")
+
+
 class ParsedEntry(BaseModel):
     """Entry payload parsed from RSS feed before persistence."""
 
@@ -79,4 +92,3 @@ class ParsedFeedResult(BaseModel):
     description: str | None = None
     image: str | None = None
     entries: list[ParsedEntry] = Field(default_factory=list)
-

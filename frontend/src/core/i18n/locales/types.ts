@@ -226,6 +226,7 @@ export interface Translations {
   // Chats
   chats: {
     searchChats: string;
+    awaitingResponse: string;
   };
 
   // Page titles (document title)
@@ -243,6 +244,13 @@ export interface Translations {
       installSkillFailed: string;
       selectFile: string;
       copyFailed: string;
+      hostImportRequiredTitle: string;
+      hostImportRequiredDescription: string;
+      hostImportAction: string;
+      hostImportUnavailable: string;
+      hostImportSuccess: string;
+      hostImportFailed: string;
+      hostGrantRequired: string;
     };
   };
 
@@ -345,6 +353,8 @@ export interface Translations {
     translationTitle: string;
     summaryFailed: string;
     translationFailed: string;
+    readabilityLoading: string;
+    readabilityFailed: string;
     openOriginal: string;
     backToList: string;
     aiPanelTitle: string;
@@ -420,6 +430,7 @@ export interface Translations {
     clickToViewContent: string;
     writeTodos: string;
     skillInstallTooltip: string;
+    clarificationManualHint: string;
   };
 
   // Uploads
@@ -459,6 +470,7 @@ export interface Translations {
       saveBar: Record<string, any>;
       fieldTip: Record<string, any>;
       environmentVariables: Record<string, any>;
+      checkpointer: Record<string, any>;
       memory: Record<string, any>;
       models: Record<string, any>;
       rss: Record<string, any>;
@@ -577,7 +589,12 @@ export interface Translations {
       pluginDeleted: string;
       deleteFailed: string;
       noDescription: string;
-      authorBy: string;
+      testPluginAction: string;
+      pluginTestPassed: string;
+      pluginTestFailed: string;
+      pluginTestRunFailed: string;
+      verified: string;
+      unverified: string;
       deleteConfirmTitle: string;
       deleteConfirmDescription: string;
       cancelAction: string;

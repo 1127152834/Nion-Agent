@@ -569,6 +569,7 @@ export function InputBox({
   isNewThread,
   initialValue,
   workspacePaths = [],
+  extraTools,
   onContextChange,
   onSubmit,
   onStop,
@@ -589,6 +590,7 @@ export function InputBox({
   isNewThread?: boolean;
   initialValue?: string;
   workspacePaths?: string[];
+  extraTools?: React.ReactNode;
   onContextChange?: (
     context: Omit<
       AgentThreadContext,
@@ -1565,6 +1567,7 @@ export function InputBox({
       )}
       <PromptInputFooter className="flex">
         <PromptInputTools>
+          {extraTools}
           {/* TODO: Add more connectors here
           <PromptInputActionMenu>
             <PromptInputActionMenuTrigger className="px-2!" />

@@ -2,7 +2,7 @@ import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -34,6 +34,20 @@ export type ThreadStreamOptions = {
   onToolEnd?: (event: ToolEndEvent) => void;
 };
 
+function toFileInMessage(info: UploadedFileInfo): FileInMessage {
+  return {
+    filename: info.filename,
+    size: info.size,
+    path: info.virtual_path,
+    virtual_path: info.virtual_path,
+    markdown_file: info.markdown_file,
+    markdown_path: info.markdown_path,
+    markdown_virtual_path: info.markdown_virtual_path,
+    markdown_artifact_url: info.markdown_artifact_url,
+    status: "uploaded",
+  };
+}
+
 export function useThreadStream({
   threadId,
   context,
@@ -57,12 +71,16 @@ export function useThreadStream({
   const queryClient = useQueryClient();
   const updateSubtask = useUpdateSubtask();
   const { blocks: rssContextBlocks } = useRSSContext();
+  const previousLoadingRef = useRef(false);
+  const stopRequestedRef = useRef(false);
   const thread = useStream<AgentThreadState>({
     client: getAPIClient(isMock),
     assistantId: "lead_agent",
     threadId: _threadId,
     reconnectOnMount: !isNewThread,
-    fetchStateHistory: isNewThread ? false : { limit: 1 },
+    // LangGraph history endpoint may fail when no checkpointer is configured.
+    // Keep reconnect behavior but skip history fetch to prevent startup crashes.
+    fetchStateHistory: false,
     onError: isNewThread
       ? (error) => {
           // For new threads, ignore 404 errors as the thread doesn't exist yet
@@ -107,11 +125,19 @@ export function useThreadStream({
         updateSubtask({ id: e.task_id, latestMessage: e.message });
       }
     },
-    onFinish(state) {
-      onFinish?.(state.values);
-      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
-    },
   });
+
+  useEffect(() => {
+    const wasLoading = previousLoadingRef.current;
+    if (wasLoading && !thread.isLoading) {
+      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+      if (!stopRequestedRef.current && !thread.error) {
+        onFinish?.(thread.values);
+      }
+      stopRequestedRef.current = false;
+    }
+    previousLoadingRef.current = thread.isLoading;
+  }, [onFinish, queryClient, thread.error, thread.isLoading, thread.values]);
 
   // Optimistic messages shown before the server stream responds
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
@@ -143,6 +169,7 @@ export function useThreadStream({
 
       // Capture current count before showing optimistic messages
       prevMsgCountRef.current = thread.messages.length;
+      stopRequestedRef.current = false;
 
       // Build optimistic files list with uploading status
       const optimisticFiles: FileInMessage[] = (message.files ?? []).map(
@@ -184,6 +211,38 @@ export function useThreadStream({
         onStart?.(threadId);
         startedRef.current = true;
       }
+
+      queryClient.setQueriesData(
+        {
+          queryKey: ["threads", "search"],
+          exact: false,
+        },
+        (oldData: Array<AgentThread> | undefined) => {
+          if (!Array.isArray(oldData)) {
+            return oldData;
+          }
+          return oldData.map((threadItem) => {
+            if (
+              threadItem.thread_id !== threadId ||
+              threadItem.values?.clarification?.status !== "awaiting_user"
+            ) {
+              return threadItem;
+            }
+            return {
+              ...threadItem,
+              values: {
+                ...threadItem.values,
+                clarification: {
+                  ...threadItem.values.clarification,
+                  status: "resolved",
+                  resolved_at: new Date().toISOString(),
+                  resolved_by_message_id: null,
+                },
+              },
+            };
+          });
+        },
+      );
 
       let uploadedFileInfo: UploadedFileInfo[] = [];
 
@@ -236,12 +295,7 @@ export function useThreadStream({
 
               // Update optimistic human message with uploaded status + paths
               const uploadedFiles: FileInMessage[] = uploadedFileInfo.map(
-                (info) => ({
-                  filename: info.filename,
-                  size: info.size,
-                  path: info.virtual_path,
-                  status: "uploaded" as const,
-                }),
+                (info) => toFileInMessage(info),
               );
               setOptimisticMessages((messages) => {
                 if (messages.length > 1 && messages[0]) {
@@ -274,12 +328,7 @@ export function useThreadStream({
 
         // Build files metadata for submission (included in additional_kwargs)
         const filesForSubmit: FileInMessage[] = uploadedFileInfo.map(
-          (info) => ({
-            filename: info.filename,
-            size: info.size,
-            path: info.virtual_path,
-            status: "uploaded" as const,
-          }),
+          (info) => toFileInMessage(info),
         );
 
         const rssContext = rssContextBlocks.map((block) => {
@@ -324,6 +373,22 @@ export function useThreadStream({
           runtimeContext.rss_context = rssContext;
         }
 
+        const configurable: Record<string, unknown> = {
+          thread_id: threadId,
+          model_name: runtimeContext.model_name,
+          thinking_enabled: runtimeContext.thinking_enabled,
+          is_plan_mode: runtimeContext.is_plan_mode,
+          subagent_enabled: runtimeContext.subagent_enabled,
+          reasoning_effort: runtimeContext.reasoning_effort,
+          agent_name: runtimeContext.agent_name,
+          session_mode: runtimeContext.session_mode,
+          memory_read: runtimeContext.memory_read,
+          memory_write: runtimeContext.memory_write,
+        };
+        if (rssContext.length > 0) {
+          configurable.rss_context = rssContext;
+        }
+
         const messageAdditionalKwargs: Record<string, unknown> = {};
         if (filesForSubmit.length > 0) {
           messageAdditionalKwargs.files = filesForSubmit;
@@ -354,6 +419,7 @@ export function useThreadStream({
             streamMode: ["values", "messages-tuple", "custom"],
             config: {
               recursion_limit: 1000,
+              configurable,
             },
             context: runtimeContext,
           },
@@ -367,16 +433,37 @@ export function useThreadStream({
     [rssContextBlocks, thread, t.uploads.uploadingFiles, onStart, context, queryClient],
   );
 
-  // Merge thread with optimistic messages for display
-  const mergedThread =
-    optimisticMessages.length > 0
-      ? ({
-          ...thread,
-          messages: [...thread.messages, ...optimisticMessages],
-        } as typeof thread)
-      : thread;
+  // Wrap stream with a safe adapter:
+  // 1) merge optimistic messages
+  // 2) guard lazy getters (`history` / `experimental_branchTree`) when
+  //    fetchStateHistory is disabled in SDK options.
+  const safeThread = useMemo<typeof thread>(() => {
+    return new Proxy(thread, {
+      get(target, prop, receiver) {
+        if (prop === "messages") {
+          if (optimisticMessages.length === 0) {
+            return target.messages;
+          }
+          return [...target.messages, ...optimisticMessages];
+        }
+        if (prop === "history") {
+          return [];
+        }
+        if (prop === "experimental_branchTree") {
+          return null;
+        }
+        if (prop === "stop") {
+          return async () => {
+            stopRequestedRef.current = true;
+            return target.stop();
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+  }, [optimisticMessages, thread]);
 
-  return [mergedThread, sendMessage] as const;
+  return [safeThread, sendMessage] as const;
 }
 
 export function useThreads(

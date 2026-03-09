@@ -38,6 +38,13 @@ def _entry_content(entry: Any) -> str:
         value = _read_attr(first, "value", "")
         return str(value or "").strip()
 
+    if isinstance(content, dict):
+        return str(content.get("value") or "").strip()
+
+    return ""
+
+
+def _entry_description(entry: Any) -> str:
     summary = _read_attr(entry, "summary", "")
     if summary:
         return str(summary).strip()
@@ -78,7 +85,7 @@ def parse_rss_feed(url: str) -> ParsedFeedResult:
                 title=entry_title,
                 url=entry_url or f"{url}#{len(parsed_entries)}",
                 content=_entry_content(item),
-                description=str(_read_attr(item, "summary", "") or "").strip(),
+                description=_entry_description(item),
                 author=_read_attr(item, "author"),
                 published_at=_to_datetime(published_raw),
             )

@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,13 +38,20 @@ import {
   useRenameThread,
   useThreads,
 } from "@/core/threads/hooks";
-import { pathOfThread, titleOfThread } from "@/core/threads/utils";
+import {
+  isThreadAwaitingResponse,
+  pathOfThread,
+  titleOfThread,
+} from "@/core/threads/utils";
 import { env } from "@/env";
+
+import { useWorkspaceSidebarNavigation } from "./workspace-sidebar-routing";
 
 export function RecentChatList() {
   const { t } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
+  const handleNavigate = useWorkspaceSidebarNavigation();
   const { thread_id: threadIdFromPath } = useParams<{ thread_id: string }>();
   const { data: threads = [] } = useThreads();
   const visibleThreads = useMemo(
@@ -145,8 +153,19 @@ export function RecentChatList() {
                         <Link
                           className="text-muted-foreground block w-full whitespace-nowrap group-hover/side-menu-item:overflow-hidden"
                           href={pathOfThread(thread.thread_id)}
+                          onClick={handleNavigate}
                         >
-                          {titleOfThread(thread)}
+                          <span className="inline-flex max-w-full items-center gap-2">
+                            <span className="truncate">{titleOfThread(thread)}</span>
+                            {isThreadAwaitingResponse(thread) ? (
+                              <Badge
+                                variant="secondary"
+                                className="border-emerald-200 bg-emerald-100 text-[10px] text-emerald-700"
+                              >
+                                {t.chats.awaitingResponse}
+                              </Badge>
+                            ) : null}
+                          </span>
                         </Link>
                         {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
                           <DropdownMenu>

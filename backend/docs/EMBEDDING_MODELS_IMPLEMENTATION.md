@@ -386,9 +386,8 @@ def _build_embedding_provider(self, embeddings_module: Any) -> Any:
 
 ### 相关文档
 
-- Memory v2 实施计划：`docs/MEMORY_V2_补全方案_主文档.md`
-- Memory v2 代码示例：`docs/MEMORY_V2_补全方案_代码示例.md`
-- Memory v2 完成计划：`docs/MEMORY_V2_COMPLETION_PLAN.md`
+- 检索模型配置：`backend/src/config/retrieval_models_config.py`
+- 检索模型服务：`backend/src/retrieval_models/service.py`
 
 ### 外部资源
 

@@ -22,63 +22,77 @@ export function Welcome({
   const isUltra = useMemo(() => mode === "ultra", [mode]);
   const colors = useMemo(() => {
     if (isUltra) {
-      return ["#efefbb", "#e9c665", "#e3a812"];
+      return ["#efe5b2", "#d9bf70", "#b88e28"];
     }
     return ["var(--color-foreground)"];
   }, [isUltra]);
+
   useEffect(() => {
     waved = true;
   }, []);
-  return (
-    <div
-      className={cn(
-        "mx-auto flex w-full flex-col items-center justify-center gap-2 px-8 py-4 text-center",
-        className,
-      )}
-    >
-      <div className="text-2xl font-bold">
-        {searchParams.get("mode") === "skill" ? (
-          `✨ ${t.welcome.createYourOwnSkill} ✨`
-        ) : searchParams.get("mode") === "workbench-plugin" ? (
-          `🔌 ${t.welcome.createYourOwnPlugin} 🔌`
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className={cn("inline-block", !waved ? "animate-wave" : "")}>
-              {isUltra ? "🚀" : "👋"}
-            </div>
-            <AuroraText colors={colors}>{t.welcome.greeting}</AuroraText>
-          </div>
+
+  if (searchParams.get("mode") === "skill") {
+    return (
+      <div
+        className={cn(
+          "mx-auto flex w-full flex-col items-center justify-center gap-4 px-4 text-center",
+          className,
         )}
-      </div>
-      {searchParams.get("mode") === "skill" ? (
-        <div className="text-muted-foreground text-sm">
+      >
+        <div className="text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.05em] text-balance">
+          ✨ {t.welcome.createYourOwnSkill} ✨
+        </div>
+        <div className="text-foreground/62 max-w-2xl text-[15px] leading-7">
           {t.welcome.createYourOwnSkillDescription.includes("\n") ? (
-            <pre className="font-sans whitespace-pre">
-              {t.welcome.createYourOwnSkillDescription}
-            </pre>
+            <pre className="font-sans whitespace-pre-wrap">{t.welcome.createYourOwnSkillDescription}</pre>
           ) : (
             <p>{t.welcome.createYourOwnSkillDescription}</p>
           )}
         </div>
-      ) : searchParams.get("mode") === "workbench-plugin" ? (
-        <div className="text-muted-foreground text-sm">
+      </div>
+    );
+  }
+
+  if (searchParams.get("mode") === "workbench-plugin") {
+    return (
+      <div
+        className={cn(
+          "mx-auto flex w-full flex-col items-center justify-center gap-4 px-4 text-center",
+          className,
+        )}
+      >
+        <div className="text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.05em] text-balance">
+          🔌 {t.welcome.createYourOwnPlugin} 🔌
+        </div>
+        <div className="text-foreground/62 max-w-2xl text-[15px] leading-7">
           {t.welcome.createYourOwnPluginDescription.includes("\n") ? (
-            <pre className="font-sans whitespace-pre">
-              {t.welcome.createYourOwnPluginDescription}
-            </pre>
+            <pre className="font-sans whitespace-pre-wrap">{t.welcome.createYourOwnPluginDescription}</pre>
           ) : (
             <p>{t.welcome.createYourOwnPluginDescription}</p>
           )}
         </div>
-      ) : (
-        <div className="text-muted-foreground text-sm">
-          {t.welcome.description.includes("\n") ? (
-            <pre className="whitespace-pre">{t.welcome.description}</pre>
-          ) : (
-            <p>{t.welcome.description}</p>
-          )}
-        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "mx-auto flex w-full flex-col items-center justify-center gap-4 px-4 text-center",
+        className,
       )}
+    >
+      <div className="flex items-center justify-center gap-3 text-[clamp(2.35rem,4.6vw,3.6rem)] font-semibold tracking-[-0.06em] text-balance text-foreground">
+        <div className={cn("inline-flex shrink-0 items-center justify-center", !waved ? "animate-wave" : "")}>{isUltra ? "🚀" : "👋"}</div>
+        <AuroraText colors={colors}>{t.welcome.greeting}</AuroraText>
+      </div>
+      <div className="text-foreground/62 max-w-[44rem] text-[15px] leading-8 sm:text-base">
+        {t.welcome.description.includes("\n") ? (
+          <pre className="font-sans whitespace-pre-wrap">{t.welcome.description}</pre>
+        ) : (
+          <p>{t.welcome.description}</p>
+        )}
+      </div>
     </div>
   );
 }

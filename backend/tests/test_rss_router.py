@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from src.config.paths import Paths
 from src.database.models.rss import ParsedEntry, ParsedFeedResult
 from src.gateway.routers.rss import router
+from src.services.rss_readability import RSSReadabilityError
 
 
 def _make_app() -> FastAPI:
@@ -176,6 +177,102 @@ def test_summarize_and_translate_entry_with_cache(rss_client):
         "cached": True,
     }
     translate_mock.assert_called_once()
+
+
+def test_fetch_entry_readability_with_cache(rss_client):
+    now = datetime(2026, 3, 5, 15, 0, tzinfo=UTC)
+    parsed = ParsedFeedResult(
+        title="Demo Feed",
+        url="https://example.com/feed.xml",
+        site_url="https://demo.example.com",
+        description="Demo description",
+        image=None,
+        entries=[
+            ParsedEntry(
+                title="No Content Entry",
+                url="https://example.com/nc",
+                content="",
+                description="summary only",
+                author="demo",
+                published_at=now,
+            )
+        ],
+    )
+
+    with patch("src.services.rss_store.parse_rss_feed", return_value=parsed):
+        add_resp = rss_client.post("/api/rss/feeds", json={"url": "https://example.com/feed.xml"})
+        feed_id = add_resp.json()["feed"]["id"]
+
+    entries_resp = rss_client.get("/api/rss/entries", params={"feed_id": feed_id})
+    entry_id = entries_resp.json()["entries"][0]["id"]
+
+    with patch(
+        "src.gateway.routers.rss.rss_readability.extract_entry_content",
+        return_value="<article><p>full text</p></article>",
+    ) as readability_mock:
+        first = rss_client.post(f"/api/rss/entries/{entry_id}/readability")
+        second = rss_client.post(f"/api/rss/entries/{entry_id}/readability")
+
+    assert first.status_code == 200
+    assert first.json() == {
+        "entry_id": entry_id,
+        "content": "<article><p>full text</p></article>",
+        "cached": False,
+        "status": "success",
+        "message": None,
+    }
+    assert second.status_code == 200
+    assert second.json() == {
+        "entry_id": entry_id,
+        "content": "<article><p>full text</p></article>",
+        "cached": True,
+        "status": "success",
+        "message": None,
+    }
+    readability_mock.assert_called_once()
+
+
+def test_fetch_entry_readability_returns_error_status(rss_client):
+    now = datetime(2026, 3, 5, 15, 0, tzinfo=UTC)
+    parsed = ParsedFeedResult(
+        title="Demo Feed",
+        url="https://example.com/feed.xml",
+        site_url="https://demo.example.com",
+        description="Demo description",
+        image=None,
+        entries=[
+            ParsedEntry(
+                title="No Content Entry",
+                url="https://example.com/nc",
+                content="",
+                description="summary only",
+                author="demo",
+                published_at=now,
+            )
+        ],
+    )
+
+    with patch("src.services.rss_store.parse_rss_feed", return_value=parsed):
+        add_resp = rss_client.post("/api/rss/feeds", json={"url": "https://example.com/feed.xml"})
+        feed_id = add_resp.json()["feed"]["id"]
+
+    entries_resp = rss_client.get("/api/rss/entries", params={"feed_id": feed_id})
+    entry_id = entries_resp.json()["entries"][0]["id"]
+
+    with patch(
+        "src.gateway.routers.rss.rss_readability.extract_entry_content",
+        side_effect=RSSReadabilityError("failed to extract"),
+    ):
+        response = rss_client.post(f"/api/rss/entries/{entry_id}/readability")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "entry_id": entry_id,
+        "content": "",
+        "cached": False,
+        "status": "error",
+        "message": "failed to extract",
+    }
 
 
 def test_discover_sources_support_keyword_and_category(rss_client):

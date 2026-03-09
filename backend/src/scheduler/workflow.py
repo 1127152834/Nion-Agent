@@ -123,11 +123,15 @@ class WorkflowExecutor:
         prompt = self._inject_context(agent_step, input_data)
         run_thread_id = f"scheduler-{task_id}-{uuid.uuid4().hex[:8]}"
 
+        agent_config = agent_step.agent_config or {}
         client = NionClient(
-            model_name=(agent_step.agent_config or {}).get("model_name"),
-            thinking_enabled=bool((agent_step.agent_config or {}).get("thinking_enabled", True)),
-            subagent_enabled=bool((agent_step.agent_config or {}).get("subagent_enabled", False)),
-            plan_mode=bool((agent_step.agent_config or {}).get("plan_mode", False)),
+            model_name=agent_config.get("model_name"),
+            thinking_enabled=bool(agent_config.get("thinking_enabled", True)),
+            subagent_enabled=bool(agent_config.get("subagent_enabled", False)),
+            plan_mode=bool(agent_config.get("plan_mode", False)),
+            session_mode=agent_config.get("session_mode"),
+            memory_read=agent_config.get("memory_read"),
+            memory_write=agent_config.get("memory_write"),
         )
         output = client.chat(prompt, thread_id=run_thread_id)
 

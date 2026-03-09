@@ -1,25 +1,18 @@
 "use client";
 
-import { MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarTrigger,
-  useSidebar,
 } from "@/components/ui/sidebar";
-import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
+import { useWorkspaceSidebarPresentation } from "./workspace-sidebar-routing";
+
 export function WorkspaceHeader({ className }: { className?: string }) {
-  const { t } = useI18n();
-  const { state } = useSidebar();
-  const pathname = usePathname();
+  const { isCollapsed } = useWorkspaceSidebarPresentation();
   const [titlebarInset, setTitlebarInset] = useState(0);
 
   useEffect(() => {
@@ -49,12 +42,12 @@ export function WorkspaceHeader({ className }: { className?: string }) {
             : undefined
         }
       >
-        {state === "collapsed" ? (
+        {isCollapsed ? (
           <div className="group-has-data-[collapsible=icon]/sidebar-wrapper:-translate-y flex w-full cursor-pointer items-center justify-center">
-            <div className="text-primary block pt-1 font-serif group-hover/workspace-header:hidden">
-              DF
+            <div className="text-primary block pt-1 text-lg leading-none font-serif tracking-[0.08em] group-hover/workspace-header:hidden">
+              NION
             </div>
-            <SidebarTrigger className="hidden pl-2 group-hover/workspace-header:block" />
+            <SidebarTrigger className="hidden group-hover/workspace-header:block" />
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2">
@@ -71,28 +64,6 @@ export function WorkspaceHeader({ className }: { className?: string }) {
           </div>
         )}
       </div>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            isActive={pathname === "/workspace/chats" || pathname.startsWith("/workspace/chats/")}
-            asChild
-          >
-            {pathname === "/workspace/chats" || pathname.startsWith("/workspace/chats/") ? (
-              // 在对话页面时，显示"新对话"按钮
-              <Link className="text-muted-foreground" href="/workspace/chats/new">
-                <MessageSquarePlus size={16} />
-                <span>{t.sidebar.newChat}</span>
-              </Link>
-            ) : (
-              // 在其他页面时，显示"对话列表"按钮
-              <Link className="text-muted-foreground" href="/workspace/chats">
-                <MessageSquarePlus size={16} />
-                <span>{t.sidebar.chats}</span>
-              </Link>
-            )}
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
     </>
   );
 }

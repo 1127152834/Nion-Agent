@@ -126,6 +126,7 @@ export class DesktopProcessManager {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
+      NION_DESKTOP_RUNTIME: "1",
       NO_COLOR: "1"
     };
 
@@ -161,7 +162,9 @@ export class DesktopProcessManager {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
+      NION_DESKTOP_RUNTIME: "1",
       CORS_ORIGINS: `http://localhost:${this.ports!.frontendPort},http://127.0.0.1:${this.ports!.frontendPort}`,
+      LANGGRAPH_SERVER_BASE_URL: `http://localhost:${this.ports!.langgraphPort}`,
     };
 
     // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量
@@ -195,8 +198,8 @@ export class DesktopProcessManager {
 
     const env = {
       ...process.env,
-      // 关键：设置前端环境变量，指向本地服务
-      NEXT_PUBLIC_LANGGRAPH_BASE_URL: `http://localhost:${this.ports!.langgraphPort}`,
+      // 关键：设置前端环境变量，LangGraph 统一走 Gateway 代理，避免浏览器直连 2024 的 CORS 问题
+      NEXT_PUBLIC_LANGGRAPH_BASE_URL: `http://localhost:${this.ports!.gatewayPort}/api/langgraph`,
       NEXT_PUBLIC_BACKEND_BASE_URL: `http://localhost:${this.ports!.gatewayPort}`,
       SKIP_ENV_VALIDATION: "1" // 跳过环境变量验证
     };

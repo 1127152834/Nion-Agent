@@ -78,6 +78,13 @@ export function MessageGroup({
     }
   }, [lastToolCallStep, steps]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
+  const hasVisibleContent =
+    aboveLastToolCallSteps.length > 0 || !!lastToolCallStep || !!lastReasoningStep;
+
+  if (!hasVisibleContent) {
+    return null;
+  }
+
   return (
     <ChainOfThought
       className={cn("w-full gap-2 rounded-lg border p-0.5", className)}
@@ -478,7 +485,9 @@ function convertToSteps(messages: Message[]): CoTStep[] {
         steps.push(step);
       }
       for (const tool_call of message.tool_calls ?? []) {
-        if (tool_call.name === "task") {
+        // ask_clarification has a dedicated ClarificationCard in MessageList.
+        // Exclude it from ChainOfThought to avoid duplicate cards.
+        if (tool_call.name === "task" || tool_call.name === "ask_clarification") {
           continue;
         }
         const step: CoTToolCallStep = {

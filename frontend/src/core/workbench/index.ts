@@ -11,11 +11,16 @@ export {
   uninstallPlugin,
   loadInstalledPlugin,
   listInstalledPlugins,
+  runInstalledPluginTest,
+  getInstalledPluginFiles,
+  getInstalledPluginMetadataById,
 } from "./loader";
 export {
   useInstalledPlugins,
   usePlugin,
+  useInstalledPluginPackage,
   useInstallPlugin,
   useUninstallPlugin,
   useTogglePlugin,
+  useTestInstalledPlugin,
 } from "./hooks";

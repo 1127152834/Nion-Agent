@@ -7,11 +7,19 @@ import { uuid } from "@/core/utils/uuid";
 
 import type { AgentThreadState, ArtifactGroup, ArtifactGroupMetadata } from "../threads";
 
-import { loadArtifactGroups, replaceArtifactGroups } from "./api";
+import { loadArtifactGroups, loadWorkspaceTree, replaceArtifactGroups } from "./api";
 import { loadArtifactContent, loadArtifactContentFromToolCall } from "./loader";
 
 const artifactGroupsQueryKey = (threadId: string) =>
   ["artifact-groups", threadId] as const;
+const workspaceTreeQueryKey = (
+  threadId: string,
+  root: string,
+  depth: number,
+  includeHidden: boolean,
+  maxNodes: number,
+) =>
+  ["workspace-tree", threadId, root, depth, includeHidden ? 1 : 0, maxNodes] as const;
 
 function normalizeArtifactGroups(
   artifactGroups: AgentThreadState["artifact_groups"],
@@ -270,4 +278,46 @@ export function useArtifactGroups(
     isSaving: persistMutation.isPending,
     refetch: query.refetch,
   };
+}
+
+export function useWorkspaceTree(
+  threadId: string,
+  opts?: {
+    enabled?: boolean;
+    root?: string;
+    depth?: number;
+    includeHidden?: boolean;
+    maxNodes?: number;
+    live?: boolean;
+    refetchIntervalMs?: number;
+  },
+) {
+  const enabled = opts?.enabled ?? true;
+  const root = opts?.root ?? "/mnt/user-data";
+  const depth = opts?.depth ?? 6;
+  const includeHidden = opts?.includeHidden ?? false;
+  const maxNodes = opts?.maxNodes ?? 5000;
+  const live = opts?.live ?? false;
+  const refetchIntervalMs = opts?.refetchIntervalMs ?? 1000;
+
+  return useQuery({
+    queryKey: workspaceTreeQueryKey(
+      threadId,
+      root,
+      depth,
+      includeHidden,
+      maxNodes,
+    ),
+    queryFn: () =>
+      loadWorkspaceTree(threadId, {
+        root,
+        depth,
+        includeHidden,
+        maxNodes,
+      }),
+    enabled: enabled && Boolean(threadId),
+    refetchInterval: enabled && live ? refetchIntervalMs : false,
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+  });
 }

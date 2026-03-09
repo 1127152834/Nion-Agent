@@ -35,6 +35,7 @@ def test_config_store():
     print(f"✓ Initial read successful (version: {version})")
     assert version == "1", f"Expected version 1, got {version}"
     assert "models" in config, "Config should have 'models' key"
+    assert config.get("checkpointer", {}).get("type") == "sqlite", "Config should default to sqlite checkpointer"
 
     # Test write with correct version
     config["models"] = [{"name": "test-model", "use": "test"}]

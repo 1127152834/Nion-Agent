@@ -179,14 +179,6 @@ def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2
     if not memory_data:
         return ""
 
-    # MemoryManager v2 payload may embed legacy content under "legacy".
-    if (
-        isinstance(memory_data.get("legacy"), dict)
-        and not memory_data.get("user")
-        and not memory_data.get("history")
-    ):
-        memory_data = memory_data["legacy"]
-
     sections = []
 
     # Format user context

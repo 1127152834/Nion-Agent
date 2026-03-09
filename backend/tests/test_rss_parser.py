@@ -28,6 +28,12 @@ def test_parse_rss_feed_success(monkeypatch):
                 "summary": "Summary B",
                 "published_parsed": datetime(2026, 3, 5, 11, 0, tzinfo=UTC),
             },
+            {
+                "title": "Entry C",
+                "link": "https://example.com/c",
+                "description": "Description C",
+                "published_parsed": datetime(2026, 3, 5, 12, 0, tzinfo=UTC),
+            },
         ],
     }
 
@@ -37,9 +43,12 @@ def test_parse_rss_feed_success(monkeypatch):
     assert result.title == "Example Feed"
     assert result.site_url == "https://example.com"
     assert result.image == "https://example.com/logo.png"
-    assert len(result.entries) == 2
+    assert len(result.entries) == 3
+    assert result.entries[0].content == ""
     assert result.entries[0].description == "Summary A"
     assert result.entries[1].content == "<p>Body B</p>"
+    assert result.entries[2].content == ""
+    assert result.entries[2].description == "Description C"
 
 
 def test_parse_rss_feed_requires_title(monkeypatch):

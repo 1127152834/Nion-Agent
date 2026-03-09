@@ -4,6 +4,8 @@ import {
   loadInstalledPlugin,
 } from "@/core/workbench/loader";
 
+import DocumentPreviewPlugin from "./document-preview";
+
 // import ExampleImageViewerPlugin from "./example-image-viewer";
 
 /**
@@ -14,6 +16,7 @@ export async function initializeBuiltInPlugins() {
   const registry = getWorkbenchRegistry();
 
   // Register built-in plugins
+  registry.register(DocumentPreviewPlugin);
   // registry.register(ExampleImageViewerPlugin); // Removed: now available as installable plugin
 
   // Load and register installed plugins

@@ -8,7 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from src.config.paths import get_paths
-from src.database.models.rss import Entry, Feed, ParsedFeedResult, Summary, Translation
+from src.database.models.rss import (
+    Entry,
+    Feed,
+    ParsedFeedResult,
+    ReadabilityContent,
+    Summary,
+    Translation,
+)
 from src.services.rss_parser import parse_rss_feed
 
 _LOCK = threading.Lock()
@@ -43,6 +50,10 @@ def _summaries_file() -> Path:
 
 def _translations_file() -> Path:
     return _rss_dir() / "translations.json"
+
+
+def _readability_file() -> Path:
+    return _rss_dir() / "readability.json"
 
 
 def _read_json(path: Path, default: dict[str, Any]) -> dict[str, Any]:
@@ -96,6 +107,21 @@ def _load_translations() -> dict[str, Translation]:
 
 def _save_translations(translations: dict[str, Translation]) -> None:
     _write_json(_translations_file(), {key: translation.model_dump(mode="json") for key, translation in translations.items()})
+
+
+def _load_readability() -> dict[str, ReadabilityContent]:
+    raw = _read_json(_readability_file(), {})
+    return {
+        entry_id: ReadabilityContent.model_validate(item)
+        for entry_id, item in raw.items()
+    }
+
+
+def _save_readability(items: dict[str, ReadabilityContent]) -> None:
+    _write_json(
+        _readability_file(),
+        {entry_id: item.model_dump(mode="json") for entry_id, item in items.items()},
+    )
 
 
 def _entry_identity(parsed: ParsedFeedResult, feed_id: str, payload: Any) -> str:
@@ -313,3 +339,35 @@ def upsert_translation(entry_id: str, language: str, content: str) -> Translatio
         translations[key] = translation
         _save_translations(translations)
         return translation
+
+
+def get_readability(entry_id: str) -> ReadabilityContent | None:
+    with _LOCK:
+        return _load_readability().get(entry_id)
+
+
+def upsert_readability(
+    *,
+    entry_id: str,
+    url: str,
+    content: str,
+    status: str = "success",
+    message: str | None = None,
+) -> ReadabilityContent:
+    with _LOCK:
+        readability_items = _load_readability()
+        existing = readability_items.get(entry_id)
+        now = _now()
+        readability = ReadabilityContent(
+            id=existing.id if existing else _stable_id("readability", entry_id),
+            entry_id=entry_id,
+            url=url.strip(),
+            content=content.strip(),
+            status=status.strip() or "success",
+            message=message.strip() if isinstance(message, str) and message.strip() else None,
+            created_at=existing.created_at if existing else now,
+            updated_at=now,
+        )
+        readability_items[entry_id] = readability
+        _save_readability(readability_items)
+        return readability

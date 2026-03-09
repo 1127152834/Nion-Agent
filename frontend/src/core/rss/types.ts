@@ -54,6 +54,14 @@ export interface RSSEntryTranslationResponse {
   cached: boolean;
 }
 
+export interface RSSEntryReadabilityResponse {
+  entry_id: string;
+  content: string;
+  cached: boolean;
+  status: "success" | "error";
+  message?: string | null;
+}
+
 export interface RSSDiscoverCategory {
   id: string;
   label: string;

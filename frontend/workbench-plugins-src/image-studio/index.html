@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Studio</title>
+    <link rel="stylesheet" href="./assets/main.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="left-actions">
+          <button id="saveBtn" class="btn primary">保存（覆盖原图）</button>
+          <button id="exportBtn" class="btn">导出新文件</button>
+          <button id="undoBtn" class="btn">后退</button>
+          <button id="redoBtn" class="btn">前进</button>
+        </div>
+        <div class="center-actions">
+          <label>颜色 <input id="colorInput" type="color" value="#ff2e63" /></label>
+          <label>粗细 <input id="sizeInput" type="range" min="1" max="80" value="12" /></label>
+          <label>缩放 <input id="zoomInput" type="range" min="25" max="300" value="100" /></label>
+        </div>
+        <div class="right-actions">
+          <span id="statusText">准备中</span>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="toolbox" id="toolbox">
+          <button class="tool active" data-tool="select">选择</button>
+          <button class="tool" data-tool="pan">平移</button>
+          <button class="tool" data-tool="pen">涂鸦</button>
+          <button class="tool" data-tool="mosaic">打码</button>
+          <button class="tool" data-tool="erase">橡皮擦</button>
+          <button class="tool" data-tool="text">文字</button>
+          <button class="tool" data-tool="rect">矩形</button>
+          <button class="tool" data-tool="arrow">箭头</button>
+          <button class="tool" data-tool="crop">框选截取</button>
+        </aside>
+
+        <main class="stage-area">
+          <div id="warning" class="warning hidden"></div>
+          <div id="stageViewport" class="stage-viewport">
+            <div id="stage" class="stage">
+              <canvas id="mainCanvas"></canvas>
+              <canvas id="overlayCanvas"></canvas>
+            </div>
+          </div>
+        </main>
+
+        <aside class="history-panel">
+          <div class="history-header">
+            <strong>操作历史</strong>
+          </div>
+          <div id="historyList" class="history-list"></div>
+        </aside>
+      </div>
+    </div>
+
+    <script src="./assets/main.js"></script>
+  </body>
+</html>

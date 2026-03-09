@@ -125,6 +125,7 @@ export function ArtifactFileDetail({
       setIsInstalling(false);
     }
   }, [threadId, filepath, isInstalling, installSkillFailedText]);
+
   return (
     <Artifact className={cn(className)}>
       <ArtifactHeader className="px-2">

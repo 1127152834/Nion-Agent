@@ -9,9 +9,7 @@ import type { WorkbenchPlugin, WorkbenchContext, Artifact } from "@/core/workben
 const ExampleImageViewerPlugin: WorkbenchPlugin = {
   id: "example-image-viewer",
   name: "Example Image Viewer",
-  version: "1.0.0",
   description: "Simple image viewer plugin demonstrating the workbench plugin system",
-  author: "Nion Team",
   icon: ImageIcon,
 
   canHandle(artifact: Artifact): boolean | number {

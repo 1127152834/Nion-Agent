@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronDownIcon, PackageIcon, SparklesIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useRef, useState, type ChangeEvent } from "react";
+import { CheckCircle2Icon, ChevronDownIcon, PackageIcon, SparklesIcon, TestTube2Icon, Trash2Icon, UploadIcon, XCircleIcon } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import {
   useInstalledPlugins,
   useInstallPlugin,
+  useTestInstalledPlugin,
   useUninstallPlugin,
   useTogglePlugin,
 } from "@/core/workbench";
@@ -73,23 +74,36 @@ function WorkbenchPluginsList({
     manifest: {
       id: string;
       name: string;
-      version: string;
       description?: string;
-      author?: string;
     };
     enabled: boolean;
+    verified?: boolean;
+    lastTestReport?: {
+      summary: string;
+      passed: boolean;
+    } | null;
   }>;
   onClose?: () => void;
 }) {
   const { t } = useI18n();
   const copy = t.settings.workbenchPlugins;
   const router = useRouter();
+  const pathname = usePathname();
+  const activeThreadId = useMemo(() => {
+    const match = pathname.match(/\/workspace\/(?:agents\/[^/]+\/)?chats\/([^/?#]+)/);
+    if (!match?.[1]) {
+      return undefined;
+    }
+    const decoded = decodeURIComponent(match[1]);
+    return decoded === "new" ? undefined : decoded;
+  }, [pathname]);
   const [filter, setFilter] = useState<string>("installed");
   const [pendingDeletePluginId, setPendingDeletePluginId] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const { mutate: togglePlugin } = useTogglePlugin();
   const { mutate: uninstallPlugin, isPending: uninstallingPlugin } = useUninstallPlugin();
   const { mutate: installPlugin, isPending: installingPlugin } = useInstallPlugin();
+  const { mutate: testPlugin, isPending: testingPlugin } = useTestInstalledPlugin();
 
   const handleCreatePlugin = () => {
     onClose?.();
@@ -154,6 +168,24 @@ function WorkbenchPluginsList({
     });
   };
 
+  const handleTestPlugin = (pluginId: string, pluginName: string) => {
+    testPlugin(
+      { pluginId, threadId: activeThreadId },
+      {
+        onSuccess: (report) => {
+          if (report.passed) {
+            toast.success(copy.pluginTestPassed.replaceAll("{name}", pluginName));
+          } else {
+            toast.error(copy.pluginTestFailed.replaceAll("{name}", pluginName));
+          }
+        },
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : copy.pluginTestRunFailed);
+        },
+      },
+    );
+  };
+
   return (
     <div className="flex w-full flex-col gap-4">
       <header className="flex justify-between">
@@ -214,26 +246,36 @@ function WorkbenchPluginsList({
               <ItemTitle>
                 <div className="flex items-center gap-2">
                   {plugin.manifest.name}
-                  <span className="text-muted-foreground text-xs">
-                    v{plugin.manifest.version}
-                  </span>
+                  {plugin.verified ? (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+                      <CheckCircle2Icon className="size-3.5" />
+                      {copy.verified}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
+                      <XCircleIcon className="size-3.5" />
+                      {copy.unverified}
+                    </span>
+                  )}
                 </div>
               </ItemTitle>
               <ItemDescription className="line-clamp-4">
                 {plugin.manifest.description ?? copy.noDescription}
-                {plugin.manifest.author && (
-                  <span className="text-muted-foreground text-xs">
-                    {" "}
-                    •{" "}
-                    {copy.authorBy.replaceAll(
-                      "{name}",
-                      plugin.manifest.author,
-                    )}
-                  </span>
-                )}
+                {plugin.lastTestReport?.summary ? ` • ${plugin.lastTestReport.summary}` : ""}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={testingPlugin}
+                onClick={() => {
+                  handleTestPlugin(plugin.manifest.id, plugin.manifest.name);
+                }}
+              >
+                <TestTube2Icon className="size-4" />
+                {copy.testPluginAction}
+              </Button>
               <Switch
                 checked={plugin.enabled}
                 onCheckedChange={(checked) =>

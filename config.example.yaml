@@ -123,12 +123,14 @@ tool_groups:
 # Configure available tools for the agent to use
 
 tools:
-  # Web search tool (requires Tavily API key)
+  # Web search tool (auto fallback: Tavily -> SearXNG public instances)
   - name: web_search
     group: web
-    use: src.community.tavily.tools:web_search_tool
+    use: src.community.web_search.tools:web_search_tool
+    provider: auto
     max_results: 5
     # api_key: $TAVILY_API_KEY  # Set if needed
+    # searxng_base_url: http://localhost:8080  # Optional preferred endpoint (otherwise use public pool)
 
   # Web search tool (requires InfoQuest API key)
   # - name: web_search

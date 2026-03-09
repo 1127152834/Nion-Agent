@@ -1,20 +1,23 @@
 """Middleware for intercepting clarification requests and presenting them to the user."""
 
 from collections.abc import Callable
-from typing import override
+from datetime import UTC, datetime
+from typing import NotRequired, cast, override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
+from langchain_core.messages import HumanMessage
 from langchain_core.messages import ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
+from langgraph.runtime import Runtime
 from langgraph.types import Command
 
 
 class ClarificationMiddlewareState(AgentState):
     """Compatible with the `ThreadState` schema."""
 
-    pass
+    clarification: NotRequired[dict | None]
 
 
 class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
@@ -32,16 +35,41 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
 
     state_schema = ClarificationMiddlewareState
 
-    def _is_chinese(self, text: str) -> bool:
-        """Check if text contains Chinese characters.
+    @staticmethod
+    def _now_iso() -> str:
+        return datetime.now(UTC).isoformat()
 
-        Args:
-            text: Text to check
+    @staticmethod
+    def _normalize_options(raw_options: object) -> list[str]:
+        if not isinstance(raw_options, list):
+            return []
+        options: list[str] = []
+        for item in raw_options:
+            if isinstance(item, str):
+                value = item.strip()
+                if value:
+                    options.append(value)
+        return options
 
-        Returns:
-            True if text contains Chinese characters
-        """
-        return any("\u4e00" <= char <= "\u9fff" for char in text)
+    def _build_clarification_payload(self, args: dict, tool_call_id: str | None) -> dict:
+        question = str(args.get("question") or "").strip()
+        clarification_type = str(args.get("clarification_type") or "missing_info").strip() or "missing_info"
+        context = args.get("context")
+        context_text = str(context).strip() if isinstance(context, str) and context.strip() else None
+        options = self._normalize_options(args.get("options"))
+
+        return {
+            "status": "awaiting_user",
+            "question": question,
+            "clarification_type": clarification_type,
+            "context": context_text,
+            "options": options,
+            "requires_choice": len(options) > 0,
+            "tool_call_id": tool_call_id,
+            "asked_at": self._now_iso(),
+            "resolved_at": None,
+            "resolved_by_message_id": None,
+        }
 
     def _format_clarification_message(self, args: dict) -> str:
         """Format the clarification arguments into a user-friendly message.
@@ -108,14 +136,16 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
         formatted_message = self._format_clarification_message(args)
 
         # Get the tool call ID
-        tool_call_id = request.tool_call.get("id", "")
+        tool_call_id = cast(str | None, request.tool_call.get("id"))
+        clarification_payload = self._build_clarification_payload(args, tool_call_id)
 
         # Create a ToolMessage with the formatted question
         # This will be added to the message history
         tool_message = ToolMessage(
             content=formatted_message,
-            tool_call_id=tool_call_id,
+            tool_call_id=tool_call_id or "",
             name="ask_clarification",
+            additional_kwargs={"clarification": clarification_payload},
         )
 
         # Return a Command that:
@@ -124,9 +154,40 @@ class ClarificationMiddleware(AgentMiddleware[ClarificationMiddlewareState]):
         # Note: We don't add an extra AIMessage here - the frontend will detect
         # and display ask_clarification tool messages directly
         return Command(
-            update={"messages": [tool_message]},
+            update={
+                "messages": [tool_message],
+                "clarification": clarification_payload,
+            },
             goto=END,
         )
+
+    @override
+    def before_agent(
+        self,
+        state: ClarificationMiddlewareState,
+        runtime: Runtime,
+    ) -> dict | None:
+        """Resolve awaiting clarification once a new human response arrives."""
+        _ = runtime
+        clarification = state.get("clarification")
+        if not isinstance(clarification, dict):
+            return None
+        if clarification.get("status") != "awaiting_user":
+            return None
+
+        messages = state.get("messages", [])
+        if not messages:
+            return None
+
+        last_message = messages[-1]
+        if not isinstance(last_message, HumanMessage):
+            return None
+
+        resolved = dict(clarification)
+        resolved["status"] = "resolved"
+        resolved["resolved_at"] = self._now_iso()
+        resolved["resolved_by_message_id"] = getattr(last_message, "id", None)
+        return {"clarification": resolved}
 
     @override
     def wrap_tool_call(

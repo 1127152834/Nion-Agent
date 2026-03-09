@@ -20,11 +20,11 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { SettingsDialog } from "./settings";
+import { useWorkspaceSidebarPresentation } from "./workspace-sidebar-routing";
 
 function NavMenuButtonContent({
   isSidebarOpen,
@@ -41,7 +41,7 @@ function NavMenuButtonContent({
     </div>
   ) : (
     <div className="flex size-full items-center justify-center">
-      <SettingsIcon className="text-muted-foreground size-4" />
+      <SettingsIcon className="text-muted-foreground size-5" />
     </div>
   );
 }
@@ -52,7 +52,7 @@ export function WorkspaceNavMenu() {
     "appearance" | "memory" | "tools" | "skills" | "notification" | "about"
   >("appearance");
   const [mounted, setMounted] = useState(false);
-  const { open: isSidebarOpen } = useSidebar();
+  const { isExpanded } = useWorkspaceSidebarPresentation();
   const { t } = useI18n();
 
   useEffect(() => {
@@ -75,7 +75,7 @@ export function WorkspaceNavMenu() {
                   size="lg"
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
-                  <NavMenuButtonContent isSidebarOpen={isSidebarOpen} t={t} />
+                  <NavMenuButtonContent isSidebarOpen={isExpanded} t={t} />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -84,16 +84,16 @@ export function WorkspaceNavMenu() {
                 sideOffset={4}
               >
                 <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSettingsDefaultSection("appearance");
-                      setSettingsOpen(true);
-                    }}
-                  >
-                    <Settings2Icon />
-                    {t.common.settings}
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSettingsDefaultSection("appearance");
+                    setSettingsOpen(true);
+                  }}
+                >
+                  <Settings2Icon />
+                  {t.common.settings}
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => {
@@ -108,7 +108,7 @@ export function WorkspaceNavMenu() {
             </DropdownMenu>
           ) : (
             <SidebarMenuButton size="lg" className="pointer-events-none">
-              <NavMenuButtonContent isSidebarOpen={isSidebarOpen} t={t} />
+              <NavMenuButtonContent isSidebarOpen={isExpanded} t={t} />
             </SidebarMenuButton>
           )}
         </SidebarMenuItem>

@@ -10,6 +10,12 @@ export interface ConfigValidateErrorItem {
   type: string;
 }
 
+export interface ConfigValidateWarningItem {
+  path: string[];
+  message: string;
+  type: string;
+}
+
 export interface ConfigReadResponse {
   version: string;
   source_path: string;
@@ -35,6 +41,7 @@ export interface ConfigValidateRequest {
 export interface ConfigValidateResponse {
   valid: boolean;
   errors: ConfigValidateErrorItem[];
+  warnings: ConfigValidateWarningItem[];
   config?: Record<string, unknown> | null;
   yaml_text?: string | null;
 }
@@ -50,11 +57,38 @@ export interface ConfigUpdateResponse {
   source_path: string;
   yaml_text: string;
   config: Record<string, unknown>;
+  warnings: ConfigValidateWarningItem[];
+}
+
+export interface RuntimeProcessConfigStatus {
+  loaded_version?: string | null;
+  source_path?: string | null;
+  tools_count?: number | null;
+  status: string;
+  reason?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ConfigRuntimeStatusResponse {
+  process_name: string;
+  store_version?: string | null;
+  store_source_path?: string | null;
+  loaded_version?: string | null;
+  loaded_source_path?: string | null;
+  source_kind: string;
+  tools_count: number;
+  loaded_tools: string[];
+  last_loaded_at?: string | null;
+  last_error?: string | null;
+  runtime_processes: Record<string, RuntimeProcessConfigStatus>;
+  is_in_sync: boolean;
+  warnings: string[];
 }
 
 export interface ApiErrorDetail {
   message?: string;
   errors?: ConfigValidateErrorItem[];
+  warnings?: ConfigValidateWarningItem[];
   current_version?: string;
 }
 

@@ -1,12 +1,13 @@
 """Middleware for memory mechanism."""
 
 import re
-from typing import Any, override
+from typing import Any, NotRequired, override
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
 from langgraph.runtime import Runtime
 
+from src.agents.memory.policy import resolve_memory_policy
 from src.agents.memory.queue import get_memory_queue
 from src.config.memory_config import get_memory_config
 
@@ -14,7 +15,9 @@ from src.config.memory_config import get_memory_config
 class MemoryMiddlewareState(AgentState):
     """Compatible with the `ThreadState` schema."""
 
-    pass
+    session_mode: NotRequired[str | None]
+    memory_read: NotRequired[bool | None]
+    memory_write: NotRequired[bool | None]
 
 
 def _filter_messages_for_memory(messages: list[Any]) -> list[Any]:
@@ -123,14 +126,18 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
         if not config.enabled:
             return None
 
-        runtime_context = runtime.context or {}
-        if runtime_context.get("memory_write") is False:
-            return None
-
         # Get thread ID from runtime context
-        thread_id = runtime_context.get("thread_id")
+        thread_id = runtime.context.get("thread_id")
         if not thread_id:
             print("MemoryMiddleware: No thread_id in context, skipping memory update")
+            return None
+
+        policy = resolve_memory_policy(state=state, runtime_context=runtime.context)
+        if not policy.allow_write:
+            print(
+                "MemoryMiddleware: Memory write disabled for thread "
+                f"{thread_id} (session_mode={policy.session_mode})"
+            )
             return None
 
         # Get messages from state
