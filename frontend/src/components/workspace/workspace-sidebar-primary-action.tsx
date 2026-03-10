@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquarePlus } from "lucide-react";
+import { Loader2, MessageSquarePlus } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -11,17 +11,18 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useI18n } from "@/core/i18n/hooks";
+import { pathOfNewThread } from "@/core/threads/utils";
 import { cn } from "@/lib/utils";
 
 import {
-  useWorkspaceSidebarNavigation,
+  useWorkspaceSidebarLink,
   useWorkspaceSidebarPresentation,
 } from "./workspace-sidebar-routing";
 
 export function WorkspaceSidebarPrimaryAction() {
   const { t } = useI18n();
   const { isCollapsed } = useWorkspaceSidebarPresentation();
-  const handleNavigate = useWorkspaceSidebarNavigation();
+  const newChatLink = useWorkspaceSidebarLink(pathOfNewThread());
 
   const actionButton = (
     <Button
@@ -30,11 +31,12 @@ export function WorkspaceSidebarPrimaryAction() {
       size={isCollapsed ? "icon-sm" : "sm"}
       className={cn(
         "border-sidebar-border bg-background text-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+        newChatLink.isNavigating && "cursor-progress",
         isCollapsed ? "mx-auto" : "w-full justify-start",
       )}
     >
-      <Link href="/workspace/chats/new" onClick={handleNavigate}>
-        <MessageSquarePlus />
+      <Link {...newChatLink.linkProps}>
+        {newChatLink.isNavigating ? <Loader2 className="animate-spin" /> : <MessageSquarePlus />}
         {isCollapsed ? (
           <span className="sr-only">{t.sidebar.newChat}</span>
         ) : (
@@ -45,8 +47,8 @@ export function WorkspaceSidebarPrimaryAction() {
   );
 
   return (
-    <SidebarGroup className="pt-1 pb-0">
-      <SidebarGroupContent>
+    <SidebarGroup className="pt-1 pb-0 group-data-[collapsible=icon]:px-0">
+      <SidebarGroupContent className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
         {isCollapsed ? (
           <Tooltip>
             <TooltipTrigger asChild>{actionButton}</TooltipTrigger>

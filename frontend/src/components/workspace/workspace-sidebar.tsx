@@ -15,16 +15,18 @@ import { WorkspaceNavChatList } from "./workspace-nav-chat-list";
 import { WorkspaceNavMenu } from "./workspace-nav-menu";
 import { WorkspaceSidebarPrimaryAction } from "./workspace-sidebar-primary-action";
 import {
+  useWorkspaceChatSidebarContext,
+  usePrefetchWorkspaceSidebarRoutes,
   useWorkspaceSidebarPresentation,
-  useWorkspaceSidebarSection,
 } from "./workspace-sidebar-routing";
 
 export function WorkspaceSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
-  const section = useWorkspaceSidebarSection();
+  usePrefetchWorkspaceSidebarRoutes();
+  const showChatContext = useWorkspaceChatSidebarContext();
   const { isExpanded } = useWorkspaceSidebarPresentation();
-  const showRecentChats = section === "chats" && isExpanded;
+  const showRecentChats = showChatContext && isExpanded;
 
   return (
     <>

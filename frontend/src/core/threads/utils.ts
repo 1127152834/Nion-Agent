@@ -2,6 +2,14 @@ import type { Message } from "@langchain/langgraph-sdk";
 
 import type { AgentThread } from "./types";
 
+export function pathOfChatsIndex() {
+  return "/workspace/chats";
+}
+
+export function pathOfNewThread() {
+  return "/workspace/chats/new";
+}
+
 export function pathOfThread(threadId: string) {
   return `/workspace/chats/${threadId}`;
 }
@@ -25,7 +33,7 @@ export function titleOfThread(thread: AgentThread) {
 
 export function isThreadAwaitingResponse(thread: AgentThread) {
   const clarification = thread.values?.clarification;
-  if (!clarification || clarification.status !== "awaiting_user") {
+  if (clarification?.status !== "awaiting_user") {
     return false;
   }
 
