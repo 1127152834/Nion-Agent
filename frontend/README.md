@@ -67,11 +67,18 @@ pnpm start
 Key environment variables (see `.env.example` for full list):
 
 ```bash
-# Backend API URLs (optional, uses nginx proxy by default)
+# Backend API URL
 NEXT_PUBLIC_BACKEND_BASE_URL="http://localhost:8001"
-# LangGraph API URLs (optional, uses nginx proxy by default)
-NEXT_PUBLIC_LANGGRAPH_BASE_URL="http://localhost:2024"
+# LangGraph facade URL (recommended to keep behind Gateway)
+NEXT_PUBLIC_LANGGRAPH_BASE_URL="http://localhost:8001/api/langgraph"
 ```
+
+### Runtime Topology
+
+- Web unified entry: browser can still enter through `http://localhost:2026`, but browser-side `/api/*` traffic should be proxied to Gateway.
+- Web direct dev: frontend on `3000` talks to Gateway on `8001`, and Gateway proxies LangGraph upstream.
+- Electron: renderer loads the frontend on `3000`, business HTTP goes to Gateway on `8001`, and host capabilities go through IPC.
+- If `NEXT_PUBLIC_LANGGRAPH_BASE_URL` is unset, the frontend falls back to `${NEXT_PUBLIC_BACKEND_BASE_URL}/api/langgraph`.
 
 ## Project Structure
 
@@ -123,7 +130,7 @@ src/
 - Uses pnpm workspaces (see `packageManager` in package.json)
 - Turbopack enabled by default in development for faster builds
 - Environment validation can be skipped with `SKIP_ENV_VALIDATION=1` (useful for Docker)
-- Backend API URLs are optional; nginx proxy is used by default in development
+- Keep LangGraph behind Gateway to avoid mode-specific drift in streaming, timeout, and error handling
 
 ## License
 

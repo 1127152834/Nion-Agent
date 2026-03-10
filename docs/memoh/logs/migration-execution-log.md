@@ -35,3 +35,48 @@
 - desktop/electron/scripts/generate-app-icons.py (new)
 - desktop/electron/build/icons/* (updated)
 
+
+### 2026-03-10 10:35 - desktop/runtime: fix build script source paths
+
+**Commit**: 874c9141
+
+**Changes**:
+- Resolved REPO_ROOT from script location to support both dev and packaged layouts
+- Fixed BACKEND_DIR and FRONTEND_SRC to use absolute paths from repo root
+- Added source directory existence checks with clear error messages
+- Updated pack-frontend.sh to inject desktop-specific env vars during build
+- Fixed Python version check commands to avoid f-string syntax issues
+
+**Files**:
+- desktop/runtime/build-python-runtime.sh
+- desktop/runtime/pack-backend.sh
+- desktop/runtime/pack-frontend.sh
+
+### 2026-03-10 10:35 - desktop/runtime: recover pending runs on startup
+
+**Commit**: 24c6e056
+
+**Changes**:
+- Added recoverPendingRuns() to cancel orphaned pending runs on startup
+- Prevents queue deadlock from runs left in pending state after crashes
+- Calls Gateway's /api/langgraph/runs/cancel endpoint with status filter
+- Integrated as stage 4.5 in startup sequence, after Gateway is ready
+- Gracefully handles 204/404 responses and logs warnings on errors
+
+**Files**:
+- desktop/electron/src/process-manager.ts
+
+### 2026-03-10 10:35 - desktop: unify langgraph routing through gateway
+
+**Commit**: 753deae4
+
+**Changes**:
+- Removed desktop/electron/src/local-proxy.ts (no longer needed)
+- Updated nginx.local.conf to route /api/langgraph to Gateway instead of direct LangGraph
+- Ensures consistent behavior across web and desktop by centralizing all traffic through Gateway
+- Gateway handles authentication, request transformation, and LangGraph coordination
+
+**Files**:
+- docker/nginx/nginx.local.conf
+- desktop/electron/src/local-proxy.ts (deleted)
+

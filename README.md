@@ -16,7 +16,9 @@
 - 上传与产物链路：文件上传、解析、产物访问与下载能力完整闭环
 - 上下文存储：支持 workspace/thread 级上下文沉淀与召回
 - 临时会话保护：`temporary_chat` 默认允许读取长期记忆但禁止写回，避免污染长期记忆文件
-- 嵌入式会话契约：`NionClient` 与 scheduler workflow 也支持 `session_mode` / `memory_read` / `memory_write`，与 Web 聊天入口保持一致
+- 聊天追问建议模型可在“模型设置”页单独指定；未设置时默认跟随当前聊天模型
+- 嵌入式会话契约：`NionClient` 与 scheduler workflow 也支持 `session_mode` / `memory_read` / `memory_write`，与 Web 聊天入口保持一致；带 checkpointer 的多轮线程会继承已持久化的记忆会话策略，不会因后续缺省调用而误恢复长期记忆注入/写回
+- Memory Core 骨架：后端已引入默认 `v2-compatible` provider/runtime/registry，prompt 注入、写回门禁与只读查询统一走兼容层，底层仍保持 `memory.json` 路线不变
 
 ---
 
@@ -103,6 +105,12 @@ make docker-start
 └── docs/           # 架构、接口与实施文档
 ```
 
+### 运行时参数约定
+
+- Web / LangGraph SDK 请求统一通过 `context` 传递运行时字段，如 `thread_id`、`model_name`、`thinking_enabled`、`is_plan_mode`、`subagent_enabled`、`agent_name`、`session_mode`、`memory_read`、`memory_write`、`rss_context`。
+- 不要在同一个 HTTP 请求里同时传 `config.configurable` 和 `context`；当前 LangGraph 运行时会拒绝这类请求并返回 400。
+- 嵌入式 Python 客户端会继续保留 `config.configurable.thread_id` 供 checkpointer 使用，其余运行时字段仅通过 `context` 传递。
+
 ---
 
 ## 桌面端路线
@@ -131,3 +139,11 @@ make docker-start
 ## 许可证
 
 本项目采用 [MIT License](./LICENSE)。
+
+### 通道会话覆盖与 HTML 预览
+
+- Channels 设置页支持两层会话参数：通道级 `Session Defaults` 与授权用户级 `Session Override`。
+- 覆盖优先级固定为：授权用户覆盖 > 通道默认 > 当前桥接层硬编码基础值。
+- 当前 v1 会话覆盖只支持 `assistant_id`、`config.recursion_limit`、`context.thinking_enabled`、`context.is_plan_mode`、`context.subagent_enabled`。
+- “继承”语义表示字段不持久化、也不会被发送到运行时 payload。
+- HTML artifact 预览走 `iframe.srcDoc`，并使用 `sandbox="allow-scripts allow-forms"`；原始 artifact URL 的打开/下载行为保持不变。

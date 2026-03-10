@@ -8,9 +8,9 @@ Nion is a LangGraph-based AI super agent system with a full-stack architecture. 
 
 **Architecture**:
 - **LangGraph Server** (port 2024): Agent runtime and workflow execution
-- **Gateway API** (port 8001): REST API for models, MCP, skills, memory, artifacts, and uploads
+- **Gateway API** (port 8001): Browser-facing REST facade for models, MCP, skills, memory, artifacts, uploads, topology, and LangGraph proxying
 - **Frontend** (port 3000): Next.js web interface
-- **Nginx** (port 2026): Unified reverse proxy entry point
+- **Nginx** (port 2026): Unified web entry point that forwards browser `/api/*` to Gateway
 - **Provisioner** (port 8002, optional in Docker dev): Started only when sandbox is configured for provisioner/Kubernetes mode
 
 **Project Structure**:
@@ -108,7 +108,11 @@ CI runs these regression tests for every pull request via [.github/workflows/bac
 - Extends `AgentState` with: `sandbox`, `thread_data`, `title`, `artifacts`, `todos`, `uploaded_files`, `viewed_images`, `session_mode`, `memory_read`, `memory_write`
 - Uses custom reducers: `merge_artifacts` (deduplicate), `merge_viewed_images` (merge/clear)
 
-**Runtime Configuration** (via `config.configurable`):
+**Runtime Configuration**:
+- HTTP / LangGraph SDK run requests should keep runtime fields on the `context` lane (`thread_id`, `model_name`, `thinking_enabled`, `is_plan_mode`, `subagent_enabled`, `reasoning_effort`, `agent_name`, `session_mode`, `memory_read`, `memory_write`, optional `rss_context`).
+- Do not send `config.configurable` together with `context` in the same browser/Electron HTTP run request; current LangGraph rejects that payload with HTTP 400. Runtime-only middleware inputs continue to flow through `context` (for example `thread_id`, `user_timezone`, runtime profile fields such as `execution_mode` / `host_workdir`).
+
+Fields resolved by the lead agent/runtime:
 - `thinking_enabled` - Enable model's extended thinking
 - `model_name` - Select specific LLM model
 - `is_plan_mode` - Enable TodoList middleware
@@ -169,8 +173,9 @@ FastAPI application on port 8001 with health check at `GET /health`.
 | **Memory** (`/api/memory`) | `GET /` - memory data; `POST /reload` - force reload; `GET /config` - config; `GET /status` - config + data |
 | **Uploads** (`/api/threads/{id}/uploads`) | `POST /` - upload files (auto-converts PDF/PPT/Excel/Word); `GET /list` - list; `DELETE /{filename}` - delete |
 | **Artifacts** (`/api/threads/{id}/artifacts`) | `GET /{path}` - serve artifacts; `?download=true` for file download |
+| **Suggestions** (`/api/threads/{id}/suggestions`) | `POST /` - generate follow-up questions; accepts optional `model_name` override |
 
-Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → Gateway.
+Browser traffic should use Gateway as the only API facade. In Web mode nginx forwards `/api/*` to Gateway; in Electron and direct dev mode the frontend talks to Gateway directly.
 
 ### Sandbox System (`src/sandbox/`)
 
@@ -248,6 +253,7 @@ Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → 
 
 **Components**:
 - `policy.py` - Shared memory session policy resolution (`normal` vs `temporary_chat`, explicit read/write overrides)
+- `core.py` / `provider.py` / `runtime.py` / `registry.py` - Minimal Memory Core skeleton. Default provider is `v2-compatible`, which keeps the existing `memory.json` read/write path but gives prompt injection, write gating, Gateway memory endpoints, and embedded read-only memory APIs a shared abstraction layer
 - `updater.py` - LLM-based memory updates with fact extraction and atomic file I/O
 - `queue.py` - Debounced update queue (per-thread deduplication, configurable wait time)
 - `prompt.py` - Prompt templates for memory updates
@@ -263,7 +269,7 @@ Proxied through nginx: `/api/langgraph/*` → LangGraph, all other `/api/*` → 
 3. Queue debounces (30s default), batches updates, deduplicates per-thread
 4. Background thread invokes LLM to extract context updates and facts
 5. Applies updates atomically (temp file + rename) with cache invalidation
-6. Next interaction injects top 15 facts + context into `<memory>` tags in system prompt when `memory_read` is allowed
+6. Next interaction injects context summaries plus up to 10 high-confidence facts into `<memory>` tags in system prompt when `memory_read` is allowed
 
 **Configuration** (`config.yaml` → `memory`):
 - `enabled` / `injection_enabled` - Master switches
@@ -310,7 +316,7 @@ Both can be modified at runtime via Gateway API endpoints or `NionClient` method
   - `"messages-tuple"` — per-message update (AI text, tool calls, tool results)
   - `"end"` — stream finished
 - Agent created lazily via `create_agent()` + `_build_middlewares()`, same as `make_lead_agent`
-- Embedded mode supports the same memory session contract as web chat: `session_mode`, `memory_read`, `memory_write` are mirrored into both `config.configurable` and runtime `context`
+- Embedded mode now preserves the full resolved `config.configurable` payload when streaming so per-call model selection and memory session flags behave the same as web chat; `context` still carries middleware-facing runtime fields, and omitted memory session fields are rehydrated from the checkpointer on later turns before rebuilding the cached prompt
 - Supports `checkpointer` parameter for state persistence across turns
 - `reset_agent()` forces agent recreation (e.g. after memory or skill changes)
 - Internal agent cache key includes memory session fields so prompt injection policy cannot be reused across mismatched embedded sessions
@@ -362,9 +368,9 @@ make dev
 This starts all services and makes the application available at `http://localhost:2026`.
 
 **Nginx routing**:
-- `/api/langgraph/*` → LangGraph Server (2024)
-- `/api/*` (other) → Gateway API (8001)
-- `/` (non-API) → Frontend (3000)
+- Browser `/api/*` → Gateway API (8001)
+- Browser `/` (non-API) → Frontend (3000)
+- Gateway internal `/api/langgraph/*` → LangGraph Server (2024)
 
 ### Running Backend Services Separately
 
@@ -385,10 +391,10 @@ Direct access (without nginx):
 ### Frontend Configuration
 
 The frontend uses environment variables to connect to backend services:
-- `NEXT_PUBLIC_LANGGRAPH_BASE_URL` - Defaults to `/api/langgraph` (through nginx)
-- `NEXT_PUBLIC_BACKEND_BASE_URL` - Defaults to empty string (through nginx)
+- `NEXT_PUBLIC_LANGGRAPH_BASE_URL` - Recommended to point at Gateway facade, e.g. `http://localhost:8001/api/langgraph`
+- `NEXT_PUBLIC_BACKEND_BASE_URL` - Recommended to point at Gateway, e.g. `http://localhost:8001`
 
-When using `make dev` from root, the frontend automatically connects through nginx.
+When using `make dev` from root, nginx remains the web entry point, but browser API traffic should still converge on Gateway.
 
 ## Key Features
 
@@ -445,3 +451,12 @@ See `docs/` directory for detailed documentation:
 - [PATH_EXAMPLES.md](docs/PATH_EXAMPLES.md) - Path types and usage
 - [summarization.md](docs/summarization.md) - Context summarization
 - [plan_mode_usage.md](docs/plan_mode_usage.md) - Plan mode with TodoList
+
+## Channel Session Overrides
+
+- Gateway / HTTP channels persist session defaults in `channel_integrations.session_json`.
+- Per-user channel overrides persist in `channel_authorized_users.session_override_json`.
+- Runtime resolution priority is `authorized_user.session_override` > `integration.session` > bridge base defaults.
+- The channel bridge only force-injects `context.thread_id`, `context.workspace_id`, `context.user_id`, and `context.locale`; optional session fields are appended only when explicitly configured.
+- For HTTP/SDK requests, runtime fields should use the `context` lane. The embedded direct-runtime path may still keep `configurable.thread_id` when checkpointer compatibility requires it.
+- Local sandbox `read_file`, `write_file`, and `update_file` must rethrow file errors with the caller-requested logical path instead of the resolved host path.

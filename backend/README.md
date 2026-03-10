@@ -9,35 +9,34 @@ Nion is a LangGraph-based AI super agent with sandbox execution, persistent memo
 ```
                         ┌──────────────────────────────────────┐
                         │          Nginx (Port 2026)           │
-                        │      Unified reverse proxy           │
-                        └───────┬──────────────────┬───────────┘
-                                │                  │
-              /api/langgraph/*  │                  │  /api/* (other)
-                                ▼                  ▼
-               ┌────────────────────┐  ┌────────────────────────┐
-               │ LangGraph Server   │  │   Gateway API (8001)   │
-               │    (Port 2024)     │  │   FastAPI REST         │
-               │                    │  │                        │
-               │ ┌────────────────┐ │  │ Models, MCP, Skills,   │
-               │ │  Lead Agent    │ │  │ Memory, Uploads,       │
-               │ │  ┌──────────┐  │ │  │ Artifacts              │
-               │ │  │Middleware│  │ │  └────────────────────────┘
-               │ │  │  Chain   │  │ │
-               │ │  └──────────┘  │ │
-               │ │  ┌──────────┐  │ │
-               │ │  │  Tools   │  │ │
-               │ │  └──────────┘  │ │
-               │ │  ┌──────────┐  │ │
-               │ │  │Subagents │  │ │
-               │ │  └──────────┘  │ │
-               │ └────────────────┘ │
-               └────────────────────┘
+                        │   Unified browser entry (Web only)   │
+                        └─────────────────┬────────────────────┘
+                                          │
+                            Browser `/api/*` + `/`
+                                          │
+                                          ▼
+                         ┌────────────────────────────────┐
+                         │      Gateway API (8001)        │
+                         │       FastAPI facade           │
+                         │ Models, MCP, Skills, Memory,   │
+                         │ Uploads, Artifacts, Topology,  │
+                         │ LangGraph proxy + state access │
+                         └─────────────────┬──────────────┘
+                                           │
+                           Internal upstream `/api/langgraph/*`
+                                           │
+                                           ▼
+                            ┌────────────────────────────┐
+                            │    LangGraph Server 2024   │
+                            │  Lead Agent + middleware   │
+                            │  chain + tools + subagents │
+                            └────────────────────────────┘
 ```
 
-**Request Routing** (via Nginx):
-- `/api/langgraph/*` → LangGraph Server - agent interactions, threads, streaming
-- `/api/*` (other) → Gateway API - models, MCP, skills, memory, artifacts, uploads
-- `/` (non-API) → Frontend - Next.js web interface
+**Request Routing**:
+- Web unified entry: Nginx forwards browser `/` to Frontend and browser `/api/*` to Gateway
+- Electron / web direct dev: Frontend calls Gateway directly without Nginx
+- Gateway is the only browser-facing API facade; LangGraph is treated as Gateway's upstream
 
 ---
 
@@ -52,6 +51,7 @@ The single LangGraph agent (`lead_agent`) is the runtime entry point, created vi
 - **Tool system** with sandbox, MCP, community, and built-in tools
 - **Subagent delegation** for parallel task execution
 - **System prompt** with skills injection, memory context, and working directory guidance
+- **Run contract** where browser/Electron LangGraph requests keep runtime fields in `context`; do not send `config.configurable` together with `context` in the same HTTP run request
 
 ### Middleware Chain
 
@@ -123,6 +123,7 @@ FastAPI application providing REST endpoints for frontend integration:
 | `POST /api/memory/reload` | Force memory reload |
 | `GET /api/memory/config` | Memory configuration |
 | `GET /api/memory/status` | Combined config + data |
+| `GET /api/runtime/topology` | Read-only runtime topology diagnostics |
 | `POST /api/threads/{id}/uploads` | Upload files (auto-converts PDF/PPT/Excel/Word to Markdown) |
 | `GET /api/threads/{id}/uploads/list` | List uploaded files |
 | `GET /api/threads/{id}/artifacts/{path}` | Serve generated artifacts |
@@ -191,7 +192,7 @@ make dev
 make gateway
 ```
 
-Direct access: LangGraph at http://localhost:2024, Gateway at http://localhost:8001
+Direct service access for diagnostics: LangGraph at http://localhost:2024, Gateway at http://localhost:8001
 
 ---
 

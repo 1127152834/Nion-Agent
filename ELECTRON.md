@@ -23,6 +23,8 @@ Electron 应用会自动：
 - 启动 Frontend（端口 3000）
 - 打开应用窗口
 
+其中业务 HTTP 链路固定为 `Renderer -> Gateway -> LangGraph`，不经过 Nginx；宿主文件系统、目录监听、外链打开等能力继续通过 IPC 暴露。
+
 ### 构建安装包
 
 ```bash
@@ -73,11 +75,13 @@ Electron 自动管理以下服务：
 
 所有服务在应用启动时自动启动，关闭时自动停止。
 
+开发态使用 `pnpm run dev` 启动前端；打包态改为启动随安装包分发的 standalone `server.js`，不再依赖本机 `pnpm` 或开发服务器。
+
 ### 环境检测
 
 前端代码自动检测运行环境：
-- Electron 模式：使用本地服务（localhost:2024, localhost:8001）
-- Web 模式：使用环境变量或 nginx 代理
+- Electron 模式：窗口加载 `http://localhost:3000`，业务 HTTP 统一访问 `http://localhost:8001`，LangGraph 通过 Gateway 门面 `/api/langgraph` 暴露
+- Web 模式：可通过 `2026` 统一入口或 `3000 -> 8001` 直连开发，浏览器均应只感知 Gateway
 
 ## 高级功能
 
@@ -158,6 +162,8 @@ ps aux | grep -E "langgraph|uvicorn|next" | grep -v grep
 | 服务管理 | 自动 | 手动 |
 | 数据目录 | `~/.nion` | `~/.nion` |
 | 端口 | 固定（2024/8001/3000） | 可配置 |
+| 业务 HTTP 边界 | Gateway 统一门面 | Gateway 统一门面 |
+| Nginx | 不使用 | 统一 Web 入口 |
 | 分发方式 | 安装包 | Docker/本地部署 |
 
 ## 参考资料
