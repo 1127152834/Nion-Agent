@@ -58,7 +58,7 @@ export default function AgentChatPage() {
 
   const { agent } = useAgent(agent_name);
 
-  const { threadId, isNewThread, setIsNewThread } = useThreadChat();
+  const { threadId, setThreadId, isNewThread, setIsNewThread } = useThreadChat();
 
   const { showNotification } = useNotification();
   const [runtimeProfile, setRuntimeProfile] = useState<RuntimeProfile>(DEFAULT_RUNTIME_PROFILE);
@@ -94,10 +94,9 @@ export default function AgentChatPage() {
     threadId: isNewThread ? undefined : threadId,
     context: { ...settings.context, agent_name: agent_name },
     onStart: (startedThreadId) => {
+      setThreadId(startedThreadId);
       setIsNewThread(false);
-      history.replaceState(
-        null,
-        "",
+      router.replace(
         `/workspace/agents/${agent_name}/chats/${startedThreadId}`,
       );
     },

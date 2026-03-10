@@ -38,7 +38,7 @@ import { useDesktopRuntime } from "@/core/platform/hooks";
 import { type RuntimeProfile, fetchRuntimeProfile, updateRuntimeProfile } from "@/core/runtime-profile/api";
 import { useLocalSettings } from "@/core/settings";
 import { useDeleteThread, useThreadStream } from "@/core/threads/hooks";
-import { textOfMessage } from "@/core/threads/utils";
+import { pathOfNewThread, pathOfThread, textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +49,15 @@ const DEFAULT_RUNTIME_PROFILE: RuntimeProfile = {
   updated_at: null,
 };
 
+function isThreadMissingError(error: unknown): boolean {
+  if (typeof error === "object" && error !== null && "status" in error) {
+    return error.status === 404;
+  }
+
+  return error instanceof Error
+    && (error.message.includes("404") || error.message.toLowerCase().includes("not found"));
+}
+
 export default function ChatPage() {
   const { t, locale } = useI18n();
   const router = useRouter();
@@ -56,7 +65,7 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const { isDesktopRuntime } = useDesktopRuntime();
 
-  const { threadId, isNewThread, setIsNewThread, isMock } = useThreadChat();
+  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } = useThreadChat();
   const isTemporaryMode = searchParams.get("mode") === "temporary-chat";
   const prefillPrompt = searchParams.get("prefill")?.trim() ?? "";
   const prefillSentRef = useRef<string | null>(null);
@@ -99,13 +108,12 @@ export default function ChatPage() {
     context: settings.context,
     isMock,
     onStart: (startedThreadId) => {
+      setThreadId(startedThreadId);
       setIsNewThread(false);
-      history.replaceState(
-        null,
-        "",
+      router.replace(
         isTemporaryMode
-          ? `/workspace/chats/${startedThreadId}?mode=temporary-chat`
-          : `/workspace/chats/${startedThreadId}`,
+          ? `${pathOfThread(startedThreadId)}?mode=temporary-chat`
+          : pathOfThread(startedThreadId),
       );
       if (isTemporaryMode) {
         const apiClient = getAPIClient(isMock);
@@ -410,6 +418,28 @@ export default function ChatPage() {
     };
   }, [hostModeCopy.modeSaveFailed, isMock, threadId]);
 
+  useEffect(() => {
+    if (isMock || isNewThread || !threadId || threadId === "new") {
+      return;
+    }
+
+    let cancelled = false;
+    const apiClient = getAPIClient(isMock);
+
+    void apiClient.threads.get(threadId)
+      .catch((error) => {
+        if (cancelled || !isThreadMissingError(error)) {
+          return;
+        }
+
+        router.replace(pathOfNewThread());
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMock, isNewThread, router, threadId]);
+
   const cleanupTemporaryThread = useCallback(
     async (useKeepalive: boolean) => {
       if (
@@ -535,7 +565,7 @@ export default function ChatPage() {
 
   const handleEndTemporaryChat = useCallback(async () => {
     await cleanupTemporaryThread(false);
-    void router.push("/workspace/chats/new");
+    void router.push(pathOfNewThread());
   }, [cleanupTemporaryThread, router]);
 
   useEffect(() => {
@@ -635,11 +665,12 @@ export default function ChatPage() {
                     className={cn("size-full", !isNewThread && "pt-10")}
                     threadId={threadId}
                     thread={thread}
+                    paddingBottom={232}
                     onClarificationSelect={handleClarificationSelect}
                   />
                 </div>
-                <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">
-                  <div className="relative w-full max-w-(--container-width-md)">
+                <div className="pointer-events-none absolute right-0 bottom-4 left-0 z-30 flex justify-center px-4 sm:bottom-6 sm:px-6">
+                  <div className="pointer-events-auto relative w-full max-w-(--container-width-md)">
                     <div className="absolute -top-4 right-0 left-0 z-0">
                       <div className="absolute right-0 bottom-0 left-0">
                         <TodoList
@@ -667,7 +698,7 @@ export default function ChatPage() {
                     ) : null}
                     {shouldShowInputBox ? (
                       <InputBox
-                        className={cn("bg-background/5 w-full")}
+                        className={cn("w-full bg-background/72 shadow-[0_24px_60px_-36px_rgba(70,60,41,0.35)] ring-1 ring-black/6 backdrop-blur-xl")}
                         threadId={threadId}
                         isNewThread={isNewThread}
                         autoFocus={isNewThread}
