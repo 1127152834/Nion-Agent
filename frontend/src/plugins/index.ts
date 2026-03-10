@@ -1,5 +1,6 @@
-import { getWorkbenchRegistry } from "@/core/workbench";
+import { getWorkbenchRegistry, type InstalledPlugin } from "@/core/workbench";
 import {
+  installPlugin,
   listInstalledPlugins,
   loadInstalledPlugin,
 } from "@/core/workbench/loader";
@@ -12,6 +13,37 @@ import DocumentPreviewPlugin from "./document-preview";
  * Initialize and register built-in workbench plugins
  * Call this function when the app starts
  */
+type BundledWorkbenchPlugin = {
+  id: string;
+  packageURL: string;
+};
+
+const BUNDLED_WORKBENCH_PLUGINS: BundledWorkbenchPlugin[] = [
+  {
+    id: "frontend-workbench",
+    packageURL: "/workbench-plugins/frontend-workbench.nwp",
+  },
+];
+
+async function installBundledPluginIfMissing(
+  existingById: Map<string, InstalledPlugin>,
+  bundled: BundledWorkbenchPlugin,
+) {
+  if (existingById.has(bundled.id)) {
+    return;
+  }
+
+  const response = await fetch(bundled.packageURL, { cache: "no-cache" });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch bundled plugin ${bundled.id}: ${response.status}`);
+  }
+  const blob = await response.blob();
+  const filename = bundled.packageURL.split("/").pop() || `${bundled.id}.nwp`;
+  const file = new File([blob], filename, { type: blob.type || "application/zip" });
+  const installed = await installPlugin(file);
+  existingById.set(installed.manifest.id, installed);
+}
+
 export async function initializeBuiltInPlugins() {
   const registry = getWorkbenchRegistry();
 
@@ -22,7 +54,17 @@ export async function initializeBuiltInPlugins() {
   // Load and register installed plugins
   try {
     const installed = await listInstalledPlugins();
-    const enabled = installed.filter((p) => p.enabled);
+    const installedById = new Map(installed.map((item) => [item.manifest.id, item]));
+
+    for (const bundled of BUNDLED_WORKBENCH_PLUGINS) {
+      try {
+        await installBundledPluginIfMissing(installedById, bundled);
+      } catch (error) {
+        console.warn(`Failed to auto-install bundled plugin ${bundled.id}:`, error);
+      }
+    }
+
+    const enabled = Array.from(installedById.values()).filter((p) => p.enabled);
 
     for (const meta of enabled) {
       try {
