@@ -43,6 +43,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   useDeleteThread,
@@ -51,7 +56,6 @@ import {
 } from "@/core/threads/hooks";
 import {
   isThreadAwaitingResponse,
-  pathOfChatsIndex,
   pathOfNewThread,
   pathOfThread,
   titleOfThread,
@@ -132,16 +136,6 @@ export function RecentChatList() {
     setSelectedThreadIds([]);
     setBatchDeleteDialogOpen(false);
   }, []);
-
-  useEffect(() => {
-    if (!selectionMode) {
-      return;
-    }
-
-    if (pathname === pathOfChatsIndex() || pathname === pathOfNewThread()) {
-      exitSelectionMode();
-    }
-  }, [exitSelectionMode, pathname, selectionMode]);
 
   const toggleThreadSelection = useCallback((threadId: string) => {
     setSelectedThreadIds((current) =>
@@ -420,27 +414,41 @@ export function RecentChatList() {
 
             {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" ? (
               selectionMode ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 rounded-full px-2 text-[11px] text-sidebar-foreground/80 hover:bg-sidebar-accent"
-                  onClick={exitSelectionMode}
-                >
-                  <X className="size-3.5" />
-                  <span>{t.sidebar.cancelManageChats}</span>
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 rounded-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      onClick={exitSelectionMode}
+                      aria-label={t.sidebar.cancelManageChats}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {t.sidebar.cancelManageChats}
+                  </TooltipContent>
+                </Tooltip>
               ) : (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 rounded-full px-2 text-[11px] text-sidebar-foreground/80 hover:bg-sidebar-accent"
-                  onClick={() => setSelectionMode(true)}
-                >
-                  <CheckCheck className="size-3.5" />
-                  <span>{t.sidebar.manageChats}</span>
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 rounded-full text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      onClick={() => setSelectionMode(true)}
+                      aria-label={t.sidebar.manageChats}
+                    >
+                      <CheckCheck className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {t.sidebar.manageChats}
+                  </TooltipContent>
+                </Tooltip>
               )
             ) : null}
           </div>
