@@ -1,0 +1,69 @@
+{
+  "id": "frontend-workbench",
+  "name": "Frontend Workbench",
+  "description": "Old-style hardcoded frontend workbench experience with file tree, editor, build/start controls, preview and logs.",
+  "entry": "index.html",
+  "runtime": "iframe",
+  "targets": [
+    {
+      "kind": "project",
+      "priority": 100
+    },
+    {
+      "kind": "directory",
+      "priority": 95
+    },
+    {
+      "kind": "file",
+      "extensions": ["ts", "tsx", "js", "jsx", "json", "css", "scss", "html", "md", "vue", "svelte"],
+      "priority": 90
+    },
+    {
+      "kind": "file",
+      "extensions": ["yml", "yaml", "toml", "lock"],
+      "priority": 70
+    }
+  ],
+  "capabilities": [
+    "file.read",
+    "file.write",
+    "dir.list",
+    "command.run",
+    "command.stop",
+    "log.stream",
+    "toast",
+    "state.persist"
+  ],
+  "fixtures": [
+    "fixtures/sample-project/package.json",
+    "fixtures/sample-project/package-lock.json",
+    "fixtures/sample-project/src/main.tsx",
+    "fixtures/sample-project/scripts/build-ok.js",
+    "fixtures/sample-project/scripts/dev-server.js"
+  ],
+  "testSpec": {
+    "assertions": [
+      {
+        "type": "entry_exists",
+        "target": "index.html"
+      },
+      {
+        "type": "fixture_exists",
+        "target": "fixtures/sample-project/package.json"
+      },
+      {
+        "type": "fixture_exists",
+        "target": "fixtures/sample-project/scripts/dev-server.js"
+      }
+    ],
+    "commandSteps": [
+      {
+        "id": "workspace-pwd",
+        "command": "pwd",
+        "cwd": "/mnt/user-data/workspace",
+        "timeout_seconds": 30,
+        "expect_contains": ["/mnt/user-data/workspace"]
+      }
+    ]
+  }
+}
