@@ -207,11 +207,6 @@ export function useThreadStream({
       }
       setOptimisticMessages(newOptimistic);
 
-      if (!startedRef.current) {
-        onStart?.(threadId);
-        startedRef.current = true;
-      }
-
       queryClient.setQueriesData(
         {
           queryKey: ["threads", "search"],
@@ -373,22 +368,6 @@ export function useThreadStream({
           runtimeContext.rss_context = rssContext;
         }
 
-        const configurable: Record<string, unknown> = {
-          thread_id: threadId,
-          model_name: runtimeContext.model_name,
-          thinking_enabled: runtimeContext.thinking_enabled,
-          is_plan_mode: runtimeContext.is_plan_mode,
-          subagent_enabled: runtimeContext.subagent_enabled,
-          reasoning_effort: runtimeContext.reasoning_effort,
-          agent_name: runtimeContext.agent_name,
-          session_mode: runtimeContext.session_mode,
-          memory_read: runtimeContext.memory_read,
-          memory_write: runtimeContext.memory_write,
-        };
-        if (rssContext.length > 0) {
-          configurable.rss_context = rssContext;
-        }
-
         const messageAdditionalKwargs: Record<string, unknown> = {};
         if (filesForSubmit.length > 0) {
           messageAdditionalKwargs.files = filesForSubmit;
@@ -419,7 +398,6 @@ export function useThreadStream({
             streamMode: ["values", "messages-tuple", "custom"],
             config: {
               recursion_limit: 1000,
-              configurable,
             },
             context: runtimeContext,
           },
@@ -430,7 +408,7 @@ export function useThreadStream({
         throw error;
       }
     },
-    [rssContextBlocks, thread, t.uploads.uploadingFiles, onStart, context, queryClient],
+    [rssContextBlocks, thread, t.uploads.uploadingFiles, context, queryClient],
   );
 
   // Wrap stream with a safe adapter:
