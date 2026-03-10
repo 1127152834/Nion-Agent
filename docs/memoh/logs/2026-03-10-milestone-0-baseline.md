@@ -29,7 +29,7 @@
 ### 1.3 当前工作树状态
 
 - 当前分支：`main`
-- 当前 `git status --short` 条目数：`89`
+- 当前 `git status --short` 条目数：`87`
 - 改动横跨：`backend`、`frontend`、`desktop`、`docs`、`openspec`
 
 结论：**前序功能基线当前可验证为“可运行、可测试、可校验”，但工作树尚未收口，不满足直接开启 `Phase 3` 的工程条件。**
