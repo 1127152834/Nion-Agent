@@ -163,7 +163,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
             <div className="space-y-8 p-6">
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "models" && <ModelSettingsPage />}
-              {activeSection === "memory" && <MemorySettingsPage />}
+              {activeSection === "memory" && (
+                <MemorySettingsPage
+                  onClose={() => props.onOpenChange?.(false)}
+                />
+              )}
               {activeSection === "embedding" && <RetrievalSettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}
               {activeSection === "channels" && <ChannelSettingsPage />}

@@ -1,8 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import type { ComponentProps, MouseEvent } from "react";
 import { Streamdown } from "streamdown";
 
 import { useI18n } from "@/core/i18n/hooks";
+import { platform } from "@/core/platform";
 import { useMemory } from "@/core/memory/hooks";
 import type { UserMemory } from "@/core/memory/types";
 import { streamdownPlugins } from "@/core/streamdown/plugins";
@@ -29,6 +32,76 @@ function confidenceToLevelKey(confidence: unknown): {
   if (value >= 0.85) return { key: "veryHigh", value };
   if (value >= 0.65) return { key: "high", value };
   return { key: "normal", value };
+}
+
+function resolveWorkspaceHref(href: string | undefined): string | null {
+  if (!href) {
+    return null;
+  }
+
+  if (href.startsWith("/workspace/")) {
+    return href;
+  }
+
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : "http://localhost";
+    const url = new URL(href, base);
+    if (url.pathname.startsWith("/workspace/")) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function isModifiedEvent(event: MouseEvent<HTMLAnchorElement>): boolean {
+  return event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+}
+
+function MemorySourceLink({
+  href,
+  children,
+  onClick,
+  onNavigate,
+  ...props
+}: ComponentProps<"a"> & { onNavigate?: () => void }) {
+  const router = useRouter();
+  const internalHref = resolveWorkspaceHref(href);
+
+  const handleClick = async (event: MouseEvent<HTMLAnchorElement>) => {
+    onClick?.(event);
+    if (event.defaultPrevented || isModifiedEvent(event)) {
+      return;
+    }
+
+    if (internalHref) {
+      event.preventDefault();
+      event.stopPropagation();
+      onNavigate?.();
+      router.push(internalHref);
+      return;
+    }
+
+    if (href) {
+      event.preventDefault();
+      event.stopPropagation();
+      await platform.openExternal(href);
+    }
+  };
+
+  return (
+    <a
+      {...props}
+      href={internalHref ?? href}
+      onClick={(event) => {
+        void handleClick(event);
+      }}
+    >
+      {children}
+    </a>
+  );
 }
 
 function formatMemorySection(
@@ -155,7 +228,7 @@ function memoryToMarkdown(
   return out.join("\n");
 }
 
-export function MemorySettingsPage() {
+export function MemorySettingsPage({ onClose }: { onClose?: () => void }) {
   const { t } = useI18n();
   const { memory, isLoading, error } = useMemory();
   return (
@@ -176,6 +249,9 @@ export function MemorySettingsPage() {
           <Streamdown
             className="size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
             {...streamdownPlugins}
+            components={{
+              a: (props) => <MemorySourceLink {...props} onNavigate={onClose} />,
+            }}
           >
             {memoryToMarkdown(memory, t)}
           </Streamdown>
