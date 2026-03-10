@@ -196,7 +196,19 @@ dev:
 	echo "Starting Gateway API..."; \
 	cd backend && uv run uvicorn src.gateway.app:app --host 0.0.0.0 --port 8001 > ../logs/gateway.log 2>&1 & \
 	sleep 3; \
-	if ! lsof -i :8001 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+	check_port_listening() { \
+		if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:8001 -sTCP:LISTEN -t >/dev/null 2>&1; then \
+			return 0; \
+		fi; \
+		if command -v ss >/dev/null 2>&1 && ss -ltn "( sport = :8001 )" 2>/dev/null | tail -n +2 | grep -q .; then \
+			return 0; \
+		fi; \
+		if command -v netstat >/dev/null 2>&1 && netstat -ltn 2>/dev/null | awk '{print $$4}' | grep -Eq "(^|[.:])8001$$"; then \
+			return 0; \
+		fi; \
+		return 1; \
+	}; \
+	if ! check_port_listening; then \
 		echo "✗ Gateway API failed to start. Last log output:"; \
 		tail -30 logs/gateway.log; \
 		cleanup; \

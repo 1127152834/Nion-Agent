@@ -456,8 +456,54 @@ export function useThreads(
   return useQuery<AgentThread[]>({
     queryKey: ["threads", "search", params],
     queryFn: async () => {
-      const response = await apiClient.threads.search<AgentThreadState>(params);
-      return response as AgentThread[];
+      const maxResults = params.limit;
+      const initialOffset = params.offset ?? 0;
+      const defaultPageSize = 50;
+
+      // Keep previous behavior for explicit non-positive limits.
+      if (maxResults !== undefined && maxResults <= 0) {
+        const response = await apiClient.threads.search<AgentThreadState>(params);
+        return response as AgentThread[];
+      }
+
+      const pageSize =
+        typeof maxResults === "number" && maxResults > 0
+          ? Math.min(defaultPageSize, maxResults)
+          : defaultPageSize;
+
+      const allThreads: AgentThread[] = [];
+      let offset = initialOffset;
+
+      while (true) {
+        if (typeof maxResults === "number" && allThreads.length >= maxResults) {
+          break;
+        }
+
+        const currentLimit =
+          typeof maxResults === "number"
+            ? Math.min(pageSize, maxResults - allThreads.length)
+            : pageSize;
+
+        if (typeof maxResults === "number" && currentLimit <= 0) {
+          break;
+        }
+
+        const response = (await apiClient.threads.search<AgentThreadState>({
+          ...params,
+          limit: currentLimit,
+          offset,
+        })) as AgentThread[];
+
+        allThreads.push(...response);
+
+        if (response.length < currentLimit) {
+          break;
+        }
+
+        offset += response.length;
+      }
+
+      return allThreads;
     },
     refetchOnWindowFocus: false,
   });
