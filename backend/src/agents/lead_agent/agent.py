@@ -284,6 +284,8 @@ def make_lead_agent(config: RunnableConfig):
     session_mode = cfg.get("session_mode")
     memory_read = cfg.get("memory_read")
     memory_write = cfg.get("memory_write")
+    workspace_mode = cfg.get("workspace_mode")
+    plugin_studio_session_id = cfg.get("plugin_studio_session_id")
 
     agent_config = load_agent_config(agent_name) if not is_bootstrap else None
     # Custom agent model or fallback to global/default model resolution
@@ -337,6 +339,8 @@ def make_lead_agent(config: RunnableConfig):
             session_mode=session_mode,
             memory_read=memory_read,
             memory_write=memory_write,
+            workspace_mode=workspace_mode,
+            plugin_studio_session_id=plugin_studio_session_id,
         )
 
         return create_agent(
@@ -360,6 +364,8 @@ def make_lead_agent(config: RunnableConfig):
             session_mode=session_mode,
             memory_read=memory_read,
             memory_write=memory_write,
+            workspace_mode=workspace_mode,
+            plugin_studio_session_id=plugin_studio_session_id,
         ),
         state_schema=ThreadState,
     )

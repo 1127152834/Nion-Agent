@@ -139,6 +139,7 @@ class PluginStudioSessionCreateRequest(BaseModel):
     plugin_name: str = Field(..., min_length=2, max_length=80)
     plugin_id: str | None = Field(default=None, min_length=2, max_length=64)
     description: str = Field(default="", max_length=400)
+    chat_thread_id: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class PluginStudioGenerateRequest(BaseModel):
@@ -168,6 +169,7 @@ class PluginStudioSessionResponse(BaseModel):
     session_id: str
     plugin_id: str
     plugin_name: str
+    chat_thread_id: str | None = None
     description: str
     state: Literal["draft", "generated", "auto_verified", "manual_verified", "packaged"]
     auto_verified: bool
@@ -836,6 +838,7 @@ def _plugin_studio_response(payload: dict[str, Any]) -> PluginStudioSessionRespo
         session_id=session_id,
         plugin_id=plugin_id,
         plugin_name=str(payload.get("plugin_name", plugin_id)),
+        chat_thread_id=str(payload.get("chat_thread_id") or "") or None,
         description=str(payload.get("description", "")),
         state=str(payload.get("state", "draft")),  # type: ignore[arg-type]
         auto_verified=bool(payload.get("auto_verified", False)),
@@ -1084,6 +1087,7 @@ async def create_plugin_studio_session(payload: PluginStudioSessionCreateRequest
             "session_id": session_id,
             "plugin_id": plugin_id,
             "plugin_name": payload.plugin_name.strip(),
+            "chat_thread_id": (payload.chat_thread_id or "").strip(),
             "description": payload.description.strip(),
             "state": "draft",
             "auto_verified": False,

@@ -216,15 +216,19 @@ def test_plugin_studio_requires_auto_and_manual_before_package(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench, "get_paths", return_value=Paths(tmp_path), create=True),
     ):
+        chat_thread_id = "plugin-assistant-thread-001"
         create_resp = client.post(
             "/api/workbench/plugin-studio/sessions",
             json={
                 "plugin_name": "Code Viewer",
                 "description": "demo",
+                "chat_thread_id": chat_thread_id,
             },
         )
         assert create_resp.status_code == 200
-        session_id = create_resp.json()["session_id"]
+        create_payload = create_resp.json()
+        session_id = create_payload["session_id"]
+        assert create_payload["chat_thread_id"] == chat_thread_id
 
         generate_resp = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/generate", json={})
         assert generate_resp.status_code == 200

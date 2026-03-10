@@ -257,6 +257,7 @@ You: "Deploying to staging..." [proceed]
 </clarification_system>
 
 {skills_section}
+{plugin_assistant_section}
 
 {subagent_section}
 
@@ -504,6 +505,33 @@ def _format_rss_context_section(rss_context: list[dict[str, Any]] | None) -> str
     )
 
 
+def _build_plugin_assistant_section(
+    *,
+    workspace_mode: str | None,
+    plugin_studio_session_id: str | None,
+) -> str:
+    if workspace_mode != "plugin_assistant":
+        return ""
+
+    session_line = (
+        f"- Bound Plugin Studio Session: `{plugin_studio_session_id}`\n"
+        if plugin_studio_session_id
+        else ""
+    )
+    return (
+        "<plugin_assistant_mode>\n"
+        "You are running in Plugin Assistant mode. Keep responses implementation-oriented and structurally consistent.\n"
+        f"{session_line}"
+        "For every substantive reply, output exactly these four sections in order:\n"
+        "1) Requirement Clarification\n"
+        "2) Interaction Flow Design\n"
+        "3) Manifest & Capability Draft\n"
+        "4) Verification & Acceptance Checklist\n"
+        "Keep each section concrete and short. Avoid generic brainstorming-only replies.\n"
+        "</plugin_assistant_mode>\n"
+    )
+
+
 def apply_prompt_template(
     subagent_enabled: bool = False,
     max_concurrent_subagents: int = 3,
@@ -514,6 +542,8 @@ def apply_prompt_template(
     session_mode: str | None = None,
     memory_read: bool | None = None,
     memory_write: bool | None = None,
+    workspace_mode: str | None = None,
+    plugin_studio_session_id: str | None = None,
 ) -> str:
     # Get memory context
     memory_context = _get_memory_context(
@@ -548,6 +578,10 @@ def apply_prompt_template(
 
     # Get skills section
     skills_section = get_skills_prompt_section(available_skills)
+    plugin_assistant_section = _build_plugin_assistant_section(
+        workspace_mode=workspace_mode,
+        plugin_studio_session_id=plugin_studio_session_id,
+    )
 
     # Get user profile with policy enforcement
     user_profile = get_user_profile(session_mode=session_mode, memory_read=memory_read)
@@ -558,6 +592,7 @@ def apply_prompt_template(
         soul=get_agent_soul(agent_name),
         user_profile=user_profile,
         skills_section=skills_section,
+        plugin_assistant_section=plugin_assistant_section,
         memory_context=memory_context,
         rss_context_section=rss_context_section,
         subagent_section=subagent_section,
