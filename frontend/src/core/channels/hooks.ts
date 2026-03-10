@@ -10,9 +10,11 @@ import {
   rejectPairRequest,
   revokeAuthorizedUser,
   testChannelConnection,
+  updateAuthorizedUserSessionOverride,
   upsertChannelConfig,
 } from "./api";
 import type {
+  ChannelAuthorizedUserSessionOverridePayload,
   ChannelConfigUpsertPayload,
   ChannelConnectionTestPayload,
   ChannelPairRequestDecisionPayload,
@@ -152,6 +154,23 @@ export function useRevokeAuthorizedUser(platform: ChannelPlatform) {
   return useMutation({
     mutationFn: (userId: number) =>
       revokeAuthorizedUser(platform, userId, { handled_by: "ui" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.users });
+    },
+  });
+}
+
+export function useUpdateAuthorizedUserSessionOverride(platform: ChannelPlatform) {
+  const queryClient = useQueryClient();
+  const keys = channelQueryKeys(platform);
+  return useMutation({
+    mutationFn: ({
+      userId,
+      payload,
+    }: {
+      userId: number;
+      payload: ChannelAuthorizedUserSessionOverridePayload;
+    }) => updateAuthorizedUserSessionOverride(platform, userId, payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: keys.users });
     },

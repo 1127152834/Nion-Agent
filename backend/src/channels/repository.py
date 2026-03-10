@@ -58,6 +58,80 @@ def _ensure_mode(mode: str | None) -> str:
     return normalized
 
 
+def _parse_json_object(raw: Any) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return dict(raw)
+    try:
+        parsed = json.loads(str(raw))
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_recursion_limit(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str):
+        normalized = value.strip()
+        if not normalized:
+            return None
+        try:
+            parsed = int(normalized)
+        except ValueError:
+            return None
+        return parsed if parsed > 0 else None
+    return None
+
+
+def _normalize_session_config(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    normalized: dict[str, Any] = {}
+    assistant_id = value.get("assistant_id")
+    if isinstance(assistant_id, str) and assistant_id.strip():
+        normalized["assistant_id"] = assistant_id.strip()
+
+    raw_config = value.get("config")
+    if isinstance(raw_config, dict):
+        recursion_limit = _normalize_recursion_limit(raw_config.get("recursion_limit"))
+        if recursion_limit is not None:
+            normalized["config"] = {"recursion_limit": recursion_limit}
+
+    raw_context = value.get("context")
+    if isinstance(raw_context, dict):
+        context: dict[str, bool] = {}
+        for key in ("thinking_enabled", "is_plan_mode", "subagent_enabled"):
+            raw_flag = raw_context.get(key)
+            if isinstance(raw_flag, bool):
+                context[key] = raw_flag
+        if context:
+            normalized["context"] = context
+
+    return normalized or None
+
+
+def _load_session_config(raw: Any) -> dict[str, Any] | None:
+    return _normalize_session_config(_parse_json_object(raw))
+
+
+def _dump_session_config(session: dict[str, Any] | None) -> str | None:
+    normalized = _normalize_session_config(session)
+    if not normalized:
+        return None
+    return json.dumps(normalized, ensure_ascii=False, sort_keys=True)
+
+
+def _normalize_authorized_user_record(data: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(data)
+    normalized["session_override"] = _load_session_config(normalized.pop("session_override_json", None))
+    return normalized
+
+
 class ChannelRepository:
     def __init__(self, *, db: ChannelDatabase | None = None, paths: Paths | None = None):
         self._db = db or ChannelDatabase(paths=paths)
@@ -80,22 +154,18 @@ class ChannelRepository:
                 "mode": "webhook",
                 "credentials": {},
                 "default_workspace_id": None,
+                "session": None,
                 "created_at": None,
                 "updated_at": None,
             }
-        raw_credentials = str(data.get("credentials_json") or "{}")
-        try:
-            credentials = json.loads(raw_credentials)
-        except json.JSONDecodeError:
-            credentials = {}
-        if not isinstance(credentials, dict):
-            credentials = {}
+        credentials = _parse_json_object(data.get("credentials_json"))
         return {
             "platform": normalized,
             "enabled": bool(data.get("enabled")),
             "mode": _ensure_mode(str(data.get("mode") or "webhook")),
             "credentials": {str(k): str(v) for k, v in credentials.items()},
             "default_workspace_id": data.get("default_workspace_id"),
+            "session": _load_session_config(data.get("session_json")),
             "created_at": data.get("created_at"),
             "updated_at": data.get("updated_at"),
         }
@@ -111,23 +181,26 @@ class ChannelRepository:
         mode: str = "webhook",
         credentials: dict[str, str],
         default_workspace_id: str | None = None,
+        session: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         normalized = _ensure_platform(platform)
         normalized_mode = _ensure_mode(mode)
         now = _utcnow()
         credentials_json = json.dumps(credentials, ensure_ascii=False, sort_keys=True)
+        session_json = _dump_session_config(session)
         with self._db.transaction() as conn:
             conn.execute(
                 """
                 INSERT INTO channel_integrations(
-                    platform, enabled, mode, credentials_json, default_workspace_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    platform, enabled, mode, credentials_json, default_workspace_id, session_json, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(platform)
                 DO UPDATE SET
                     enabled = excluded.enabled,
                     mode = excluded.mode,
                     credentials_json = excluded.credentials_json,
                     default_workspace_id = excluded.default_workspace_id,
+                    session_json = excluded.session_json,
                     updated_at = excluded.updated_at
                 """,
                 (
@@ -136,6 +209,7 @@ class ChannelRepository:
                     normalized_mode,
                     credentials_json,
                     default_workspace_id,
+                    session_json,
                     now,
                     now,
                 ),
@@ -350,7 +424,7 @@ class ChannelRepository:
         for row in rows:
             converted = _row_to_dict(row)
             if converted is not None:
-                result.append(converted)
+                result.append(_normalize_authorized_user_record(converted))
         return result
 
     def _get_pair_request(self, conn: sqlite3.Connection, platform: str, request_id: int) -> dict[str, Any]:
@@ -465,7 +539,7 @@ class ChannelRepository:
         for row in rows:
             converted = _row_to_dict(row)
             if converted is not None:
-                result.append(converted)
+                result.append(_normalize_authorized_user_record(converted))
         return result
 
     def revoke_authorized_user(self, platform: str, user_id: int, *, handled_by: str | None = None) -> bool:
@@ -510,7 +584,10 @@ class ChannelRepository:
                 sql,
                 tuple(params),
             ).fetchone()
-        return _row_to_dict(row)
+        result = _row_to_dict(row)
+        if result is None:
+            return None
+        return _normalize_authorized_user_record(result)
 
     def get_authorized_user_by_chat(
         self,
@@ -536,7 +613,10 @@ class ChannelRepository:
                 sql,
                 tuple(params),
             ).fetchone()
-        return _row_to_dict(row)
+        result = _row_to_dict(row)
+        if result is None:
+            return None
+        return _normalize_authorized_user_record(result)
 
     def rebind_authorized_user_identity(
         self,
@@ -585,7 +665,7 @@ class ChannelRepository:
         result = _row_to_dict(row)
         if result is None:
             raise ChannelRepositoryNotFoundError(f"channel authorized user {user_id} not found")
-        return result
+        return _normalize_authorized_user_record(result)
 
     def update_authorized_user_workspace(
         self,
@@ -622,7 +702,42 @@ class ChannelRepository:
         result = _row_to_dict(row)
         if result is None:
             raise ChannelRepositoryNotFoundError(f"channel authorized user {user_id} not found")
-        return result
+        return _normalize_authorized_user_record(result)
+
+    def update_authorized_user_session_override(
+        self,
+        platform: str,
+        user_id: int,
+        *,
+        session_override: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        normalized = _ensure_platform(platform)
+        session_override_json = _dump_session_config(session_override)
+        with self._db.transaction() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE channel_authorized_users
+                SET session_override_json = ?
+                WHERE platform = ? AND id = ? AND revoked_at IS NULL
+                """,
+                (
+                    session_override_json,
+                    normalized,
+                    user_id,
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise ChannelRepositoryNotFoundError(
+                    f"channel authorized user {user_id} not found"
+                )
+            row = conn.execute(
+                "SELECT * FROM channel_authorized_users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+        result = _row_to_dict(row)
+        if result is None:
+            raise ChannelRepositoryNotFoundError(f"channel authorized user {user_id} not found")
+        return _normalize_authorized_user_record(result)
 
     def get_chat_thread(self, platform: str, chat_id: str) -> dict[str, Any] | None:
         normalized = _ensure_platform(platform)

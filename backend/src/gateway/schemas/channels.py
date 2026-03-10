@@ -8,11 +8,28 @@ ChannelPlatform = Literal["lark", "dingtalk", "telegram"]
 ChannelMode = Literal["webhook", "stream"]
 
 
+class ChannelSessionRunConfig(BaseModel):
+    recursion_limit: int | None = Field(default=None, ge=1, le=10_000)
+
+
+class ChannelSessionContext(BaseModel):
+    thinking_enabled: bool | None = None
+    is_plan_mode: bool | None = None
+    subagent_enabled: bool | None = None
+
+
+class ChannelSessionConfig(BaseModel):
+    assistant_id: str | None = Field(default=None, min_length=1, max_length=128)
+    config: ChannelSessionRunConfig | None = None
+    context: ChannelSessionContext | None = None
+
+
 class ChannelConfigUpsertRequest(BaseModel):
     enabled: bool = False
     mode: ChannelMode = "webhook"
     credentials: dict[str, str] = Field(default_factory=dict)
     default_workspace_id: str | None = Field(default=None, min_length=1, max_length=64)
+    session: ChannelSessionConfig | None = None
 
 
 class ChannelConfigResponse(BaseModel):
@@ -21,6 +38,7 @@ class ChannelConfigResponse(BaseModel):
     mode: ChannelMode = "webhook"
     credentials: dict[str, str]
     default_workspace_id: str | None = None
+    session: ChannelSessionConfig | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -108,6 +126,7 @@ class ChannelAuthorizedUserResponse(BaseModel):
     chat_id: str | None = None
     conversation_type: str | None = None
     workspace_id: str | None = None
+    session_override: ChannelSessionConfig | None = None
     granted_at: str
     revoked_at: str | None = None
     source_request_id: int | None = None
@@ -123,6 +142,10 @@ class ChannelAuthorizedUserRevokeResponse(BaseModel):
 
 class ChannelAuthorizedUserWorkspaceUpdateRequest(BaseModel):
     workspace_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class ChannelAuthorizedUserSessionOverrideUpdateRequest(ChannelSessionConfig):
+    pass
 
 
 class ChannelWebhookResponse(BaseModel):

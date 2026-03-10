@@ -18,6 +18,7 @@ _TABLE_DDL: dict[str, str] = {
             mode TEXT NOT NULL DEFAULT 'webhook' CHECK(mode IN ('webhook', 'stream')),
             credentials_json TEXT NOT NULL DEFAULT '{}',
             default_workspace_id TEXT,
+            session_json TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )
@@ -60,6 +61,7 @@ _TABLE_DDL: dict[str, str] = {
             chat_id TEXT,
             conversation_type TEXT,
             workspace_id TEXT,
+            session_override_json TEXT,
             granted_at TEXT NOT NULL,
             revoked_at TEXT,
             source_request_id INTEGER REFERENCES channel_pair_requests(id) ON DELETE SET NULL,
@@ -140,6 +142,7 @@ _SCHEMA_DDL = f"""
         mode TEXT NOT NULL DEFAULT 'webhook' CHECK(mode IN ('webhook', 'stream')),
         credentials_json TEXT NOT NULL DEFAULT '{{}}',
         default_workspace_id TEXT,
+        session_json TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     );
@@ -179,6 +182,7 @@ _SCHEMA_DDL = f"""
         chat_id TEXT,
         conversation_type TEXT,
         workspace_id TEXT,
+        session_override_json TEXT,
         granted_at TEXT NOT NULL,
         revoked_at TEXT,
         source_request_id INTEGER REFERENCES channel_pair_requests(id) ON DELETE SET NULL,
@@ -277,6 +281,10 @@ class ChannelDatabase:
                 conn.execute(
                     "ALTER TABLE channel_integrations ADD COLUMN mode TEXT NOT NULL DEFAULT 'webhook'"
                 )
+            if "session_json" not in columns:
+                conn.execute(
+                    "ALTER TABLE channel_integrations ADD COLUMN session_json TEXT"
+                )
 
             authorized_user_columns = {
                 str(row[1])
@@ -285,6 +293,10 @@ class ChannelDatabase:
             if "workspace_id" not in authorized_user_columns:
                 conn.execute(
                     "ALTER TABLE channel_authorized_users ADD COLUMN workspace_id TEXT"
+                )
+            if "session_override_json" not in authorized_user_columns:
+                conn.execute(
+                    "ALTER TABLE channel_authorized_users ADD COLUMN session_override_json TEXT"
                 )
 
             message_log_columns = {

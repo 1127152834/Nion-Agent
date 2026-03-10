@@ -1,12 +1,29 @@
 export type ChannelPlatform = "lark" | "dingtalk" | "telegram";
 export type ChannelMode = "webhook" | "stream";
 
+export interface ChannelSessionContext {
+  thinking_enabled?: boolean;
+  is_plan_mode?: boolean;
+  subagent_enabled?: boolean;
+}
+
+export interface ChannelSessionRunConfig {
+  recursion_limit?: number;
+}
+
+export interface ChannelSessionConfig {
+  assistant_id?: string;
+  config?: ChannelSessionRunConfig;
+  context?: ChannelSessionContext;
+}
+
 export interface ChannelConfig {
   platform: ChannelPlatform;
   enabled: boolean;
   mode: ChannelMode;
   credentials: Record<string, string>;
   default_workspace_id: string | null;
+  session?: ChannelSessionConfig | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -16,6 +33,7 @@ export interface ChannelConfigUpsertPayload {
   mode: ChannelMode;
   credentials: Record<string, string>;
   default_workspace_id?: string | null;
+  session?: ChannelSessionConfig | null;
 }
 
 export interface ChannelConnectionTestPayload {
@@ -97,6 +115,7 @@ export interface ChannelAuthorizedUser {
   chat_id: string | null;
   conversation_type: string | null;
   workspace_id: string | null;
+  session_override?: ChannelSessionConfig | null;
   granted_at: string;
   revoked_at: string | null;
   source_request_id: number | null;
@@ -109,3 +128,5 @@ export interface ChannelAuthorizedUserRevokePayload {
 export interface ChannelAuthorizedUserRevokeResult {
   revoked: boolean;
 }
+
+export type ChannelAuthorizedUserSessionOverridePayload = ChannelSessionConfig;

@@ -17,6 +17,14 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -37,9 +45,12 @@ import {
   useRejectPairRequest,
   useRevokeAuthorizedUser,
   useTestChannelConnection,
+  useUpdateAuthorizedUserSessionOverride,
   useUpsertChannelConfig,
+  type ChannelAuthorizedUser,
   type ChannelMode,
   type ChannelPlatform,
+  type ChannelSessionConfig,
 } from "@/core/channels";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
@@ -53,6 +64,16 @@ type ChannelFormState = {
   credentials: Record<string, string>;
 };
 
+type SessionBooleanState = "inherit" | "enabled" | "disabled";
+
+type ChannelSessionFormState = {
+  assistant_id: string;
+  recursion_limit: string;
+  thinking_enabled: SessionBooleanState;
+  is_plan_mode: SessionBooleanState;
+  subagent_enabled: SessionBooleanState;
+};
+
 type CredentialFieldSpec = {
   key: string;
   label: string;
@@ -64,6 +85,113 @@ type CredentialFieldSpec = {
 
 const PAIR_CODE_SLOT_COUNT = 6;
 const DEFAULT_CHANNEL_WORKSPACE_ID = "default";
+const DEFAULT_SESSION_FORM_STATE: ChannelSessionFormState = {
+  assistant_id: "",
+  recursion_limit: "",
+  thinking_enabled: "inherit",
+  is_plan_mode: "inherit",
+  subagent_enabled: "inherit",
+};
+
+function toSessionBooleanState(value: boolean | undefined): SessionBooleanState {
+  if (value === true) {
+    return "enabled";
+  }
+  if (value === false) {
+    return "disabled";
+  }
+  return "inherit";
+}
+
+function fromSessionBooleanState(value: SessionBooleanState): boolean | undefined {
+  if (value === "enabled") {
+    return true;
+  }
+  if (value === "disabled") {
+    return false;
+  }
+  return undefined;
+}
+
+function sessionConfigToFormState(session?: ChannelSessionConfig | null): ChannelSessionFormState {
+  return {
+    assistant_id: session?.assistant_id ?? "",
+    recursion_limit:
+      typeof session?.config?.recursion_limit === "number"
+        ? String(session.config.recursion_limit)
+        : "",
+    thinking_enabled: toSessionBooleanState(session?.context?.thinking_enabled),
+    is_plan_mode: toSessionBooleanState(session?.context?.is_plan_mode),
+    subagent_enabled: toSessionBooleanState(session?.context?.subagent_enabled),
+  };
+}
+
+function sessionFormToConfig(form: ChannelSessionFormState): ChannelSessionConfig | undefined {
+  const assistantId = form.assistant_id.trim();
+  const recursionRaw = form.recursion_limit.trim();
+  const recursionLimit = recursionRaw ? Number.parseInt(recursionRaw, 10) : Number.NaN;
+  const thinkingEnabled = fromSessionBooleanState(form.thinking_enabled);
+  const isPlanMode = fromSessionBooleanState(form.is_plan_mode);
+  const subagentEnabled = fromSessionBooleanState(form.subagent_enabled);
+
+  const config: ChannelSessionConfig = {};
+  if (assistantId) {
+    config.assistant_id = assistantId;
+  }
+  if (Number.isFinite(recursionLimit) && recursionLimit > 0) {
+    config.config = { recursion_limit: recursionLimit };
+  }
+
+  const context: NonNullable<ChannelSessionConfig["context"]> = {};
+  if (thinkingEnabled !== undefined) {
+    context.thinking_enabled = thinkingEnabled;
+  }
+  if (isPlanMode !== undefined) {
+    context.is_plan_mode = isPlanMode;
+  }
+  if (subagentEnabled !== undefined) {
+    context.subagent_enabled = subagentEnabled;
+  }
+  if (Object.keys(context).length > 0) {
+    config.context = context;
+  }
+
+  return Object.keys(config).length > 0 ? config : undefined;
+}
+
+function describeSessionConfig(
+  session: ChannelSessionConfig | null | undefined,
+  options?: {
+    emptyLabel?: string;
+    assistantLabel?: string;
+    recursionLabel?: string;
+    thinkingLabel?: string;
+    planLabel?: string;
+    subagentLabel?: string;
+  },
+): string[] {
+  const labels = options ?? {};
+  if (!session) {
+    return [labels.emptyLabel ?? "继承默认值"];
+  }
+  const items: string[] = [];
+  if (session.assistant_id) {
+    items.push(`${labels.assistantLabel ?? "Assistant"}: ${session.assistant_id}`);
+  }
+  if (typeof session.config?.recursion_limit === "number") {
+    items.push(`${labels.recursionLabel ?? "Recursion"}: ${session.config.recursion_limit}`);
+  }
+  if (typeof session.context?.thinking_enabled === "boolean") {
+    items.push(`${labels.thinkingLabel ?? "Thinking"}: ${session.context.thinking_enabled ? "On" : "Off"}`);
+  }
+  if (typeof session.context?.is_plan_mode === "boolean") {
+    items.push(`${labels.planLabel ?? "Plan"}: ${session.context.is_plan_mode ? "On" : "Off"}`);
+  }
+  if (typeof session.context?.subagent_enabled === "boolean") {
+    items.push(`${labels.subagentLabel ?? "Subagent"}: ${session.context.subagent_enabled ? "On" : "Off"}`);
+  }
+  return items.length > 0 ? items : [labels.emptyLabel ?? "继承默认值"];
+}
 
 const PLATFORM_FIELDS: Record<ChannelPlatform, CredentialFieldSpec[]> = {
   lark: [
@@ -251,6 +379,45 @@ function shouldRefetchForChannelEvent(eventType: string): boolean {
   return true;
 }
 
+function SessionBooleanSelect({
+  value,
+  onValueChange,
+  inheritLabel,
+  enabledLabel,
+  disabledLabel,
+}: {
+  value: SessionBooleanState;
+  onValueChange: (value: SessionBooleanState) => void;
+  inheritLabel: string;
+  enabledLabel: string;
+  disabledLabel: string;
+}) {
+  return (
+    <Select value={value} onValueChange={(next) => onValueChange(next as SessionBooleanState)}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="inherit">{inheritLabel}</SelectItem>
+        <SelectItem value="enabled">{enabledLabel}</SelectItem>
+        <SelectItem value="disabled">{disabledLabel}</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+function SessionSummaryBadges({ items }: { items: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <Badge key={item} variant="secondary" className="rounded-full px-2 py-0.5 text-[11px]">
+          {item}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 function InlineError({
   error,
   apiNotReadyHint,
@@ -433,12 +600,16 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
   const approvePairRequest = useApprovePairRequest(platform);
   const rejectPairRequest = useRejectPairRequest(platform);
   const revokeAuthorizedUser = useRevokeAuthorizedUser(platform);
+  const updateAuthorizedUserSessionOverride = useUpdateAuthorizedUserSessionOverride(platform);
 
   const [form, setForm] = useState<ChannelFormState>({
     enabled: false,
     mode: "webhook",
     credentials: {},
   });
+  const [sessionDefaultsForm, setSessionDefaultsForm] = useState<ChannelSessionFormState>(DEFAULT_SESSION_FORM_STATE);
+  const [editingAuthorizedUser, setEditingAuthorizedUser] = useState<ChannelAuthorizedUser | null>(null);
+  const [authorizedUserSessionForm, setAuthorizedUserSessionForm] = useState<ChannelSessionFormState>(DEFAULT_SESSION_FORM_STATE);
 
   useEffect(() => {
     if (!config) {
@@ -449,6 +620,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
       mode: config.mode ?? "webhook",
       credentials: { ...config.credentials },
     });
+    setSessionDefaultsForm(sessionConfigToFormState(config.session));
   }, [config]);
 
   const platformTitle = platform === "lark"
@@ -493,6 +665,22 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
   const shouldShowPairingGuide =
     ((testConnection.data?.success ?? false) || (runtimeStatus?.connected ?? false))
     && authorizedUsers.length === 0;
+  const sessionSummaryOptions = useMemo(() => ({
+    emptyLabel: m?.sessionInheritLabel ?? "继承当前默认值",
+    assistantLabel: m?.sessionAssistantIdLabel ?? "Assistant",
+    recursionLabel: m?.sessionRecursionLimitLabel ?? "Recursion",
+    thinkingLabel: m?.sessionThinkingLabel ?? "Thinking",
+    planLabel: m?.sessionPlanModeLabel ?? "Plan",
+    subagentLabel: m?.sessionSubagentLabel ?? "Subagent",
+  }), [m]);
+  const sessionDefaultsConfig = useMemo(
+    () => sessionFormToConfig(sessionDefaultsForm),
+    [sessionDefaultsForm],
+  );
+  const sessionDefaultsSummary = useMemo(
+    () => describeSessionConfig(sessionDefaultsConfig, sessionSummaryOptions),
+    [sessionDefaultsConfig, sessionSummaryOptions],
+  );
 
   useEffect(() => {
     if (!shouldSubscribeEvents) {
@@ -580,6 +768,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
         mode: form.mode,
         credentials: form.credentials,
         default_workspace_id: DEFAULT_CHANNEL_WORKSPACE_ID,
+        session: sessionDefaultsConfig ?? null,
       })
       .then(() => {
         toast.success((m?.platformConfigSaved ?? "{platform} configuration saved").replaceAll("{platform}", platformTitle));
@@ -744,6 +933,90 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
             </div>
           ))}
 
+        </div>
+
+        <div className="space-y-3 rounded-xl border border-dashed bg-muted/20 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="text-sm font-medium">
+                {m?.sessionDefaultsTitle ?? "Session Defaults"}
+              </div>
+              <div className="text-muted-foreground text-xs leading-5">
+                {m?.sessionDefaultsDescription
+                  ?? "为这个通道配置默认会话参数。只有显式填写的字段才会下发到运行时。"}
+              </div>
+            </div>
+            <SessionSummaryBadges items={sessionDefaultsSummary} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium">{m?.sessionAssistantIdLabel ?? "Assistant ID"}</div>
+              <Input
+                value={sessionDefaultsForm.assistant_id}
+                onChange={(event) =>
+                  setSessionDefaultsForm((prev) => ({
+                    ...prev,
+                    assistant_id: event.target.value,
+                  }))}
+                placeholder={m?.sessionAssistantIdPlaceholder ?? "留空表示使用 lead_agent"}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium">{m?.sessionRecursionLimitLabel ?? "Recursion Limit"}</div>
+              <Input
+                value={sessionDefaultsForm.recursion_limit}
+                onChange={(event) =>
+                  setSessionDefaultsForm((prev) => ({
+                    ...prev,
+                    recursion_limit: event.target.value.replace(/[^\d]/g, ""),
+                  }))}
+                inputMode="numeric"
+                placeholder={m?.sessionRecursionLimitPlaceholder ?? "留空表示不下发"}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium">{m?.sessionThinkingLabel ?? "Thinking"}</div>
+              <SessionBooleanSelect
+                value={sessionDefaultsForm.thinking_enabled}
+                onValueChange={(value) =>
+                  setSessionDefaultsForm((prev) => ({
+                    ...prev,
+                    thinking_enabled: value,
+                  }))}
+                inheritLabel={m?.sessionInheritOption ?? "继承"}
+                enabledLabel={m?.sessionEnabledOption ?? "启用"}
+                disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium">{m?.sessionPlanModeLabel ?? "Plan Mode"}</div>
+              <SessionBooleanSelect
+                value={sessionDefaultsForm.is_plan_mode}
+                onValueChange={(value) =>
+                  setSessionDefaultsForm((prev) => ({
+                    ...prev,
+                    is_plan_mode: value,
+                  }))}
+                inheritLabel={m?.sessionInheritOption ?? "继承"}
+                enabledLabel={m?.sessionEnabledOption ?? "启用"}
+                disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium">{m?.sessionSubagentLabel ?? "Subagent"}</div>
+              <SessionBooleanSelect
+                value={sessionDefaultsForm.subagent_enabled}
+                onValueChange={(value) =>
+                  setSessionDefaultsForm((prev) => ({
+                    ...prev,
+                    subagent_enabled: value,
+                  }))}
+                inheritLabel={m?.sessionInheritOption ?? "继承"}
+                enabledLabel={m?.sessionEnabledOption ?? "启用"}
+                disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -1017,9 +1290,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                   {authorizedUsers.map((item) => (
                     <div
                       key={item.id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/70 p-3 shadow-sm"
                     >
-                      <div className="min-w-0">
+                      <div className="min-w-0 space-y-2">
                         <div className="truncate text-sm font-medium">
                           {item.external_user_name ?? item.external_user_id}
                         </div>
@@ -1031,8 +1304,26 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                           })} · {m?.grantedAtLabel ?? "Granted at"}:
                           {formatDateTime(item.granted_at, locale, m?.unknownTimeLabel ?? "Unknown time")}
                         </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <Badge variant="outline" className="rounded-full px-2 py-0.5">
+                            {m?.sessionOverrideBadge ?? "Session Override"}
+                          </Badge>
+                          <SessionSummaryBadges
+                            items={describeSessionConfig(item.session_override, sessionSummaryOptions)}
+                          />
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingAuthorizedUser(item);
+                            setAuthorizedUserSessionForm(sessionConfigToFormState(item.session_override));
+                          }}
+                        >
+                          {m?.sessionOverrideAction ?? "Session Override"}
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
@@ -1067,6 +1358,159 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
           </div>
         </div>
       </section>
+
+      <Dialog
+        open={editingAuthorizedUser !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingAuthorizedUser(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[720px]">
+          <DialogHeader>
+            <DialogTitle>{m?.sessionOverrideDialogTitle ?? "Edit Session Override"}</DialogTitle>
+            <DialogDescription>
+              {m?.sessionOverrideDialogDescription
+                ?? "为授权用户配置更高优先级的会话参数。留空或选择继承表示回退到通道默认值。"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border bg-muted/20 p-3">
+              <div className="text-sm font-medium">
+                {editingAuthorizedUser?.external_user_name ?? editingAuthorizedUser?.external_user_id ?? "-"}
+              </div>
+              <div className="text-muted-foreground mt-1 text-xs">
+                {m?.sessionOverrideCurrentLabel ?? "Current override"}
+              </div>
+              <div className="mt-2">
+                <SessionSummaryBadges
+                  items={describeSessionConfig(editingAuthorizedUser?.session_override, sessionSummaryOptions)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{m?.sessionAssistantIdLabel ?? "Assistant ID"}</div>
+                <Input
+                  value={authorizedUserSessionForm.assistant_id}
+                  onChange={(event) =>
+                    setAuthorizedUserSessionForm((prev) => ({
+                      ...prev,
+                      assistant_id: event.target.value,
+                    }))}
+                  placeholder={m?.sessionAssistantIdPlaceholder ?? "留空表示继承"}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{m?.sessionRecursionLimitLabel ?? "Recursion Limit"}</div>
+                <Input
+                  value={authorizedUserSessionForm.recursion_limit}
+                  onChange={(event) =>
+                    setAuthorizedUserSessionForm((prev) => ({
+                      ...prev,
+                      recursion_limit: event.target.value.replace(/[^\d]/g, ""),
+                    }))}
+                  inputMode="numeric"
+                  placeholder={m?.sessionRecursionLimitPlaceholder ?? "留空表示继承"}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{m?.sessionThinkingLabel ?? "Thinking"}</div>
+                <SessionBooleanSelect
+                  value={authorizedUserSessionForm.thinking_enabled}
+                  onValueChange={(value) =>
+                    setAuthorizedUserSessionForm((prev) => ({
+                      ...prev,
+                      thinking_enabled: value,
+                    }))}
+                  inheritLabel={m?.sessionInheritOption ?? "继承"}
+                  enabledLabel={m?.sessionEnabledOption ?? "启用"}
+                  disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{m?.sessionPlanModeLabel ?? "Plan Mode"}</div>
+                <SessionBooleanSelect
+                  value={authorizedUserSessionForm.is_plan_mode}
+                  onValueChange={(value) =>
+                    setAuthorizedUserSessionForm((prev) => ({
+                      ...prev,
+                      is_plan_mode: value,
+                    }))}
+                  inheritLabel={m?.sessionInheritOption ?? "继承"}
+                  enabledLabel={m?.sessionEnabledOption ?? "启用"}
+                  disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{m?.sessionSubagentLabel ?? "Subagent"}</div>
+                <SessionBooleanSelect
+                  value={authorizedUserSessionForm.subagent_enabled}
+                  onValueChange={(value) =>
+                    setAuthorizedUserSessionForm((prev) => ({
+                      ...prev,
+                      subagent_enabled: value,
+                    }))}
+                  inheritLabel={m?.sessionInheritOption ?? "继承"}
+                  enabledLabel={m?.sessionEnabledOption ?? "启用"}
+                  disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={updateAuthorizedUserSessionOverride.isPending}
+              onClick={() => {
+                setAuthorizedUserSessionForm(DEFAULT_SESSION_FORM_STATE);
+              }}
+            >
+              {m?.sessionResetAction ?? "恢复继承"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditingAuthorizedUser(null)}
+              disabled={updateAuthorizedUserSessionOverride.isPending}
+            >
+              {m?.cancelAction ?? "Cancel"}
+            </Button>
+            <Button
+              type="button"
+              disabled={editingAuthorizedUser == null || updateAuthorizedUserSessionOverride.isPending}
+              onClick={() => {
+                if (editingAuthorizedUser == null) {
+                  return;
+                }
+                void updateAuthorizedUserSessionOverride
+                  .mutateAsync({
+                    userId: editingAuthorizedUser.id,
+                    payload: sessionFormToConfig(authorizedUserSessionForm) ?? {},
+                  })
+                  .then(() => {
+                    toast.success(m?.sessionOverrideSavedToast ?? "Session override saved");
+                    setEditingAuthorizedUser(null);
+                  })
+                  .catch((error) => {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : (m?.sessionOverrideSaveFailedToast ?? "Failed to save session override"),
+                    );
+                  });
+              }}
+            >
+              {updateAuthorizedUserSessionOverride.isPending
+                ? <Loader2Icon className="size-4 animate-spin" />
+                : <ShieldCheckIcon className="size-4" />}
+              {m?.saveAndApplyAction ?? "Save & Apply"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

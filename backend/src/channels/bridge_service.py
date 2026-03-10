@@ -1190,19 +1190,61 @@ class ChannelAgentBridgeService:
             workspace_id=workspace_id,
         )
 
-    def _run_agent(
+    def _resolve_run_settings(
         self,
         *,
-        platform: str,
+        integration: dict[str, Any] | None,
+        authorized_user: dict[str, Any] | None,
         thread_id: str,
         workspace_id: str,
         incoming: IncomingWebhookEvent,
-    ) -> ChannelReplyBundle:
-        if not incoming.text:
-            raise ValueError("incoming text is empty")
+    ) -> tuple[str, dict[str, Any] | None, dict[str, Any]]:
+        assistant_id = "lead_agent"
+        run_config: dict[str, Any] = {}
+        run_context: dict[str, Any] = {
+            "thread_id": thread_id,
+            "workspace_id": workspace_id,
+            "user_id": incoming.external_user_id,
+            "locale": "zh-CN",
+        }
 
-        payload = {
-            "assistant_id": "lead_agent",
+        for layer in (
+            integration.get("session") if isinstance(integration, dict) else None,
+            authorized_user.get("session_override") if isinstance(authorized_user, dict) else None,
+        ):
+            if not isinstance(layer, dict):
+                continue
+            candidate_assistant_id = _safe_text(layer.get("assistant_id"))
+            if candidate_assistant_id:
+                assistant_id = candidate_assistant_id
+
+            raw_config = layer.get("config")
+            if isinstance(raw_config, dict):
+                recursion_limit = raw_config.get("recursion_limit")
+                if isinstance(recursion_limit, int) and recursion_limit > 0:
+                    run_config["recursion_limit"] = recursion_limit
+
+            raw_context = layer.get("context")
+            if isinstance(raw_context, dict):
+                for key in ("thinking_enabled", "is_plan_mode", "subagent_enabled"):
+                    value = raw_context.get(key)
+                    if isinstance(value, bool):
+                        run_context[key] = value
+
+        return assistant_id, run_config or None, run_context
+
+    def _build_run_payload(
+        self,
+        *,
+        platform: str,
+        incoming: IncomingWebhookEvent,
+        assistant_id: str,
+        run_config: dict[str, Any] | None,
+        run_context: dict[str, Any],
+        stream_mode: list[str] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "assistant_id": assistant_id,
             "input": {
                 "messages": [
                     {
@@ -1216,12 +1258,7 @@ class ChannelAgentBridgeService:
                     }
                 ]
             },
-            "context": {
-                "thread_id": thread_id,
-                "workspace_id": workspace_id,
-                "user_id": incoming.external_user_id,
-                "locale": "zh-CN",
-            },
+            "context": run_context,
             "metadata": {
                 "channel_platform": platform,
                 "channel_chat_id": incoming.chat_id,
@@ -1230,6 +1267,32 @@ class ChannelAgentBridgeService:
                 "channel_event_id": incoming.event_id,
             },
         }
+        if run_config:
+            payload["config"] = run_config
+        if stream_mode is not None:
+            payload["stream_mode"] = stream_mode
+        return payload
+
+    def _run_agent(
+        self,
+        *,
+        platform: str,
+        thread_id: str,
+        incoming: IncomingWebhookEvent,
+        assistant_id: str,
+        run_config: dict[str, Any] | None,
+        run_context: dict[str, Any],
+    ) -> ChannelReplyBundle:
+        if not incoming.text:
+            raise ValueError("incoming text is empty")
+
+        payload = self._build_run_payload(
+            platform=platform,
+            incoming=incoming,
+            assistant_id=assistant_id,
+            run_config=run_config,
+            run_context=run_context,
+        )
         with httpx.Client(timeout=self._run_timeout_seconds) as client:
             response = client.post(
                 f"{self._langgraph_base_url}/threads/{thread_id}/runs/wait",
@@ -1251,43 +1314,23 @@ class ChannelAgentBridgeService:
         *,
         platform: str,
         thread_id: str,
-        workspace_id: str,
         incoming: IncomingWebhookEvent,
+        assistant_id: str,
+        run_config: dict[str, Any] | None,
+        run_context: dict[str, Any],
         on_partial: Callable[[str], None] | None = None,
     ) -> ChannelReplyBundle:
         if not incoming.text:
             raise ValueError("incoming text is empty")
 
-        payload = {
-            "assistant_id": "lead_agent",
-            "input": {
-                "messages": [
-                    {
-                        "type": "human",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": incoming.text,
-                            }
-                        ],
-                    }
-                ]
-            },
-            "stream_mode": ["messages", "values", "custom"],
-            "context": {
-                "thread_id": thread_id,
-                "workspace_id": workspace_id,
-                "user_id": incoming.external_user_id,
-                "locale": "zh-CN",
-            },
-            "metadata": {
-                "channel_platform": platform,
-                "channel_chat_id": incoming.chat_id,
-                "channel_external_user_id": incoming.external_user_id,
-                "channel_external_user_name": incoming.external_user_name,
-                "channel_event_id": incoming.event_id,
-            },
-        }
+        payload = self._build_run_payload(
+            platform=platform,
+            incoming=incoming,
+            assistant_id=assistant_id,
+            run_config=run_config,
+            run_context=run_context,
+            stream_mode=["messages", "values", "custom"],
+        )
 
         event_name: str | None = None
         data_lines: list[str] = []
@@ -2585,6 +2628,13 @@ class ChannelAgentBridgeService:
         )
         thread_id = _safe_text(thread_mapping.get("thread_id"))
         client_thread_id = _normalize_thread_id_for_client(thread_id)
+        assistant_id, run_config, run_context = self._resolve_run_settings(
+            integration=integration,
+            authorized_user=authorized_user,
+            thread_id=thread_id,
+            workspace_id=workspace_id,
+            incoming=incoming,
+        )
 
         log = self._repo.create_message_log(
             platform,
@@ -2685,8 +2735,10 @@ class ChannelAgentBridgeService:
                 reply_bundle = self._run_agent_stream(
                     platform=platform,
                     thread_id=thread_id,
-                    workspace_id=workspace_id,
                     incoming=incoming,
+                    assistant_id=assistant_id,
+                    run_config=run_config,
+                    run_context=run_context,
                     on_partial=_on_partial,
                 )
                 reply_text = reply_bundle.reply_text
@@ -2700,8 +2752,10 @@ class ChannelAgentBridgeService:
                     reply_bundle = self._run_agent(
                         platform=platform,
                         thread_id=thread_id,
-                        workspace_id=workspace_id,
                         incoming=incoming,
+                        assistant_id=assistant_id,
+                        run_config=run_config,
+                        run_context=run_context,
                     )
                     reply_text = reply_bundle.reply_text
                     renderer.fail(f"langgraph stream fallback to wait-run: {stream_error}")

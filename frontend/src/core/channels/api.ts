@@ -4,6 +4,7 @@ import type {
   ChannelAuthorizedUser,
   ChannelAuthorizedUserRevokePayload,
   ChannelAuthorizedUserRevokeResult,
+  ChannelAuthorizedUserSessionOverridePayload,
   ChannelConfig,
   ChannelConfigUpsertPayload,
   ChannelConnectionTestPayload,
@@ -86,7 +87,6 @@ export function getChannelRuntimeStatus(platform: ChannelPlatform) {
         return (await response.json()) as ChannelRuntimeStatus;
       }
 
-      // Compatibility fallback for older backends without runtime endpoint.
       if (response.status === 404) {
         const config = await getChannelConfig(platform);
         return {
@@ -202,5 +202,21 @@ export function revokeAuthorizedUser(
       body: JSON.stringify(payload),
     },
     "Failed to revoke authorized user",
+  );
+}
+
+export function updateAuthorizedUserSessionOverride(
+  platform: ChannelPlatform,
+  userId: number,
+  payload: ChannelAuthorizedUserSessionOverridePayload,
+) {
+  return requestJSON<ChannelAuthorizedUser>(
+    `${getBackendBaseURL()}/api/channels/${platform}/authorized-users/${userId}/session-override`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+    "Failed to update authorized user session override",
   );
 }

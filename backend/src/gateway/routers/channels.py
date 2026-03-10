@@ -27,6 +27,7 @@ from src.gateway.schemas.channels import (
     ChannelAuthorizedUserResponse,
     ChannelAuthorizedUserRevokeRequest,
     ChannelAuthorizedUserRevokeResponse,
+    ChannelAuthorizedUserSessionOverrideUpdateRequest,
     ChannelAuthorizedUserWorkspaceUpdateRequest,
     ChannelConfigResponse,
     ChannelConfigUpsertRequest,
@@ -107,6 +108,7 @@ async def upsert_channel_config(
         mode=payload.mode,
         credentials={str(k): str(v) for k, v in payload.credentials.items()},
         default_workspace_id=payload.default_workspace_id,
+        session=payload.session.model_dump(exclude_none=True) if payload.session is not None else None,
     )
     manager = _runtime_manager(request)
     if manager is not None:
@@ -416,6 +418,38 @@ async def update_authorized_user_workspace(
         payload={
             "user_id": int(updated["id"]),
             "workspace_id": updated.get("workspace_id"),
+        },
+    )
+    return ChannelAuthorizedUserResponse(**updated)
+
+
+@router.post(
+    "/{platform}/authorized-users/{user_id}/session-override",
+    response_model=ChannelAuthorizedUserResponse,
+    summary="Update authorized user session override",
+)
+async def update_authorized_user_session_override(
+    platform: ChannelPlatform,
+    user_id: int,
+    payload: ChannelAuthorizedUserSessionOverrideUpdateRequest,
+    request: Request,
+) -> ChannelAuthorizedUserResponse:
+    repository = _repo()
+    try:
+        updated = repository.update_authorized_user_session_override(
+            platform,
+            user_id,
+            session_override=payload.model_dump(exclude_none=True),
+        )
+    except ChannelRepositoryNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _publish_channel_event(
+        request,
+        platform,
+        event_type="authorized_user_session_override_updated",
+        payload={
+            "user_id": int(updated["id"]),
+            "session_override": updated.get("session_override"),
         },
     )
     return ChannelAuthorizedUserResponse(**updated)
