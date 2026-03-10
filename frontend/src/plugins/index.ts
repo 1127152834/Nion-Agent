@@ -38,7 +38,7 @@ async function installBundledPluginIfMissing(
     throw new Error(`Failed to fetch bundled plugin ${bundled.id}: ${response.status}`);
   }
   const blob = await response.blob();
-  const filename = bundled.packageURL.split("/").pop() || `${bundled.id}.nwp`;
+  const filename = bundled.packageURL.split("/").pop() ?? `${bundled.id}.nwp`;
   const file = new File([blob], filename, { type: blob.type || "application/zip" });
   const installed = await installPlugin(file);
   existingById.set(installed.manifest.id, installed);

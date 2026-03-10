@@ -11,6 +11,7 @@ import {
 import { useWorkspaceLiveSync, useWorkspaceTree } from "@/core/artifacts";
 import { useI18n } from "@/core/i18n/hooks";
 import { useDesktopRuntime } from "@/core/platform/hooks";
+import { useInstalledPluginPackage } from "@/core/workbench";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +22,6 @@ import {
 } from "../artifacts";
 import { WorkbenchContainer } from "../artifacts/workbench-container";
 import { useThread } from "../messages/context";
-import { useInstalledPluginPackage } from "@/core/workbench";
 
 const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
