@@ -148,6 +148,25 @@ export interface PluginTestSpec {
   }>;
 }
 
+export interface WorkbenchPluginDocsManifest {
+  readme_path?: string;
+  demo_images?: string[];
+}
+
+export interface WorkbenchPluginVerificationManifest {
+  level?: "none" | "auto" | "auto_manual";
+  source_hash?: string;
+  verified_at?: string;
+}
+
+export interface WorkbenchPluginProvenanceManifest {
+  source?: "assistant" | "bundled" | "marketplace";
+}
+
+export interface WorkbenchPluginUIManifest {
+  surface?: "sidebar-slot";
+}
+
 /**
  * Plugin manifest v2 (from manifest.json)
  */
@@ -174,6 +193,10 @@ export interface WorkbenchPluginManifestV2 {
   fixtures?: string[];
   contributions?: WorkbenchContribution;
   testSpec?: PluginTestSpec;
+  docs?: WorkbenchPluginDocsManifest;
+  verification?: WorkbenchPluginVerificationManifest;
+  provenance?: WorkbenchPluginProvenanceManifest;
+  ui?: WorkbenchPluginUIManifest;
 }
 
 /**
@@ -202,4 +225,67 @@ export interface PluginTestReport {
   executedAt: string;
   summary: string;
   steps: PluginTestStepReport[];
+}
+
+export interface WorkbenchMarketplacePluginListItem {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  maintainer?: string | null;
+  tags: string[];
+  updatedAt?: string | null;
+  downloadUrl: string;
+  detailUrl: string;
+  docsSummary?: string | null;
+}
+
+export interface WorkbenchMarketplacePluginDetail {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  maintainer?: string | null;
+  tags: string[];
+  updatedAt?: string | null;
+  downloadUrl: string;
+  readmeMarkdown: string;
+  demoImageUrls: string[];
+}
+
+export interface PluginStudioSession {
+  sessionId: string;
+  pluginId: string;
+  pluginName: string;
+  description: string;
+  state: "draft" | "generated" | "auto_verified" | "manual_verified" | "packaged";
+  autoVerified: boolean;
+  manualVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+  readmeUrl?: string | null;
+  demoImageUrls: string[];
+  packageDownloadUrl?: string | null;
+}
+
+export interface PluginStudioAutoVerifyReportStep {
+  id: string;
+  passed: boolean;
+  message: string;
+}
+
+export interface PluginStudioAutoVerifyReport {
+  sessionId: string;
+  passed: boolean;
+  executedAt: string;
+  summary: string;
+  steps: PluginStudioAutoVerifyReportStep[];
+}
+
+export interface PluginStudioPackageResult {
+  sessionId: string;
+  pluginId: string;
+  filename: string;
+  packageDownloadUrl: string;
+  packagedAt: string;
 }

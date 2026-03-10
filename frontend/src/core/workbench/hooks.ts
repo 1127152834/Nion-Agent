@@ -10,6 +10,16 @@ import {
   uninstallPlugin,
   updateInstalledPluginMetadata,
 } from "./loader";
+import {
+  autoVerifyPluginStudioSession,
+  createPluginStudioSession,
+  downloadWorkbenchMarketplacePluginPackage,
+  generatePluginStudioSession,
+  getWorkbenchMarketplacePluginDetail,
+  listWorkbenchMarketplacePlugins,
+  manualVerifyPluginStudioSession,
+  packagePluginStudioSession,
+} from "./marketplace";
 import { getWorkbenchRegistry } from "./registry";
 import type { PluginTestReport } from "./types";
 
@@ -20,6 +30,8 @@ const workbenchKeys = {
   all: ["workbench"] as const,
   plugins: () => [...workbenchKeys.all, "plugins"] as const,
   plugin: (id: string) => [...workbenchKeys.plugins(), id] as const,
+  marketplace: () => [...workbenchKeys.all, "marketplace"] as const,
+  marketplaceDetail: (id: string) => [...workbenchKeys.marketplace(), "detail", id] as const,
 };
 
 /**
@@ -167,5 +179,83 @@ export function useTestInstalledPlugin() {
       queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
       queryClient.invalidateQueries({ queryKey: workbenchKeys.plugin(variables.pluginId) });
     },
+  });
+}
+
+export function useWorkbenchMarketplacePlugins() {
+  return useQuery({
+    queryKey: workbenchKeys.marketplace(),
+    queryFn: listWorkbenchMarketplacePlugins,
+  });
+}
+
+export function useWorkbenchMarketplacePluginDetail(pluginId: string | null) {
+  return useQuery({
+    queryKey: workbenchKeys.marketplaceDetail(pluginId ?? ""),
+    queryFn: () => getWorkbenchMarketplacePluginDetail(pluginId ?? ""),
+    enabled: Boolean(pluginId),
+  });
+}
+
+export function useInstallMarketplacePlugin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (pluginId: string) => {
+      const file = await downloadWorkbenchMarketplacePluginPackage(pluginId);
+      const installed = await installPlugin(file);
+      const plugin = await loadInstalledPlugin(installed.manifest.id);
+      const registry = getWorkbenchRegistry();
+      registry.register(plugin);
+      registry.registerInstalled(installed);
+      return installed;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
+      queryClient.invalidateQueries({ queryKey: workbenchKeys.marketplace() });
+    },
+  });
+}
+
+export function useCreatePluginStudioSession() {
+  return useMutation({
+    mutationFn: createPluginStudioSession,
+  });
+}
+
+export function useGeneratePluginStudioSession() {
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      description,
+    }: {
+      sessionId: string;
+      description?: string;
+    }) => generatePluginStudioSession(sessionId, { description }),
+  });
+}
+
+export function useAutoVerifyPluginStudioSession() {
+  return useMutation({
+    mutationFn: (sessionId: string) => autoVerifyPluginStudioSession(sessionId),
+  });
+}
+
+export function useManualVerifyPluginStudioSession() {
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      passed,
+      note,
+    }: {
+      sessionId: string;
+      passed: boolean;
+      note?: string;
+    }) => manualVerifyPluginStudioSession(sessionId, { passed, note }),
+  });
+}
+
+export function usePackagePluginStudioSession() {
+  return useMutation({
+    mutationFn: (sessionId: string) => packagePluginStudioSession(sessionId),
   });
 }

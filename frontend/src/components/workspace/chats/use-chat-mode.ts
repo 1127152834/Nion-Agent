@@ -17,7 +17,7 @@ export function useSpecificChatMode() {
 
     const mode = searchParams.get("mode");
     if (mode === "skill") return t.inputBox.createSkillPrompt;
-    if (mode === "workbench-plugin") return t.inputBox.createPluginPrompt;
+    if (mode === "workbench-plugin" || mode === "plugin-assistant") return t.inputBox.createPluginPrompt;
 
     return undefined;
   }, [

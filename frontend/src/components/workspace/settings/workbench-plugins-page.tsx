@@ -1,8 +1,10 @@
 "use client";
 
-import { CheckCircle2Icon, ChevronDownIcon, PackageIcon, SparklesIcon, TestTube2Icon, Trash2Icon, UploadIcon, XCircleIcon } from "lucide-react";
+import { CheckCircle2Icon, ChevronDownIcon, PackageIcon, SparklesIcon, TestTube2Icon, Trash2Icon, UploadIcon, XCircleIcon, XIcon } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -29,15 +31,18 @@ import {
 } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { WorkbenchModal } from "@/components/workspace/artifact-center/workbench-modal";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
-import { pathOfNewThread } from "@/core/threads/utils";
+import { pathOfNewThread, pathOfThread } from "@/core/threads/utils";
 import {
+  buildWorkbenchSlotRouteURL,
   ensurePluginTestThreadId,
   getInstalledPluginFiles,
   getInstalledPluginMetadataById,
+  useInstallMarketplacePlugin,
   useInstalledPlugins,
+  useWorkbenchMarketplacePluginDetail,
+  useWorkbenchMarketplacePlugins,
   useInstallPlugin,
   useTestInstalledPlugin,
   useUninstallPlugin,
@@ -106,31 +111,36 @@ function WorkbenchPluginsList({
     const decoded = decodeURIComponent(match[1]);
     return decoded === "new" ? undefined : decoded;
   }, [pathname]);
+  const activeAgentRoute = useMemo(() => {
+    const match = /\/workspace\/agents\/([^/]+)\/chats\/[^/?#]+/.exec(pathname);
+    if (!match?.[1]) {
+      return null;
+    }
+    return decodeURIComponent(match[1]);
+  }, [pathname]);
   const [filter, setFilter] = useState<string>("installed");
   const [pendingDeletePluginId, setPendingDeletePluginId] = useState<string | null>(null);
   const [manualTestLoading, setManualTestLoading] = useState(false);
-  const [manualTestState, setManualTestState] = useState<{
-    open: boolean;
-    threadId: string | null;
-    artifactPath: string | null;
-    pluginId: string | null;
-    targetKind: "file" | "directory" | "project";
-  }>({
-    open: false,
-    threadId: null,
-    artifactPath: null,
-    pluginId: null,
-    targetKind: "file",
-  });
+  const [selectedMarketplacePluginId, setSelectedMarketplacePluginId] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const { mutate: togglePlugin } = useTogglePlugin();
   const { mutate: uninstallPlugin, isPending: uninstallingPlugin } = useUninstallPlugin();
   const { mutate: installPlugin, isPending: installingPlugin } = useInstallPlugin();
+  const { mutate: installMarketplacePlugin, isPending: installingMarketplacePlugin } = useInstallMarketplacePlugin();
   const { mutate: testPlugin, isPending: testingPlugin } = useTestInstalledPlugin();
+  const {
+    data: marketplacePlugins,
+    isLoading: marketplaceLoading,
+    error: marketplaceError,
+  } = useWorkbenchMarketplacePlugins();
+  const {
+    data: marketplaceDetail,
+    isLoading: marketplaceDetailLoading,
+  } = useWorkbenchMarketplacePluginDetail(selectedMarketplacePluginId);
 
   const handleCreatePlugin = () => {
     onClose?.();
-    router.push(`${pathOfNewThread()}?mode=workbench-plugin`);
+    router.push(`${pathOfNewThread()}?mode=plugin-assistant`);
   };
 
   const handleUploadMenuClick = () => {
@@ -189,6 +199,13 @@ function WorkbenchPluginsList({
         );
       },
     });
+  };
+
+  const resolveThreadPath = (threadId: string) => {
+    if (activeAgentRoute) {
+      return `/workspace/agents/${encodeURIComponent(activeAgentRoute)}/chats/${encodeURIComponent(threadId)}`;
+    }
+    return pathOfThread(threadId);
   };
 
   const normalizePath = (path: string) => path.replace(/^\/+/, "");
@@ -337,22 +354,35 @@ function WorkbenchPluginsList({
       },
     );
 
-    // Always open a manual test session so users can interact with the plugin UI.
+    // Always open a manual test session in the right sidebar plugin slot.
     try {
       setManualTestLoading(true);
       const manual = await prepareManualTest(pluginId);
-      setManualTestState({
-        open: true,
-        threadId: manual.threadId,
-        artifactPath: manual.artifactPath,
+      const targetPath = resolveThreadPath(manual.threadId);
+      const targetURL = buildWorkbenchSlotRouteURL({
+        pathname: targetPath,
         pluginId: manual.pluginId,
+        artifactPath: manual.artifactPath,
         targetKind: manual.targetKind,
       });
+      onClose?.();
+      router.push(targetURL);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : copy.pluginTestRunFailed);
     } finally {
       setManualTestLoading(false);
     }
+  };
+
+  const handleInstallMarketplacePlugin = (pluginId: string, pluginName: string) => {
+    installMarketplacePlugin(pluginId, {
+      onSuccess: () => {
+        toast.success(copy.marketplaceInstallSuccess.replaceAll("{name}", pluginName));
+      },
+      onError: (error) => {
+        toast.error(error instanceof Error ? error.message : copy.marketplaceInstallFailed);
+      },
+    });
   };
 
   return (
@@ -364,7 +394,7 @@ function WorkbenchPluginsList({
               <TabsTrigger value="installed">
                 {copy.installed}
               </TabsTrigger>
-              <TabsTrigger value="marketplace" disabled>
+              <TabsTrigger value="marketplace">
                 {copy.marketplace}
               </TabsTrigger>
             </TabsList>
@@ -468,6 +498,101 @@ function WorkbenchPluginsList({
             </ItemActions>
           </Item>
         ))}
+      {filter === "marketplace" && (
+        <div className="flex flex-col gap-3">
+          {marketplaceLoading ? (
+            <div className="text-muted-foreground text-sm">{t.common.loading}</div>
+          ) : marketplaceError ? (
+            <div className="text-sm text-rose-600">{marketplaceError.message}</div>
+          ) : (marketplacePlugins?.length ?? 0) === 0 ? (
+            <div className="text-muted-foreground text-sm">{copy.marketplaceEmpty}</div>
+          ) : (
+            marketplacePlugins?.map((item) => (
+              <Item className="w-full" variant="outline" key={item.id}>
+                <ItemContent>
+                  <ItemTitle>
+                    <div className="flex items-center gap-2">
+                      <span>{item.name}</span>
+                      <span className="text-muted-foreground text-xs">v{item.version}</span>
+                    </div>
+                  </ItemTitle>
+                  <ItemDescription className="line-clamp-4">
+                    {item.description}
+                  </ItemDescription>
+                  {item.tags.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {item.tags.map((tag) => (
+                        <span
+                          key={`${item.id}:${tag}`}
+                          className="bg-muted inline-flex rounded px-1.5 py-0.5 text-[10px]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </ItemContent>
+                <ItemActions>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setSelectedMarketplacePluginId(item.id)}
+                  >
+                    {copy.marketplaceDetailAction}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={installingMarketplacePlugin}
+                    onClick={() => handleInstallMarketplacePlugin(item.id, item.name)}
+                  >
+                    {installingMarketplacePlugin ? copy.marketplaceInstalling : copy.marketplaceInstallAction}
+                  </Button>
+                </ItemActions>
+              </Item>
+            ))
+          )}
+
+          {selectedMarketplacePluginId ? (
+            <section className="rounded-lg border p-3">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h4 className="text-sm font-semibold">{copy.marketplaceDetailTitle}</h4>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => setSelectedMarketplacePluginId(null)}
+                >
+                  <XIcon className="size-4" />
+                </Button>
+              </div>
+              {marketplaceDetailLoading ? (
+                <div className="text-muted-foreground text-sm">{t.common.loading}</div>
+              ) : marketplaceDetail ? (
+                <div className="space-y-3">
+                  {marketplaceDetail.demoImageUrls.length > 0 ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {marketplaceDetail.demoImageUrls.map((url) => (
+                        <img
+                          key={url}
+                          src={url}
+                          alt={marketplaceDetail.name}
+                          className="h-auto w-full rounded border"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  <article className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {marketplaceDetail.readmeMarkdown}
+                    </ReactMarkdown>
+                  </article>
+                </div>
+              ) : (
+                <div className="text-muted-foreground text-sm">{copy.marketplaceDetailEmpty}</div>
+              )}
+            </section>
+          ) : null}
+        </div>
+      )}
       <ConfirmActionDialog
         open={pendingDeletePluginId !== null}
         onOpenChange={(open) => {
@@ -488,19 +613,6 @@ function WorkbenchPluginsList({
         onConfirm={handleConfirmDeletePlugin}
         confirmVariant="destructive"
       />
-      {manualTestState.threadId && manualTestState.artifactPath ? (
-        <WorkbenchModal
-          open={manualTestState.open}
-          onOpenChange={(open) => {
-            setManualTestState((prev) => ({ ...prev, open }));
-          }}
-          artifactPath={manualTestState.artifactPath}
-          threadId={manualTestState.threadId}
-          matchedPluginId={manualTestState.pluginId}
-          forcedPluginId={manualTestState.pluginId}
-          targetKind={manualTestState.targetKind}
-        />
-      ) : null}
     </div>
   );
 }

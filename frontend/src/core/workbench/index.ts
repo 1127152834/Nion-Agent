@@ -1,6 +1,8 @@
 export * from "./types";
 export * from "./registry";
 export * from "./loader";
+export * from "./marketplace";
+export * from "./slot-routing";
 export * from "./sdk";
 export * from "./hooks";
 export { getWorkbenchRegistry } from "./registry";

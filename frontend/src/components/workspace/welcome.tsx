@@ -53,7 +53,7 @@ export function Welcome({
     );
   }
 
-  if (searchParams.get("mode") === "workbench-plugin") {
+  if (searchParams.get("mode") === "workbench-plugin" || searchParams.get("mode") === "plugin-assistant") {
     return (
       <div
         className={cn(

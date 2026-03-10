@@ -633,6 +633,14 @@ export interface Translations {
       pluginDeleted: string;
       deleteFailed: string;
       noDescription: string;
+      marketplaceInstallAction: string;
+      marketplaceInstalling: string;
+      marketplaceInstallSuccess: string;
+      marketplaceInstallFailed: string;
+      marketplaceEmpty: string;
+      marketplaceDetailAction: string;
+      marketplaceDetailTitle: string;
+      marketplaceDetailEmpty: string;
       testPluginAction: string;
       pluginTestPassed: string;
       pluginTestFailed: string;
