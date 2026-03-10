@@ -25,6 +25,7 @@ from src.gateway.routers import (
     retrieval_models,
     rss,
     runtime_profile,
+    runtime_topology,
     scheduler,
     skills,
     suggestions,
@@ -117,8 +118,8 @@ API Gateway for Nion - A LangGraph-based AI agent backend with sandbox execution
 
 ### Architecture
 
-LangGraph requests are handled by nginx reverse proxy.
-This gateway provides custom endpoints for models, MCP configuration, skills, and artifacts.
+Gateway is the single backend facade for frontend HTTP traffic.
+It proxies LangGraph streaming requests and also provides custom endpoints for models, MCP configuration, skills, artifacts, workspace, and diagnostics.
         """,
         version="0.1.0",
         lifespan=lifespan,
@@ -161,6 +162,10 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
             {
                 "name": "agents",
                 "description": "Create and manage custom agents with per-agent config and prompts",
+            },
+            {
+                "name": "runtime",
+                "description": "Inspect runtime topology and active network facade configuration",
             },
             {
                 "name": "rss",
@@ -248,6 +253,9 @@ This gateway provides custom endpoints for models, MCP configuration, skills, an
 
     # Runtime profile API is mounted at /api/threads/{thread_id}/runtime-profile
     app.include_router(runtime_profile.router)
+
+    # Runtime topology API is mounted at /api/runtime/topology
+    app.include_router(runtime_topology.router)
 
     # Agents API is mounted at /api/agents
     app.include_router(agents.router)

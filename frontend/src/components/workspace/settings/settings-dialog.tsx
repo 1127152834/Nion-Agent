@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ActivityIcon,
   BellIcon,
   InfoIcon,
   BrainIcon,
@@ -28,6 +29,7 @@ import { MemorySettingsPage } from "@/components/workspace/settings/memory-setti
 import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
 import { RetrievalSettingsPage } from "@/components/workspace/settings/retrieval-settings-page";
+import { RuntimeTopologySettingsPage } from "@/components/workspace/settings/runtime-topology-settings-page";
 import { SandboxSettingsPage } from "@/components/workspace/settings/sandbox-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
@@ -44,6 +46,7 @@ type SettingsSection =
   | "channels"
   | "skills"
   | "sandbox"
+  | "diagnostics"
   | "notification"
   | "workbench-plugins"
   | "about";
@@ -84,6 +87,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
         icon: BellIcon,
       },
       {
+        id: "diagnostics",
+        label: t.settings.sections.diagnostics,
+        icon: ActivityIcon,
+      },
+      {
         id: "memory",
         label: t.settings.sections.memory,
         icon: BrainIcon,
@@ -106,6 +114,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
     [
       t.settings.sections.appearance,
       t.settings.models?.title,
+      t.settings.sections.notification,
+      t.settings.sections.diagnostics,
       t.settings.sections.memory,
       t.settings.sections.embedding,
       t.settings.retrieval?.title,
@@ -114,7 +124,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.sections.skills,
       t.settings.workbenchPlugins?.title,
       t.settings.sandbox?.title,
-      t.settings.sections.notification,
       t.settings.sections.about,
       locale,
     ],
@@ -183,6 +192,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               )}
               {activeSection === "sandbox" && <SandboxSettingsPage />}
               {activeSection === "notification" && <NotificationSettingsPage />}
+              {activeSection === "diagnostics" && <RuntimeTopologySettingsPage />}
               {activeSection === "about" && <AboutSettingsPage />}
             </div>
           </ScrollArea>

@@ -460,6 +460,7 @@ export interface Translations {
       channels: string;
       skills: string;
       notification: string;
+      diagnostics: string;
       about: string;
     };
     validation: {
@@ -549,6 +550,32 @@ export interface Translations {
     sandbox: {
       title: string;
       description: string;
+    };
+    diagnostics: {
+      title: string;
+      description: string;
+      gatewayFacadeBadge: string;
+      refresh: string;
+      frontendTitle: string;
+      frontendDescription: string;
+      platformType: string;
+      windowOrigin: string;
+      backendBaseUrl: string;
+      langgraphBaseUrl: string;
+      gatewayTitle: string;
+      gatewayDescription: string;
+      loading: string;
+      unavailable: string;
+      runtimeMode: string;
+      gatewayHost: string;
+      gatewayPort: string;
+      gatewayFacadePath: string;
+      langgraphUpstream: string;
+      frontendAllowedOrigins: string;
+      corsRegex: string;
+      browserShouldUseGatewayFacade: string;
+      booleanTrue: string;
+      booleanFalse: string;
     };
     retrieval: Record<string, any>;
     skills: {
