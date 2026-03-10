@@ -49,10 +49,12 @@ export function ArtifactFileDetail({
   className,
   filepath: filepathFromProps,
   threadId,
+  disableWorkbench = false,
 }: {
   className?: string;
   filepath: string;
   threadId: string;
+  disableWorkbench?: boolean;
 }) {
   const { t } = useI18n();
   const installSkillFailedText = t.artifacts.fileDetail.installSkillFailed;
@@ -125,6 +127,32 @@ export function ArtifactFileDetail({
       setIsInstalling(false);
     }
   }, [threadId, filepath, isInstalling, installSkillFailedText]);
+
+  const detailContent = (
+    <>
+      {isSupportPreview &&
+        viewMode === "preview" &&
+        (language === "markdown" || language === "html") && (
+        <ArtifactFilePreview
+          content={displayContent}
+          language={language ?? "text"}
+        />
+      )}
+      {isCodeFile && viewMode === "code" && (
+        <CodeEditor
+          className="size-full resize-none rounded-none border-none"
+          value={displayContent ?? ""}
+          readonly
+        />
+      )}
+      {!isCodeFile && (
+        <iframe
+          className="size-full"
+          src={urlOfArtifact({ filepath, threadId, isMock })}
+        />
+      )}
+    </>
+  );
 
   return (
     <Artifact className={cn(className)}>
@@ -238,29 +266,13 @@ export function ArtifactFileDetail({
         </div>
       </ArtifactHeader>
       <ArtifactContent className="p-0">
-        <WorkbenchContainer filepath={filepath} threadId={threadId}>
-          {isSupportPreview &&
-            viewMode === "preview" &&
-            (language === "markdown" || language === "html") && (
-              <ArtifactFilePreview
-                content={displayContent}
-                language={language ?? "text"}
-              />
-            )}
-          {isCodeFile && viewMode === "code" && (
-            <CodeEditor
-              className="size-full resize-none rounded-none border-none"
-              value={displayContent ?? ""}
-              readonly
-            />
-          )}
-          {!isCodeFile && (
-            <iframe
-              className="size-full"
-              src={urlOfArtifact({ filepath, threadId, isMock })}
-            />
-          )}
-        </WorkbenchContainer>
+        {disableWorkbench ? (
+          detailContent
+        ) : (
+          <WorkbenchContainer filepath={filepath} threadId={threadId}>
+            {detailContent}
+          </WorkbenchContainer>
+        )}
       </ArtifactContent>
     </Artifact>
   );
