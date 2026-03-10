@@ -164,6 +164,21 @@ export interface Translations {
     scheduler: string;
     bulkDeleteTitle: string;
     bulkDeleteDescription: string;
+    bulkDeleteSuccess: string;
+    bulkDeletePartialFailure: string;
+    bulkDeleteFailure: string;
+    deleteChatFailed: string;
+    selectedChatsCount: string;
+    cancelManageChats: string;
+    manageChats: string;
+    selectAllChats: string;
+    clearChatSelection: string;
+    deleteSelectedChats: string;
+    moreSelectedChats: string;
+    deleteCurrentChatInSelectionDescription: string;
+    deleteCurrentChatInSelectionTitle: string;
+    deleteCurrentChatTitle: string;
+    deleteCurrentChatDescription: string;
   };
 
   // Agents

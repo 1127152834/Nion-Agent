@@ -306,11 +306,11 @@ export function RecentChatList() {
         }
 
         if (failedCount === 0) {
-          toast.success(t.sidebar.bulkDeleteSuccess(successCount));
+          toast.success(t.sidebar.bulkDeleteSuccess);
         } else if (successCount > 0) {
-          toast.error(t.sidebar.bulkDeletePartialFailure(successCount, failedCount));
+          toast.error(t.sidebar.bulkDeletePartialFailure);
         } else {
-          toast.error(t.sidebar.bulkDeleteFailed);
+          toast.error(t.sidebar.bulkDeleteFailure);
         }
 
         if (failedCount === 0) {
@@ -322,7 +322,7 @@ export function RecentChatList() {
           setBatchDeleteDialogOpen(false);
         }
       } catch {
-        toast.error(t.sidebar.bulkDeleteFailed);
+        toast.error(t.sidebar.bulkDeleteFailure);
       } finally {
         setIsBatchDeleting(false);
       }
@@ -413,7 +413,7 @@ export function RecentChatList() {
                   variant="secondary"
                   className="rounded-full border border-sidebar-border bg-sidebar-accent/70 px-2 py-0.5 text-[10px] font-medium"
                 >
-                  {t.sidebar.selectedChatsCount(selectedCount)}
+                  {selectedCount}
                 </Badge>
               ) : null}
             </div>
@@ -683,12 +683,12 @@ export function RecentChatList() {
             </div>
             {selectedCount > 6 ? (
               <p className="text-muted-foreground text-xs">
-                + {t.sidebar.moreSelectedChats(selectedCount - 6)}
+                + {selectedCount - 6} {t.sidebar.moreSelectedChats}
               </p>
             ) : null}
             {currentThreadId && selectedThreadIdSet.has(currentThreadId) ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs leading-5 text-amber-900 dark:text-amber-100">
-                {t.sidebar.deleteCurrentChatInSelectionDescription(selectedCount)}
+                {t.sidebar.deleteCurrentChatInSelectionDescription}
               </div>
             ) : null}
           </div>
@@ -735,16 +735,12 @@ export function RecentChatList() {
           <DialogHeader>
             <DialogTitle>
               {currentThreadDeleteIntent?.kind === "batch"
-                ? t.sidebar.deleteCurrentChatInSelectionTitle(
-                    currentThreadDeleteIntent.threadIds.length,
-                  )
+                ? t.sidebar.deleteCurrentChatInSelectionTitle
                 : t.sidebar.deleteCurrentChatTitle}
             </DialogTitle>
             <DialogDescription>
               {currentThreadDeleteIntent?.kind === "batch"
-                ? t.sidebar.deleteCurrentChatInSelectionDescription(
-                    currentThreadDeleteIntent.threadIds.length,
-                  )
+                ? t.sidebar.deleteCurrentChatInSelectionDescription
                 : t.sidebar.deleteCurrentChatDescription}
             </DialogDescription>
           </DialogHeader>

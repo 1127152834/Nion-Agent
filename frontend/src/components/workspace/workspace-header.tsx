@@ -30,29 +30,37 @@ export function WorkspaceHeader({ className }: { className?: string }) {
     <>
       <div
         className={cn(
-          "group/workspace-header flex h-12 flex-col justify-center",
+          "group/workspace-header flex h-16 flex-col justify-center cursor-move transition-all duration-200 hover:bg-gradient-to-b hover:from-muted/40 hover:to-muted/20",
           className,
         )}
-        style={
-          titlebarInset > 0
+        style={{
+          WebkitAppRegion: "drag",
+          ...(titlebarInset > 0
             ? {
                 paddingTop: `${titlebarInset}px`,
-                height: `${48 + titlebarInset}px`,
+                height: `${64 + titlebarInset}px`,
               }
-            : undefined
-        }
+            : {}),
+        } as React.CSSProperties}
       >
         {isCollapsed ? (
           <div className="group-has-data-[collapsible=icon]/sidebar-wrapper:-translate-y flex w-full cursor-pointer items-center justify-center">
             <div className="text-primary block pt-1 text-lg leading-none font-serif tracking-[0.08em] group-hover/workspace-header:hidden">
               NION
             </div>
-            <SidebarTrigger className="hidden group-hover/workspace-header:block" />
+            <SidebarTrigger
+              className="hidden group-hover/workspace-header:block"
+              style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+            />
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2">
             {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ? (
-              <Link href="/" className="text-primary ml-2 font-serif">
+              <Link
+                href="/"
+                className="text-primary ml-2 font-serif"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
                 Nion
               </Link>
             ) : (
@@ -60,7 +68,7 @@ export function WorkspaceHeader({ className }: { className?: string }) {
                 Nion
               </div>
             )}
-            <SidebarTrigger />
+            <SidebarTrigger style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties} />
           </div>
         )}
       </div>

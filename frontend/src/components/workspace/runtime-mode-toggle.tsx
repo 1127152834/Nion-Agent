@@ -120,12 +120,8 @@ export function RuntimeModeToggle({
         : copy.hostLabel;
 
   return (
-    <div className={cn("relative inline-flex min-w-[250px] max-w-full items-center justify-center px-5 pt-3 pb-2 sm:min-w-[290px]", className)}>
-      <div className="pointer-events-none absolute inset-x-10 bottom-1 h-10 rounded-full bg-[radial-gradient(circle_at_center,rgba(146,198,170,0.28),transparent_72%)] blur-2xl" />
-      <div className="pointer-events-none absolute inset-x-12 top-4 h-16 rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.55),rgba(255,255,255,0.08),rgba(255,255,255,0.55))] opacity-60 blur-xl" />
-
-      <div className="relative inline-flex items-center justify-center rounded-[2rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(246,242,233,0.78))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_24px_44px_-30px_rgba(69,61,44,0.36)] ring-1 ring-black/5">
-        <div className="relative inline-grid grid-cols-2 gap-1 rounded-[1.55rem] bg-[linear-gradient(180deg,rgba(250,248,243,0.94),rgba(239,234,225,0.9))] p-1.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.92),inset_0_-1px_2px_rgba(102,88,63,0.08)]">
+    <div className={cn("relative inline-flex min-w-[250px] max-w-full items-center justify-center", className)}>
+      <div className="relative inline-grid grid-cols-2 gap-1 rounded-[1.55rem] bg-[linear-gradient(180deg,rgba(250,248,243,0.94),rgba(239,234,225,0.9))] p-1.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.92),inset_0_-1px_2px_rgba(102,88,63,0.08)]">
           <div
             className={cn(
               "pointer-events-none absolute top-1.5 bottom-1.5 left-1.5 w-[calc(50%-7px)] rounded-[1.2rem] blur-md transition-transform duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -181,7 +177,6 @@ export function RuntimeModeToggle({
             </button>
           </Tooltip>
         </div>
-      </div>
 
       <Tooltip
         side="top"
@@ -209,9 +204,9 @@ export function RuntimeModeToggle({
         <button
           type="button"
           aria-label={copy.tipAriaLabel}
-          className="absolute top-0 right-0 z-20 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-950 text-white shadow-[0_14px_24px_-16px_rgba(0,0,0,0.95)] transition-transform duration-200 hover:scale-[1.04] focus-visible:ring-2 focus-visible:ring-zinc-950/35 focus-visible:outline-none"
+          className="absolute -top-1 -right-1 z-20 inline-flex size-5 items-center justify-center rounded-full bg-zinc-950 text-white shadow-[0_8px_16px_-8px_rgba(0,0,0,0.85)] transition-all duration-200 hover:scale-110 hover:shadow-[0_12px_20px_-10px_rgba(0,0,0,0.95)] focus-visible:ring-2 focus-visible:ring-zinc-950/35 focus-visible:outline-none"
         >
-          <CircleHelpIcon className="size-3.5" />
+          <CircleHelpIcon className="size-3" />
         </button>
       </Tooltip>
     </div>

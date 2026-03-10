@@ -25,7 +25,6 @@ export function NewChatStage({
       )}
     >
       <div className="pointer-events-none absolute inset-x-[14%] top-10 h-28 rounded-full bg-[radial-gradient(circle_at_center,rgba(152,209,176,0.22),rgba(152,209,176,0.08)_32%,transparent_72%)] blur-3xl" />
-      <div className="pointer-events-none absolute inset-x-[24%] top-2 h-px bg-gradient-to-r from-transparent via-foreground/10 to-transparent" />
       <div className="pointer-events-none absolute inset-x-[30%] top-30 h-20 rounded-full bg-[radial-gradient(circle_at_center,rgba(215,188,145,0.18),transparent_74%)] blur-2xl" />
 
       <div className="relative z-10 flex w-full flex-col items-center gap-8 sm:gap-10">
