@@ -19,12 +19,25 @@ class MemoryRegistry:
             raise KeyError(f"Unknown memory provider: {name}") from exc
 
     def get_default(self) -> MemoryProvider:
-        return self.get("v2-compatible")
+        from src.config.memory_config import get_memory_config
+
+        config = get_memory_config()
+        provider_name = config.provider
+        return self.get(provider_name)
 
 
 def _build_default_registry() -> MemoryRegistry:
     registry = MemoryRegistry()
+
+    # V2 compatible provider
     registry.register(V2CompatibleMemoryProvider(runtime=V2CompatibleMemoryRuntime()))
+
+    # Structured FS provider
+    from src.agents.memory.structured_provider import StructuredFsProvider
+    from src.agents.memory.structured_runtime import StructuredFsRuntime
+
+    registry.register(StructuredFsProvider(runtime=StructuredFsRuntime()))
+
     return registry
 
 

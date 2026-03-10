@@ -168,6 +168,14 @@ class MemoryConfig(BaseModel):
         le=8000,
         description="Maximum tokens to use for memory injection",
     )
+    provider: str = Field(
+        default="v2-compatible",
+        description="Memory provider to use: v2-compatible | structured-fs",
+    )
+    structured_enabled: bool = Field(
+        default=False,
+        description="Whether to enable structured memory storage",
+    )
 
 
 # Global configuration instance

@@ -59,6 +59,29 @@ class Paths:
         return self.base_dir / "memory.json"
 
     @property
+    def structured_memory_root(self) -> Path:
+        """Root directory for structured memory: `{base_dir}/memory/`."""
+        return self.base_dir / "memory"
+
+    @property
+    def memory_overview_file(self) -> Path:
+        """Overview file: `{memory_root}/MEMORY.md`."""
+        return self.structured_memory_root / "MEMORY.md"
+
+    @property
+    def memory_manifest_file(self) -> Path:
+        """Manifest file: `{memory_root}/index/manifest.json`."""
+        return self.structured_memory_root / "index" / "manifest.json"
+
+    def memory_day_file(self, date: str) -> Path:
+        """Day file: `{memory_root}/memory/YYYY-MM-DD.md`."""
+        return self.structured_memory_root / "memory" / f"{date}.md"
+
+    def memory_snapshot_dir(self, timestamp: str) -> Path:
+        """Snapshot directory: `{memory_root}/snapshots/memory-v2-{timestamp}/`."""
+        return self.structured_memory_root / "snapshots" / f"memory-v2-{timestamp}"
+
+    @property
     def user_md_file(self) -> Path:
         """Path to the global user profile file: `{base_dir}/USER.md`."""
         return self.base_dir / "USER.md"

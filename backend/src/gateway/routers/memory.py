@@ -200,3 +200,63 @@ async def get_memory_status() -> MemoryStatusResponse:
         ),
         data=MemoryResponse(**memory_data),
     )
+
+
+@router.get(
+    "/memory/usage",
+    summary="Get Memory Usage Statistics",
+    description="Get usage statistics for structured memory storage.",
+)
+async def get_memory_usage() -> dict:
+    """Get memory usage statistics.
+
+    Returns:
+        Dictionary with usage statistics including entry counts and storage size.
+    """
+    provider = get_default_memory_provider()
+    if hasattr(provider, "_runtime") and hasattr(provider._runtime, "_read_manifest"):
+        from src.agents.memory.maintenance import get_usage_stats
+
+        return get_usage_stats(provider._runtime)
+
+    return {"error": "Usage stats not available for current provider"}
+
+
+@router.post(
+    "/memory/compact",
+    summary="Compact Memory Storage",
+    description="Remove archived entries to reduce storage size.",
+)
+async def compact_memory() -> dict:
+    """Compact memory by removing archived entries.
+
+    Returns:
+        Dictionary with compaction results including removed and remaining counts.
+    """
+    provider = get_default_memory_provider()
+    if hasattr(provider, "_runtime") and hasattr(provider._runtime, "_write_manifest"):
+        from src.agents.memory.maintenance import compact_memory
+
+        return compact_memory(provider._runtime)
+
+    return {"error": "Compact not available for current provider"}
+
+
+@router.post(
+    "/memory/rebuild",
+    summary="Rebuild Memory Manifest",
+    description="Rebuild memory manifest from day files.",
+)
+async def rebuild_memory() -> dict:
+    """Rebuild memory manifest from day files.
+
+    Returns:
+        Dictionary with rebuild results including entry count and status.
+    """
+    provider = get_default_memory_provider()
+    if hasattr(provider, "_runtime") and hasattr(provider._runtime, "_write_manifest"):
+        from src.agents.memory.maintenance import rebuild_memory
+
+        return rebuild_memory(provider._runtime)
+
+    return {"error": "Rebuild not available for current provider"}
