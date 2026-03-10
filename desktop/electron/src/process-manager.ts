@@ -63,6 +63,11 @@ export class DesktopProcessManager {
       await this.startGateway();
       this.notifySuccess("runtime.start.gateway");
 
+      // 阶段 4.5：恢复上次异常遗留的 pending runs，避免队列被孤儿 run 堵死
+      this.notifyStage("runtime.recover.pending-runs");
+      await this.recoverPendingRuns();
+      this.notifySuccess("runtime.recover.pending-runs");
+
       // 阶段 5：启动 Frontend
       this.notifyStage("runtime.start.frontend");
       await this.startFrontend();
@@ -85,7 +90,7 @@ export class DesktopProcessManager {
   }
 
   private async checkDependencies(): Promise<void> {
-    // 检查 uv 和 pnpm
+    // 检查 uv；开发态前端还需要 pnpm，打包态使用 bundled frontend server
     const { spawnSync } = await import("node:child_process");
 
     const uvCheck = spawnSync("uv", ["--version"], { stdio: "ignore" });
@@ -193,6 +198,33 @@ export class DesktopProcessManager {
 
     // 等待服务启动
     await waitForHttp(`http://localhost:${this.ports!.gatewayPort}/health`, 30000);
+  }
+
+  private async recoverPendingRuns(): Promise<void> {
+    if (!this.ports) {
+      return;
+    }
+
+    const url = `http://localhost:${this.ports.gatewayPort}/api/langgraph/runs/cancel?action=interrupt`;
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status: "pending" })
+      });
+
+      if (response.status === 204 || response.status === 404) {
+        return;
+      }
+
+      const body = await response.text();
+      console.warn(`[Runtime] Pending run recovery returned ${response.status}: ${body}`);
+    } catch (error) {
+      console.warn("[Runtime] Pending run recovery skipped:", error);
+    }
   }
 
   private async startFrontend(): Promise<void> {
