@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+from src.subagents.scopes import SubagentScopes
+
 
 @dataclass
 class SubagentConfig:
@@ -16,6 +18,7 @@ class SubagentConfig:
         model: Model to use - 'inherit' uses parent's model.
         max_turns: Maximum number of agent turns before stopping.
         timeout_seconds: Maximum execution time in seconds (default: 900 = 15 minutes).
+        scopes: Access boundaries for the subagent (tools, skills, memory, soul, artifacts).
     """
 
     name: str
@@ -26,3 +29,4 @@ class SubagentConfig:
     model: str = "inherit"
     max_turns: int = 50
     timeout_seconds: int = 900
+    scopes: SubagentScopes = field(default_factory=SubagentScopes)

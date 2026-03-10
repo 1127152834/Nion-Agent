@@ -187,6 +187,13 @@ class SubagentExecutor:
     def _build_initial_state(self, task: str) -> dict[str, Any]:
         """Build the initial state for agent execution.
 
+        Scope boundaries are enforced as follows:
+        - memory_scope: Subagents do not have MemoryMiddleware, so they cannot write to long-term memory.
+          Memory read access (if needed) should be provided via system_prompt context.
+        - soul_scope: Subagents receive minimal soul summary via system_prompt, not full SOUL/IDENTITY assets.
+        - tool_scope: Controlled via self.tools (filtered by config.tools and config.disallowed_tools).
+        - artifact_scope: Subagents inherit sandbox access from parent, can read/write artifacts.
+
         Args:
             task: The task description.
 
@@ -198,6 +205,7 @@ class SubagentExecutor:
         }
 
         # Pass through sandbox and thread data from parent
+        # This gives subagents access to the same workspace and artifacts
         if self.sandbox_state is not None:
             state["sandbox"] = self.sandbox_state
         if self.thread_data is not None:

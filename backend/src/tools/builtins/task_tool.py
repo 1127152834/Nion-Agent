@@ -23,7 +23,7 @@ def task_tool(
     runtime: ToolRuntime[ContextT, ThreadState],
     description: str,
     prompt: str,
-    subagent_type: Literal["general-purpose", "bash"],
+    subagent_type: Literal["general-purpose", "bash", "researcher", "writer", "organizer"],
     tool_call_id: Annotated[str, InjectedToolCallId],
     max_turns: int | None = None,
 ) -> str:
@@ -40,6 +40,12 @@ def task_tool(
       multiple dependent steps, or would benefit from isolated context.
     - **bash**: Command execution specialist for running bash commands. Use for
       git operations, build processes, or when command output would be verbose.
+    - **researcher**: Research specialist for collecting, comparing, and organizing
+      information. Use for deep research, information gathering, and comparative analysis.
+    - **writer**: Writing specialist for drafting, rewriting, and structured output.
+      Use for document creation, content rewriting, and report generation.
+    - **organizer**: Organization specialist for planning, archiving, and summarizing.
+      Use for task breakdown, information organization, and result summarization.
 
     When to use this tool:
     - Complex tasks requiring multiple steps or tools
@@ -60,7 +66,7 @@ def task_tool(
     # Get subagent configuration
     config = get_subagent_config(subagent_type)
     if config is None:
-        return f"Error: Unknown subagent type '{subagent_type}'. Available: general-purpose, bash"
+        return f"Error: Unknown subagent type '{subagent_type}'. Available: general-purpose, bash, researcher, writer, organizer"
 
     # Build config overrides
     overrides: dict = {}
