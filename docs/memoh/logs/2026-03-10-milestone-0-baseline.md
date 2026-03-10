@@ -29,12 +29,12 @@
 ### 1.3 当前工作树状态
 
 - 当前分支：`main`
-- 当前 `git status --short` 条目数：`83`
+- 当前 `git status --short` 条目数：`73`
 - 改动横跨：`backend`、`frontend`、`desktop`、`docs`、`openspec`
 
 结论：**前序功能基线当前可验证为“可运行、可测试、可校验”，但工作树尚未收口，不满足直接开启 `Phase 3` 的工程条件。**
 
-补充：`4980d28b` 已独立收口 LangGraph 线程删除前取消活跃 runs 的 proxy/client 清理块，Milestone 0 仍剩 `runtime_topology`、`channels`、`desktop/runtime` 等后续拆分项。
+补充：`4980d28b` 已独立收口 LangGraph 线程删除前取消活跃 runs 的 proxy/client 清理块，`879eb3e4` 已补上 runtime topology diagnostics 只读接口与设置页入口；Milestone 0 仍剩 `channels`、`sandbox`、`desktop/runtime` 等后续拆分项。
 
 ## 2. Review / 风险结论
 
