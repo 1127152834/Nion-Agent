@@ -18,6 +18,7 @@ from src.gateway.routers import (
     channels,
     config,
     embedding_models,
+    evolution,
     heartbeat,
     langgraph_proxy,
     mcp,
@@ -272,6 +273,9 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
 
     # Heartbeat API is mounted at /api/heartbeat
     app.include_router(heartbeat.router)
+
+    # Evolution API is mounted at /api/evolution
+    app.include_router(evolution.router)
 
 
     # Tools API is mounted at /api/tools
