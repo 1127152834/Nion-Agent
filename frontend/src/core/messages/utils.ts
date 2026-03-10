@@ -1,5 +1,10 @@
 import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 
+interface ThinkTagParseResult {
+  cleanContent: string;
+  reasoningContent: string | null;
+}
+
 interface GenericMessageGroup<T = string> {
   type: T;
   id: string | undefined;
@@ -37,6 +42,128 @@ export interface ClarificationPayload {
   asked_at?: string | null;
   resolved_at?: string | null;
   resolved_by_message_id?: string | null;
+}
+
+function normalizeOptionalText(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+function normalizeTextBlockValue(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim();
+}
+
+function wrapAsThinkTag(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    return "";
+  }
+  return `<think>${normalized}</think>`;
+}
+
+function extractThinkingBlock(content: Record<string, unknown>): string {
+  const candidates: unknown[] = [
+    content.thinking,
+    content.reasoning,
+    content.text,
+    content.content,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeTextBlockValue(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return "";
+}
+
+function parseThinkTags(content: string): ThinkTagParseResult {
+  if (!content) {
+    return {
+      cleanContent: "",
+      reasoningContent: null,
+    };
+  }
+
+  const reasoningParts: string[] = [];
+  let cleanContent = content.replace(
+    /<think\b[^>]*>([\s\S]*?)<\/think>/gi,
+    (_, reasoning: string) => {
+      const normalizedReasoning = reasoning.trim();
+      if (normalizedReasoning) {
+        reasoningParts.push(normalizedReasoning);
+      }
+      return "";
+    },
+  );
+
+  // Handle streamed responses that end with an unmatched opening <think>.
+  const danglingOpenTag = /<think\b[^>]*>/i.exec(cleanContent);
+  if (danglingOpenTag?.index !== undefined) {
+    const openTagStart = danglingOpenTag.index;
+    const openTagEnd = openTagStart + danglingOpenTag[0].length;
+    const danglingReasoning = cleanContent.slice(openTagEnd).trim();
+    if (danglingReasoning) {
+      reasoningParts.push(danglingReasoning);
+    }
+    cleanContent = cleanContent.slice(0, openTagStart);
+  }
+
+  cleanContent = cleanContent.replace(/<\/think>/gi, "").trim();
+
+  return {
+    cleanContent,
+    reasoningContent:
+      reasoningParts.length > 0 ? reasoningParts.join("\n\n") : null,
+  };
+}
+
+function extractRawContentFromMessage(message: Message) {
+  if (typeof message.content === "string") {
+    return message.content.trim();
+  }
+
+  if (Array.isArray(message.content)) {
+    return message.content
+      .map((content) => {
+        if (!content || typeof content !== "object" || !("type" in content)) {
+          return "";
+        }
+        const block = content as Record<string, unknown> & { type: string };
+        switch (block.type) {
+          case "text":
+          case "input_text":
+            return normalizeTextBlockValue(block.text);
+          case "image_url":
+            if (
+              !block.image_url ||
+              (typeof block.image_url !== "string" &&
+                (typeof block.image_url !== "object" ||
+                  !("url" in block.image_url)))
+            ) {
+              return "";
+            }
+            return `![image](${extractURLFromImageURLContent(
+              block.image_url as string | { url: string },
+            )})`;
+          case "thinking":
+          case "reasoning":
+            return wrapAsThinkTag(extractThinkingBlock(block));
+          default:
+            return "";
+        }
+      })
+      .join("\n")
+      .trim();
+  }
+
+  return "";
 }
 
 export function groupMessages<T>(
@@ -143,45 +270,32 @@ export function extractTextFromMessage(message: Message) {
 }
 
 export function extractContentFromMessage(message: Message) {
-  if (typeof message.content === "string") {
-    return message.content.trim();
+  const rawContent = extractRawContentFromMessage(message);
+  if (message.type !== "ai") {
+    return rawContent;
   }
-  if (Array.isArray(message.content)) {
-    return message.content
-      .map((content) => {
-        switch (content.type) {
-          case "text":
-            return content.text;
-          case "image_url":
-            const imageURL = extractURLFromImageURLContent(content.image_url);
-            return `![image](${imageURL})`;
-          default:
-            return "";
-        }
-      })
-      .join("\n")
-      .trim();
-  }
-  return "";
+  return parseThinkTags(rawContent).cleanContent;
 }
 
 export function extractReasoningContentFromMessage(message: Message) {
   if (message.type !== "ai") {
     return null;
   }
-  if (
-    message.additional_kwargs &&
-    "reasoning_content" in message.additional_kwargs
-  ) {
-    return message.additional_kwargs.reasoning_content as string | null;
+
+  const metadataReasoning = normalizeOptionalText(
+    message.additional_kwargs?.reasoning_content,
+  );
+  const thinkTagReasoning = parseThinkTags(
+    extractRawContentFromMessage(message),
+  ).reasoningContent;
+
+  if (metadataReasoning && thinkTagReasoning) {
+    return metadataReasoning === thinkTagReasoning
+      ? metadataReasoning
+      : `${metadataReasoning}\n\n${thinkTagReasoning}`;
   }
-  if (Array.isArray(message.content)) {
-    const part = message.content[0] as { thinking?: string } | undefined;
-    if (part?.thinking) {
-      return part.thinking;
-    }
-  }
-  return null;
+
+  return metadataReasoning ?? thinkTagReasoning;
 }
 
 export function removeReasoningContentFromMessage(message: Message) {
@@ -205,6 +319,9 @@ export function extractURLFromImageURLContent(
 }
 
 export function hasContent(message: Message) {
+  if (message.type === "ai") {
+    return extractContentFromMessage(message).length > 0;
+  }
   if (typeof message.content === "string") {
     return message.content.trim().length > 0;
   }
@@ -215,17 +332,7 @@ export function hasContent(message: Message) {
 }
 
 export function hasReasoning(message: Message) {
-  if (message.type !== "ai") {
-    return false;
-  }
-  if (typeof message.additional_kwargs?.reasoning_content === "string") {
-    return true;
-  }
-  if (Array.isArray(message.content)) {
-    const part = message.content[0] as { type?: string } | undefined;
-    return part?.type === "thinking";
-  }
-  return false;
+  return message.type === "ai" && !!extractReasoningContentFromMessage(message);
 }
 
 export function hasToolCalls(message: Message) {
