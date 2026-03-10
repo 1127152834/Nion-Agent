@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f7fafc" />
+      <stop offset="100%" stop-color="#ebf4ff" />
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="760" fill="url(#bg)" />
+  <rect x="80" y="70" width="1120" height="620" rx="22" fill="#ffffff" stroke="#d7e1f5" stroke-width="2" />
+  <rect x="120" y="130" width="280" height="500" rx="14" fill="#f8fbff" stroke="#dbe6fb" />
+  <rect x="430" y="130" width="450" height="500" rx="14" fill="#ffffff" stroke="#dbe6fb" />
+  <rect x="905" y="130" width="255" height="500" rx="14" fill="#f8fbff" stroke="#dbe6fb" />
+  <text x="120" y="105" font-family="Arial, sans-serif" font-size="22" fill="#1f2a44">Sidebar Slot Plugin Shell</text>
+  <text x="146" y="170" font-family="Arial, sans-serif" font-size="18" fill="#334e7d">目录</text>
+  <text x="460" y="170" font-family="Arial, sans-serif" font-size="18" fill="#334e7d">编辑区</text>
+  <text x="935" y="170" font-family="Arial, sans-serif" font-size="18" fill="#334e7d">预览 / 日志</text>
+  <rect x="460" y="210" width="250" height="36" rx="8" fill="#2f6fe4" />
+  <text x="486" y="234" font-family="Arial, sans-serif" font-size="16" fill="#ffffff">Build Success</text>
+  <rect x="735" y="210" width="125" height="36" rx="8" fill="#e9f2ff" stroke="#bfd3fb" />
+  <text x="760" y="234" font-family="Arial, sans-serif" font-size="15" fill="#2c4c82">Start Dev</text>
+</svg>

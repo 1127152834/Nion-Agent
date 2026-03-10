@@ -25,6 +25,8 @@ workbench.PluginTestResponse.model_rebuild()
 def _make_client() -> TestClient:
     app = FastAPI()
     app.include_router(workbench.plugin_router)
+    app.include_router(workbench.marketplace_router)
+    app.include_router(workbench.plugin_studio_router)
     return TestClient(app)
 
 
@@ -149,3 +151,106 @@ def test_plugin_test_thread_endpoint_creates_sandbox_dirs(tmp_path: Path):
     thread_id = payload["thread_id"]
     assert thread_id.startswith("workbench-test-")
     assert (tmp_path / "threads" / thread_id / "user-data" / "workspace").is_dir()
+
+
+def test_marketplace_endpoints_list_detail_download(tmp_path: Path):
+    repo_root = tmp_path / "repo"
+    package_file = repo_root / "frontend" / "public" / "workbench-plugins" / "demo.nwp"
+    readme_file = repo_root / "backend" / "data" / "workbench_marketplace" / "docs" / "demo" / "README.md"
+    asset_dir = repo_root / "backend" / "data" / "workbench_marketplace" / "assets"
+    demo_asset = asset_dir / "demo" / "preview.svg"
+    catalog_file = repo_root / "backend" / "data" / "workbench_marketplace" / "catalog.json"
+
+    package_file.parent.mkdir(parents=True, exist_ok=True)
+    package_file.write_bytes(b"fake")
+    readme_file.parent.mkdir(parents=True, exist_ok=True)
+    readme_file.write_text("# Demo Plugin\n\nhello", encoding="utf-8")
+    demo_asset.parent.mkdir(parents=True, exist_ok=True)
+    demo_asset.write_text("<svg></svg>", encoding="utf-8")
+    catalog_file.parent.mkdir(parents=True, exist_ok=True)
+    catalog_file.write_text(
+        """
+{
+  "plugins": [
+    {
+      "id": "demo-plugin",
+      "name": "Demo Plugin",
+      "description": "Demo",
+      "version": "0.1.0",
+      "package_path": "frontend/public/workbench-plugins/demo.nwp",
+      "readme_path": "backend/data/workbench_marketplace/docs/demo/README.md",
+      "demo_images": ["demo/preview.svg"]
+    }
+  ]
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with (
+        _make_client() as client,
+        patch.object(workbench, "_repo_root_dir", return_value=repo_root),
+        patch.object(workbench, "_marketplace_catalog_file", return_value=catalog_file),
+        patch.object(workbench, "_marketplace_assets_dir", return_value=asset_dir),
+    ):
+        list_resp = client.get("/api/workbench/marketplace/plugins")
+        assert list_resp.status_code == 200
+        plugins = list_resp.json()["plugins"]
+        assert len(plugins) == 1
+        assert plugins[0]["id"] == "demo-plugin"
+
+        detail_resp = client.get("/api/workbench/marketplace/plugins/demo-plugin")
+        assert detail_resp.status_code == 200
+        detail = detail_resp.json()
+        assert detail["id"] == "demo-plugin"
+        assert "readme_markdown" in detail
+        assert detail["demo_image_urls"]
+
+        download_resp = client.get("/api/workbench/marketplace/plugins/demo-plugin/download")
+        assert download_resp.status_code == 200
+        assert download_resp.content == b"fake"
+
+
+def test_plugin_studio_requires_auto_and_manual_before_package(tmp_path: Path):
+    with (
+        _make_client() as client,
+        patch.object(workbench, "get_paths", return_value=Paths(tmp_path), create=True),
+    ):
+        create_resp = client.post(
+            "/api/workbench/plugin-studio/sessions",
+            json={
+                "plugin_name": "Code Viewer",
+                "description": "demo",
+            },
+        )
+        assert create_resp.status_code == 200
+        session_id = create_resp.json()["session_id"]
+
+        generate_resp = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/generate", json={})
+        assert generate_resp.status_code == 200
+
+        package_without_auto = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/package")
+        assert package_without_auto.status_code == 409
+
+        auto_verify_resp = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/verify/auto")
+        assert auto_verify_resp.status_code == 200
+        assert auto_verify_resp.json()["passed"] is True
+
+        package_without_manual = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/package")
+        assert package_without_manual.status_code == 409
+
+        manual_verify_resp = client.post(
+            f"/api/workbench/plugin-studio/sessions/{session_id}/verify/manual",
+            json={"passed": True, "note": "looks good"},
+        )
+        assert manual_verify_resp.status_code == 200
+        assert manual_verify_resp.json()["manual_verified"] is True
+
+        package_resp = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/package")
+        assert package_resp.status_code == 200
+        payload = package_resp.json()
+        assert payload["package_download_url"].endswith("/package/download")
+
+        download_resp = client.get(payload["package_download_url"])
+        assert download_resp.status_code == 200
+        assert download_resp.content

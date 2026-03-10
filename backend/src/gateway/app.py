@@ -296,6 +296,8 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
     # Workbench API is mounted at /api/threads/{thread_id}/workbench and /api/workbench/plugins/*
     app.include_router(workbench.router)
     app.include_router(workbench.plugin_router)
+    app.include_router(workbench.marketplace_router)
+    app.include_router(workbench.plugin_studio_router)
 
     @app.get("/health", tags=["health"])
     async def health_check() -> dict:
