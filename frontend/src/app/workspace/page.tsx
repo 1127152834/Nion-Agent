@@ -3,6 +3,7 @@ import path from "path";
 
 import { redirect } from "next/navigation";
 
+import { pathOfNewThread } from "@/core/threads/utils";
 import { env } from "@/env";
 
 export default function WorkspacePage() {
@@ -16,5 +17,5 @@ export default function WorkspacePage() {
       return redirect(`/workspace/chats/${firstThread.name}`);
     }
   }
-  return redirect("/workspace/chats/new");
+  return redirect(pathOfNewThread());
 }

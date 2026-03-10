@@ -30,6 +30,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/core/i18n/hooks";
+import { pathOfNewThread } from "@/core/threads/utils";
 import {
   useInstalledPlugins,
   useInstallPlugin,
@@ -90,7 +91,7 @@ function WorkbenchPluginsList({
   const router = useRouter();
   const pathname = usePathname();
   const activeThreadId = useMemo(() => {
-    const match = pathname.match(/\/workspace\/(?:agents\/[^/]+\/)?chats\/([^/?#]+)/);
+    const match = /\/workspace\/(?:agents\/[^/]+\/)?chats\/([^/?#]+)/.exec(pathname);
     if (!match?.[1]) {
       return undefined;
     }
@@ -107,7 +108,7 @@ function WorkbenchPluginsList({
 
   const handleCreatePlugin = () => {
     onClose?.();
-    router.push("/workspace/chats/new?mode=workbench-plugin");
+    router.push(`${pathOfNewThread()}?mode=workbench-plugin`);
   };
 
   const handleUploadMenuClick = () => {

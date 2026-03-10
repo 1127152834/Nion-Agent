@@ -38,6 +38,7 @@ import {
 } from "@/core/skills/hooks";
 import { getLocalizedSkillDescription } from "@/core/skills/i18n";
 import type { Skill } from "@/core/skills/type";
+import { pathOfNewThread } from "@/core/threads/utils";
 import { env } from "@/env";
 
 import { ConfirmActionDialog } from "./confirm-action-dialog";
@@ -128,7 +129,7 @@ function SkillSettingsList({
   );
   const handleCreateSkill = () => {
     onClose?.();
-    router.push("/workspace/chats/new?mode=skill");
+    router.push(`${pathOfNewThread()}?mode=skill`);
   };
   const handleUploadMenuClick = () => {
     uploadInputRef.current?.click();
