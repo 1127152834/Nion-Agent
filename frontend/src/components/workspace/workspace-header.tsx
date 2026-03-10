@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -13,7 +14,12 @@ import { useWorkspaceSidebarPresentation } from "./workspace-sidebar-routing";
 
 export function WorkspaceHeader({ className }: { className?: string }) {
   const { isCollapsed } = useWorkspaceSidebarPresentation();
+  const { toggleSidebar } = useSidebar();
   const [titlebarInset, setTitlebarInset] = useState(0);
+  const nionRef = useRef<SVGGElement | null>(null);
+  const arrowRef = useRef<SVGPathElement | null>(null);
+  const arrowLengthRef = useRef(0);
+  const animationsRef = useRef<Animation[]>([]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -24,6 +30,57 @@ export function WorkspaceHeader({ className }: { className?: string }) {
     const isElectron = ua.includes("Electron");
     const isMac = /Mac/i.test(platform) || /Macintosh|Mac OS X/i.test(ua);
     setTitlebarInset(isElectron && isMac ? 26 : 0);
+  }, []);
+
+  useEffect(() => {
+    const arrow = arrowRef.current;
+    if (!arrow) {
+      return;
+    }
+    const length = arrow.getTotalLength();
+    arrowLengthRef.current = length;
+    arrow.style.strokeDasharray = `${length}`;
+    arrow.style.strokeDashoffset = `${length}`;
+    arrow.style.opacity = "0";
+  }, []);
+
+  const playMorph = useCallback((toArrow: boolean) => {
+    const nion = nionRef.current;
+    const arrow = arrowRef.current;
+    if (!nion || !arrow) {
+      return;
+    }
+    const length = arrowLengthRef.current || 48;
+    animationsRef.current.forEach((anim) => anim.cancel());
+    animationsRef.current = [];
+
+    const duration = 1000;
+    const easing = "cubic-bezier(0.16, 1, 0.3, 1)";
+
+    const nionFrames = toArrow
+      ? [
+          { opacity: 1, transform: "scale(1) translateX(0px)" },
+          { opacity: 0, transform: "scale(0.78) translateX(-6px)" },
+        ]
+      : [
+          { opacity: 0, transform: "scale(0.78) translateX(-6px)" },
+          { opacity: 1, transform: "scale(1) translateX(0px)" },
+        ];
+
+    const arrowFrames = toArrow
+      ? [
+          { opacity: 0, transform: "scale(0.6) translateX(-6px)", strokeDashoffset: length },
+          { opacity: 1, transform: "scale(1) translateX(0px)", strokeDashoffset: 0 },
+        ]
+      : [
+          { opacity: 1, transform: "scale(1) translateX(0px)", strokeDashoffset: 0 },
+          { opacity: 0, transform: "scale(0.6) translateX(-6px)", strokeDashoffset: length },
+        ];
+
+    animationsRef.current = [
+      nion.animate(nionFrames, { duration, easing, fill: "forwards" }),
+      arrow.animate(arrowFrames, { duration, easing, fill: "forwards" }),
+    ];
   }, []);
 
   return (
@@ -44,14 +101,58 @@ export function WorkspaceHeader({ className }: { className?: string }) {
         } as React.CSSProperties}
       >
         {isCollapsed ? (
-          <div className="group-has-data-[collapsible=icon]/sidebar-wrapper:-translate-y flex w-full cursor-pointer items-center justify-center">
-            <div className="text-primary block pt-1 text-lg leading-none font-serif tracking-[0.08em] group-hover/workspace-header:hidden">
-              NION
-            </div>
-            <SidebarTrigger
-              className="hidden group-hover/workspace-header:block"
+          <div className="group-has-data-[collapsible=icon]/sidebar-wrapper:-translate-y flex w-full items-center justify-center">
+            {/* Hover morph: NION -> arrow (1s) to hint expand action. */}
+            <button
+              type="button"
+              aria-label="展开侧边栏"
+              onClick={toggleSidebar}
+              onMouseEnter={() => playMorph(true)}
+              onMouseLeave={() => playMorph(false)}
+              onFocus={() => playMorph(true)}
+              onBlur={() => playMorph(false)}
+              className="group/nion-toggle relative flex h-10 w-16 items-center justify-center"
               style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
-            />
+            >
+              <svg
+                viewBox="0 0 120 24"
+                className="text-primary h-6 w-14"
+                aria-hidden="true"
+              >
+                <g
+                  ref={nionRef}
+                  style={{
+                    transformBox: "fill-box",
+                    transformOrigin: "center",
+                  }}
+                >
+                  <text
+                    x="50%"
+                    y="50%"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    className="fill-current font-serif"
+                    letterSpacing="0.12em"
+                    fontSize="18"
+                  >
+                    NION
+                  </text>
+                </g>
+                <path
+                  ref={arrowRef}
+                  d="M34 12H86M78 6L86 12L78 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{
+                    transformBox: "fill-box",
+                    transformOrigin: "center",
+                  }}
+                />
+              </svg>
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-2">
