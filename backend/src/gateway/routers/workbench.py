@@ -410,7 +410,21 @@ async def test_workbench_plugin(plugin_id: str, payload: PluginTestRequest) -> P
             passed = process.returncode == 0
             if passed and step.expect_contains:
                 for expected in step.expect_contains:
-                    if expected not in combined_output:
+                    if expected in combined_output:
+                        continue
+
+                    # Allow virtual /mnt/user-data paths to match their resolved host paths.
+                    # Workbench command steps run on the host, so `pwd` will emit host paths.
+                    alternate_match = False
+                    if expected.startswith("/mnt/user-data"):
+                        try:
+                            resolved = resolve_thread_virtual_path(payload.thread_id, expected)
+                            if str(resolved) in combined_output:
+                                alternate_match = True
+                        except HTTPException:
+                            alternate_match = False
+
+                    if not alternate_match:
                         passed = False
                         message = f"Missing expected output fragment: {expected}"
                         break

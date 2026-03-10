@@ -32,6 +32,7 @@ def test_plugin_test_step_handles_timeout_without_500(tmp_path: Path):
     with (
         _make_client() as client,
         patch.object(workbench, "_resolve_cwd", return_value=("/mnt/user-data/workspace", tmp_path)),
+        patch.object(workbench, "resolve_thread_virtual_path", return_value=tmp_path),
         patch.object(
             workbench.subprocess,
             "run",
@@ -97,6 +98,43 @@ def test_plugin_test_step_handles_invalid_cwd_as_failed_step():
     assert payload["steps"][0]["id"] == "step-cwd"
     assert payload["steps"][0]["passed"] is False
     assert payload["steps"][0]["message"] == "Workbench cwd not found"
+
+
+def test_plugin_test_step_accepts_virtual_path_match(tmp_path: Path):
+    with (
+        _make_client() as client,
+        patch.object(workbench, "_resolve_cwd", return_value=("/mnt/user-data/workspace", tmp_path)),
+        patch.object(workbench, "resolve_thread_virtual_path", return_value=tmp_path),
+        patch.object(
+            workbench.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                args=["/bin/zsh", "-lc", "pwd"],
+                returncode=0,
+                stdout=f"{tmp_path}\n",
+                stderr="",
+            ),
+        ),
+    ):
+        response = client.post(
+            "/api/workbench/plugins/demo/test",
+            json={
+                "thread_id": "thread-1",
+                "command_steps": [
+                    {
+                        "id": "step-virtual",
+                        "command": "pwd",
+                        "cwd": "/mnt/user-data/workspace",
+                        "expect_contains": ["/mnt/user-data/workspace"],
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["passed"] is True
+    assert payload["steps"][0]["passed"] is True
 
 
 def test_plugin_test_thread_endpoint_creates_sandbox_dirs(tmp_path: Path):
