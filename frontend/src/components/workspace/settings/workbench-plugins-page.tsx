@@ -202,7 +202,9 @@ function WorkbenchPluginsList({
   const normalizeExtensions = (extensions?: string[]) =>
     new Set((extensions ?? []).map((ext) => ext.replace(/^\./, "").toLowerCase()));
 
-  const pickTargetKind = (targets?: WorkbenchTargetRule[]) => {
+  const pickTargetKind = (
+    targets?: WorkbenchTargetRule[],
+  ): "file" | "directory" | "project" => {
     if (!targets || targets.length === 0) return "file";
     if (targets.some((rule) => rule.kind === "file" || !rule.kind)) return "file";
     if (targets.some((rule) => rule.kind === "directory")) return "directory";
@@ -224,16 +226,16 @@ function WorkbenchPluginsList({
     return preferred ?? fixturePaths[0] ?? null;
   };
 
-  const decodePackageFile = (file: WorkbenchPackageFile): Uint8Array => {
+  const decodePackageFile = (file: WorkbenchPackageFile): Blob => {
     if (file.encoding === "text") {
-      return new TextEncoder().encode(file.content);
+      return new Blob([file.content], { type: "text/plain;charset=utf-8" });
     }
     const binary = atob(file.content);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) {
       bytes[i] = binary.charCodeAt(i);
     }
-    return bytes;
+    return new Blob([bytes], { type: "application/octet-stream" });
   };
 
   const writeFixtureToThread = async (

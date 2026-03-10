@@ -19,3 +19,10 @@ export function useThread() {
   }
   return context;
 }
+
+/**
+ * Optional variant for components/hooks that can work outside chat pages.
+ */
+export function useOptionalThread() {
+  return useContext(ThreadContext);
+}
