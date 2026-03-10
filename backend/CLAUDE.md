@@ -279,6 +279,77 @@ Browser traffic should use Gateway as the only API facade. In Web mode nginx for
 - `max_facts` / `fact_confidence_threshold` - Fact storage limits (100 / 0.7)
 - `max_injection_tokens` - Token limit for prompt injection (2000)
 
+### Heartbeat System (`src/heartbeat/`)
+
+**Purpose**: Semantic layer on top of scheduler for assistant rhythm and periodic maintenance tasks.
+
+**Components**:
+- `models.py` - Data models (HeartbeatTemplate, HeartbeatSettings, HeartbeatLogRecord)
+- `templates.py` - Four default templates (daily_review, weekly_reset, memory_maintenance, identity_check)
+- `store.py` - Thread-safe storage with atomic writes (temp file + rename)
+- `executor.py` - Execution engine integrating Memory Core and Soul Core
+- `service.py` - Service layer with singleton pattern
+
+**Default Templates**:
+- `daily_review` - Daily 21:00, read_write memory, generates daily summary
+- `weekly_reset` - Sunday 19:00, read_write memory, generates weekly insights
+- `memory_maintenance` - Monday 02:00, calls Memory Core maintenance (usage/compact/rebuild)
+- `identity_check` - Monthly 1st 10:00, calls Soul Core summarizer (suggestions only)
+
+**API Endpoints** (`/api/heartbeat`):
+- `GET/PUT /settings` - Get/update heartbeat settings
+- `GET /templates` - List available templates
+- `POST /bootstrap` - Bootstrap scheduler tasks from templates
+- `GET /logs` - Get execution logs
+- `POST /execute/{template_id}` - Manual execution
+- `GET /status` - Get heartbeat status
+
+**Storage** (`backend/.nion/heartbeat/`):
+- `settings.json` - Heartbeat configuration
+- `logs/` - Execution logs by date
+
+### Evolution System (`src/evolution/`)
+
+**Purpose**: Low-frequency reflection and suggestion layer based on Heartbeat logs, Memory stats, and Soul assets.
+
+**Components**:
+- `models.py` - Data models (EvolutionReport, EvolutionSuggestion, EvolutionSettings)
+- `analyzer.py` - Analyzer generating three types of suggestions
+- `store.py` - Thread-safe storage with atomic writes, suggestions stored by status
+- `service.py` - Service layer with singleton pattern
+
+**Suggestion Types**:
+- `MEMORY` - Memory compression suggestions (triggers when entry_count > 200)
+- `SOUL` - Soul asset completeness (checks for SOUL.md/IDENTITY.md existence)
+- `AGENT` - Agent stability suggestions (analyzes Heartbeat failure rates)
+
+**Suggestion Flow**:
+- Status: `pending` → `accepted` / `dismissed`
+- Default action: `suggest_only` (never auto-apply)
+- Priority levels: `LOW`, `MEDIUM`, `HIGH`
+
+**API Endpoints** (`/api/evolution`):
+- `POST /run` - Run Evolution analysis manually
+- `GET/PUT /settings` - Get/update Evolution settings
+- `GET /reports` - Get report list
+- `GET /reports/{report_id}` - Get specific report
+- `GET /suggestions` - Get suggestions (filterable by status)
+- `POST /suggestions/{id}/dismiss` - Dismiss suggestion
+- `POST /suggestions/{id}/accept` - Accept suggestion (does not auto-apply)
+
+**Storage** (`backend/.nion/evolution/`):
+- `settings.json` - Evolution configuration
+- `reports/` - Analysis reports by date
+- `suggestions/pending/` - Pending suggestions
+- `suggestions/accepted/` - Accepted suggestions
+- `suggestions/dismissed/` - Dismissed suggestions
+
+**Design Principles**:
+- Low-frequency operation (manual trigger or scheduled)
+- Suggest-only, never auto-apply
+- Auditable and reversible
+- Can be globally disabled via settings
+
 ### Reflection System (`src/reflection/`)
 
 - `resolve_variable(path)` - Import module and return variable (e.g., `module.path:variable_name`)
