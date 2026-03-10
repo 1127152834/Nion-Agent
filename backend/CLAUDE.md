@@ -200,7 +200,37 @@ Browser traffic should use Gateway as the only API facade. In Web mode nginx for
 
 ### Subagent System (`src/subagents/`)
 
-**Built-in Agents**: `general-purpose` (all tools except `task`) and `bash` (command specialist)
+**Architecture**: Lead agent is the single user entry point; subagents are bounded delegation workers, not peer agents.
+
+**Built-in Agents** (5 templates):
+- `general-purpose` - Complex multi-step tasks (all tools except `task`)
+- `bash` - Command execution specialist (sandbox tools only)
+- `researcher` - Research, information gathering, comparative analysis (max_turns=50)
+- `writer` - Document creation, content rewriting, structured output (max_turns=40)
+- `organizer` - Task breakdown, information organization, result summarization (max_turns=40)
+
+**Scope Model** (`SubagentScopes`):
+- `tool_scope`: Tools accessible to subagent (inherit/list)
+- `skill_scope`: Skills accessible to subagent (inherit/none/list)
+- `memory_scope`: Long-term memory access (read-only/no-access)
+- `soul_scope`: Soul asset access (minimal-summary/none)
+- `artifact_scope`: Artifact access (read-write/read-only)
+
+**Delegation Contract** (`DelegationContract`):
+- `task_kind`: Task type (research/writing/execution)
+- `goal`: Clear task description
+- `input_context_refs`: Input context references
+- `allowed_tools`: Tool allowlist for this delegation
+- `memory_scope`: Memory access level
+- `expected_output_schema`: Optional structured output schema
+- `return_summary`: Whether to return summary
+
+**Scope Boundaries**:
+- Subagents have READ-ONLY memory access (no MemoryMiddleware)
+- Subagents receive minimal soul summary, not full SOUL/IDENTITY assets
+- Subagents cannot delegate to other subagents (task tool disallowed)
+- Subagents inherit sandbox access for artifact read/write
+
 **Execution**: Dual thread pool - `_scheduler_pool` (3 workers) + `_execution_pool` (3 workers)
 **Concurrency**: `MAX_CONCURRENT_SUBAGENTS = 3` enforced by `SubagentLimitMiddleware` (truncates excess tool calls in `after_model`), 15-minute timeout
 **Flow**: `task()` tool → `SubagentExecutor` → background thread → poll 5s → SSE events → result
