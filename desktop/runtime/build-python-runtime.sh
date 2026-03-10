@@ -5,8 +5,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PYTHON_DIR="$SCRIPT_DIR/python"
-BACKEND_DIR="$SCRIPT_DIR/../backend"
+BACKEND_DIR="$REPO_ROOT/backend"
 
 # Configuration
 PYTHON_VERSION="${NION_DESKTOP_PYTHON_VERSION:-3.12}"
@@ -17,6 +18,12 @@ echo "Building Python runtime..."
 echo "  Python version: $PYTHON_VERSION"
 echo "  Backend extras: $BACKEND_EXTRAS"
 echo "  Output directory: $PYTHON_DIR"
+echo "  Backend source: $BACKEND_DIR"
+
+if [ ! -d "$BACKEND_DIR" ]; then
+  echo "Backend source directory not found: $BACKEND_DIR" >&2
+  exit 1
+fi
 
 # Clean existing runtime
 if [ -d "$PYTHON_DIR" ]; then
@@ -47,7 +54,7 @@ fi
 
 # Verify installation
 echo "Verifying installation..."
-python -c "import langgraph; print(f'LangGraph version: {langgraph.__version__}')"
-python -c "import fastapi; print(f'FastAPI version: {fastapi.__version__}')"
+python -c 'from importlib.metadata import version; print("LangGraph version:", version("langgraph"))'
+python -c 'from importlib.metadata import version; print("FastAPI version:", version("fastapi"))'
 
 echo "Python runtime built successfully at: $PYTHON_DIR"

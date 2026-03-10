@@ -17,3 +17,21 @@
 | 2026-03-10 | Milestone 0 | local-sandbox-path-errors | n/a | 3e5fe1f5 | `git stash push --keep-index -u -m codex-milestone0-local-sandbox-*`、`cd backend && uv run pytest tests/test_local_sandbox.py -q`、`git diff --cached --check` | passed | LocalSandbox 现在会在文件错误里保留调用方请求路径而不是宿主机真实路径；下一步继续拆 channels / desktop runtime / frontend branding 等块 |
 | 2026-03-10 | Milestone 0 | channels-session-override | n/a | 6d5be26b | `git stash push --keep-index -u -m codex-milestone0-channels-session-override-*`、`cd backend && uv run pytest tests/test_channels_telegram.py -q`、`cd frontend && pnpm typecheck`、`git diff --cached --check` | passed | 通道已支持 integration session 默认值和 authorized user session override，全链路覆盖 repository / bridge / router / settings UI；下一步继续拆 desktop runtime / frontend branding / suggestions 等块 |
 | 2026-03-10 | Milestone 0 | suggestions-dedicated-model | n/a | a3d5cfda | `git stash push --keep-index -u -m codex-milestone0-suggestions-model-*`、`cd backend && uv run pytest tests/test_suggestions_router.py -q`、`cd frontend && pnpm typecheck`、`git diff --cached --check` | passed | 追问建议现在支持单独模型配置，设置页可持久化 suggestions.model_name，聊天输入框会向 suggestions 接口透传 model_name；下一步继续拆 desktop runtime / branding 等块 |
+
+### 2026-03-10 10:27 - desktop/electron: add app icon mounting
+
+**Commit**: 52c0c5c1
+
+**Changes**:
+- Added `applyAppIcon()` to set dock icon on macOS and window icon on other platforms
+- Added `resolveAppIconPngPath()` to locate icon across dev/prod environments
+- Added `icons:generate` script using Python + Pillow to generate all icon sizes
+- Generated app-icon.icns for macOS and updated all iconset variants
+- Integrated icon generation into dev/start/dist workflows
+
+**Files**:
+- desktop/electron/src/main.ts
+- desktop/electron/package.json
+- desktop/electron/scripts/generate-app-icons.py (new)
+- desktop/electron/build/icons/* (updated)
+
