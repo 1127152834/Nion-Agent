@@ -14,6 +14,7 @@ import {
 import { useI18n } from "@/core/i18n/hooks";
 import { useThreads } from "@/core/threads/hooks";
 import {
+  isHiddenWorkspaceThread,
   isThreadAwaitingResponse,
   pathOfThread,
   titleOfThread,
@@ -31,9 +32,12 @@ export default function ChatsPage() {
 
   const filteredThreads = useMemo(() => {
     return threads?.filter((thread) => {
+      if (isHiddenWorkspaceThread(thread)) {
+        return false;
+      }
       return titleOfThread(thread).toLowerCase().includes(search.toLowerCase());
     });
-  }, [threads, search]);
+  }, [search, threads]);
   return (
     <WorkspaceContainer>
       <WorkspaceHeader></WorkspaceHeader>

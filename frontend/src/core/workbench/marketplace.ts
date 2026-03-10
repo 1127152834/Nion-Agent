@@ -38,6 +38,7 @@ type PluginStudioSessionPayload = {
   session_id: string;
   plugin_id: string;
   plugin_name: string;
+  chat_thread_id?: string | null;
   description: string;
   state: "draft" | "generated" | "auto_verified" | "manual_verified" | "packaged";
   auto_verified: boolean;
@@ -108,6 +109,7 @@ function mapPluginStudioSession(payload: PluginStudioSessionPayload): PluginStud
     sessionId: payload.session_id,
     pluginId: payload.plugin_id,
     pluginName: payload.plugin_name,
+    chatThreadId: payload.chat_thread_id ?? null,
     description: payload.description,
     state: payload.state,
     autoVerified: payload.auto_verified,
@@ -186,6 +188,7 @@ export async function createPluginStudioSession(params: {
   pluginName: string;
   pluginId?: string;
   description?: string;
+  chatThreadId?: string;
 }): Promise<PluginStudioSession> {
   const response = await fetch(`${getBackendBaseURL()}/api/workbench/plugin-studio/sessions`, {
     method: "POST",
@@ -196,11 +199,24 @@ export async function createPluginStudioSession(params: {
       plugin_name: params.pluginName,
       plugin_id: params.pluginId,
       description: params.description ?? "",
+      chat_thread_id: params.chatThreadId,
     }),
   });
   if (!response.ok) {
     const detail = await response.text();
     throw new Error(detail || `Failed to create plugin studio session (${response.status})`);
+  }
+  const payload = (await response.json()) as PluginStudioSessionPayload;
+  return mapPluginStudioSession(payload);
+}
+
+export async function getPluginStudioSession(sessionId: string): Promise<PluginStudioSession> {
+  const response = await fetch(`${getBackendBaseURL()}/api/workbench/plugin-studio/sessions/${sessionId}`, {
+    method: "GET",
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Failed to get plugin studio session (${response.status})`);
   }
   const payload = (await response.json()) as PluginStudioSessionPayload;
   return mapPluginStudioSession(payload);

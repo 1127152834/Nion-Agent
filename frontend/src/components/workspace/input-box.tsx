@@ -2135,7 +2135,7 @@ export function InputBox({
       {isNewThread &&
         searchParams.get("mode") !== "skill" &&
         searchParams.get("mode") !== "workbench-plugin" &&
-        searchParams.get("mode") !== "plugin-assistant" && (
+        (
           <div className="absolute right-0 -bottom-20 left-0 z-0 flex items-center justify-center">
             <SuggestionList />
           </div>

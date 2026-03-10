@@ -40,6 +40,9 @@ export interface AgentThreadState extends Record<string, unknown> {
   clarification?: ClarificationState | null;
   todos?: Todo[];
   session_mode?: SessionMode;
+  workspace_mode?: "default" | "plugin_assistant" | string;
+  thread_visibility?: "visible" | "hidden" | string;
+  plugin_studio_session_id?: string;
 }
 
 export interface AgentThread extends Thread<AgentThreadState> {}
@@ -55,4 +58,7 @@ export interface AgentThreadContext extends Record<string, unknown> {
   session_mode?: SessionMode;
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
   agent_name?: string;
+  workspace_mode?: "default" | "plugin_assistant" | string;
+  thread_visibility?: "visible" | "hidden" | string;
+  plugin_studio_session_id?: string;
 }

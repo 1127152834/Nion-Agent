@@ -33,7 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
-import { pathOfNewThread, pathOfThread } from "@/core/threads/utils";
+import { pathOfPluginAssistant, pathOfThread } from "@/core/threads/utils";
 import {
   buildWorkbenchSlotRouteURL,
   ensurePluginTestThreadId,
@@ -140,7 +140,7 @@ function WorkbenchPluginsList({
 
   const handleCreatePlugin = () => {
     onClose?.();
-    router.push(`${pathOfNewThread()}?mode=plugin-assistant`);
+    router.push(pathOfPluginAssistant());
   };
 
   const handleUploadMenuClick = () => {

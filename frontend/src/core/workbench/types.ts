@@ -257,6 +257,7 @@ export interface PluginStudioSession {
   sessionId: string;
   pluginId: string;
   pluginName: string;
+  chatThreadId?: string | null;
   description: string;
   state: "draft" | "generated" | "auto_verified" | "manual_verified" | "packaged";
   autoVerified: boolean;

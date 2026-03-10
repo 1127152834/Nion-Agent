@@ -55,6 +55,7 @@ import {
   useThreads,
 } from "@/core/threads/hooks";
 import {
+  isHiddenWorkspaceThread,
   isThreadAwaitingResponse,
   pathOfNewThread,
   pathOfThread,
@@ -80,7 +81,9 @@ export function RecentChatList() {
   const visibleThreads = useMemo(
     () =>
       threads.filter(
-        (thread) => thread.values?.session_mode !== "temporary_chat",
+        (thread) =>
+          thread.values?.session_mode !== "temporary_chat"
+          && !isHiddenWorkspaceThread(thread),
       ),
     [threads],
   );

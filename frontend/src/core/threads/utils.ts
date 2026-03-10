@@ -14,6 +14,10 @@ export function pathOfThread(threadId: string) {
   return `/workspace/chats/${threadId}`;
 }
 
+export function pathOfPluginAssistant() {
+  return "/workspace/plugins/assistant";
+}
+
 export function textOfMessage(message: Message) {
   if (typeof message.content === "string") {
     return message.content;
@@ -46,4 +50,12 @@ export function isThreadAwaitingResponse(thread: AgentThread) {
     ((clarification.options?.length ?? 0) > 0);
 
   return hasChoice;
+}
+
+export function isHiddenWorkspaceThread(thread: AgentThread) {
+  const visibility = thread.values?.thread_visibility;
+  if (visibility === "hidden") {
+    return true;
+  }
+  return thread.values?.workspace_mode === "plugin_assistant";
 }
