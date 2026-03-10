@@ -6,10 +6,12 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "pnpm run build && electron dist/main.js",
-    "start": "pnpm run build && electron dist/main.js",
+    "dev": "pnpm run icons:generate && pnpm run build && electron dist/main.js",
+    "start": "pnpm run icons:generate && pnpm run build && electron dist/main.js",
     "prepare-runtime": "bash ../runtime/prepare-runtime-core.sh",
-    "dist": "pnpm run build && pnpm run prepare-runtime && electron-builder --config electron-builder.yml"
+    "dist": "pnpm run icons:generate && pnpm run build && pnpm run prepare-runtime && electron-builder --config electron-builder.yml",
+    "icons:generate": "uv run --with pillow python ./scripts/generate-app-icons.py",
+    "dist:unsigned": "pnpm run icons:generate && pnpm run build && pnpm run prepare-runtime && electron-builder --config electron-builder.yml --config.mac.identity=null"
   },
   "nionRuntimeDownload": {
     "owner": "huanxi",

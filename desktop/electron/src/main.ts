@@ -1,6 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { resolveRuntimePaths, type DesktopRuntimePaths } from "./paths";
@@ -35,6 +35,7 @@ if (!gotTheLock) {
 
 app.on("ready", async () => {
   try {
+    applyAppIcon();
     runtimePaths = resolveRuntimePaths();
     runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(runtimePaths);
     runtimePorts = await startupRuntime();
@@ -52,6 +53,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
+  applyAppIcon();
   if (BrowserWindow.getAllWindows().length === 0) {
     createMainWindow();
   }
@@ -124,8 +126,41 @@ async function stopWorkspaceWatchersForSender(senderId: number): Promise<void> {
   await Promise.all(watchIds.map((watchId) => stopWorkspaceWatcher(watchId)));
 }
 
+function resolveAppIconPngPath(): string | null {
+  const candidates = [
+    path.resolve(__dirname, "..", "build", "icons", "app-icon.png"),
+    path.resolve(__dirname, "..", "..", "build", "icons", "app-icon.png"),
+    path.join(process.resourcesPath, "build", "icons", "app-icon.png"),
+  ];
+
+  for (const iconPath of candidates) {
+    if (existsSync(iconPath)) {
+      return iconPath;
+    }
+  }
+
+  return null;
+}
+
+function applyAppIcon(): void {
+  const iconPath = resolveAppIconPngPath();
+  if (!iconPath) {
+    return;
+  }
+
+  const iconImage = nativeImage.createFromPath(iconPath);
+  if (iconImage.isEmpty()) {
+    return;
+  }
+
+  if (process.platform === "darwin" && app.dock) {
+    app.dock.setIcon(iconImage);
+  }
+}
+
 function createMainWindow(): void {
   const isMac = process.platform === "darwin";
+  const iconPath = resolveAppIconPngPath();
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -133,6 +168,7 @@ function createMainWindow(): void {
     minWidth: 1000,
     minHeight: 600,
     title: "Nion",
+    ...(iconPath && !isMac ? { icon: iconPath } : {}),
     ...(isMac
       ? {
           titleBarStyle: "hiddenInset" as const
