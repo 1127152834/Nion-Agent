@@ -6,6 +6,7 @@ need to be forwarded by gateway.
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 
 import httpx
@@ -13,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
-from src.gateway.config import get_gateway_config
+from src.gateway.langgraph_client import build_langgraph_upstream_url, cancel_active_thread_runs
 
 router = APIRouter(prefix="/api/langgraph", tags=["langgraph"])
 
@@ -39,12 +40,11 @@ _STREAM_CONTENT_TYPES = (
     "application/x-ndjson",
 )
 
+_THREAD_DELETE_PATH = re.compile(r"^threads/(?P<thread_id>[^/]+)$")
+
 
 def _build_target_url(path: str) -> str:
-    base = get_gateway_config().langgraph_base_url.rstrip("/")
-    if not path:
-        return base
-    return f"{base}/{path.lstrip('/')}"
+    return build_langgraph_upstream_url(path)
 
 
 def _forward_request_headers(request: Request) -> dict[str, str]:
@@ -130,5 +130,10 @@ async def _close_upstream(response: httpx.Response, client: httpx.AsyncClient) -
 @router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"])
 async def proxy_langgraph(request: Request, path: str = "") -> Response:
     """Forward /api/langgraph/* requests to configured LangGraph server."""
+
+    normalized_path = path.strip("/")
+    delete_match = _THREAD_DELETE_PATH.fullmatch(normalized_path)
+    if request.method.upper() == "DELETE" and delete_match is not None:
+        await cancel_active_thread_runs(delete_match.group("thread_id"))
 
     return await _proxy_request(request, path)
