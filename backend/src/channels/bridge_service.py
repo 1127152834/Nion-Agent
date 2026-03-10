@@ -22,6 +22,7 @@ from src.channels.plugins.dingtalk.media_sender import DingTalkMediaSender
 from src.channels.repository import ChannelRepository
 from src.channels.webhook_service import IncomingWebhookEvent
 from src.config.paths import Paths, get_paths
+from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
 
 
 @dataclass(slots=True)
@@ -288,6 +289,45 @@ def _normalize_virtual_artifact_path(path: Any) -> str | None:
     if not normalized.startswith("/mnt/user-data/outputs/"):
         return None
     return normalized
+
+
+class _WorkspacePathResolver:
+    """Resolve sandbox virtual paths with optional host-mode support.
+
+    This keeps channel media delivery aligned with runtime profile execution mode
+    while still enforcing /mnt/user-data path boundaries.
+    """
+
+    def __init__(self, paths: Paths):
+        self._paths = paths
+        self._runtime_repo = RuntimeProfileRepository()
+        # Ensure runtime repo reads profiles from the same base dir.
+        self._runtime_repo._paths = paths  # noqa: SLF001 - aligned base_dir is required
+
+    def resolve_virtual_path(
+        self,
+        thread_id: str,
+        virtual_path: str,
+        *,
+        workspace_id: str | None = None,  # reserved for multi-workspace mapping
+    ) -> Path:
+        _ = workspace_id
+        profile = self._runtime_repo.read(thread_id)
+        if profile.get("execution_mode") == "host" and profile.get("host_workdir"):
+            try:
+                return RuntimeProfileRepository.resolve_host_virtual_path(
+                    virtual_path,
+                    profile["host_workdir"],
+                )
+            except RuntimeProfileValidationError:
+                # Fall back to sandbox resolution if host path validation fails.
+                pass
+        return self._paths.resolve_virtual_path(thread_id, virtual_path)
+
+
+def get_workspace_path_resolver(*, paths: Paths) -> _WorkspacePathResolver:
+    """Factory for workspace path resolver used by channel media delivery."""
+    return _WorkspacePathResolver(paths)
 
 
 def _dedupe_artifact_paths(thread_id: str, artifact_paths: list[str]) -> list[str]:
@@ -879,6 +919,69 @@ class ChannelAgentBridgeService:
             return "video"
         return "file"
 
+    def _update_media_manifest_item(
+        self,
+        manifest: list[dict[str, Any]],
+        asset: ChannelMediaAsset,
+        *,
+        status: str,
+        reason: str | None = None,
+        **extra: Any,
+    ) -> None:
+        """Update manifest entry for an asset, or append if missing.
+
+        This keeps a single source of truth for media delivery status.
+        """
+        for item in manifest:
+            if item.get("path") == asset.virtual_path and item.get("status") == "queued":
+                item["status"] = status
+                if reason:
+                    item["reason"] = reason
+                if extra:
+                    item.update(extra)
+                return
+        payload: dict[str, Any] = {
+            "path": asset.virtual_path,
+            "status": status,
+            "media_kind": asset.media_kind,
+            "size_bytes": asset.size_bytes,
+        }
+        if reason:
+            payload["reason"] = reason
+        if extra:
+            payload.update(extra)
+        manifest.append(payload)
+
+    @staticmethod
+    def _format_media_fallback_text(assets: list[ChannelMediaAsset]) -> str:
+        """Human-readable fallback when media delivery is partial."""
+        lines = ["已生成以下文件："]
+        for index, asset in enumerate(assets, start=1):
+            lines.append(f"{index}. {asset.file_name}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_media_fallback_text_from_paths(artifact_paths: list[str]) -> str:
+        """Fallback formatter based on raw virtual paths when assets are empty."""
+        lines = ["已生成以下文件："]
+        for index, path in enumerate(artifact_paths, start=1):
+            filename = Path(_safe_text(path)).name or _safe_text(path)
+            lines.append(f"{index}. {filename}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _lark_file_type_for_extension(extension: str) -> str:
+        """Map common extensions to Lark file_type values."""
+        if extension in {".xls", ".xlsx", ".csv"}:
+            return "xls"
+        if extension in {".ppt", ".pptx"}:
+            return "ppt"
+        if extension == ".pdf":
+            return "pdf"
+        if extension in {".doc", ".docx"}:
+            return "doc"
+        return "stream"
+
     def _build_media_assets(
         self,
         *,
@@ -1086,6 +1189,363 @@ class ChannelAgentBridgeService:
                 credentials=credentials,
                 incoming=incoming,
             )
+        report.manifest_json = json.dumps(manifest, ensure_ascii=False)
+        return report
+
+    def _deliver_lark_media_assets(
+        self,
+        *,
+        credentials: dict[str, str],
+        incoming: IncomingWebhookEvent,
+        thread_id: str,
+        workspace_id: str,
+        artifact_paths: list[str],
+    ) -> ChannelMediaDeliveryReport:
+        report = ChannelMediaDeliveryReport()
+        if not self._media_reply_enabled or not artifact_paths:
+            return report
+
+        chat_id = _safe_text(incoming.chat_id)
+        if not chat_id:
+            report.fallback_reason = "missing_chat_id"
+            return report
+
+        assets, manifest = self._build_media_assets(
+            thread_id=thread_id,
+            workspace_id=workspace_id,
+            artifact_paths=artifact_paths,
+        )
+
+        max_attachments = self._media_max_attachments_per_reply
+        selected_assets = assets[:max_attachments]
+        if len(assets) > max_attachments:
+            for asset in assets[max_attachments:]:
+                self._update_media_manifest_item(
+                    manifest,
+                    asset,
+                    status="skipped",
+                    reason="exceed_max_attachments",
+                )
+
+        # Feishu limits: image 10MB, file 30MB (cap by env settings).
+        filtered_assets: list[ChannelMediaAsset] = []
+        for asset in selected_assets:
+            platform_limit = 10 * 1024 * 1024 if asset.media_kind == "image" else 30 * 1024 * 1024
+            env_limit = self._media_max_image_bytes if asset.media_kind == "image" else self._media_max_file_bytes
+            effective_limit = min(platform_limit, env_limit)
+            if asset.size_bytes > effective_limit:
+                self._update_media_manifest_item(
+                    manifest,
+                    asset,
+                    status="skipped",
+                    reason=f"file_too_large>{effective_limit}",
+                )
+                continue
+            filtered_assets.append(asset)
+        selected_assets = filtered_assets
+
+        if not selected_assets:
+            skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
+            if skipped_count > 0:
+                fallback_text = (
+                    self._format_media_fallback_text(assets)
+                    if assets
+                    else self._format_media_fallback_text_from_paths(artifact_paths)
+                )
+                self._send_lark_text(
+                    chat_id=chat_id,
+                    text=fallback_text,
+                    credentials=credentials,
+                )
+                report.fallback_reason = "media_skipped"
+            report.manifest_json = json.dumps(manifest, ensure_ascii=False)
+            return report
+
+        try:
+            token = self._get_lark_tenant_access_token(credentials=credentials)
+        except Exception as exc:
+            report.fallback_reason = _safe_text(exc) or "lark token failed"
+            report.manifest_json = json.dumps(manifest, ensure_ascii=False)
+            return report
+
+        headers = {"Authorization": f"Bearer {token}"}
+        with httpx.Client(timeout=self._run_timeout_seconds) as client:
+            for asset in selected_assets:
+                report.attempted_count += 1
+                mime_type = (
+                    mimetypes.guess_type(asset.file_name)[0] or "application/octet-stream"
+                )
+
+                try:
+                    with open(asset.local_path, "rb") as f:
+                        if asset.media_kind == "image":
+                            upload_resp = client.post(
+                                "https://open.feishu.cn/open-apis/im/v1/images",
+                                headers=headers,
+                                data={"image_type": "message"},
+                                files={"image": (asset.file_name, f, mime_type)},
+                            )
+                            if upload_resp.status_code >= 400:
+                                raise RuntimeError(f"image upload http {upload_resp.status_code}")
+                            upload_payload = upload_resp.json()
+                            if int(upload_payload.get("code") or 0) != 0:
+                                raise RuntimeError(_safe_text(upload_payload.get("msg") or "image upload failed"))
+                            image_key = _safe_text((upload_payload.get("data") or {}).get("image_key"))
+                            if not image_key:
+                                raise RuntimeError("missing image_key")
+                            msg_type = "image"
+                            content = json.dumps({"image_key": image_key}, ensure_ascii=False)
+                        else:
+                            upload_resp = client.post(
+                                "https://open.feishu.cn/open-apis/im/v1/files",
+                                headers=headers,
+                                data={
+                                    "file_type": self._lark_file_type_for_extension(asset.extension),
+                                    "file_name": asset.file_name,
+                                },
+                                files={"file": (asset.file_name, f, mime_type)},
+                            )
+                            if upload_resp.status_code >= 400:
+                                raise RuntimeError(f"file upload http {upload_resp.status_code}")
+                            upload_payload = upload_resp.json()
+                            if int(upload_payload.get("code") or 0) != 0:
+                                raise RuntimeError(_safe_text(upload_payload.get("msg") or "file upload failed"))
+                            file_key = _safe_text((upload_payload.get("data") or {}).get("file_key"))
+                            if not file_key:
+                                raise RuntimeError("missing file_key")
+                            msg_type = "file"
+                            content = json.dumps({"file_key": file_key}, ensure_ascii=False)
+                except Exception as exc:
+                    report.failed_count += 1
+                    self._update_media_manifest_item(
+                        manifest,
+                        asset,
+                        status="failed",
+                        reason=_safe_text(exc) or "media_upload_failed",
+                    )
+                    if not report.fallback_reason:
+                        report.fallback_reason = "media_upload_failed"
+                    continue
+
+                message_resp = client.post(
+                    "https://open.feishu.cn/open-apis/im/v1/messages",
+                    params={"receive_id_type": "chat_id"},
+                    headers=headers,
+                    json={
+                        "receive_id": chat_id,
+                        "msg_type": msg_type,
+                        "content": content,
+                    },
+                )
+                if message_resp.status_code >= 400:
+                    report.failed_count += 1
+                    self._update_media_manifest_item(
+                        manifest,
+                        asset,
+                        status="failed",
+                        reason=f"media_delivery_http_{message_resp.status_code}",
+                    )
+                    if not report.fallback_reason:
+                        report.fallback_reason = "media_delivery_failed"
+                    continue
+                message_payload = message_resp.json()
+                if int(message_payload.get("code") or 0) != 0:
+                    report.failed_count += 1
+                    self._update_media_manifest_item(
+                        manifest,
+                        asset,
+                        status="failed",
+                        reason=_safe_text(message_payload.get("msg") or "media_delivery_failed"),
+                    )
+                    if not report.fallback_reason:
+                        report.fallback_reason = "media_delivery_failed"
+                    continue
+
+                report.sent_count += 1
+                self._update_media_manifest_item(
+                    manifest,
+                    asset,
+                    status="sent",
+                    delivery_path="lark.api.media",
+                )
+
+        skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
+        if report.failed_count > 0 or skipped_count > 0:
+            fallback_text = (
+                self._format_media_fallback_text(assets)
+                if assets
+                else self._format_media_fallback_text_from_paths(artifact_paths)
+            )
+            self._send_lark_text(
+                chat_id=chat_id,
+                text=fallback_text,
+                credentials=credentials,
+            )
+            if not report.fallback_reason:
+                report.fallback_reason = "media_delivery_failed"
+
+        report.manifest_json = json.dumps(manifest, ensure_ascii=False)
+        return report
+
+    def _deliver_telegram_media_assets(
+        self,
+        *,
+        credentials: dict[str, str],
+        incoming: IncomingWebhookEvent,
+        thread_id: str,
+        workspace_id: str,
+        artifact_paths: list[str],
+    ) -> ChannelMediaDeliveryReport:
+        report = ChannelMediaDeliveryReport()
+        if not self._media_reply_enabled or not artifact_paths:
+            return report
+
+        bot_token = _safe_text(credentials.get("bot_token"))
+        if not bot_token:
+            report.fallback_reason = "missing_bot_token"
+            return report
+
+        chat_id = _safe_text(incoming.chat_id)
+        if not chat_id:
+            report.fallback_reason = "missing_chat_id"
+            return report
+
+        assets, manifest = self._build_media_assets(
+            thread_id=thread_id,
+            workspace_id=workspace_id,
+            artifact_paths=artifact_paths,
+        )
+
+        max_attachments = self._media_max_attachments_per_reply
+        selected_assets = assets[:max_attachments]
+        if len(assets) > max_attachments:
+            for asset in assets[max_attachments:]:
+                self._update_media_manifest_item(
+                    manifest,
+                    asset,
+                    status="skipped",
+                    reason="exceed_max_attachments",
+                )
+
+        # Telegram limits: image 10MB, document 50MB (cap by env settings).
+        filtered_assets: list[ChannelMediaAsset] = []
+        for asset in selected_assets:
+            if asset.media_kind == "image":
+                platform_limit = 10 * 1024 * 1024
+                env_limit = self._media_max_image_bytes
+            else:
+                platform_limit = 50 * 1024 * 1024
+                env_limit = self._media_max_file_bytes
+            effective_limit = min(platform_limit, env_limit)
+            if asset.size_bytes > effective_limit:
+                self._update_media_manifest_item(
+                    manifest,
+                    asset,
+                    status="skipped",
+                    reason=f"file_too_large>{effective_limit}",
+                )
+                continue
+            filtered_assets.append(asset)
+        selected_assets = filtered_assets
+
+        if not selected_assets:
+            skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
+            if skipped_count > 0:
+                fallback_text = (
+                    self._format_media_fallback_text(assets)
+                    if assets
+                    else self._format_media_fallback_text_from_paths(artifact_paths)
+                )
+                self._send_telegram_text(
+                    chat_id=chat_id,
+                    text=fallback_text,
+                    credentials=credentials,
+                )
+                report.fallback_reason = "media_skipped"
+            report.manifest_json = json.dumps(manifest, ensure_ascii=False)
+            return report
+
+        with httpx.Client(timeout=self._run_timeout_seconds) as client:
+            for asset in selected_assets:
+                report.attempted_count += 1
+                mime_type = (
+                    mimetypes.guess_type(asset.file_name)[0] or "application/octet-stream"
+                )
+
+                try:
+                    with open(asset.local_path, "rb") as f:
+                        if asset.media_kind == "image":
+                            endpoint = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+                            files = {"photo": (asset.file_name, f, mime_type)}
+                        else:
+                            endpoint = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+                            files = {"document": (asset.file_name, f, mime_type)}
+
+                        response = client.post(
+                            endpoint,
+                            data={"chat_id": chat_id},
+                            files=files,
+                        )
+                except Exception as exc:
+                    report.failed_count += 1
+                    self._update_media_manifest_item(
+                        manifest,
+                        asset,
+                        status="failed",
+                        reason=_safe_text(exc) or "media_upload_failed",
+                    )
+                    if not report.fallback_reason:
+                        report.fallback_reason = "media_upload_failed"
+                    continue
+
+                if response.status_code >= 400:
+                    report.failed_count += 1
+                    self._update_media_manifest_item(
+                        manifest,
+                        asset,
+                        status="failed",
+                        reason=f"media_delivery_http_{response.status_code}",
+                    )
+                    if not report.fallback_reason:
+                        report.fallback_reason = "media_delivery_failed"
+                    continue
+
+                payload = response.json()
+                if not bool(payload.get("ok")):
+                    report.failed_count += 1
+                    self._update_media_manifest_item(
+                        manifest,
+                        asset,
+                        status="failed",
+                        reason=_safe_text(payload.get("description") or "media_delivery_failed"),
+                    )
+                    if not report.fallback_reason:
+                        report.fallback_reason = "media_delivery_failed"
+                    continue
+
+                report.sent_count += 1
+                self._update_media_manifest_item(
+                    manifest,
+                    asset,
+                    status="sent",
+                    delivery_path="telegram.api.media",
+                )
+
+        skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
+        if report.failed_count > 0 or skipped_count > 0:
+            fallback_text = (
+                self._format_media_fallback_text(assets)
+                if assets
+                else self._format_media_fallback_text_from_paths(artifact_paths)
+            )
+            self._send_telegram_text(
+                chat_id=chat_id,
+                text=fallback_text,
+                credentials=credentials,
+            )
+            if not report.fallback_reason:
+                report.fallback_reason = "media_delivery_failed"
+
         report.manifest_json = json.dumps(manifest, ensure_ascii=False)
         return report
 
@@ -2764,6 +3224,22 @@ class ChannelAgentBridgeService:
             _emit_state_snapshot("finished", force=True)
             if platform == "dingtalk" and final_report.delivered:
                 media_report = self._deliver_dingtalk_media_assets(
+                    credentials=credentials,
+                    incoming=incoming,
+                    thread_id=thread_id,
+                    workspace_id=workspace_id,
+                    artifact_paths=reply_bundle.artifacts,
+                )
+            elif platform == "lark" and final_report.delivered:
+                media_report = self._deliver_lark_media_assets(
+                    credentials=credentials,
+                    incoming=incoming,
+                    thread_id=thread_id,
+                    workspace_id=workspace_id,
+                    artifact_paths=reply_bundle.artifacts,
+                )
+            elif platform == "telegram" and final_report.delivered:
+                media_report = self._deliver_telegram_media_assets(
                     credentials=credentials,
                     incoming=incoming,
                     thread_id=thread_id,
