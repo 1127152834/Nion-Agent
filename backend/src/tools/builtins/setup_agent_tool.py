@@ -1,6 +1,6 @@
+import json
 import logging
 
-import yaml
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolRuntime
@@ -11,17 +11,43 @@ from src.config.paths import get_paths
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_IDENTITY_CONTENT = """# Agent Identity
+
+## Role
+You are a helpful AI assistant focused on assisting users with their tasks.
+
+## Personality Traits
+- Professional and focused
+- Patient and thorough
+- Adaptable to user needs
+- Proactive in problem-solving
+
+## Values
+- Quality and accuracy
+- User autonomy and consent
+- Transparency in actions
+- Continuous improvement
+"""
+
+
 @tool
 def setup_agent(
     soul: str,
     description: str,
+    # NOTE:
+    # runtime is injected by LangGraph and must remain a required positional
+    # parameter. Put it before optional params to keep Python signature valid.
     runtime: ToolRuntime,
+    model: str | None = None,
+    tool_groups: list[str] | None = None,
 ) -> Command:
     """Setup the custom Nion agent.
 
     Args:
         soul: Full SOUL.md content defining the agent's personality and behavior.
         description: One-line description of what the agent does.
+        model: Optional model name to use for this agent (e.g., "claude-opus-4-6").
+        tool_groups: Optional list of tool groups to enable for this agent (e.g., ["default"]).
     """
 
     agent_name: str | None = runtime.context.get("agent_name")
@@ -40,17 +66,31 @@ def setup_agent(
         agent_dir = paths.agent_dir(agent_name)
         agent_dir.mkdir(parents=True, exist_ok=True)
 
-        # If agent_name is provided, we are creating a custom agent in the agents/ directory
-        config_data: dict = {"name": agent_name}
-        if description:
-            config_data["description"] = description
+        # Create agent.json with complete configuration
+        config_data: dict = {
+            "name": agent_name,
+            "description": description,
+            "heartbeat_enabled": True,
+            "evolution_enabled": True,
+        }
 
-        config_file = agent_dir / "config.yaml"
+        # Add optional fields if provided
+        if model is not None:
+            config_data["model"] = model
+        if tool_groups is not None:
+            config_data["tool_groups"] = tool_groups
+
+        config_file = paths.agent_config_file(agent_name)
         with open(config_file, "w", encoding="utf-8") as f:
-            yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            json.dump(config_data, f, indent=2, ensure_ascii=False)
 
-        soul_file = agent_dir / "SOUL.md"
+        # Create SOUL.md (AI-generated content)
+        soul_file = paths.agent_soul_file(agent_name)
         soul_file.write_text(soul, encoding="utf-8")
+
+        # Create IDENTITY.md (default template)
+        identity_file = paths.agent_identity_file(agent_name)
+        identity_file.write_text(DEFAULT_IDENTITY_CONTENT.strip(), encoding="utf-8")
 
         logger.info(f"[agent_creator] Created agent '{agent_name}' at {agent_dir}")
         return Command(
