@@ -21,15 +21,20 @@ export function WorkbenchModal({
   artifactPath,
   threadId,
   matchedPluginId,
+  forcedPluginId,
+  targetKind = "file",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   artifactPath: string | null;
   threadId: string;
   matchedPluginId: string | null;
+  forcedPluginId?: string | null;
+  targetKind?: "file" | "directory" | "project";
 }) {
   const { t } = useI18n();
-  const enabled = open && Boolean(artifactPath);
+  // Only fetch file content for file targets; directory/project targets are plugin-owned.
+  const enabled = open && Boolean(artifactPath) && targetKind === "file";
   const safeArtifactPath = artifactPath ?? "";
   const { content, isLoading, error } = useArtifactContent({
     filepath: safeArtifactPath,
@@ -58,7 +63,12 @@ export function WorkbenchModal({
 
         <div className="min-h-0 flex-1 p-0">
           {artifactPath ? (
-            <WorkbenchContainer filepath={artifactPath} threadId={threadId}>
+            <WorkbenchContainer
+              filepath={artifactPath}
+              threadId={threadId}
+              targetKind={targetKind}
+              pluginId={forcedPluginId}
+            >
               <div className="text-muted-foreground flex h-full items-center justify-center px-6">
                 {isLoading ? (
                   <span>{t.artifactCenter.loadingContent}</span>

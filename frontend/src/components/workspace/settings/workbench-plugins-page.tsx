@@ -29,14 +29,22 @@ import {
 } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorkbenchModal } from "@/components/workspace/artifact-center/workbench-modal";
+import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { pathOfNewThread } from "@/core/threads/utils";
 import {
+  ensurePluginTestThreadId,
+  getInstalledPluginFiles,
+  getInstalledPluginMetadataById,
   useInstalledPlugins,
   useInstallPlugin,
   useTestInstalledPlugin,
   useUninstallPlugin,
   useTogglePlugin,
+  type WorkbenchPackageFile,
+  type WorkbenchPluginManifestV2,
+  type WorkbenchTargetRule,
 } from "@/core/workbench";
 
 import { ConfirmActionDialog } from "./confirm-action-dialog";
@@ -100,6 +108,20 @@ function WorkbenchPluginsList({
   }, [pathname]);
   const [filter, setFilter] = useState<string>("installed");
   const [pendingDeletePluginId, setPendingDeletePluginId] = useState<string | null>(null);
+  const [manualTestLoading, setManualTestLoading] = useState(false);
+  const [manualTestState, setManualTestState] = useState<{
+    open: boolean;
+    threadId: string | null;
+    artifactPath: string | null;
+    pluginId: string | null;
+    targetKind: "file" | "directory" | "project";
+  }>({
+    open: false,
+    threadId: null,
+    artifactPath: null,
+    pluginId: null,
+    targetKind: "file",
+  });
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const { mutate: togglePlugin } = useTogglePlugin();
   const { mutate: uninstallPlugin, isPending: uninstallingPlugin } = useUninstallPlugin();
@@ -169,7 +191,134 @@ function WorkbenchPluginsList({
     });
   };
 
-  const handleTestPlugin = (pluginId: string, pluginName: string) => {
+  const normalizePath = (path: string) => path.replace(/^\/+/, "");
+
+  const extName = (path: string) => {
+    const base = path.split("/").pop() ?? "";
+    const idx = base.lastIndexOf(".");
+    return idx > -1 ? base.slice(idx + 1).toLowerCase() : "";
+  };
+
+  const normalizeExtensions = (extensions?: string[]) =>
+    new Set((extensions ?? []).map((ext) => ext.replace(/^\./, "").toLowerCase()));
+
+  const pickTargetKind = (targets?: WorkbenchTargetRule[]) => {
+    if (!targets || targets.length === 0) return "file";
+    if (targets.some((rule) => rule.kind === "file" || !rule.kind)) return "file";
+    if (targets.some((rule) => rule.kind === "directory")) return "directory";
+    if (targets.some((rule) => rule.kind === "project")) return "project";
+    return "file";
+  };
+
+  const pickFixtureForPlugin = (
+    manifest: WorkbenchPluginManifestV2,
+    fixturePaths: string[],
+  ) => {
+    const extensionSet = new Set<string>();
+    for (const rule of manifest.targets ?? []) {
+      for (const ext of normalizeExtensions(rule.extensions)) {
+        extensionSet.add(ext);
+      }
+    }
+    const preferred = fixturePaths.find((fixture) => extensionSet.has(extName(fixture)));
+    return preferred ?? fixturePaths[0] ?? null;
+  };
+
+  const decodePackageFile = (file: WorkbenchPackageFile): Uint8Array => {
+    if (file.encoding === "text") {
+      return new TextEncoder().encode(file.content);
+    }
+    const binary = atob(file.content);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  };
+
+  const writeFixtureToThread = async (
+    threadId: string,
+    virtualPath: string,
+    file: WorkbenchPackageFile,
+  ) => {
+    // Use artifacts API to materialize plugin fixture files into the sandbox workspace.
+    const normalized = normalizePath(virtualPath);
+    const response = await fetch(
+      `${getBackendBaseURL()}/api/threads/${threadId}/artifacts/${normalized}`,
+      {
+        method: "PUT",
+        body: decodePackageFile(file),
+      },
+    );
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(detail || `Failed to write fixture: ${virtualPath}`);
+    }
+  };
+
+  const ensureFallbackArtifact = async (
+    threadId: string,
+    manifest: WorkbenchPluginManifestV2,
+  ) => {
+    // If the plugin ships no fixtures, create a minimal file to open manually.
+    const firstRule = manifest.targets?.find((rule) => rule.extensions?.length);
+    const fallbackExt = firstRule?.extensions?.[0]?.replace(/^\./, "") || "txt";
+    const fallbackPath = `/mnt/user-data/workspace/workbench-test.${fallbackExt}`;
+    const content = `// Workbench plugin manual test\n// Plugin: ${manifest.name}\n`;
+    await writeFixtureToThread(threadId, fallbackPath, {
+      encoding: "text",
+      content,
+    });
+    return fallbackPath;
+  };
+
+  const prepareManualTest = async (pluginId: string) => {
+    const [metadata, files] = await Promise.all([
+      getInstalledPluginMetadataById(pluginId),
+      getInstalledPluginFiles(pluginId),
+    ]);
+    if (!metadata) {
+      throw new Error(`Plugin ${pluginId} not found`);
+    }
+
+    const manifest = metadata.manifest;
+    const threadId = await ensurePluginTestThreadId();
+    const fixturePaths = (manifest.fixtures ?? [])
+      .map(normalizePath)
+      .filter((fixture) => files.has(fixture));
+
+    // Materialize all fixtures into the sandbox workspace for manual inspection.
+    await Promise.all(
+      fixturePaths.map((fixture) => {
+        const file = files.get(fixture);
+        if (!file) return Promise.resolve();
+        const virtualPath = `/mnt/user-data/workspace/${fixture}`;
+        return writeFixtureToThread(threadId, virtualPath, file);
+      }),
+    );
+
+    const targetKind = pickTargetKind(manifest.targets);
+    const fixture = pickFixtureForPlugin(manifest, fixturePaths);
+    let artifactPath = fixture
+      ? `/mnt/user-data/workspace/${fixture}`
+      : await ensureFallbackArtifact(threadId, manifest);
+
+    // Directory/project targets should open the containing folder, not a file.
+    if (targetKind !== "file") {
+      const parts = artifactPath.split("/");
+      parts.pop();
+      artifactPath = parts.join("/") || "/mnt/user-data/workspace";
+    }
+
+    return {
+      threadId,
+      artifactPath,
+      pluginId: manifest.id,
+      targetKind,
+    };
+  };
+
+  const handleTestPlugin = async (pluginId: string, pluginName: string) => {
     testPlugin(
       { pluginId, threadId: activeThreadId },
       {
@@ -185,6 +334,23 @@ function WorkbenchPluginsList({
         },
       },
     );
+
+    // Always open a manual test session so users can interact with the plugin UI.
+    try {
+      setManualTestLoading(true);
+      const manual = await prepareManualTest(pluginId);
+      setManualTestState({
+        open: true,
+        threadId: manual.threadId,
+        artifactPath: manual.artifactPath,
+        pluginId: manual.pluginId,
+        targetKind: manual.targetKind,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : copy.pluginTestRunFailed);
+    } finally {
+      setManualTestLoading(false);
+    }
   };
 
   return (
@@ -269,9 +435,9 @@ function WorkbenchPluginsList({
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={testingPlugin}
+                disabled={testingPlugin || manualTestLoading}
                 onClick={() => {
-                  handleTestPlugin(plugin.manifest.id, plugin.manifest.name);
+                  void handleTestPlugin(plugin.manifest.id, plugin.manifest.name);
                 }}
               >
                 <TestTube2Icon className="size-4" />
@@ -320,6 +486,19 @@ function WorkbenchPluginsList({
         onConfirm={handleConfirmDeletePlugin}
         confirmVariant="destructive"
       />
+      {manualTestState.threadId && manualTestState.artifactPath ? (
+        <WorkbenchModal
+          open={manualTestState.open}
+          onOpenChange={(open) => {
+            setManualTestState((prev) => ({ ...prev, open }));
+          }}
+          artifactPath={manualTestState.artifactPath}
+          threadId={manualTestState.threadId}
+          matchedPluginId={manualTestState.pluginId}
+          forcedPluginId={manualTestState.pluginId}
+          targetKind={manualTestState.targetKind}
+        />
+      ) : null}
     </div>
   );
 }

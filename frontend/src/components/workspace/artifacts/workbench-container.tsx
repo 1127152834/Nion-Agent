@@ -20,11 +20,13 @@ export function WorkbenchContainer({
   threadId,
   children,
   targetKind = "file",
+  pluginId,
 }: {
   filepath: string;
   threadId: string;
   children: React.ReactNode;
   targetKind?: "file" | "directory" | "project";
+  pluginId?: string | null;
 }) {
   const registry = getWorkbenchRegistry();
 
@@ -38,10 +40,13 @@ export function WorkbenchContainer({
     [filepath, targetKind],
   );
 
-  // Find best matching plugin
+  // Find best matching plugin (or force a specific plugin for manual tests).
   const plugin = useMemo(() => {
+    if (pluginId) {
+      return registry.get(pluginId) ?? null;
+    }
     return registry.findBestMatch(artifact);
-  }, [registry, artifact]);
+  }, [registry, artifact, pluginId]);
 
   // Create workbench context
   const context = useMemo(() => {

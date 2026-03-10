@@ -794,6 +794,7 @@ export function ArtifactCenter({
         artifactPath={selectedArtifact}
         threadId={threadId}
         matchedPluginId={matchedPluginId}
+        forcedPluginId={matchedPluginId}
       />
     </>
   );

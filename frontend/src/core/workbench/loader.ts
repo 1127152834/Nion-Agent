@@ -77,7 +77,11 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 let cachedPluginTestThreadId: string | null = null;
 
-async function getPluginTestThreadId(): Promise<string> {
+/**
+ * Ensure a hidden sandbox thread exists for workbench plugin tests.
+ * This thread is NOT tied to any chat and only backs commandSteps/manual tests.
+ */
+export async function ensurePluginTestThreadId(): Promise<string> {
   if (cachedPluginTestThreadId) {
     return cachedPluginTestThreadId;
   }
@@ -399,7 +403,7 @@ export async function runInstalledPluginTest(
     let effectiveThreadId = opts?.threadId;
     if (!effectiveThreadId) {
       try {
-        effectiveThreadId = await getPluginTestThreadId();
+        effectiveThreadId = await ensurePluginTestThreadId();
       } catch (error) {
         steps.push({
           id: "command:thread-create-failed",

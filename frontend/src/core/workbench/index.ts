@@ -14,6 +14,7 @@ export {
   runInstalledPluginTest,
   getInstalledPluginFiles,
   getInstalledPluginMetadataById,
+  ensurePluginTestThreadId,
 } from "./loader";
 export {
   useInstalledPlugins,
