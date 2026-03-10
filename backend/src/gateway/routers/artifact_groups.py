@@ -9,12 +9,16 @@ from typing import Any
 from urllib.parse import quote
 from uuid import uuid4
 
-import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from src.gateway.config import get_gateway_config
+from src.gateway.langgraph_client import (
+    LangGraphThreadNotFoundError,
+    LangGraphThreadNotReadyError,
+    load_thread_state,
+    update_thread_state,
+)
 from src.gateway.path_utils import resolve_thread_virtual_path
 
 logger = logging.getLogger(__name__)
@@ -99,44 +103,24 @@ def _normalize_groups(raw_groups: Any) -> list[ArtifactGroup]:
 
 
 async def _load_thread_artifact_groups(thread_id: str) -> list[ArtifactGroup]:
-    cfg = get_gateway_config()
-    url = f"{cfg.langgraph_base_url.rstrip('/')}/threads/{thread_id}/state"
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.get(url)
-
-    if response.status_code == 404:
-        raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
-    if not response.is_success:
-        raise HTTPException(status_code=502, detail=f"Failed to load thread state ({response.status_code})")
-
-    payload = response.json()
-    values = payload.get("values", {}) if isinstance(payload, dict) else {}
+    values = await load_thread_state(thread_id)
     raw_groups = values.get("artifact_groups", []) if isinstance(values, dict) else []
     return _normalize_groups(raw_groups)
 
 
 async def _save_thread_artifact_groups(thread_id: str, groups: list[ArtifactGroup]) -> None:
-    cfg = get_gateway_config()
-    url = f"{cfg.langgraph_base_url.rstrip('/')}/threads/{thread_id}/state"
-    payload = {
-        "values": {
-            "artifact_groups": [group.model_dump() for group in groups],
-        },
-    }
-
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await client.post(url, json=payload)
-
-    if response.status_code == 404:
-        raise HTTPException(status_code=404, detail=f"Thread '{thread_id}' not found")
-    if not response.is_success:
-        raise HTTPException(status_code=502, detail=f"Failed to persist artifact groups ({response.status_code})")
+    await update_thread_state(
+        thread_id,
+        {"artifact_groups": [group.model_dump() for group in groups]},
+    )
 
 
 @router.get("", response_model=ArtifactGroupsListResponse, summary="List Artifact Groups")
 async def list_artifact_groups(thread_id: str) -> ArtifactGroupsListResponse:
-    groups = await _load_thread_artifact_groups(thread_id)
+    try:
+        groups = await _load_thread_artifact_groups(thread_id)
+    except (LangGraphThreadNotFoundError, LangGraphThreadNotReadyError):
+        groups = []
     return ArtifactGroupsListResponse(groups=groups)
 
 
