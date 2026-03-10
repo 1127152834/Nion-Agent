@@ -87,6 +87,24 @@ class Paths:
         return self.base_dir / "USER.md"
 
     @property
+    def default_agent_soul_file(self) -> Path:
+        """Path to default agent SOUL.md: `{base_dir}/SOUL.md`."""
+        return self.base_dir / "SOUL.md"
+
+    @property
+    def default_agent_identity_file(self) -> Path:
+        """Path to default agent IDENTITY.md: `{base_dir}/IDENTITY.md`."""
+        return self.base_dir / "IDENTITY.md"
+
+    def agent_soul_file(self, name: str) -> Path:
+        """Per-agent SOUL.md: `{base_dir}/agents/{name}/SOUL.md`."""
+        return self.agent_dir(name) / "SOUL.md"
+
+    def agent_identity_file(self, name: str) -> Path:
+        """Per-agent IDENTITY.md: `{base_dir}/agents/{name}/IDENTITY.md`."""
+        return self.agent_dir(name) / "IDENTITY.md"
+
+    @property
     def agents_dir(self) -> Path:
         """Root directory for all custom agents: `{base_dir}/agents/`."""
         return self.base_dir / "agents"

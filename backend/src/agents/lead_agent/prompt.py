@@ -156,6 +156,7 @@ You are {agent_name}, an open-source super agent.
 </role>
 
 {soul}
+{user_profile}
 {memory_context}
 {rss_context_section}
 
@@ -369,11 +370,58 @@ You have access to skills that provide optimized workflows for specific tasks. E
 
 
 def get_agent_soul(agent_name: str | None) -> str:
-    # Append SOUL.md (agent personality) if present
-    soul = load_agent_soul(agent_name)
-    if soul:
-        return f"<soul>\n{soul}\n</soul>\n" if soul else ""
-    return ""
+    """Load agent soul with summarization (Memoh Soul Core)."""
+    from src.agents.soul.resolver import SoulResolver
+    from src.agents.soul.summarizer import SoulSummarizer
+
+    resolver = SoulResolver()
+    summarizer = SoulSummarizer()
+
+    result = ""
+
+    # Load SOUL.md
+    soul_asset = resolver.load_soul(agent_name)
+    if soul_asset:
+        soul_summary = summarizer.summarize(soul_asset, max_tokens=500)
+        result += f"<soul>\n{soul_summary.summary}\n</soul>\n"
+
+    # Load IDENTITY.md
+    identity_asset = resolver.load_identity(agent_name)
+    if identity_asset:
+        identity_summary = summarizer.summarize(identity_asset, max_tokens=300)
+        result += f"<identity>\n{identity_summary.summary}\n</identity>\n"
+
+    return result
+
+
+def get_user_profile(
+    session_mode: str | None = None,
+    memory_read: bool | None = None,
+) -> str:
+    """Load USER.md with policy enforcement (Memoh Soul Core)."""
+    from src.agents.memory.policy import resolve_memory_policy
+    from src.agents.soul.resolver import SoulResolver
+    from src.agents.soul.summarizer import SoulSummarizer
+
+    # Check memory policy
+    policy = resolve_memory_policy(
+        runtime_context={
+            "session_mode": session_mode,
+            "memory_read": memory_read,
+        }
+    )
+    if not policy.allow_read:
+        return ""
+
+    resolver = SoulResolver()
+    summarizer = SoulSummarizer()
+
+    user_asset = resolver.load_user_profile()
+    if not user_asset:
+        return ""
+
+    user_summary = summarizer.summarize(user_asset, max_tokens=300)
+    return f"<user-profile>\n{user_summary.summary}\n</user-profile>\n"
 
 
 def _format_rss_context_section(rss_context: list[dict[str, Any]] | None) -> str:
@@ -483,10 +531,14 @@ def apply_prompt_template(
     # Get skills section
     skills_section = get_skills_prompt_section(available_skills)
 
+    # Get user profile with policy enforcement
+    user_profile = get_user_profile(session_mode=session_mode, memory_read=memory_read)
+
     # Format the prompt with dynamic skills and memory
     prompt = SYSTEM_PROMPT_TEMPLATE.format(
         agent_name=agent_name or "Nion 2.0",
         soul=get_agent_soul(agent_name),
+        user_profile=user_profile,
         skills_section=skills_section,
         memory_context=memory_context,
         rss_context_section=rss_context_section,

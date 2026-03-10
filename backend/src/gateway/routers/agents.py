@@ -381,3 +381,180 @@ async def delete_agent(name: str) -> None:
     except Exception as e:
         logger.error(f"Failed to delete agent '{name}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete agent: {str(e)}")
+
+
+# ── Default Agent Soul/Identity Endpoints ────────────────────────────────
+
+
+class DefaultAgentAssetResponse(BaseModel):
+    """Response model for default agent soul/identity assets."""
+
+    content: str | None = Field(default=None, description="Asset content, or null if not yet created")
+
+
+class DefaultAgentAssetUpdateRequest(BaseModel):
+    """Request body for updating default agent soul/identity assets."""
+
+    content: str = Field(default="", description="Asset content")
+
+
+@router.get(
+    "/default-agent/soul",
+    response_model=DefaultAgentAssetResponse,
+    summary="Get Default Agent Soul",
+    description="Read the default agent SOUL.md file.",
+)
+async def get_default_agent_soul() -> DefaultAgentAssetResponse:
+    """Return the default agent SOUL.md content.
+
+    Returns:
+        DefaultAgentAssetResponse with content=None if SOUL.md does not exist yet.
+    """
+    try:
+        soul_path = get_paths().default_agent_soul_file
+        if not soul_path.exists():
+            return DefaultAgentAssetResponse(content=None)
+        raw = soul_path.read_text(encoding="utf-8").strip()
+        return DefaultAgentAssetResponse(content=raw or None)
+    except Exception as e:
+        logger.error(f"Failed to read default agent soul: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to read default agent soul: {str(e)}")
+
+
+@router.put(
+    "/default-agent/soul",
+    response_model=DefaultAgentAssetResponse,
+    summary="Update Default Agent Soul",
+    description="Write the default agent SOUL.md file.",
+)
+async def update_default_agent_soul(request: DefaultAgentAssetUpdateRequest) -> DefaultAgentAssetResponse:
+    """Create or overwrite the default agent SOUL.md.
+
+    Args:
+        request: The update request with the new SOUL.md content.
+
+    Returns:
+        DefaultAgentAssetResponse with the saved content.
+    """
+    try:
+        paths = get_paths()
+        paths.base_dir.mkdir(parents=True, exist_ok=True)
+        paths.default_agent_soul_file.write_text(request.content, encoding="utf-8")
+        logger.info(f"Updated default agent SOUL.md at {paths.default_agent_soul_file}")
+        return DefaultAgentAssetResponse(content=request.content or None)
+    except Exception as e:
+        logger.error(f"Failed to update default agent soul: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update default agent soul: {str(e)}")
+
+
+@router.get(
+    "/default-agent/identity",
+    response_model=DefaultAgentAssetResponse,
+    summary="Get Default Agent Identity",
+    description="Read the default agent IDENTITY.md file.",
+)
+async def get_default_agent_identity() -> DefaultAgentAssetResponse:
+    """Return the default agent IDENTITY.md content.
+
+    Returns:
+        DefaultAgentAssetResponse with content=None if IDENTITY.md does not exist yet.
+    """
+    try:
+        identity_path = get_paths().default_agent_identity_file
+        if not identity_path.exists():
+            return DefaultAgentAssetResponse(content=None)
+        raw = identity_path.read_text(encoding="utf-8").strip()
+        return DefaultAgentAssetResponse(content=raw or None)
+    except Exception as e:
+        logger.error(f"Failed to read default agent identity: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to read default agent identity: {str(e)}")
+
+
+@router.put(
+    "/default-agent/identity",
+    response_model=DefaultAgentAssetResponse,
+    summary="Update Default Agent Identity",
+    description="Write the default agent IDENTITY.md file.",
+)
+async def update_default_agent_identity(request: DefaultAgentAssetUpdateRequest) -> DefaultAgentAssetResponse:
+    """Create or overwrite the default agent IDENTITY.md.
+
+    Args:
+        request: The update request with the new IDENTITY.md content.
+
+    Returns:
+        DefaultAgentAssetResponse with the saved content.
+    """
+    try:
+        paths = get_paths()
+        paths.base_dir.mkdir(parents=True, exist_ok=True)
+        paths.default_agent_identity_file.write_text(request.content, encoding="utf-8")
+        logger.info(f"Updated default agent IDENTITY.md at {paths.default_agent_identity_file}")
+        return DefaultAgentAssetResponse(content=request.content or None)
+    except Exception as e:
+        logger.error(f"Failed to update default agent identity: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update default agent identity: {str(e)}")
+
+
+class SoulPreviewResponse(BaseModel):
+    """Response model for soul preview (debugging)."""
+
+    soul_section: str = Field(..., description="Rendered <soul> section")
+    identity_section: str = Field(..., description="Rendered <identity> section")
+    user_profile_section: str = Field(..., description="Rendered <user-profile> section")
+    combined: str = Field(..., description="Combined soul + identity + user_profile output")
+
+
+@router.get(
+    "/soul/preview",
+    response_model=SoulPreviewResponse,
+    summary="Preview Soul Injection",
+    description="Preview how soul assets will be injected into the agent prompt (for debugging).",
+)
+async def preview_soul_injection(
+    agent_name: str | None = None,
+    session_mode: str | None = None,
+    memory_read: bool | None = None,
+) -> SoulPreviewResponse:
+    """Preview soul injection for debugging.
+
+    Args:
+        agent_name: Optional agent name (null = default agent).
+        session_mode: Optional session mode for policy enforcement.
+        memory_read: Optional memory_read flag for policy enforcement.
+
+    Returns:
+        SoulPreviewResponse with rendered sections.
+    """
+    try:
+        from src.agents.lead_agent.prompt import get_agent_soul, get_user_profile
+
+        # Get soul (includes both SOUL.md and IDENTITY.md)
+        soul_output = get_agent_soul(agent_name)
+
+        # Parse soul output to extract sections
+        soul_section = ""
+        identity_section = ""
+        if "<soul>" in soul_output:
+            soul_section = soul_output.split("<soul>")[1].split("</soul>")[0].strip() if "</soul>" in soul_output else ""
+        if "<identity>" in soul_output:
+            identity_section = soul_output.split("<identity>")[1].split("</identity>")[0].strip() if "</identity>" in soul_output else ""
+
+        # Get user profile
+        user_profile_output = get_user_profile(session_mode=session_mode, memory_read=memory_read)
+        user_profile_section = ""
+        if "<user-profile>" in user_profile_output:
+            user_profile_section = user_profile_output.split("<user-profile>")[1].split("</user-profile>")[0].strip() if "</user-profile>" in user_profile_output else ""
+
+        # Combined output
+        combined = soul_output + "\n" + user_profile_output if user_profile_output else soul_output
+
+        return SoulPreviewResponse(
+            soul_section=soul_section,
+            identity_section=identity_section,
+            user_profile_section=user_profile_section,
+            combined=combined,
+        )
+    except Exception as e:
+        logger.error(f"Failed to preview soul injection: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to preview soul injection: {str(e)}")
