@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="waveGradient" x1="90" y1="780" x2="840" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2141B9"/>
+      <stop offset="0.52" stop-color="#2F8BE6"/>
+      <stop offset="0.82" stop-color="#3CCFC3"/>
+      <stop offset="1" stop-color="#F0C33A"/>
+    </linearGradient>
+    <linearGradient id="waveHighlight" x1="148" y1="706" x2="812" y2="414" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#79D9FF" stop-opacity="0"/>
+      <stop offset="0.48" stop-color="#D1FFF2" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#FFF2AE" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="cloudStroke" x1="560" y1="228" x2="914" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1F9DE8"/>
+      <stop offset="0.58" stop-color="#42CFC1"/>
+      <stop offset="1" stop-color="#F1C338"/>
+    </linearGradient>
+    <radialGradient id="cloudFill" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(740 340) rotate(160) scale(220 160)">
+      <stop offset="0" stop-color="#FFF5CC"/>
+      <stop offset="1" stop-color="#F8C93C" stop-opacity="0.95"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M120 768C204 632 246 532 326 560C404 588 434 792 560 742C660 702 690 536 820 430"
+    stroke="url(#waveGradient)" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M145 700C214 589 251 515 318 542C384 569 412 748 544 701C630 670 668 544 806 446"
+    stroke="url(#waveHighlight)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <path d="M640 448C587 448 546 414 546 364C546 327 570 298 605 290C619 245 656 214 701 214C740 214 775 238 793 271C805 266 819 263 834 263C884 263 926 300 926 349C926 396 887 434 839 434H640C639 434 639 434 640 434"
+    fill="url(#cloudFill)" stroke="url(#cloudStroke)" stroke-width="18" stroke-linejoin="round"/>
+
+  <path d="M676 326C684 305 708 294 731 301C744 306 754 315 760 327" stroke="white" stroke-width="14" stroke-linecap="round"/>
+  <path d="M730 386C738 365 762 354 785 361C798 366 807 375 814 388" stroke="white" stroke-width="14" stroke-linecap="round"/>
+
+  <path d="M595 349L697 325" stroke="url(#cloudStroke)" stroke-width="14" stroke-linecap="round"/>
+  <path d="M707 314L758 226" stroke="url(#cloudStroke)" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="589" cy="349" r="16" fill="url(#cloudStroke)"/>
+  <circle cx="758" cy="226" r="16" fill="url(#cloudStroke)"/>
+
+  <path d="M640 202L651 228L678 239L651 250L640 278L629 250L602 239L629 228L640 202Z" fill="#F3C536"/>
+  <path d="M638 464L648 486L672 496L648 507L638 529L628 507L604 496L628 486L638 464Z" fill="#2B8BE3"/>
+  <circle cx="896" cy="277" r="13" fill="#F3C536"/>
+</svg>
