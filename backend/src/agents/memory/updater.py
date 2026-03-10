@@ -3,7 +3,9 @@
 import json
 import re
 import uuid
-from datetime import datetime
+
+import yaml
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,11 +39,15 @@ def _get_memory_file_path(agent_name: str | None = None) -> Path:
     return get_paths().memory_file
 
 
+def _utcnow_iso_z() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
 def _create_empty_memory() -> dict[str, Any]:
     """Create an empty memory structure."""
     return {
         "version": "1.0",
-        "lastUpdated": datetime.utcnow().isoformat() + "Z",
+        "lastUpdated": _utcnow_iso_z(),
         "user": {
             "workContext": {"summary": "", "updatedAt": ""},
             "personalContext": {"summary": "", "updatedAt": ""},
@@ -194,7 +200,7 @@ def _save_memory_to_file(memory_data: dict[str, Any], agent_name: str | None = N
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Update lastUpdated timestamp
-        memory_data["lastUpdated"] = datetime.utcnow().isoformat() + "Z"
+        memory_data["lastUpdated"] = _utcnow_iso_z()
 
         # Write atomically using temp file
         temp_path = file_path.with_suffix(".tmp")
@@ -217,6 +223,134 @@ def _save_memory_to_file(memory_data: dict[str, Any], agent_name: str | None = N
     except OSError as e:
         print(f"Failed to save memory file: {e}")
         return False
+
+
+def _extract_text_fragments(content: Any) -> list[str]:
+    if isinstance(content, str):
+        stripped = content.strip()
+        return [stripped] if stripped else []
+
+    if isinstance(content, list):
+        fragments: list[str] = []
+        for item in content:
+            fragments.extend(_extract_text_fragments(item))
+        return fragments
+
+    if isinstance(content, dict):
+        fragments: list[str] = []
+        for key in ("text", "content", "value", "output_text"):
+            if key in content:
+                fragments.extend(_extract_text_fragments(content.get(key)))
+        return fragments
+
+    return []
+
+
+def _response_content_to_text(content: Any) -> str:
+    fragments = _extract_text_fragments(content)
+    if fragments:
+        return "\n".join(fragments).strip()
+    return str(content).strip()
+
+
+def _strip_code_fences(text: str) -> str:
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+
+    lines = stripped.splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+
+    return "\n".join(lines).strip()
+
+
+def _extract_first_json_object(text: str) -> str | None:
+    start = text.find("{")
+    if start < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+
+    for index in range(start, len(text)):
+        char = text[index]
+
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+            continue
+
+        if char == '{':
+            depth += 1
+        elif char == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+
+    return None
+
+
+def _normalize_update_data(data: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(data)
+    normalized["user"] = normalized.get("user") if isinstance(normalized.get("user"), dict) else {}
+    normalized["history"] = normalized.get("history") if isinstance(normalized.get("history"), dict) else {}
+    normalized["newFacts"] = normalized.get("newFacts") if isinstance(normalized.get("newFacts"), list) else []
+    normalized["factsToRemove"] = normalized.get("factsToRemove") if isinstance(normalized.get("factsToRemove"), list) else []
+    return normalized
+
+
+def parse_memory_update_response(response_text: str) -> dict[str, Any]:
+    candidates: list[str] = []
+
+    raw_text = response_text.strip()
+    if raw_text:
+        candidates.append(raw_text)
+
+    without_fences = _strip_code_fences(raw_text)
+    if without_fences and without_fences not in candidates:
+        candidates.append(without_fences)
+
+    for candidate in list(candidates):
+        extracted = _extract_first_json_object(candidate)
+        if extracted and extracted not in candidates:
+            candidates.append(extracted)
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return _normalize_update_data(parsed)
+
+    for candidate in candidates:
+        try:
+            parsed = yaml.safe_load(candidate)
+        except yaml.YAMLError:
+            continue
+        if isinstance(parsed, dict):
+            return _normalize_update_data(parsed)
+
+    raise ValueError("Memory update response is not a parseable object")
+
+
+def _truncate_log_text(text: str, max_chars: int = 240) -> str:
+    compact = " ".join(text.strip().split())
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 3] + "..."
 
 
 class MemoryUpdater:
@@ -273,15 +407,9 @@ class MemoryUpdater:
             # Call LLM
             model = self._get_model()
             response = model.invoke(prompt)
-            response_text = str(response.content).strip()
+            response_text = _response_content_to_text(getattr(response, "content", response))
 
-            # Parse response
-            # Remove markdown code blocks if present
-            if response_text.startswith("```"):
-                lines = response_text.split("\n")
-                response_text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-
-            update_data = json.loads(response_text)
+            update_data = parse_memory_update_response(response_text)
 
             # Apply updates
             updated_memory = self._apply_updates(current_memory, update_data, thread_id)
@@ -295,11 +423,20 @@ class MemoryUpdater:
             # Save
             return _save_memory_to_file(updated_memory, agent_name)
 
-        except json.JSONDecodeError as e:
-            print(f"Failed to parse LLM response for memory update: {e}")
+        except ValueError as e:
+            model_name = self._model_name or config.model_name or "default"
+            response_excerpt = _truncate_log_text(response_text if "response_text" in locals() else "")
+            print(
+                "Failed to parse LLM response for memory update "
+                f"(thread_id={thread_id or 'unknown'}, model={model_name}, response_excerpt={response_excerpt!r}): {e}"
+            )
             return False
         except Exception as e:
-            print(f"Memory update failed: {e}")
+            model_name = self._model_name or config.model_name or "default"
+            print(
+                "Memory update failed "
+                f"(thread_id={thread_id or 'unknown'}, model={model_name}): {e}"
+            )
             return False
 
     def _apply_updates(
@@ -319,7 +456,7 @@ class MemoryUpdater:
             Updated memory data.
         """
         config = get_memory_config()
-        now = datetime.utcnow().isoformat() + "Z"
+        now = _utcnow_iso_z()
 
         # Update user sections
         user_updates = update_data.get("user", {})

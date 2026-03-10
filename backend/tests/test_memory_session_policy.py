@@ -41,15 +41,15 @@ def test_policy_explicit_flags_override_temporary_defaults() -> None:
 
 def test_memory_middleware_skips_queue_when_writes_disabled(monkeypatch) -> None:
     middleware = MemoryMiddleware()
-    queue = Mock()
+    provider = Mock()
 
     monkeypatch.setattr(
         "src.agents.middlewares.memory_middleware.get_memory_config",
         lambda: SimpleNamespace(enabled=True),
     )
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_memory_queue",
-        lambda: queue,
+        "src.agents.middlewares.memory_middleware.get_default_memory_provider",
+        lambda: provider,
     )
 
     state = {
@@ -59,24 +59,25 @@ def test_memory_middleware_skips_queue_when_writes_disabled(monkeypatch) -> None
         ]
     }
     runtime = SimpleNamespace(context={"thread_id": "thread-1", "memory_write": False})
+    provider.resolve_policy.return_value = SimpleNamespace(allow_write=False, session_mode="normal")
 
     result = middleware.after_agent(state, runtime)
 
     assert result is None
-    queue.add.assert_not_called()
+    provider.queue_conversation_update.assert_not_called()
 
 
 def test_memory_middleware_skips_queue_for_temporary_chat(monkeypatch) -> None:
     middleware = MemoryMiddleware()
-    queue = Mock()
+    provider = Mock()
 
     monkeypatch.setattr(
         "src.agents.middlewares.memory_middleware.get_memory_config",
         lambda: SimpleNamespace(enabled=True),
     )
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_memory_queue",
-        lambda: queue,
+        "src.agents.middlewares.memory_middleware.get_default_memory_provider",
+        lambda: provider,
     )
 
     state = {
@@ -86,24 +87,25 @@ def test_memory_middleware_skips_queue_for_temporary_chat(monkeypatch) -> None:
         ]
     }
     runtime = SimpleNamespace(context={"thread_id": "thread-2", "session_mode": "temporary_chat"})
+    provider.resolve_policy.return_value = SimpleNamespace(allow_write=False, session_mode="temporary_chat")
 
     result = middleware.after_agent(state, runtime)
 
     assert result is None
-    queue.add.assert_not_called()
+    provider.queue_conversation_update.assert_not_called()
 
 
 def test_memory_middleware_queues_normal_session(monkeypatch) -> None:
     middleware = MemoryMiddleware()
-    queue = Mock()
+    provider = Mock()
 
     monkeypatch.setattr(
         "src.agents.middlewares.memory_middleware.get_memory_config",
         lambda: SimpleNamespace(enabled=True),
     )
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_memory_queue",
-        lambda: queue,
+        "src.agents.middlewares.memory_middleware.get_default_memory_provider",
+        lambda: provider,
     )
 
     state = {
@@ -113,8 +115,9 @@ def test_memory_middleware_queues_normal_session(monkeypatch) -> None:
         ]
     }
     runtime = SimpleNamespace(context={"thread_id": "thread-3"})
+    provider.resolve_policy.return_value = SimpleNamespace(allow_write=True, session_mode="normal")
 
     result = middleware.after_agent(state, runtime)
 
     assert result is None
-    queue.add.assert_called_once()
+    provider.queue_conversation_update.assert_called_once()

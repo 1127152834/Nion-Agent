@@ -3,7 +3,8 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from src.agents.memory.updater import get_memory_data, reload_memory_data
+from src.agents.memory.core import MemoryReadRequest
+from src.agents.memory.registry import get_default_memory_provider
 from src.config.memory_config import get_memory_config
 
 router = APIRouter(prefix="/api", tags=["memory"])
@@ -112,7 +113,7 @@ async def get_memory() -> MemoryResponse:
         }
         ```
     """
-    memory_data = get_memory_data()
+    memory_data = get_default_memory_provider().get_memory_data(MemoryReadRequest())
     return MemoryResponse(**memory_data)
 
 
@@ -131,7 +132,7 @@ async def reload_memory() -> MemoryResponse:
     Returns:
         The reloaded memory data.
     """
-    memory_data = reload_memory_data()
+    memory_data = get_default_memory_provider().reload_memory_data(MemoryReadRequest())
     return MemoryResponse(**memory_data)
 
 
@@ -185,7 +186,7 @@ async def get_memory_status() -> MemoryStatusResponse:
         Combined memory configuration and current data.
     """
     config = get_memory_config()
-    memory_data = get_memory_data()
+    memory_data = get_default_memory_provider().get_memory_data(MemoryReadRequest())
 
     return MemoryStatusResponse(
         config=MemoryConfigResponse(

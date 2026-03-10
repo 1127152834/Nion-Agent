@@ -91,6 +91,19 @@ def test_make_lead_agent_passes_rss_context_to_prompt(monkeypatch):
     assert captured["rss_context"] == rss_context
 
 
+def test_apply_prompt_template_uses_default_memory_provider(monkeypatch):
+    provider = type("Provider", (), {"build_injection_context": lambda self, request: "<memory>\nphase2\n</memory>\n"})()
+
+    monkeypatch.setattr(lead_prompt_module, "get_default_memory_provider", lambda: provider)
+    monkeypatch.setattr(lead_prompt_module, "get_skills_prompt_section", lambda _skills: "")
+    monkeypatch.setattr(lead_prompt_module, "get_agent_soul", lambda _agent_name: "")
+
+    prompt = lead_prompt_module.apply_prompt_template(memory_read=True)
+
+    assert "<memory>" in prompt
+    assert "phase2" in prompt
+
+
 def test_apply_prompt_template_omits_memory_when_read_disabled(monkeypatch):
     monkeypatch.setattr(lead_prompt_module, "get_skills_prompt_section", lambda _skills: "")
     monkeypatch.setattr(lead_prompt_module, "get_agent_soul", lambda _agent_name: "")

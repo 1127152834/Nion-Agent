@@ -2,6 +2,7 @@
 
 import json
 import tempfile
+from types import SimpleNamespace
 import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -9,6 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa: F401
 
+from src.agents.memory.core import MemoryReadRequest
 from src.client import NionClient
 from src.gateway.routers.mcp import McpConfigResponse
 from src.gateway.routers.memory import MemoryConfigResponse, MemoryStatusResponse
@@ -122,6 +124,54 @@ class TestRunnableConfig:
         assert configurable["memory_read"] is None
         assert configurable["memory_write"] is None
 
+    def test_inherits_persisted_memory_session_fields_when_overrides_missing(self, mock_app_config):
+        checkpointer = MagicMock()
+        checkpointer.get_tuple.return_value = SimpleNamespace(
+            checkpoint={
+                "channel_values": {
+                    "session_mode": "temporary_chat",
+                    "memory_read": False,
+                    "memory_write": False,
+                }
+            }
+        )
+        with patch("src.client.get_app_config", return_value=mock_app_config):
+            client = NionClient(checkpointer=checkpointer)
+
+        config = client._get_runnable_config("t1")
+        configurable = config.get("configurable", {})
+
+        assert configurable["session_mode"] == "temporary_chat"
+        assert configurable["memory_read"] is False
+        assert configurable["memory_write"] is False
+
+    def test_constructor_defaults_override_persisted_memory_session_fields(self, mock_app_config):
+        checkpointer = MagicMock()
+        checkpointer.get_tuple.return_value = SimpleNamespace(
+            checkpoint={
+                "channel_values": {
+                    "session_mode": "temporary_chat",
+                    "memory_read": False,
+                    "memory_write": False,
+                }
+            }
+        )
+        with patch("src.client.get_app_config", return_value=mock_app_config):
+            client = NionClient(
+                checkpointer=checkpointer,
+                session_mode="normal",
+                memory_read=True,
+                memory_write=True,
+            )
+
+        config = client._get_runnable_config("t1")
+        configurable = config.get("configurable", {})
+
+        assert configurable["session_mode"] == "normal"
+        assert configurable["memory_read"] is True
+        assert configurable["memory_write"] is True
+
+
     def test_checkpointer_stored(self, mock_app_config):
         cp = MagicMock()
         with patch("src.client.get_app_config", return_value=mock_app_config):
@@ -172,9 +222,11 @@ class TestConfigQueries:
 
     def test_get_memory(self, client):
         memory = {"version": "1.0", "facts": []}
-        with patch("src.agents.memory.updater.get_memory_data", return_value=memory) as mock_mem:
+        provider = MagicMock()
+        provider.get_memory_data.return_value = memory
+        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
             result = client.get_memory()
-            mock_mem.assert_called_once()
+        provider.get_memory_data.assert_called_once_with(MemoryReadRequest())
         assert result == memory
 
 
@@ -271,7 +323,7 @@ class TestStream:
         assert "messages" in values_events[-1].data
 
 
-    def test_stream_passes_memory_session_fields_to_context(self, client):
+    def test_stream_preserves_full_run_config_and_memory_context(self, client):
         captured = {}
         ai = AIMessage(content="ok", id="ai-1")
         agent = MagicMock()
@@ -291,21 +343,52 @@ class TestStream:
                 client.stream(
                     "hi",
                     thread_id="t3",
+                    model_name="other-model",
+                    thinking_enabled=False,
+                    plan_mode=True,
+                    subagent_enabled=True,
                     session_mode="temporary_chat",
                     memory_read=True,
                     memory_write=False,
                 )
             )
 
-        assert captured["configurable"]["session_mode"] == "temporary_chat"
-        assert captured["configurable"]["memory_read"] is True
-        assert captured["configurable"]["memory_write"] is False
+        assert captured["configurable"] == {
+            "thread_id": "t3",
+            "model_name": "other-model",
+            "thinking_enabled": False,
+            "is_plan_mode": True,
+            "subagent_enabled": True,
+            "session_mode": "temporary_chat",
+            "memory_read": True,
+            "memory_write": False,
+        }
         assert captured["context"] == {
             "thread_id": "t3",
             "session_mode": "temporary_chat",
             "memory_read": True,
             "memory_write": False,
         }
+
+    def test_stream_passes_model_override_to_agent_run_config(self, client):
+        captured = {}
+        ai = AIMessage(content="ok", id="ai-1")
+        agent = MagicMock()
+
+        def fake_stream(state, config, context, stream_mode):
+            captured["configurable"] = config.get("configurable", {})
+            yield {"messages": [ai]}
+
+        agent.stream.side_effect = fake_stream
+
+        with (
+            patch.object(client, "_ensure_agent"),
+            patch.object(client, "_agent", agent),
+        ):
+            list(client.stream("hi", thread_id="t3", model_name="other-model"))
+
+        assert captured["configurable"].get("thread_id") == "t3"
+        assert captured["configurable"].get("model_name") == "other-model"
 
     def test_deduplication(self, client):
         """Messages with the same id are not emitted twice."""
@@ -667,8 +750,11 @@ class TestSkillsManagement:
 class TestMemoryManagement:
     def test_reload_memory(self, client):
         data = {"version": "1.0", "facts": []}
-        with patch("src.agents.memory.updater.reload_memory_data", return_value=data):
+        provider = MagicMock()
+        provider.reload_memory_data.return_value = data
+        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
             result = client.reload_memory()
+        provider.reload_memory_data.assert_called_once_with(MemoryReadRequest())
         assert result == data
 
     def test_get_memory_config(self, client):
@@ -1328,17 +1414,23 @@ class TestScenarioMemoryWorkflow:
         config.injection_enabled = True
         config.max_injection_tokens = 2000
 
-        with patch("src.agents.memory.updater.get_memory_data", return_value=initial_data):
+        provider = MagicMock()
+        provider.get_memory_data.return_value = initial_data
+        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
             mem = client.get_memory()
         assert len(mem["facts"]) == 1
 
-        with patch("src.agents.memory.updater.reload_memory_data", return_value=updated_data):
+        provider = MagicMock()
+        provider.reload_memory_data.return_value = updated_data
+        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
             refreshed = client.reload_memory()
         assert len(refreshed["facts"]) == 2
 
+        provider = MagicMock()
+        provider.get_memory_data.return_value = updated_data
         with (
             patch("src.config.memory_config.get_memory_config", return_value=config),
-            patch("src.agents.memory.updater.get_memory_data", return_value=updated_data),
+            patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider),
         ):
             status = client.get_memory_status()
         assert status["config"]["enabled"] is True
@@ -1713,9 +1805,11 @@ class TestGatewayConformance:
             "facts": [],
         }
 
+        provider = MagicMock()
+        provider.get_memory_data.return_value = memory_data
         with (
             patch("src.config.memory_config.get_memory_config", return_value=mem_cfg),
-            patch("src.agents.memory.updater.get_memory_data", return_value=memory_data),
+            patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider),
         ):
             result = client.get_memory_status()
 

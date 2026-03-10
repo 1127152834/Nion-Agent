@@ -34,6 +34,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.runnables import RunnableConfig
 
 from src.agents.lead_agent.agent import _build_middlewares
+from src.agents.memory.core import MemoryReadRequest
 from src.agents.lead_agent.prompt import apply_prompt_template
 from src.agents.thread_state import ThreadState
 from src.config.app_config import get_app_config, reload_app_config
@@ -177,11 +178,48 @@ class NionClient:
             Path(fd.name).unlink(missing_ok=True)
             raise
 
-    def _resolve_memory_session_fields(self, overrides: dict[str, Any]) -> dict[str, Any]:
+    def _get_effective_checkpointer(self):
+        if self._checkpointer is not None:
+            return self._checkpointer
+
+        from src.agents.checkpointer import get_checkpointer
+
+        return get_checkpointer()
+
+    def _get_persisted_memory_session_fields(self, thread_id: str) -> dict[str, Any]:
+        checkpointer = self._get_effective_checkpointer()
+        if checkpointer is None:
+            return {
+                "session_mode": None,
+                "memory_read": None,
+                "memory_write": None,
+            }
+
+        config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+        checkpoint = None
+        try:
+            if hasattr(checkpointer, "get_tuple"):
+                checkpoint_tuple = checkpointer.get_tuple(config)
+                checkpoint = checkpoint_tuple.checkpoint if checkpoint_tuple is not None else None
+            elif hasattr(checkpointer, "get"):
+                checkpoint = checkpointer.get(config)
+        except Exception:
+            logger.debug("Failed to load persisted memory session fields for thread %s", thread_id, exc_info=True)
+            checkpoint = None
+
+        channel_values = checkpoint.get("channel_values", {}) if isinstance(checkpoint, dict) else {}
         return {
-            "session_mode": overrides.get("session_mode", self._session_mode),
-            "memory_read": overrides.get("memory_read", self._memory_read),
-            "memory_write": overrides.get("memory_write", self._memory_write),
+            "session_mode": channel_values.get("session_mode"),
+            "memory_read": channel_values.get("memory_read"),
+            "memory_write": channel_values.get("memory_write"),
+        }
+
+    def _resolve_memory_session_fields(self, thread_id: str, overrides: dict[str, Any]) -> dict[str, Any]:
+        persisted = self._get_persisted_memory_session_fields(thread_id)
+        return {
+            "session_mode": overrides.get("session_mode", self._session_mode if self._session_mode is not None else persisted.get("session_mode")),
+            "memory_read": overrides.get("memory_read", self._memory_read if self._memory_read is not None else persisted.get("memory_read")),
+            "memory_write": overrides.get("memory_write", self._memory_write if self._memory_write is not None else persisted.get("memory_write")),
         }
 
     def _get_runnable_config(self, thread_id: str, **overrides) -> RunnableConfig:
@@ -192,7 +230,7 @@ class NionClient:
             "thinking_enabled": overrides.get("thinking_enabled", self._thinking_enabled),
             "is_plan_mode": overrides.get("plan_mode", self._plan_mode),
             "subagent_enabled": overrides.get("subagent_enabled", self._subagent_enabled),
-            **self._resolve_memory_session_fields(overrides),
+            **self._resolve_memory_session_fields(thread_id, overrides),
         }
         return RunnableConfig(
             configurable=configurable,
@@ -236,11 +274,7 @@ class NionClient:
             ),
             "state_schema": ThreadState,
         }
-        checkpointer = self._checkpointer
-        if checkpointer is None:
-            from src.agents.checkpointer import get_checkpointer
-
-            checkpointer = get_checkpointer()
+        checkpointer = self._get_effective_checkpointer()
         if checkpointer is not None:
             kwargs["checkpointer"] = checkpointer
 
@@ -333,6 +367,10 @@ class NionClient:
 
         config = self._get_runnable_config(thread_id, **kwargs)
         self._ensure_agent(config)
+        run_config: RunnableConfig = {
+            **config,
+            "configurable": {**config.get("configurable", {})},
+        }
 
         state: dict[str, Any] = {"messages": [HumanMessage(content=message)]}
         configurable = config.get("configurable", {})
@@ -345,7 +383,7 @@ class NionClient:
 
         seen_ids: set[str] = set()
 
-        for chunk in self._agent.stream(state, config=config, context=context, stream_mode="values"):
+        for chunk in self._agent.stream(state, config=run_config, context=context, stream_mode="values"):
             messages = chunk.get("messages", [])
 
             for msg in messages:
@@ -479,9 +517,9 @@ class NionClient:
         Returns:
             Memory data dict (see src/agents/memory/updater.py for structure).
         """
-        from src.agents.memory.updater import get_memory_data
+        from src.agents.memory.registry import get_default_memory_provider
 
-        return get_memory_data()
+        return get_default_memory_provider().get_memory_data(MemoryReadRequest())
 
     def get_model(self, name: str) -> dict | None:
         """Get a specific model's configuration by name.
@@ -706,9 +744,9 @@ class NionClient:
         Returns:
             The reloaded memory data dict.
         """
-        from src.agents.memory.updater import reload_memory_data
+        from src.agents.memory.registry import get_default_memory_provider
 
-        return reload_memory_data()
+        return get_default_memory_provider().reload_memory_data(MemoryReadRequest())
 
     def get_memory_config(self) -> dict:
         """Get memory system configuration.

@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Any
 
-from src.agents.memory.policy import resolve_memory_policy
+from src.agents.memory.core import MemoryReadRequest
+from src.agents.memory.registry import get_default_memory_provider
 from src.config.agents_config import load_agent_soul
 from src.skills import load_skills
 
@@ -307,33 +308,17 @@ def _get_memory_context(
         Formatted memory context string wrapped in XML tags, or empty string if disabled.
     """
     try:
-        policy = resolve_memory_policy(
-            runtime_context={
-                "session_mode": session_mode,
-                "memory_read": memory_read,
-                "memory_write": memory_write,
-            }
+        provider = get_default_memory_provider()
+        return provider.build_injection_context(
+            MemoryReadRequest(
+                agent_name=agent_name,
+                runtime_context={
+                    "session_mode": session_mode,
+                    "memory_read": memory_read,
+                    "memory_write": memory_write,
+                },
+            )
         )
-        if not policy.allow_read:
-            return ""
-
-        from src.agents.memory import format_memory_for_injection, get_memory_data
-        from src.config.memory_config import get_memory_config
-
-        config = get_memory_config()
-        if not config.enabled or not config.injection_enabled:
-            return ""
-
-        memory_data = get_memory_data(agent_name)
-        memory_content = format_memory_for_injection(memory_data, max_tokens=config.max_injection_tokens)
-
-        if not memory_content.strip():
-            return ""
-
-        return f"""<memory>
-{memory_content}
-</memory>
-"""
     except Exception as e:
         print(f"Failed to load memory context: {e}")
         return ""

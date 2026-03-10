@@ -113,7 +113,7 @@ Important Rules:
   session-specific and ephemeral — they will not be accessible in future sessions.
   Recording upload events causes confusion in subsequent conversations.
 
-Return ONLY valid JSON, no explanation or markdown."""
+Return ONLY one valid JSON object. Start with `{{` and end with `}}`. Use double quotes for keys and strings. Do NOT wrap the response in markdown fences. Do NOT add any explanation, prefix, suffix, or commentary."""
 
 
 # Prompt template for extracting facts from a single message
@@ -181,7 +181,6 @@ def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2
 
     sections = []
 
-    # Format user context
     user_data = memory_data.get("user", {})
     if user_data:
         user_sections = []
@@ -199,9 +198,8 @@ def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2
             user_sections.append(f"Current Focus: {top_of_mind['summary']}")
 
         if user_sections:
-            sections.append("User Context:\n" + "\n".join(f"- {s}" for s in user_sections))
+            sections.append("User Context:\n" + "\n".join(f"- {item}" for item in user_sections))
 
-    # Format history
     history_data = memory_data.get("history", {})
     if history_data:
         history_sections = []
@@ -215,20 +213,41 @@ def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2
             history_sections.append(f"Earlier: {earlier['summary']}")
 
         if history_sections:
-            sections.append("History:\n" + "\n".join(f"- {s}" for s in history_sections))
+            sections.append("History:\n" + "\n".join(f"- {item}" for item in history_sections))
+
+    try:
+        from src.config.memory_config import get_memory_config
+
+        fact_threshold = getattr(get_memory_config(), "fact_confidence_threshold", 0.7)
+    except Exception:
+        fact_threshold = 0.7
+
+    facts = [
+        fact
+        for fact in memory_data.get("facts", [])
+        if isinstance(fact, dict)
+        and fact.get("content")
+        and float(fact.get("confidence", 0) or 0) >= fact_threshold
+    ]
+    if facts:
+        facts = sorted(
+            facts,
+            key=lambda fact: (float(fact.get("confidence", 0) or 0), str(fact.get("createdAt", ""))),
+            reverse=True,
+        )[:10]
+        fact_lines = [str(fact["content"]).strip() for fact in facts if str(fact["content"]).strip()]
+        if fact_lines:
+            sections.append("Key Facts:\n" + "\n".join(f"- {item}" for item in fact_lines))
 
     if not sections:
         return ""
 
     result = "\n\n".join(sections)
 
-    # Use accurate token counting with tiktoken
     token_count = _count_tokens(result)
     if token_count > max_tokens:
-        # Truncate to fit within token limit
-        # Estimate characters to remove based on token ratio
         char_per_token = len(result) / token_count
-        target_chars = int(max_tokens * char_per_token * 0.95)  # 95% to leave margin
+        target_chars = int(max_tokens * char_per_token * 0.95)
         result = result[:target_chars] + "\n..."
 
     return result

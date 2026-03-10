@@ -7,8 +7,8 @@ from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware
 from langgraph.runtime import Runtime
 
-from src.agents.memory.policy import resolve_memory_policy
-from src.agents.memory.queue import get_memory_queue
+from src.agents.memory.core import MemoryWriteRequest
+from src.agents.memory.registry import get_default_memory_provider
 from src.config.memory_config import get_memory_config
 
 
@@ -132,7 +132,8 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
             print("MemoryMiddleware: No thread_id in context, skipping memory update")
             return None
 
-        policy = resolve_memory_policy(state=state, runtime_context=runtime.context)
+        provider = get_default_memory_provider()
+        policy = provider.resolve_policy(MemoryWriteRequest(thread_id=thread_id, messages=[], agent_name=self._agent_name, state=state, runtime_context=runtime.context))
         if not policy.allow_write:
             print(
                 "MemoryMiddleware: Memory write disabled for thread "
@@ -158,7 +159,14 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
             return None
 
         # Queue the filtered conversation for memory update
-        queue = get_memory_queue()
-        queue.add(thread_id=thread_id, messages=filtered_messages, agent_name=self._agent_name)
+        provider.queue_conversation_update(
+            MemoryWriteRequest(
+                thread_id=thread_id,
+                messages=filtered_messages,
+                agent_name=self._agent_name,
+                state=state,
+                runtime_context=runtime.context,
+            )
+        )
 
         return None

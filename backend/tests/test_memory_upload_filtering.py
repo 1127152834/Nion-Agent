@@ -7,10 +7,13 @@ persisting in long-term memory:
   - _strip_upload_mentions_from_memory  (updater)
 """
 
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src.agents.memory.updater import _strip_upload_mentions_from_memory
-from src.agents.middlewares.memory_middleware import _filter_messages_for_memory
+from src.agents.middlewares.memory_middleware import MemoryMiddleware, _filter_messages_for_memory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -230,3 +233,32 @@ class TestStripUploadMentionsFromMemory:
         mem = {"user": {}, "history": {}, "facts": []}
         result = _strip_upload_mentions_from_memory(mem)
         assert result == {"user": {}, "history": {}, "facts": []}
+
+
+def test_memory_middleware_queues_filtered_messages_via_provider():
+    mem_cfg = SimpleNamespace(enabled=True)
+    provider = MagicMock()
+    provider.resolve_policy.return_value = SimpleNamespace(allow_write=True, session_mode="normal")
+
+    middleware = MemoryMiddleware()
+    state = {
+        "messages": [
+            _human(_UPLOAD_BLOCK + "\n\nSummarise the file please."),
+            _ai("The file says hello."),
+        ]
+    }
+    runtime = SimpleNamespace(context={"thread_id": "thread-1"})
+
+    with (
+        patch("src.agents.middlewares.memory_middleware.get_memory_config", return_value=mem_cfg),
+        patch("src.agents.middlewares.memory_middleware.get_default_memory_provider", return_value=provider),
+    ):
+        result = middleware.after_agent(state, runtime)
+
+    assert result is None
+    provider.queue_conversation_update.assert_called_once()
+    queued_request = provider.queue_conversation_update.call_args.args[0]
+    queued_messages = queued_request.messages
+    assert len(queued_messages) == 2
+    assert queued_messages[0].content == "Summarise the file please."
+    assert queued_messages[1].content == "The file says hello."
