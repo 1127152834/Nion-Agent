@@ -159,8 +159,9 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
         elif effective_wte.get("thinking", {}).get("type"):
             # Native langchain_anthropic: thinking is a direct constructor parameter
             kwargs.update({"thinking": {"type": "disabled"}})
-    if not model_config.supports_reasoning_effort:
-        kwargs.update({"reasoning_effort": None})
+    if not model_config.supports_reasoning_effort and "reasoning_effort" in kwargs:
+        # Only strip reasoning_effort if it was set by thinking-disabled logic.
+        del kwargs["reasoning_effort"]
 
     # 使用运行时设置处理函数
     model_settings_from_config = _prepare_model_runtime_kwargs(
