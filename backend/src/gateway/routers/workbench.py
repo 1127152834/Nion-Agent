@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from src.config.paths import get_paths
 from src.gateway.path_utils import resolve_thread_virtual_path
 
 router = APIRouter(prefix="/api/threads/{thread_id}/workbench", tags=["workbench"])
@@ -89,6 +90,12 @@ class PluginTestResponse(BaseModel):
     executed_at: str
     summary: str
     steps: list[PluginTestStepResult]
+
+
+class PluginTestThreadResponse(BaseModel):
+    thread_id: str
+    created_at: str
+    workspace_root: str
 
 
 class _SessionState:
@@ -330,6 +337,27 @@ async def stream_workbench_session(thread_id: str, session_id: str, request: Req
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
+
+
+@plugin_router.post(
+    "/test-thread",
+    response_model=PluginTestThreadResponse,
+    summary="Create hidden workbench test thread",
+)
+async def create_workbench_test_thread() -> PluginTestThreadResponse:
+    """Create a sandbox-only thread directory for workbench plugin tests.
+
+    This avoids coupling plugin tests to any existing chat thread while still
+    providing a valid /mnt/user-data workspace for commandSteps execution.
+    """
+    thread_id = f"workbench-test-{uuid.uuid4().hex}"
+    paths = get_paths()
+    paths.ensure_thread_dirs(thread_id)
+    return PluginTestThreadResponse(
+        thread_id=thread_id,
+        created_at=_utcnow_iso(),
+        workspace_root=str(paths.sandbox_work_dir(thread_id)),
+    )
 
 
 @plugin_router.post(

@@ -29,6 +29,12 @@ interface PluginTestBackendResponse {
   steps: PluginTestBackendStepResult[];
 }
 
+interface PluginTestThreadResponse {
+  thread_id: string;
+  created_at?: string;
+  workspace_root?: string;
+}
+
 const TEXT_FILE_EXTENSIONS = new Set([
   "html",
   "htm",
@@ -67,6 +73,26 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i] ?? 0);
   }
   return btoa(binary);
+}
+
+let cachedPluginTestThreadId: string | null = null;
+
+async function getPluginTestThreadId(): Promise<string> {
+  if (cachedPluginTestThreadId) {
+    return cachedPluginTestThreadId;
+  }
+
+  // Create a hidden sandbox thread so commandSteps can run without a chat thread.
+  const response = await fetch(`${getBackendBaseURL()}/api/workbench/plugins/test-thread`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Failed to create plugin test thread (${response.status})`);
+  }
+  const payload = (await response.json()) as PluginTestThreadResponse;
+  cachedPluginTestThreadId = payload.thread_id;
+  return payload.thread_id;
 }
 
 /**
@@ -370,15 +396,22 @@ export async function runInstalledPluginTest(
   }
 
   if (manifest.testSpec?.commandSteps?.length) {
-    if (!opts?.threadId) {
-      steps.push({
-        id: "command:thread-required",
-        passed: false,
-        message: "Command steps require a thread context to run.",
-        durationMs: 0,
-      });
-    } else {
-      const commandReports = await runBackendCommandTest(pluginId, opts.threadId, manifest);
+    let effectiveThreadId = opts?.threadId;
+    if (!effectiveThreadId) {
+      try {
+        effectiveThreadId = await getPluginTestThreadId();
+      } catch (error) {
+        steps.push({
+          id: "command:thread-create-failed",
+          passed: false,
+          message: error instanceof Error ? error.message : "Failed to create plugin test thread.",
+          durationMs: 0,
+        });
+      }
+    }
+
+    if (effectiveThreadId) {
+      const commandReports = await runBackendCommandTest(pluginId, effectiveThreadId, manifest);
       steps.push(...commandReports);
     }
   }
