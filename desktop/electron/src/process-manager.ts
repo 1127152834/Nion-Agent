@@ -1,5 +1,5 @@
 import { ChildProcess, spawn } from "node:child_process";
-import { createWriteStream, WriteStream } from "node:fs";
+import { createWriteStream, existsSync, readFileSync, rmSync, statSync, WriteStream } from "node:fs";
 import path from "node:path";
 import { isPortInUse, waitForHttp, waitForPort } from "./health";
 import type { DesktopRuntimePaths } from "./paths";
@@ -12,6 +12,7 @@ interface ManagedService {
   child: ChildProcess;
   logStream: WriteStream;
   logPath: string;
+  logStartOffset?: number;
 }
 
 export interface DesktopRuntimePorts {
@@ -92,9 +93,11 @@ export class DesktopProcessManager {
       throw new Error("uv not found. Please install: curl -LsSf https://astral.sh/uv/install.sh | sh");
     }
 
-    const pnpmCheck = spawnSync("pnpm", ["--version"], { stdio: "ignore" });
-    if (pnpmCheck.error || pnpmCheck.status !== 0) {
-      throw new Error("pnpm not found. Please install: npm install -g pnpm");
+    if (!this.paths.frontendServerEntry) {
+      const pnpmCheck = spawnSync("pnpm", ["--version"], { stdio: "ignore" });
+      if (pnpmCheck.error || pnpmCheck.status !== 0) {
+        throw new Error("pnpm not found. Please install: npm install -g pnpm");
+      }
     }
   }
 
@@ -194,34 +197,153 @@ export class DesktopProcessManager {
 
   private async startFrontend(): Promise<void> {
     const logPath = path.join(this.paths.logsDir, "frontend.log");
+    const logStartOffset = this.getLogStartOffset(logPath);
+
+    if (!this.paths.frontendServerEntry) {
+      this.clearFrontendDevArtifacts();
+    }
+
     const logStream = createWriteStream(logPath, { flags: "a" });
 
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
+      HOSTNAME: "127.0.0.1",
+      PORT: String(this.ports!.frontendPort),
+      NEXT_PUBLIC_IS_ELECTRON: "1",
       // 关键：设置前端环境变量，LangGraph 统一走 Gateway 代理，避免浏览器直连 2024 的 CORS 问题
       NEXT_PUBLIC_LANGGRAPH_BASE_URL: `http://localhost:${this.ports!.gatewayPort}/api/langgraph`,
       NEXT_PUBLIC_BACKEND_BASE_URL: `http://localhost:${this.ports!.gatewayPort}`,
       SKIP_ENV_VALIDATION: "1" // 跳过环境变量验证
     };
 
-    const child = spawn(
-      "pnpm",
-      ["run", "dev"],
-      {
-        cwd: this.paths.frontendCwd,
-        env,
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
+    let child: ChildProcess;
+
+    if (this.paths.frontendServerEntry) {
+      child = spawn(
+        process.execPath,
+        [this.paths.frontendServerEntry],
+        {
+          cwd: this.paths.frontendCwd,
+          env: {
+            ...env,
+            ELECTRON_RUN_AS_NODE: "1",
+            NODE_ENV: "production"
+          },
+          stdio: ["ignore", "pipe", "pipe"]
+        }
+      );
+    } else {
+      child = spawn(
+        "pnpm",
+        ["run", "dev"],
+        {
+          cwd: this.paths.frontendCwd,
+          env,
+          stdio: ["ignore", "pipe", "pipe"]
+        }
+      );
+    }
 
     child.stdout?.pipe(logStream);
     child.stderr?.pipe(logStream);
 
-    this.services.set("frontend", { name: "frontend", child, logStream, logPath });
+    this.services.set("frontend", {
+      name: "frontend",
+      child,
+      logStream,
+      logPath,
+      logStartOffset,
+    });
 
     // 等待服务启动（HTTP 层可访问）
     await waitForPort(this.ports!.frontendPort, 60000);
     await waitForHttp(`http://localhost:${this.ports!.frontendPort}`, 30000);
+    await this.verifyFrontendWorkspaceHealth(logPath, logStartOffset);
+  }
+
+  private clearFrontendDevArtifacts(): void {
+    const nextDir = path.join(this.paths.frontendCwd, ".next");
+    const targets = [path.join(nextDir, "dev"), path.join(nextDir, "cache")];
+    const removed: string[] = [];
+
+    for (const target of targets) {
+      if (!existsSync(target)) {
+        continue;
+      }
+      rmSync(target, { recursive: true, force: true });
+      removed.push(path.basename(target));
+    }
+
+    console.log(
+      `[Frontend] Dev artifact cleanup: ${removed.length > 0 ? removed.join(", ") : "none"}`
+    );
+  }
+
+  private getLogStartOffset(logPath: string): number {
+    try {
+      return statSync(logPath).size;
+    } catch {
+      return 0;
+    }
+  }
+
+  private readLogDelta(logPath: string, startOffset: number): string {
+    try {
+      const content = readFileSync(logPath);
+      return content.subarray(Math.min(startOffset, content.length)).toString("utf8");
+    } catch {
+      return "";
+    }
+  }
+
+  private detectFrontendCompileBlocker(logDelta: string): string | null {
+    const patterns = [
+      "Parsing ecmascript source code failed",
+      "Unexpected character",
+      "Can't resolve <dynamic>",
+      "Module not found",
+    ];
+
+    for (const pattern of patterns) {
+      if (logDelta.includes(pattern)) {
+        return pattern;
+      }
+    }
+
+    return null;
+  }
+
+  private async verifyFrontendWorkspaceHealth(
+    logPath: string,
+    logStartOffset: number,
+  ): Promise<void> {
+    if (!this.ports) {
+      throw new Error("Ports not assigned");
+    }
+
+    const workspaceUrl = `http://localhost:${this.ports.frontendPort}/workspace/chats/new`;
+    const response = await fetch(workspaceUrl);
+    const body = await response.text();
+    const hasErrorPage =
+      body.includes('data-next-error-message') || body.includes('name="next-error"');
+
+    if (response.status === 404 || response.status >= 500 || hasErrorPage) {
+      const logDelta = this.readLogDelta(logPath, logStartOffset);
+      const blocker = this.detectFrontendCompileBlocker(logDelta);
+      const blockerSuffix = blocker ? ` (compile blocker: ${blocker})` : "";
+      throw new Error(
+        `Frontend workspace health check failed for ${workspaceUrl}: HTTP ${response.status}${blockerSuffix}`
+      );
+    }
+
+    const logDelta = this.readLogDelta(logPath, logStartOffset);
+    if (logDelta.includes("Parsing ecmascript source code failed")) {
+      throw new Error(
+        "Frontend workspace health check detected a blocking compile error in the current startup log"
+      );
+    }
+
+    console.log(`[Frontend] Workspace health check passed: ${workspaceUrl}`);
   }
 
   async shutdown(): Promise<void> {
