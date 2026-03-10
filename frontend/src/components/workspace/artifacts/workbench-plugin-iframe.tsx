@@ -168,6 +168,13 @@ function injectBridge(entryHtml: string, payload: {
   artifactPath: string;
   files: string[];
 }) {
+  const hostStyle = `
+<style id="nion-workbench-slot-host-style">
+  html, body {
+    background: transparent !important;
+  }
+</style>
+`;
   const bridgeScript = `
 <script>
 (() => {
@@ -256,15 +263,15 @@ function injectBridge(entryHtml: string, payload: {
   // Inject bridge as early as possible so plugin scripts can use window.NionWorkbench
   // during initial evaluation (some plugins run bootstrap logic in <head> scripts).
   if (entryHtml.includes("<head>")) {
-    return entryHtml.replace("<head>", `<head>\n${bridgeScript}\n`);
+    return entryHtml.replace("<head>", `<head>\n${hostStyle}\n${bridgeScript}\n`);
   }
   if (entryHtml.includes("<body>")) {
-    return entryHtml.replace("<body>", `<body>\n${bridgeScript}\n`);
+    return entryHtml.replace("<body>", `<body>\n${hostStyle}\n${bridgeScript}\n`);
   }
   if (entryHtml.includes("</body>")) {
-    return entryHtml.replace("</body>", `${bridgeScript}\n</body>`);
+    return entryHtml.replace("</body>", `${hostStyle}\n${bridgeScript}\n</body>`);
   }
-  return `${bridgeScript}\n${entryHtml}`;
+  return `${hostStyle}\n${bridgeScript}\n${entryHtml}`;
 }
 
 export function WorkbenchPluginIframe({

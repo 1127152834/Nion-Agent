@@ -65,5 +65,20 @@
         "expect_contains": ["/mnt/user-data/workspace"]
       }
     ]
+  },
+  "docs": {
+    "readme_path": "README.md",
+    "demo_images": [
+      "docs/demo/overview.svg"
+    ]
+  },
+  "verification": {
+    "level": "auto_manual"
+  },
+  "provenance": {
+    "source": "bundled"
+  },
+  "ui": {
+    "surface": "sidebar-slot"
   }
 }

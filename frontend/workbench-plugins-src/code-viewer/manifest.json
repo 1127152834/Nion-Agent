@@ -50,5 +50,14 @@
         "expect_contains": ["/mnt/user-data/workspace"]
       }
     ]
+  },
+  "verification": {
+    "level": "auto_manual"
+  },
+  "provenance": {
+    "source": "bundled"
+  },
+  "ui": {
+    "surface": "sidebar-slot"
   }
 }

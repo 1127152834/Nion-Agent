@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#f4f7ff"/>
+  <rect x="90" y="80" width="1020" height="560" rx="20" fill="#ffffff" stroke="#d7dff5"/>
+  <text x="140" y="160" font-size="40" font-family="Arial" fill="#22304d">Frontend Workbench</text>
+  <text x="140" y="208" font-size="24" font-family="Arial" fill="#4b5f85">Sidebar Slot Rendering</text>
+</svg>

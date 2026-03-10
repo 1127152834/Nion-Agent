@@ -1,4 +1,5 @@
 import { Code2Icon, FileTextIcon, FolderIcon, Loader2Icon, XIcon } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
@@ -11,13 +12,18 @@ import {
 import { useWorkspaceLiveSync, useWorkspaceTree } from "@/core/artifacts";
 import { useI18n } from "@/core/i18n/hooks";
 import { useDesktopRuntime } from "@/core/platform/hooks";
-import { useInstalledPluginPackage } from "@/core/workbench";
+import {
+  getWorkbenchRegistry,
+  parseWorkbenchSlotRouteState,
+  useInstalledPluginPackage,
+} from "@/core/workbench";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import {
   ArtifactDirectoryTree,
   ArtifactFileDetail,
+  WorkbenchSlotShell,
   useArtifacts,
 } from "../artifacts";
 import { WorkbenchContainer } from "../artifacts/workbench-container";
@@ -27,13 +33,14 @@ const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
 const FRONTEND_WORKBENCH_PLUGIN_ID = "frontend-workbench";
 const DEFAULT_WORKBENCH_PATH = "/mnt/user-data/workspace";
-type ArtifactPanelMode = "directory" | "preview" | "workbench";
+type ArtifactPanelMode = "directory" | "preview" | "plugin";
 
 const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   children,
   threadId,
 }) => {
   const { t } = useI18n();
+  const searchParams = useSearchParams();
   const { thread } = useThread();
   const layoutRef = useRef<GroupImperativeHandle>(null);
   const {
@@ -53,14 +60,28 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
   const [artifactPanelMode, setArtifactPanelMode] = useState<ArtifactPanelMode>("directory");
+  const [pluginSlotState, setPluginSlotState] = useState<{
+    pluginId: string;
+    artifactPath: string;
+    targetKind: "file" | "directory" | "project";
+  }>({
+    pluginId: FRONTEND_WORKBENCH_PLUGIN_ID,
+    artifactPath: DEFAULT_WORKBENCH_PATH,
+    targetKind: "directory",
+  });
+  const appliedSlotRouteKeyRef = useRef<string | null>(null);
   const supportsWorkspaceView = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true";
   const artifactPanelOpen = artifactsOpen;
   const { isDesktopRuntime } = useDesktopRuntime();
+  const slotRouteState = useMemo(
+    () => parseWorkbenchSlotRouteState(searchParams),
+    [searchParams],
+  );
   const {
-    data: frontendWorkbenchPackage,
-    isLoading: frontendWorkbenchLoading,
-    refetch: refetchFrontendWorkbench,
-  } = useInstalledPluginPackage(FRONTEND_WORKBENCH_PLUGIN_ID);
+    data: activePluginPackage,
+    isLoading: activePluginLoading,
+    refetch: refetchActivePlugin,
+  } = useInstalledPluginPackage(pluginSlotState.pluginId);
 
   const {
     data: workspaceTree,
@@ -133,9 +154,39 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   );
   const panelFiles = supportsWorkspaceView ? workspaceFiles : artifacts;
   const panelDirectories = supportsWorkspaceView ? workspaceDirectories : [];
-  const frontendWorkbenchEnabled = Boolean(frontendWorkbenchPackage?.metadata?.enabled);
-  const workbenchTargetPath = selectedArtifact ?? DEFAULT_WORKBENCH_PATH;
-  const workbenchTargetKind = selectedArtifact ? "file" : "directory";
+  const activePluginEnabled = Boolean(activePluginPackage?.metadata?.enabled);
+  const activePluginSupportsSidebarSlot = activePluginPackage?.metadata?.manifest.ui?.surface
+    ? activePluginPackage.metadata.manifest.ui.surface === "sidebar-slot"
+    : true;
+  const activePluginName = activePluginPackage?.metadata?.manifest.name ?? pluginSlotState.pluginId;
+
+  const resolvePluginIdForTarget = (path: string, kind: "file" | "directory" | "project") => {
+    const registry = getWorkbenchRegistry();
+    const plugin = registry.findBestMatch({
+      path,
+      kind,
+      metadata: {},
+    });
+    return plugin?.id ?? FRONTEND_WORKBENCH_PLUGIN_ID;
+  };
+
+  const openPluginSlot = ({
+    pluginId,
+    artifactPath,
+    targetKind,
+  }: {
+    pluginId?: string;
+    artifactPath: string;
+    targetKind: "file" | "directory" | "project";
+  }) => {
+    setPluginSlotState({
+      pluginId: pluginId ?? resolvePluginIdForTarget(artifactPath, targetKind),
+      artifactPath,
+      targetKind,
+    });
+    setArtifactPanelMode("plugin");
+    setArtifactsOpen(true);
+  };
 
   useEffect(() => {
     if (!selectedArtifact) {
@@ -165,7 +216,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   ]);
 
   useEffect(() => {
-    if (artifactPanelMode === "workbench") {
+    if (artifactPanelMode === "plugin") {
       return;
     }
     if (selectedArtifact) {
@@ -174,6 +225,31 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     }
     setArtifactPanelMode("directory");
   }, [artifactPanelMode, selectedArtifact]);
+
+  useEffect(() => {
+    if (!slotRouteState) {
+      return;
+    }
+    const routeKey = `${slotRouteState.pluginId}:${slotRouteState.artifactPath}:${slotRouteState.targetKind}:${slotRouteState.nonce ?? ""}`;
+    if (appliedSlotRouteKeyRef.current === routeKey) {
+      return;
+    }
+    appliedSlotRouteKeyRef.current = routeKey;
+
+    openPluginSlot({
+      pluginId: slotRouteState.pluginId,
+      artifactPath: slotRouteState.artifactPath,
+      targetKind: slotRouteState.targetKind,
+    });
+    if (slotRouteState.targetKind === "file") {
+      if (!artifacts.includes(slotRouteState.artifactPath)) {
+        setArtifacts([...artifacts, slotRouteState.artifactPath]);
+      }
+      selectArtifact(slotRouteState.artifactPath);
+    } else {
+      deselect();
+    }
+  }, [artifacts, deselect, selectArtifact, setArtifacts, slotRouteState]);
 
   return (
     <ResizablePanelGroup
@@ -210,8 +286,8 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
                 <FolderIcon className="text-muted-foreground size-4 shrink-0" />
                 <span className="truncate">
-                  {artifactPanelMode === "workbench"
-                    ? "工作台"
+                  {artifactPanelMode === "plugin"
+                    ? "插件"
                     : artifactPanelMode === "preview"
                       ? "文件预览"
                       : t.common.workingDirectory}
@@ -221,7 +297,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                {artifactPanelMode !== "workbench" ? (
+                {artifactPanelMode !== "plugin" ? (
                   <span className="text-muted-foreground">
                     {panelFiles.length}
                     {t.common.filesSuffix}
@@ -263,51 +339,67 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                 <Button
                   size="sm"
                   className="h-7 px-2 text-xs"
-                  variant={artifactPanelMode === "workbench" ? "secondary" : "ghost"}
-                  onClick={() => setArtifactPanelMode("workbench")}
+                  variant={artifactPanelMode === "plugin" ? "secondary" : "ghost"}
+                  onClick={() => {
+                    const artifactPath = selectedArtifact ?? DEFAULT_WORKBENCH_PATH;
+                    const targetKind = selectedArtifact ? "file" : "directory";
+                    openPluginSlot({
+                      artifactPath,
+                      targetKind,
+                    });
+                  }}
                 >
                   <Code2Icon className="size-3.5" />
-                  工作台
+                  插件
                 </Button>
               </div>
             </div>
 
             <div className="min-h-0 grow">
-              {artifactPanelMode === "workbench" ? (
-                frontendWorkbenchEnabled ? (
-                  <WorkbenchContainer
-                    filepath={workbenchTargetPath}
-                    threadId={threadId}
-                    targetKind={workbenchTargetKind}
-                    pluginId={FRONTEND_WORKBENCH_PLUGIN_ID}
-                  >
-                    <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                      工作台加载中...
-                    </div>
-                  </WorkbenchContainer>
-                ) : (
-                  <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-sm">
-                    {frontendWorkbenchLoading ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2Icon className="size-4 animate-spin" />
-                        正在加载工作台插件...
+              {artifactPanelMode === "plugin" ? (
+                <WorkbenchSlotShell
+                  title={activePluginName}
+                  subtitle={`目标：${pluginSlotState.artifactPath}`}
+                >
+                  {activePluginEnabled && activePluginSupportsSidebarSlot ? (
+                    <WorkbenchContainer
+                      filepath={pluginSlotState.artifactPath}
+                      threadId={threadId}
+                      targetKind={pluginSlotState.targetKind}
+                      pluginId={pluginSlotState.pluginId}
+                    >
+                      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+                        插件加载中...
                       </div>
-                    ) : (
-                      <>
-                        <div>工作台插件未就绪，请稍后重试。</div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            void refetchFrontendWorkbench();
-                          }}
-                        >
-                          重试加载
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )
+                    </WorkbenchContainer>
+                  ) : (
+                    <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-6 text-sm">
+                      {activePluginLoading ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2Icon className="size-4 animate-spin" />
+                          正在加载插件...
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            {activePluginSupportsSidebarSlot
+                              ? "插件未安装或未启用，请先在插件设置中安装并启用。"
+                              : "该插件未声明侧边插槽渲染能力，无法在此容器中运行。"}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              void refetchActivePlugin();
+                            }}
+                          >
+                            重试加载
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </WorkbenchSlotShell>
               ) : artifactPanelMode === "preview" ? (
                 selectedArtifact ? (
                   <ArtifactFileDetail

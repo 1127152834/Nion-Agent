@@ -31,5 +31,14 @@
         "target": "fixtures/readme.txt"
       }
     ]
+  },
+  "verification": {
+    "level": "auto_manual"
+  },
+  "provenance": {
+    "source": "bundled"
+  },
+  "ui": {
+    "surface": "sidebar-slot"
   }
 }

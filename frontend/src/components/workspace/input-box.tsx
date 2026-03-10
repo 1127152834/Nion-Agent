@@ -2130,16 +2130,12 @@ export function InputBox({
           onOpenChange={artifactCenter.setOpen}
           artifacts={artifacts}
           threadId={threadId}
-          selectedArtifact={artifactCenter.selectedArtifact}
-          workbenchOpen={artifactCenter.workbenchOpen}
-          matchedPluginId={artifactCenter.matchedPluginId}
-          openWorkbench={artifactCenter.openWorkbench}
-          closeWorkbench={artifactCenter.closeWorkbench}
         />
       )}
       {isNewThread &&
         searchParams.get("mode") !== "skill" &&
-        searchParams.get("mode") !== "workbench-plugin" && (
+        searchParams.get("mode") !== "workbench-plugin" &&
+        searchParams.get("mode") !== "plugin-assistant" && (
           <div className="absolute right-0 -bottom-20 left-0 z-0 flex items-center justify-center">
             <SuggestionList />
           </div>

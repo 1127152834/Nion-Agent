@@ -11,6 +11,7 @@ import {
   SearchIcon,
   Trash2Icon,
 } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
@@ -41,12 +42,10 @@ import {
 import { useArtifactGroups } from "@/core/artifacts/hooks";
 import { useI18n } from "@/core/i18n/hooks";
 import { getFileName } from "@/core/utils/files";
-import { getWorkbenchRegistry } from "@/core/workbench";
+import { buildWorkbenchSlotRouteURL, getWorkbenchRegistry } from "@/core/workbench";
 import { cn } from "@/lib/utils";
 
 import { useThread } from "../messages/context";
-
-import { WorkbenchModal } from "./workbench-modal";
 
 const AUTO_GROUPING_STORAGE_KEY = "nion:artifact-center:auto-grouping-enabled";
 
@@ -55,23 +54,16 @@ export function ArtifactCenter({
   onOpenChange,
   artifacts,
   threadId,
-  selectedArtifact,
-  workbenchOpen,
-  matchedPluginId,
-  openWorkbench,
-  closeWorkbench,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   artifacts: string[];
   threadId: string;
-  selectedArtifact: string | null;
-  workbenchOpen: boolean;
-  matchedPluginId: string | null;
-  openWorkbench: (artifactPath: string, pluginId: string | null) => void;
-  closeWorkbench: () => void;
 }) {
   const { t } = useI18n();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { isMock } = useThread();
   const [autoGroupingEnabled, setAutoGroupingEnabled] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -165,22 +157,20 @@ export function ArtifactCenter({
       const registry = getWorkbenchRegistry();
       const plugin = registry.findBestMatch({
         path: filepath,
+        kind: "file",
         metadata: {},
       });
-
-      openWorkbench(filepath, plugin?.id ?? null);
+      const nextURL = buildWorkbenchSlotRouteURL({
+        pathname,
+        pluginId: plugin?.id ?? "frontend-workbench",
+        artifactPath: filepath,
+        targetKind: "file",
+        searchParams,
+      });
+      router.push(nextURL);
       onOpenChange(false);
     },
-    [onOpenChange, openWorkbench],
-  );
-
-  const handleWorkbenchOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (!nextOpen) {
-        closeWorkbench();
-      }
-    },
-    [closeWorkbench],
+    [onOpenChange, pathname, router, searchParams],
   );
 
   const toggleGroupCollapsed = useCallback((groupId: string) => {
@@ -788,14 +778,6 @@ export function ArtifactCenter({
         </SheetContent>
       </Sheet>
 
-      <WorkbenchModal
-        open={workbenchOpen}
-        onOpenChange={handleWorkbenchOpenChange}
-        artifactPath={selectedArtifact}
-        threadId={threadId}
-        matchedPluginId={matchedPluginId}
-        forcedPluginId={matchedPluginId}
-      />
     </>
   );
 }
