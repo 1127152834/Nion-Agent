@@ -1,10 +1,12 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import type { BaseStream } from "@langchain/langgraph-sdk/react";
+import { useMemo } from "react";
 
 import {
   Conversation,
   ConversationContent,
 } from "@/components/ai-elements/conversation";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   extractContentFromMessage,
@@ -15,6 +17,7 @@ import {
   hasContent,
   hasPresentFiles,
   hasReasoning,
+  hasSubagent,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Subtask } from "@/core/tasks";
@@ -32,23 +35,120 @@ import { MessageListItem } from "./message-list-item";
 import { MessageListSkeleton } from "./skeleton";
 import { SubtaskCard } from "./subtask-card";
 
+function formatStreamError(error: unknown): string {
+  if (!error) {
+    return "";
+  }
+  if (typeof error === "string") {
+    return error.trim();
+  }
+  if (error instanceof Error) {
+    return error.message.trim();
+  }
+  if (typeof error === "object" && error !== null) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message.trim();
+    }
+    const nestedError = (error as { error?: unknown }).error;
+    if (typeof nestedError === "string" && nestedError.trim()) {
+      return nestedError.trim();
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Unknown stream error";
+    }
+  }
+  return "Unknown stream error";
+}
+
+function isTransientStreamError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  // 对齐旧项目经验：这类错误通常是 SSE/网络抖动导致，提示用户可直接重试上一条。
+  return (
+    normalized.includes("incomplete chunked read")
+    || normalized.includes("remoteprotocolerror")
+    || normalized.includes("peer closed connection")
+    || normalized.includes("stream")
+    || normalized.includes("connection")
+  );
+}
+
 export function MessageList({
   className,
   threadId,
   thread,
   paddingBottom = 160,
   onClarificationSelect,
+  onRetryLastMessage,
 }: {
   className?: string;
   threadId: string;
   thread: BaseStream<AgentThreadState>;
   paddingBottom?: number;
   onClarificationSelect?: (option: string) => void;
+  onRetryLastMessage?: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const isZh = locale.startsWith("zh");
+  const copy = t.workspace?.messageList;
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
   const messages = thread.messages;
+  const streamErrorMessage = formatStreamError((thread as { error?: unknown }).error);
+  const showStreamErrorNotice = !thread.isLoading && streamErrorMessage.length > 0;
+  const streamErrorHint = isTransientStreamError(streamErrorMessage)
+    ? (isZh
+        ? (copy?.streamInterruptedHint ?? "网络或上游模型流式连接中断，当前结果可能不完整。建议点击“重试上一条”。")
+        : "Network or upstream model stream interrupted. Current output may be incomplete. Retry the last message.")
+    : (isZh
+        ? (copy?.streamEndedUnexpectedlyHint ?? "本次回答在执行过程中异常结束，当前结果可能不完整。")
+        : "This response ended unexpectedly and may be incomplete.");
+
+  const showIncompleteTurnNotice = useMemo(() => {
+    if (thread.isLoading || showStreamErrorNotice) {
+      return false;
+    }
+
+    let lastHumanMessageIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index]?.type === "human") {
+        lastHumanMessageIndex = index;
+        break;
+      }
+    }
+    if (lastHumanMessageIndex < 0) {
+      return false;
+    }
+
+    const tailMessages = messages.slice(lastHumanMessageIndex + 1);
+    if (tailMessages.length === 0) {
+      return false;
+    }
+
+    const hasRenderableAssistantOutcome = tailMessages.some((message) => {
+      if (message.type !== "ai") {
+        return false;
+      }
+      if (hasContent(message) || hasPresentFiles(message)) {
+        return true;
+      }
+      return hasSubagent(message);
+    });
+
+    if (hasRenderableAssistantOutcome) {
+      return false;
+    }
+
+    // 只有“有推理/工具执行但无最终可见输出”时才显示未完整生成提示，避免误报。
+    return tailMessages.some(
+      (message) =>
+        message.type === "ai"
+        && (hasReasoning(message) || (message.tool_calls?.length ?? 0) > 0),
+    );
+  }, [messages, showStreamErrorNotice, thread.isLoading]);
+
   if (thread.isThreadLoading && messages.length === 0) {
     return <MessageListSkeleton />;
   }
@@ -237,6 +337,62 @@ export function MessageList({
             />
           );
         })}
+        {showStreamErrorNotice && (
+          <div className="mt-1 w-full rounded-lg border border-amber-300/50 bg-amber-50/70 p-3">
+            <div className="text-sm font-medium text-amber-900">
+              {isZh
+                ? (copy?.streamInterruptedTitle ?? "回答流已中断")
+                : "Response Stream Interrupted"}
+            </div>
+            <div className="text-muted-foreground mt-1 text-xs leading-5">
+              {streamErrorHint}
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {onRetryLastMessage ? (
+                <Button
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={onRetryLastMessage}
+                >
+                  {isZh ? (copy?.retryLastMessage ?? "重试上一条") : "Retry last message"}
+                </Button>
+              ) : null}
+              <details className="text-muted-foreground text-xs">
+                <summary className="cursor-pointer select-none">
+                  {isZh ? (copy?.errorDetails ?? "查看错误详情") : "Error details"}
+                </summary>
+                <pre className="bg-background mt-1 max-h-24 overflow-auto rounded border p-2 whitespace-pre-wrap">
+                  {streamErrorMessage}
+                </pre>
+              </details>
+            </div>
+          </div>
+        )}
+        {showIncompleteTurnNotice && (
+          <div className="mt-1 w-full rounded-lg border border-amber-300/50 bg-amber-50/70 p-3">
+            <div className="text-sm font-medium text-amber-900">
+              {isZh
+                ? (copy?.incompleteResponseTitle ?? "回答未完整生成")
+                : "Response ended without final output"}
+            </div>
+            <div className="text-muted-foreground mt-1 text-xs leading-5">
+              {isZh
+                ? (copy?.incompleteResponseHint ?? "本轮执行已结束，但没有生成最终可见回复。建议点击“重试上一条”继续。")
+                : "Execution ended without a final visible response. Retry the last message to continue."}
+            </div>
+            {onRetryLastMessage ? (
+              <div className="mt-2">
+                <Button
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={onRetryLastMessage}
+                >
+                  {isZh ? (copy?.retryLastMessage ?? "重试上一条") : "Retry last message"}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
         {thread.isLoading && <StreamingIndicator className="my-4" />}
         <div style={{ height: `${paddingBottom}px` }} />
       </ConversationContent>

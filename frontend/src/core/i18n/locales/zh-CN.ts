@@ -305,6 +305,20 @@ export const zhCN: Translations = {
       untitled: "未命名",
       loading: "标题生成中...",
     },
+    messageList: {
+      streamInterruptedTitle: "回答流已中断",
+      streamInterruptedHint:
+        "网络或上游模型流式连接中断，当前结果可能不完整。建议点击“重试上一条”。",
+      streamEndedUnexpectedlyHint:
+        "本次回答在执行过程中异常结束，当前结果可能不完整。",
+      retryLastMessage: "重试上一条",
+      errorDetails: "查看错误详情",
+      incompleteResponseTitle: "回答未完整生成",
+      incompleteResponseHint:
+        "本轮执行已结束，但没有生成最终可见回复。建议点击“重试上一条”继续。",
+      noRetryableUserMessage: "没有找到可重试的上一条用户消息。",
+      retryFailedPrefix: "重试失败：",
+    },
     todoList: {
       title: "待办列表",
     },

@@ -315,6 +315,20 @@ export const enUS: Translations = {
       untitled: "Untitled",
       loading: "Loading title...",
     },
+    messageList: {
+      streamInterruptedTitle: "Response Stream Interrupted",
+      streamInterruptedHint:
+        "Network or upstream model stream interrupted. Current output may be incomplete. Retry the last message.",
+      streamEndedUnexpectedlyHint:
+        "This response ended unexpectedly and may be incomplete.",
+      retryLastMessage: "Retry last message",
+      errorDetails: "Error details",
+      incompleteResponseTitle: "Response ended without final output",
+      incompleteResponseHint:
+        "Execution ended without a final visible response. Retry the last message to continue.",
+      noRetryableUserMessage: "No retryable user message found.",
+      retryFailedPrefix: "Retry failed: ",
+    },
     todoList: {
       title: "Todo list",
     },

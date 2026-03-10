@@ -3,6 +3,7 @@
 import { ArrowLeftIcon, BotIcon, CheckCircleIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import {
   PromptInput,
@@ -18,6 +19,7 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import type { Agent } from "@/core/agents";
 import { checkAgentName, getAgent } from "@/core/agents/api";
 import { useI18n } from "@/core/i18n/hooks";
+import { findLastRetryableUserMessage } from "@/core/messages/retry";
 import { useThreadStream } from "@/core/threads/hooks";
 import { uuid } from "@/core/utils/uuid";
 import { cn } from "@/lib/utils";
@@ -117,6 +119,28 @@ export default function NewAgentPage() {
     [thread.isLoading, sendMessage, threadId, agentName],
   );
 
+  const handleRetryLastMessage = useCallback(() => {
+    if (thread.isLoading) {
+      return;
+    }
+    const retryText = findLastRetryableUserMessage(thread.messages);
+    if (!retryText) {
+      toast.error(t.workspace.messageList.noRetryableUserMessage);
+      return;
+    }
+    void sendMessage(
+      threadId,
+      {
+        text: retryText,
+        files: [],
+      },
+      { agent_name: agentName },
+    ).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`${t.workspace.messageList.retryFailedPrefix}${message}`);
+    });
+  }, [agentName, sendMessage, t.workspace.messageList.noRetryableUserMessage, t.workspace.messageList.retryFailedPrefix, thread.isLoading, thread.messages, threadId]);
+
   // ── Shared header ──────────────────────────────────────────────────────────
 
   const header = (
@@ -201,6 +225,7 @@ export default function NewAgentPage() {
                 onClarificationSelect={(option) => {
                   void handleChatSubmit(option);
                 }}
+                onRetryLastMessage={handleRetryLastMessage}
               />
             </div>
 

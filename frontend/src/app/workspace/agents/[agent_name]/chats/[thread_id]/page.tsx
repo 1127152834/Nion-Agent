@@ -29,6 +29,7 @@ import { TodoList } from "@/components/workspace/todo-list";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { useAgent } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
+import { findLastRetryableUserMessage } from "@/core/messages/retry";
 import { useNotification } from "@/core/notification/hooks";
 import { platform } from "@/core/platform";
 import { useDesktopRuntime } from "@/core/platform/hooks";
@@ -411,6 +412,32 @@ export default function AgentChatPage() {
     [handleSubmit],
   );
 
+  const handleRetryLastMessage = useCallback(() => {
+    if (thread.isLoading) {
+      return;
+    }
+    const retryText = findLastRetryableUserMessage(thread.messages);
+    if (!retryText) {
+      toast.error(t.workspace.messageList.noRetryableUserMessage);
+      return;
+    }
+    void sendMessage(
+      threadId,
+      {
+        text: retryText,
+        files: [],
+      },
+      {
+        agent_name,
+        execution_mode: runtimeProfile.execution_mode,
+        host_workdir: runtimeProfile.host_workdir ?? undefined,
+      },
+    ).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`${t.workspace.messageList.retryFailedPrefix}${message}`);
+    });
+  }, [agent_name, runtimeProfile.execution_mode, runtimeProfile.host_workdir, sendMessage, t.workspace.messageList.noRetryableUserMessage, t.workspace.messageList.retryFailedPrefix, thread.isLoading, thread.messages, threadId]);
+
   const handleStop = useCallback(async () => {
     await thread.stop();
   }, [thread]);
@@ -519,6 +546,7 @@ export default function AgentChatPage() {
                     threadId={threadId}
                     thread={thread}
                     onClarificationSelect={handleClarificationSelect}
+                    onRetryLastMessage={handleRetryLastMessage}
                   />
                 </div>
                 <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">

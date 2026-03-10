@@ -229,6 +229,17 @@ export interface Translations {
       untitled: string;
       loading: string;
     };
+    messageList: {
+      streamInterruptedTitle: string;
+      streamInterruptedHint: string;
+      streamEndedUnexpectedlyHint: string;
+      retryLastMessage: string;
+      errorDetails: string;
+      incompleteResponseTitle: string;
+      incompleteResponseHint: string;
+      noRetryableUserMessage: string;
+      retryFailedPrefix: string;
+    };
     todoList: {
       title: string;
     };
