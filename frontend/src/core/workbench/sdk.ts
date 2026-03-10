@@ -28,6 +28,17 @@ function pathDepth(path: string): number {
   return path.replace(/\/+$/, "").split("/").filter(Boolean).length;
 }
 
+function normalizeTimeoutSeconds(timeoutSeconds?: number): number {
+  // Keep client-side bounds aligned with backend validation (1..1800).
+  if (!Number.isFinite(timeoutSeconds)) {
+    return 600;
+  }
+  const value = Math.trunc(timeoutSeconds as number);
+  if (value < 1) return 1;
+  if (value > 1800) return 1800;
+  return value;
+}
+
 function artifactApiURL(threadId: string, path: string): string {
   const normalized = normalizeVirtualPath(path).replace(/^\/+/, "");
   return `${getBackendBaseURL()}/api/threads/${threadId}/artifacts/${normalized}`;
@@ -183,7 +194,7 @@ export function createWorkbenchContext(
           body: JSON.stringify({
             command: args.command,
             cwd: args.cwd ?? "/mnt/user-data/workspace",
-            timeout_seconds: args.timeoutSeconds ?? 600,
+            timeout_seconds: normalizeTimeoutSeconds(args.timeoutSeconds),
           }),
         },
       );
