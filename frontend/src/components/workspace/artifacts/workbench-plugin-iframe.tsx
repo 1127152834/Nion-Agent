@@ -253,10 +253,18 @@ function injectBridge(entryHtml: string, payload: {
 </script>
 `;
 
+  // Inject bridge as early as possible so plugin scripts can use window.NionWorkbench
+  // during initial evaluation (some plugins run bootstrap logic in <head> scripts).
+  if (entryHtml.includes("<head>")) {
+    return entryHtml.replace("<head>", `<head>\n${bridgeScript}\n`);
+  }
+  if (entryHtml.includes("<body>")) {
+    return entryHtml.replace("<body>", `<body>\n${bridgeScript}\n`);
+  }
   if (entryHtml.includes("</body>")) {
     return entryHtml.replace("</body>", `${bridgeScript}\n</body>`);
   }
-  return `${entryHtml}\n${bridgeScript}`;
+  return `${bridgeScript}\n${entryHtml}`;
 }
 
 export function WorkbenchPluginIframe({
