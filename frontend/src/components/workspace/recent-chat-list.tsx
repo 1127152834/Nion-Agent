@@ -661,9 +661,9 @@ export function RecentChatList() {
       >
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
-            <DialogTitle>{t.sidebar.bulkDeleteTitle(selectedCount)}</DialogTitle>
+            <DialogTitle>{t.sidebar.bulkDeleteTitle}</DialogTitle>
             <DialogDescription>
-              {t.sidebar.bulkDeleteDescription(selectedCount)}
+              {t.sidebar.bulkDeleteDescription}
             </DialogDescription>
           </DialogHeader>
 

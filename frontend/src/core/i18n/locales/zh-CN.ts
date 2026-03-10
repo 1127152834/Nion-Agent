@@ -236,6 +236,8 @@ export const zhCN: Translations = {
     agents: "智能体",
     rss: "资讯",
     scheduler: "定时任务",
+    bulkDeleteTitle: "删除选中的对话",
+    bulkDeleteDescription: "确定要删除选中的对话吗？此操作不可撤销。",
   },
 
   // Agents

@@ -162,6 +162,8 @@ export interface Translations {
     agents: string;
     rss: string;
     scheduler: string;
+    bulkDeleteTitle: string;
+    bulkDeleteDescription: string;
   };
 
   // Agents

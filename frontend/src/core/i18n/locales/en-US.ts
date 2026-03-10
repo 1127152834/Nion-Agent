@@ -241,6 +241,8 @@ export const enUS: Translations = {
     agents: "Agents",
     rss: "News",
     scheduler: "Scheduler",
+    bulkDeleteTitle: "Delete selected chats",
+    bulkDeleteDescription: "Are you sure you want to delete the selected chats? This action cannot be undone.",
   },
 
   // Agents
