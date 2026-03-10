@@ -9,6 +9,9 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
     mode: undefined,
     reasoning_effort: undefined,
   },
+  suggestions: {
+    model_name: undefined,
+  },
   layout: {
     sidebar_collapsed: false,
   },
@@ -26,6 +29,9 @@ export interface LocalSettings {
   > & {
     mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
+  };
+  suggestions: {
+    model_name?: string;
   };
   layout: {
     sidebar_collapsed: boolean;
@@ -53,6 +59,10 @@ export function getLocalSettings(): LocalSettings {
         notification: {
           ...DEFAULT_LOCAL_SETTINGS.notification,
           ...settings.notification,
+        },
+        suggestions: {
+          ...DEFAULT_LOCAL_SETTINGS.suggestions,
+          ...settings.suggestions,
         },
       };
       return mergedSettings;

@@ -53,7 +53,7 @@ import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
-import { getLocalSettings, saveLocalSettings } from "@/core/settings/local";
+import { useLocalSettings } from "@/core/settings";
 import { useSkills } from "@/core/skills/hooks";
 import { getLocalizedSkillDescription } from "@/core/skills/i18n";
 import type { AgentThreadContext } from "@/core/threads";
@@ -610,6 +610,7 @@ export function InputBox({
   const { thread } = useThread();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const { models } = useModels();
+  const [localSettings, setLocalSettings] = useLocalSettings();
   const artifactCenter = useArtifactCenter();
   const { toggleOpen } = artifactCenter;
   const [localModelName, setLocalModelName] = useState<string | undefined>(
@@ -650,11 +651,11 @@ export function InputBox({
 
   // Read initial model from local settings for model selector persistence
   useEffect(() => {
-    const persistedModelName = getLocalSettings().context.model_name;
+    const persistedModelName = localSettings.context.model_name;
     setLocalModelName(
       typeof persistedModelName === "string" ? persistedModelName : undefined,
     );
-  }, []);
+  }, [localSettings.context.model_name]);
 
   // Toggle artifact center with Cmd/Ctrl + Shift + A
   useEffect(() => {
@@ -900,6 +901,14 @@ export function InputBox({
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
   const [followUpLoading, setFollowUpLoading] = useState(false);
 
+  const suggestionModelName = useMemo(() => {
+    const configuredModelName = localSettings.suggestions.model_name?.trim();
+    if (configuredModelName) {
+      return configuredModelName;
+    }
+    return context.model_name ?? localModelName;
+  }, [context.model_name, localModelName, localSettings.suggestions.model_name]);
+
   const followUpMessages = useMemo(
     () => buildFollowUpMessages(Array.isArray(thread.messages) ? thread.messages : []),
     [thread.messages],
@@ -914,8 +923,8 @@ export function InputBox({
     if (!lastAssistant) {
       return "";
     }
-    return `${threadId}:${followUpMessages.length}:${lastAssistant.content}`;
-  }, [followUpMessages, threadId]);
+    return `${threadId}:${suggestionModelName ?? ""}:${followUpMessages.length}:${lastAssistant.content}`;
+  }, [followUpMessages, suggestionModelName, threadId]);
 
   useEffect(() => {
     if (status === "streaming") {
@@ -943,6 +952,7 @@ export function InputBox({
             body: JSON.stringify({
               messages: followUpMessages,
               n: 3,
+              model_name: suggestionModelName,
             }),
             signal: controller.signal,
           },
@@ -978,7 +988,7 @@ export function InputBox({
       disposed = true;
       controller.abort();
     };
-  }, [followUpFetchKey, followUpMessages, isNewThread, status, threadId]);
+  }, [followUpFetchKey, followUpMessages, isNewThread, status, suggestionModelName, threadId]);
 
   const handleFollowUpSuggestionClick = useCallback(
     (prompt: string) => {
@@ -1244,16 +1254,11 @@ export function InputBox({
       mode: nextMode,
     });
 
-    const settings = getLocalSettings();
-    saveLocalSettings({
-      ...settings,
-      context: {
-        ...settings.context,
-        model_name: nextModelName,
-      },
+    setLocalSettings("context", {
+      model_name: nextModelName,
     });
     setLocalModelName(nextModelName);
-  }, [context, localModelName, models, onContextChange]);
+  }, [context, localModelName, models, onContextChange, setLocalSettings]);
 
   const activeModelName = context.model_name ?? localModelName;
 
@@ -1310,13 +1315,8 @@ export function InputBox({
         mode: getResolvedMode(context.mode, model.supports_thinking ?? false),
         reasoning_effort: context.reasoning_effort,
       });
-      const settings = getLocalSettings();
-      saveLocalSettings({
-        ...settings,
-        context: {
-          ...settings.context,
-          model_name,
-        },
+      setLocalSettings("context", {
+        model_name,
       });
       setLocalModelName(model_name);
       setModelDialogOpen(false);
@@ -1329,7 +1329,7 @@ export function InputBox({
         return next;
       });
     },
-    [onContextChange, context, models],
+    [onContextChange, context, models, setLocalSettings],
   );
 
   const handleModeSelect = useCallback(
