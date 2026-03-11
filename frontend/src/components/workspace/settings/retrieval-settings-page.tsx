@@ -491,7 +491,9 @@ export function RetrievalSettingsPage() {
       const status = installedCount === 0 ? "not_installed" : (installedCount === totalCount ? "installed" : "partial");
       return {
         pack_id: packId,
-        display_name: packId === "zh" ? "中文检索包" : "English Retrieval Pack",
+        display_name: packId === "zh"
+          ? t.settings.retrieval.packNameZh
+          : t.settings.retrieval.packNameEn,
         locale: packId === "zh" ? "zh-CN" : "en-US",
         approx_size_bytes: modelList.reduce((sum, item) => sum + item.approx_size_bytes, 0),
         installed: installedCount === totalCount,
@@ -564,7 +566,7 @@ export function RetrievalSettingsPage() {
     }
     const normalized = asBoolean(asObject(result).normalization_applied, false);
     if (normalized && !packNormalizedToastShown) {
-      toast.success(t.settings.retrieval.packNormalizedHint ?? "已自动修正为同语言检索组合。");
+      toast.success(t.settings.retrieval.packNormalizedHint);
       setPackNormalizedToastShown(true);
     }
   }, [packNormalizedToastShown, statusResponse, t.settings.retrieval.packNormalizedHint]);
@@ -752,14 +754,12 @@ export function RetrievalSettingsPage() {
             const errorCode = response.error_code ?? "remove_failed";
             if (errorCode === "retrieval_active_model_remove_forbidden") {
               throw new Error(
-                t.settings.retrieval.packDeleteActiveForbidden
-                  ?? "当前启用组合包不可删除，请先启用另一个组合包。",
+                t.settings.retrieval.packDeleteActiveForbidden,
               );
             }
             if (errorCode === "retrieval_pack_keep_one_required") {
               throw new Error(
-                t.settings.retrieval.packDeleteKeepOneRequired
-                  ?? "至少保留一个已下载组合包，请先下载并启用另一个组合包。",
+                t.settings.retrieval.packDeleteKeepOneRequired,
               );
             }
             throw new Error(errorCode);
@@ -953,7 +953,7 @@ export function RetrievalSettingsPage() {
       });
       if (activated) {
         await refetchConfig();
-        toast.success(t.settings.retrieval.packDownloadAndEnableSuccess ?? "组合下载并启用成功。");
+        toast.success(t.settings.retrieval.packDownloadAndEnableSuccess);
         return;
       }
     } finally {
@@ -971,20 +971,18 @@ export function RetrievalSettingsPage() {
         const errorCode = response.error_code ?? "delete_pack_failed";
         if (errorCode === "retrieval_active_model_remove_forbidden") {
           throw new Error(
-            t.settings.retrieval.packDeleteActiveForbidden
-              ?? "当前启用组合包不可删除，请先启用另一个组合包。",
+            t.settings.retrieval.packDeleteActiveForbidden,
           );
         }
         if (errorCode === "retrieval_pack_keep_one_required") {
           throw new Error(
-            t.settings.retrieval.packDeleteKeepOneRequired
-              ?? "至少保留一个已下载组合包，请先下载并启用另一个组合包。",
+            t.settings.retrieval.packDeleteKeepOneRequired,
           );
         }
         throw new Error(errorCode);
       }
       await loadStatus();
-      toast.success(t.settings.retrieval.packDeleteSuccess ?? "组合包已删除。");
+      toast.success(t.settings.retrieval.packDeleteSuccess);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       toast.error(`${t.settings.retrieval.operationFailedPrefix}${message}`);
@@ -1409,7 +1407,7 @@ export function RetrievalSettingsPage() {
                     }}
                   >
                     {isPackDownloading ? <Loader2Icon className="mr-1 size-4 animate-spin" /> : <DownloadIcon className="mr-1 size-4" />}
-                    {t.settings.retrieval.packActionDownloadAndEnable ?? "下载并启用"}
+                    {t.settings.retrieval.packActionDownloadAndEnable}
                   </Button>
                 ) : pack.is_active_pack ? (
                   <Button size="sm" disabled>
@@ -1424,7 +1422,7 @@ export function RetrievalSettingsPage() {
                     }}
                   >
                     {isPackEnabling ? <Loader2Icon className="mr-1 size-4 animate-spin" /> : null}
-                    {t.settings.retrieval.packActionEnable ?? "启用组合"}
+                    {t.settings.retrieval.packActionEnable}
                   </Button>
                 )}
 
@@ -1437,16 +1435,20 @@ export function RetrievalSettingsPage() {
                   }}
                 >
                   {isPackDeleting ? <Loader2Icon className="mr-1 size-4 animate-spin" /> : <Trash2Icon className="mr-1 size-4" />}
-                  {t.settings.retrieval.packActionDelete ?? "删除组合包"}
+                  {t.settings.retrieval.packActionDelete}
                 </Button>
               </div>
 
               {packDownloadMeta ? (
                 <div className="space-y-1">
                   <div className="text-muted-foreground text-xs">
-                    {`下载进度 ${packDownloadMeta.completed}/${packDownloadMeta.total}${
-                      currentDownloadModel ? ` · ${currentDownloadModel.display_name}` : ""
-                    }`}
+                    {t.settings.retrieval.packDownloadProgressTemplate
+                      .replace("{completed}", String(packDownloadMeta.completed))
+                      .replace("{total}", String(packDownloadMeta.total))
+                      .replace(
+                        "{currentModel}",
+                        currentDownloadModel ? ` · ${currentDownloadModel.display_name}` : "",
+                      )}
                   </div>
                   {packByteProgress ? (
                     <div className="space-y-1">
@@ -1552,13 +1554,13 @@ export function RetrievalSettingsPage() {
                       )}
                       {t.settings.retrieval.actionDownload}
                     </Button>
-                    {downloadProgress && downloadProgress.modelId === model.model_id && (
+                    {downloadProgress?.modelId === model.model_id && (
                       <div className="w-full mt-2 space-y-1">
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <span>
                             {downloadProgress.percentage !== null
                               ? `${downloadProgress.percentage}%`
-                              : "下载中..."}
+                              : t.settings.retrieval.downloading}
                           </span>
                           <span>
                             {downloadProgress.total
@@ -1966,7 +1968,7 @@ export function RetrievalSettingsPage() {
               onValueChange={(value) => setActiveTab(value as "packs" | "testing")}
             >
               <TabsList variant="line">
-                <TabsTrigger value="packs">{t.settings.retrieval.tabPacks ?? "组合"}</TabsTrigger>
+                <TabsTrigger value="packs">{t.settings.retrieval.tabPacks}</TabsTrigger>
                 <TabsTrigger value="testing">{t.settings.retrieval.tabTesting}</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -1989,10 +1991,10 @@ export function RetrievalSettingsPage() {
           {activeTab === "packs" ? (
             <section className="space-y-3 rounded-lg border p-4">
               <div className="space-y-1">
-                <div className="text-sm font-medium">{t.settings.retrieval.packTitle ?? "检索组合"}</div>
+                <div className="text-sm font-medium">{t.settings.retrieval.packTitle}</div>
                 {activePackId ? (
                   <div className="text-muted-foreground text-xs">
-                    {(t.settings.retrieval.activePackHint ?? "当前启用组合：{pack}").replace("{pack}", activePackId.toUpperCase())}
+                    {t.settings.retrieval.activePackHint.replace("{pack}", activePackId.toUpperCase())}
                   </div>
                 ) : null}
               </div>

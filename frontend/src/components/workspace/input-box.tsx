@@ -326,21 +326,21 @@ function resolveMentionState(value: string, caret: number): MentionState | null 
     return null;
   }
 
-  // 向前扫描，找到最近的触发字符
+  // Scan backward to find the nearest trigger character.
   let triggerIndex = -1;
   let trigger: MentionTrigger | null = null;
 
   for (let i = safeCaret - 1; i >= 0; i--) {
     const char = value.charAt(i);
 
-    // 如果遇到空格或换行，停止扫描（mention 不能包含空格）
+    // Stop scanning when we hit whitespace/newline.
     if (char === ' ' || char === '\n') {
       break;
     }
 
-    // 如果找到触发字符
+    // Mention trigger found.
     if (char === '@' || char === '/') {
-      // 允许在任何位置触发提及
+      // Allow mention triggers in any position.
       triggerIndex = i;
       trigger = char as MentionTrigger;
       break;
@@ -494,7 +494,7 @@ function getResolvedMode(
 }
 
 function normalizeFollowUpRole(value: unknown): "user" | "assistant" | null {
-  const role = String(value ?? "").trim().toLowerCase();
+  const role = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (role === "user" || role === "human") {
     return "user";
   }
@@ -603,7 +603,7 @@ export function InputBox({
   onSubmit?: (message: PromptInputMessage) => void;
   onStop?: () => void;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const mentionLabels = t.migration.workspace?.inputBox;
   const searchParams = useSearchParams();
   const [hydrated, setHydrated] = useState(false);
@@ -683,16 +683,11 @@ export function InputBox({
   // Fetch data for mention options
   const { skills } = useSkills();
   const { config: mcpConfig } = useMCPConfig();
-  const { locale } = useI18n();
-  const defaultContextLabel = locale.startsWith("zh") ? "上下文" : "Context";
-  const defaultSkillLabel = locale.startsWith("zh") ? "技能" : "Skill";
-  const defaultMcpLabel = "MCP";
-  const defaultSearchMcpTools = locale.startsWith("zh")
-    ? "搜索 MCP 工具..."
-    : "Search MCP tools...";
-  const defaultNoMcpTools = locale.startsWith("zh")
-    ? "暂无 MCP 工具"
-    : "No MCP tools available";
+  const defaultContextLabel = t.inputBox.contextLabel;
+  const defaultSkillLabel = t.inputBox.skillLabel;
+  const defaultMcpLabel = t.inputBox.mcpLabel;
+  const defaultSearchMcpTools = t.inputBox.searchMcpTools;
+  const defaultNoMcpTools = t.inputBox.noMcpTools;
 
   // Build mention options
   const fileMentionOptions = useMemo<MentionOption[]>(
@@ -901,13 +896,11 @@ export function InputBox({
   const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
   const [followUpLoading, setFollowUpLoading] = useState(false);
 
-  const suggestionModelName = useMemo(() => {
-    const configuredModelName = localSettings.suggestions.model_name?.trim();
-    if (configuredModelName) {
-      return configuredModelName;
-    }
-    return context.model_name ?? localModelName;
-  }, [context.model_name, localModelName, localSettings.suggestions.model_name]);
+  const suggestionModelName = useMemo<string | undefined>(() => {
+    const contextModelName =
+      typeof context.model_name === "string" ? context.model_name : undefined;
+    return contextModelName ?? localModelName;
+  }, [context.model_name, localModelName]);
 
   const followUpMessages = useMemo(
     () => buildFollowUpMessages(Array.isArray(thread.messages) ? thread.messages : []),
@@ -1080,7 +1073,7 @@ export function InputBox({
       const prefix = textInput.value.slice(0, mentionState.start);
       const suffix = textInput.value.slice(mentionState.end);
 
-      // 插入选中的 mention，保留触发字符
+      // Insert selected mention and keep the trigger character.
       const mentionText = `${mentionState.trigger}${option.value}`;
       const nextValue = `${prefix}${mentionText} ${suffix}`;
       const nextCaret = prefix.length + mentionText.length + 1;
@@ -2166,8 +2159,8 @@ function FollowUpSuggestionList({
   loading: boolean;
   onClick: (suggestion: string) => void;
 }) {
-  const { locale } = useI18n();
-  const loadingText = locale.startsWith("zh") ? "正在生成追问建议..." : "Generating follow-up suggestions...";
+  const { t } = useI18n();
+  const loadingText = t.inputBox.generatingFollowUpSuggestions;
 
   return (
     <Suggestions className="min-h-16 w-fit items-start">

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { isElectron } from "./detector";
 
 /**
- * 客户端环境探测，避免 SSR/CSR 首帧不一致导致 hydration 警告。
+ * Client-side runtime probe to avoid SSR/CSR hydration mismatch warnings.
  */
 export function useDesktopRuntime() {
   const [mounted, setMounted] = useState(false);
@@ -21,4 +21,3 @@ export function useDesktopRuntime() {
     isDesktopRuntime: mounted && desktopRuntime,
   };
 }
-

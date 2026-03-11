@@ -164,7 +164,7 @@ export const ModelSelectorSeparator = (props: ModelSelectorSeparatorProps) => (
   <CommandSeparator className="bg-border my-1 h-px" {...props} />
 );
 
-// 分组标题组件
+// Group title component
 export const ModelSelectorGroupTitle = ({
   className,
   children,
@@ -240,7 +240,7 @@ export const ModelSelectorName = ({
   />
 );
 
-// 选中指示器
+// Selected-state indicator
 export const ModelSelectorCheck = ({
   className,
   ...props

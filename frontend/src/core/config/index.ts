@@ -2,16 +2,16 @@ import { isElectron } from "@/core/platform";
 import { env } from "@/env";
 
 export function getBackendBaseURL() {
-  // Electron 模式：优先使用环境变量，其次回退到同源代理入口
+  // Electron mode: prefer env var, then fallback to local desktop gateway.
   if (isElectron()) {
     return env.NEXT_PUBLIC_BACKEND_BASE_URL ?? "http://localhost:2026";
   }
 
-  // Web 模式：优先使用环境变量，其次回退到本地后端端口
+  // Web mode: prefer env var, then fallback to local backend port.
   if (env.NEXT_PUBLIC_BACKEND_BASE_URL) {
     return env.NEXT_PUBLIC_BACKEND_BASE_URL;
   } else {
-    // 默认使用本地后端端口，开发环境下通常运行在 8001
+    // Default local backend port for development.
     return "http://localhost:8001";
   }
 }

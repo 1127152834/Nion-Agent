@@ -22,17 +22,17 @@ const PopoverContent = React.forwardRef<
       sideOffset={sideOffset}
       collisionPadding={collisionPadding}
       className={cn(
-        // 简洁风格
+        // Minimal style
         "z-[9999] w-full max-w-[360px]",
-        // 简洁背景
+        // Minimal background
         "bg-white dark:bg-zinc-900",
-        // 简洁细边框
+        // Thin border
         "border border-zinc-200 dark:border-zinc-800",
-        // 小圆角
+        // Small radius
         "rounded-lg",
-        // 简洁阴影
+        // Subtle shadow
         "shadow-lg",
-        // 动画
+        // Animation
         "duration-150 ease-out",
         "animate-in fade-in-0 zoom-in-95",
         "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 duration-100 data-[state=closed]:ease-in",

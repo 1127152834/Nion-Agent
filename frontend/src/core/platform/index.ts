@@ -3,11 +3,11 @@ import { electronPlatform } from "./electron-api";
 import { webPlatform } from "./web-api";
 
 /**
- * 统一的平台 API（运行时动态解析）
+ * Unified platform API with runtime resolution.
  *
- * 注意：不要在模块初始化阶段静态绑定平台实现。
- * Electron 的 preload 注入可能晚于早期模块执行，静态绑定会导致
- * 运行时一直停留在 web 平台实现。
+ * Do not statically bind platform implementations during module initialization.
+ * Electron preload injection may arrive after early module execution, and static
+ * binding can lock the runtime to web implementation.
  */
 function getRuntimePlatform() {
   return isElectron() ? electronPlatform : webPlatform;

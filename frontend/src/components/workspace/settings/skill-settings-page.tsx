@@ -77,37 +77,21 @@ function SkillSettingsList({
   onClose?: () => void;
 }) {
   const { t, locale } = useI18n();
-  const fallbackCopy = locale === "zh-CN"
-    ? {
-      createViaChat: "通过对话创建",
-      uploadPackage: "上传包文件",
-      importFromAgents: "从 Agents 导入",
-      uploading: "上传中...",
-      uploadFormatError: "请上传 .skill 或 .zip 文件",
-      uploadFailed: "上传技能包失败",
-      skillInstalled: "技能 \"{name}\" 已安装",
-      skillDeleted: "技能已删除",
-      deleteFailed: "删除技能失败",
-      deleteConfirmTitle: "确认删除技能",
-      deleteConfirmDescription: "删除技能 \"{name}\"？此操作不可撤销。",
-      cancelAction: "取消",
-      confirmDeleteAction: "删除",
-    }
-    : {
-      createViaChat: "Create via chat",
-      uploadPackage: "Upload package",
-      importFromAgents: "Import from Agents",
-      uploading: "Uploading...",
-      uploadFormatError: "Please upload a .skill or .zip file",
-      uploadFailed: "Failed to upload skill package",
-      skillInstalled: "Skill \"{name}\" installed",
-      skillDeleted: "Skill deleted",
-      deleteFailed: "Failed to delete skill",
-      deleteConfirmTitle: "Confirm skill deletion",
-      deleteConfirmDescription: "Delete skill \"{name}\"? This action cannot be undone.",
-      cancelAction: "Cancel",
-      confirmDeleteAction: "Delete",
-    };
+  const fallbackCopy = {
+    createViaChat: "Create via chat",
+    uploadPackage: "Upload package",
+    importFromAgents: "Import from Agents",
+    uploading: "Uploading...",
+    uploadFormatError: "Please upload a .skill or .zip file",
+    uploadFailed: "Failed to upload skill package",
+    skillInstalled: "Skill \"{name}\" installed",
+    skillDeleted: "Skill deleted",
+    deleteFailed: "Failed to delete skill",
+    deleteConfirmTitle: "Confirm skill deletion",
+    deleteConfirmDescription: "Delete skill \"{name}\"? This action cannot be undone.",
+    cancelAction: "Cancel",
+    confirmDeleteAction: "Delete",
+  };
   const settingsLike = t.settings as unknown as {
     skillPage?: Record<string, string>;
   };

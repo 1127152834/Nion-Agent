@@ -1,5 +1,5 @@
 /**
- * Web 平台的 API 封装（提供兼容接口）
+ * Web platform API wrapper (compatibility interface).
  */
 type RuntimeStatus = Record<string, unknown>;
 type RuntimeActionResult = Record<string, unknown>;
@@ -82,7 +82,7 @@ export const webPlatform = {
   },
 
   onStartupStage(_callback: (data: StartupStageEvent) => void): void {
-    // Web 模式不需要启动监听
+    // Startup stage listening is not required in web mode.
   },
 
   async getRuntimeStatus(): Promise<RuntimeStatus> {
@@ -106,6 +106,6 @@ export const webPlatform = {
   },
 
   onRuntimeDownloadProgress(_callback: (data: RuntimeProgressEvent) => void): void {
-    // Web 模式不需要运行时下载监听
+    // Runtime download progress listening is not required in web mode.
   },
 };

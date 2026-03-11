@@ -74,16 +74,16 @@ export function ArtifactFileList({
         if (result.success) {
           toast.success(result.message);
         } else {
-          toast.error(result.message || "Failed to install skill");
+          toast.error(result.message || t.artifacts.fileDetail.installSkillFailed);
         }
       } catch (error) {
         console.error("Failed to install skill:", error);
-        toast.error("Failed to install skill");
+        toast.error(t.artifacts.fileDetail.installSkillFailed);
       } finally {
         setInstallingFile(null);
       }
     },
-    [threadId, installingFile],
+    [threadId, installingFile, t.artifacts.fileDetail.installSkillFailed],
   );
 
   return (

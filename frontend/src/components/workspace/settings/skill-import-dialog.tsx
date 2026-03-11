@@ -20,18 +20,12 @@ export function SkillImportDialog({
   open,
   onOpenChange,
 }: SkillImportDialogProps) {
-  const { t, locale } = useI18n();
-  const fallbackCopy = locale === "zh-CN"
-    ? {
-      title: "导入技能",
-      description: "从包文件或共享来源导入技能。",
-      close: "关闭",
-    }
-    : {
-      title: "Import skill",
-      description: "Import a skill from package file or shared source.",
-      close: "Close",
-    };
+  const { t } = useI18n();
+  const fallbackCopy = {
+    title: "Import skill",
+    description: "Import a skill from package file or shared source.",
+    close: "Close",
+  };
   const settingsLike = t.settings as unknown as {
     skillImportDialog?: Record<string, string>;
   };

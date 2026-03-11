@@ -1,17 +1,17 @@
 /**
- * 检测当前运行环境
+ * Detect current runtime environment.
  */
 export function isElectron(): boolean {
   if (typeof window === "undefined") {
     return false;
   }
 
-  // preload 显式注入
+  // Explicitly injected by preload.
   if ("electronAPI" in window && window.electronAPI !== undefined) {
     return true;
   }
 
-  // 兜底：部分场景下 preload 注入晚于早期模块执行
+  // Fallback for cases where preload arrives after early module execution.
   const userAgent = window.navigator?.userAgent?.toLowerCase() ?? "";
   return userAgent.includes("electron");
 }
@@ -27,7 +27,7 @@ export function getPlatformType(): PlatformType {
 }
 
 /**
- * 获取 Electron API（如果可用）
+ * Get Electron API when available.
  */
 export function getElectronAPI() {
   if (isElectron()) {

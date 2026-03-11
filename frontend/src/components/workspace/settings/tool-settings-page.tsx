@@ -51,6 +51,45 @@ const EMPTY_DRAFT: NewServerDraft = {
   enabled: true,
 };
 
+const DEFAULT_TOOL_PAGE_COPY = {
+  builtInTitle: "Built-in tools",
+  builtInDesc: "Manage built-in tool presets.",
+  mcpTitle: "MCP servers",
+  mcpDesc: "Manage MCP server connections and available tools.",
+  addServer: "Add server",
+  create: "Create",
+  creating: "Creating...",
+  cancel: "Cancel",
+  serverName: "Server name",
+  serverNamePlaceholder: "my-server",
+  serverDesc: "Description",
+  serverDescPlaceholder: "Optional description",
+  serverType: "Server type",
+  command: "Command",
+  commandPlaceholder: "python -m mcp_server",
+  args: "Arguments",
+  argsPlaceholder: "--port 8080",
+  url: "URL",
+  urlPlaceholder: "https://example.com/sse",
+  enabled: "Enabled",
+  remove: "Remove",
+  probeDisabled: "Server is disabled",
+  probeTesting: "Testing connection...",
+  probeRetry: "Retry",
+  probeFailed: "Connection failed",
+  probeConnected: "Connected",
+  toolsLabel: "Available tools",
+  emptyServer: "No MCP servers configured",
+  loadConfigFailed: "Failed to load tool config",
+  runtimeTitle: "Runtime config status",
+  runtimeSource: "Source",
+  runtimeVersion: "Version",
+  runtimeInSync: "In sync with storage",
+  runtimeOutOfSync: "Not synced to latest storage version",
+  runtimeWarnings: "Runtime warnings",
+  runtimeProcesses: "Processes",
+} as const;
+
 function MCPServerItem({
   name,
   config,
@@ -171,89 +210,12 @@ function MCPServerItem({
 }
 
 export function ToolSettingsPage() {
-  const { t, locale } = useI18n();
-  const fallbackCopy = locale === "zh-CN"
-    ? {
-      builtInTitle: "内置工具",
-      builtInDesc: "管理内置工具预设。",
-      mcpTitle: "MCP 服务",
-      mcpDesc: "管理 MCP 连接状态与可用工具。",
-      addServer: "添加服务",
-      create: "创建",
-      creating: "创建中...",
-      cancel: "取消",
-      serverName: "服务名称",
-      serverNamePlaceholder: "my-server",
-      serverDesc: "描述",
-      serverDescPlaceholder: "可选描述",
-      serverType: "服务类型",
-      command: "命令",
-      commandPlaceholder: "python -m mcp_server",
-      args: "参数",
-      argsPlaceholder: "--port 8080",
-      url: "地址",
-      urlPlaceholder: "https://example.com/sse",
-      enabled: "启用",
-      remove: "删除",
-      probeDisabled: "服务已禁用",
-      probeTesting: "正在检测连接...",
-      probeRetry: "重试",
-      probeFailed: "连接失败",
-      probeConnected: "连接成功",
-      toolsLabel: "可用工具",
-      emptyServer: "暂无 MCP 服务",
-      loadConfigFailed: "加载配置失败",
-      runtimeTitle: "运行时配置状态",
-      runtimeSource: "生效来源",
-      runtimeVersion: "版本",
-      runtimeInSync: "已与存储版本同步",
-      runtimeOutOfSync: "尚未同步到最新存储版本",
-      runtimeWarnings: "运行时警告",
-      runtimeProcesses: "进程状态",
-    }
-    : {
-      builtInTitle: "Built-in tools",
-      builtInDesc: "Manage built-in tool presets.",
-      mcpTitle: "MCP servers",
-      mcpDesc: "Manage MCP connection status and available tools.",
-      addServer: "Add server",
-      create: "Create",
-      creating: "Creating...",
-      cancel: "Cancel",
-      serverName: "Server name",
-      serverNamePlaceholder: "my-server",
-      serverDesc: "Description",
-      serverDescPlaceholder: "Optional description",
-      serverType: "Server type",
-      command: "Command",
-      commandPlaceholder: "python -m mcp_server",
-      args: "Arguments",
-      argsPlaceholder: "--port 8080",
-      url: "URL",
-      urlPlaceholder: "https://example.com/sse",
-      enabled: "Enabled",
-      remove: "Remove",
-      probeDisabled: "Server is disabled",
-      probeTesting: "Checking connection...",
-      probeRetry: "Retry",
-      probeFailed: "Connection failed",
-      probeConnected: "Connected",
-      toolsLabel: "Tools",
-      emptyServer: "No MCP servers",
-      loadConfigFailed: "Failed to load config",
-      runtimeTitle: "Runtime config status",
-      runtimeSource: "Source",
-      runtimeVersion: "Version",
-      runtimeInSync: "In sync with storage",
-      runtimeOutOfSync: "Not synced to latest storage version",
-      runtimeWarnings: "Runtime warnings",
-      runtimeProcesses: "Processes",
-    };
+  const { t } = useI18n();
   const settingsLike = t.settings as {
-    toolPage?: Partial<typeof fallbackCopy>;
+    toolPage?: Partial<typeof DEFAULT_TOOL_PAGE_COPY>;
   };
-  const copy: typeof fallbackCopy = {
-    ...fallbackCopy,
+  const copy: typeof DEFAULT_TOOL_PAGE_COPY = {
+    ...DEFAULT_TOOL_PAGE_COPY,
     ...(settingsLike.toolPage ?? {}),
   };
   const {
@@ -540,11 +502,11 @@ export function ToolSettingsPage() {
                   <div className="text-sm font-medium">{copy.runtimeTitle}</div>
                   <div className="grid gap-1">
                     <div>
-                      {copy.runtimeSource}: {runtimeStatus.loaded_source_path || "-"}
+                      {copy.runtimeSource}: {runtimeStatus.loaded_source_path ?? "-"}
                     </div>
                     <div>
-                      {copy.runtimeVersion}: {runtimeStatus.loaded_version || "-"} /{" "}
-                      {runtimeStatus.store_version || "-"}
+                      {copy.runtimeVersion}: {runtimeStatus.loaded_version ?? "-"} /{" "}
+                      {runtimeStatus.store_version ?? "-"}
                     </div>
                     <div
                       className={
@@ -555,12 +517,12 @@ export function ToolSettingsPage() {
                     </div>
                   </div>
 
-                  {Object.keys(runtimeStatus.runtime_processes || {}).length > 0 && (
+                  {Object.keys(runtimeStatus.runtime_processes ?? {}).length > 0 && (
                     <div className="space-y-1">
                       <div className="font-medium">{copy.runtimeProcesses}</div>
                       {Object.entries(runtimeStatus.runtime_processes).map(([name, info]) => (
                         <div key={name}>
-                          {name}: {info.loaded_version || "-"} ({info.status})
+                          {name}: {info.loaded_version ?? "-"} ({info.status})
                           {info.reason ? ` - ${info.reason}` : ""}
                         </div>
                       ))}

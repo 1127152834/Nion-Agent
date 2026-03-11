@@ -27,7 +27,7 @@ type RuntimeDownloadProgressPayload = {
 };
 
 /**
- * Electron 平台的 API 封装
+ * Electron platform API wrapper.
  */
 export const electronPlatform = {
   async pickHostFile(

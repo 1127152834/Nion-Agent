@@ -2,6 +2,8 @@ import type { Message } from "@langchain/langgraph-sdk";
 
 import type { AgentThread } from "./types";
 
+const LEGACY_UNTITLED_ZH = "\u672a\u547d\u540d";
+
 export function pathOfChatsIndex() {
   return "/workspace/chats";
 }
@@ -33,6 +35,23 @@ export function textOfMessage(message: Message) {
 
 export function titleOfThread(thread: AgentThread) {
   return thread.values?.title ?? "Untitled";
+}
+
+export function isGhostThread(thread: AgentThread) {
+  const messages = thread.values?.messages;
+  if (Array.isArray(messages) && messages.length > 0) {
+    return false;
+  }
+
+  const rawTitle = typeof thread.values?.title === "string"
+    ? thread.values.title.trim()
+    : "";
+  if (!rawTitle) {
+    return true;
+  }
+
+  const normalizedTitle = rawTitle.toLowerCase();
+  return normalizedTitle === "untitled" || normalizedTitle === LEGACY_UNTITLED_ZH;
 }
 
 export function isThreadAwaitingResponse(thread: AgentThread) {
