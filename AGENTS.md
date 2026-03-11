@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **Nion-Agent** (22701 symbols, 62154 relationships, 300 execution flows).
+This project is indexed by GitNexus as **Nion-Agent** (22762 symbols, 62497 relationships, 300 execution flows).
 
 ## Always Start Here
 
