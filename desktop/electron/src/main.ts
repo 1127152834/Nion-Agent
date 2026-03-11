@@ -47,6 +47,7 @@ app.on("ready", async () => {
     runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(runtimePaths);
     runtimePorts = await startupRuntime();
     ensureMainWindow();
+    await loadMainWindowFrontend();
   } catch (error) {
     console.error("Startup failed:", error);
     app.quit();
@@ -62,6 +63,7 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   applyAppIcon();
   ensureMainWindow();
+  void loadMainWindowFrontend();
 });
 
 app.on("before-quit", async (event) => {
@@ -145,9 +147,7 @@ async function restartRuntime(): Promise<DesktopRuntimePorts> {
     const ports = await startupRuntime();
     runtimePorts = ports;
 
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      await mainWindow.loadURL(`http://localhost:${ports.frontendPort}`);
-    }
+    await loadMainWindowFrontend();
 
     return ports;
   } finally {
@@ -238,10 +238,13 @@ function createMainWindow(): void {
       }
     });
 
-    const frontendPort = runtimePorts?.frontendPort ?? 3000;
-
-    // 加载前端应用
-    mainWindow.loadURL(`http://localhost:${frontendPort}`);
+    if (runtimePorts) {
+      // 运行时已就绪时直接加载前端应用。
+      void mainWindow.loadURL(`http://localhost:${runtimePorts.frontendPort}`);
+    } else {
+      // 运行时尚未就绪时先展示空白页，避免提前访问默认端口导致 ERR_CONNECTION_REFUSED。
+      void mainWindow.loadURL("about:blank");
+    }
 
     // 开发模式打开 DevTools
     if (!app.isPackaged) {
@@ -272,6 +275,24 @@ function ensureMainWindow(): void {
     return;
   }
   createMainWindow();
+}
+
+async function loadMainWindowFrontend(): Promise<void> {
+  if (!runtimePorts || !mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const targetUrl = `http://localhost:${runtimePorts.frontendPort}`;
+  const currentUrl = mainWindow.webContents.getURL();
+  if (currentUrl === targetUrl) {
+    return;
+  }
+
+  try {
+    await mainWindow.loadURL(targetUrl);
+  } catch (error) {
+    console.error(`[Runtime] Failed to load frontend URL ${targetUrl}:`, error);
+  }
 }
 
 function getRuntimeOptionalManager(): RuntimeOptionalComponentsManager {
