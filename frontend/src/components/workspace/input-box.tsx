@@ -1406,7 +1406,7 @@ export function InputBox({
       <PromptInputAttachments>
         {(attachment) => <PromptInputAttachment data={attachment} />}
       </PromptInputAttachments>
-      <PromptInputBody className="absolute top-0 right-0 left-0 z-3">
+      <PromptInputBody className="absolute top-0 right-0 left-0 z-[30]">
         <MentionHighlightOverlay text={textInput.value} mentions={highlightedMentions} />
         <PromptInputTextarea
           className={cn("size-full relative z-10 bg-transparent")}
@@ -1419,7 +1419,7 @@ export function InputBox({
       </PromptInputBody>
       {/* Mention autocomplete popup */}
       {mentionState && (
-        <div className="absolute right-0 bottom-full left-0 z-20 pb-2">
+        <div className="absolute right-0 bottom-full left-0 z-[140] pb-2">
           <div className="bg-background border-border mx-2 overflow-hidden rounded-lg border shadow-lg">
             <div className="border-border/70 border-b px-3 py-2">
               <span className="text-muted-foreground text-xs">

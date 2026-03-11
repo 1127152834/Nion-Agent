@@ -108,7 +108,7 @@ export function RuntimeModeToggle({
               type="button"
               aria-label={copy.sandboxLabel}
               className={cn(
-                "relative z-10 flex h-12 w-[4.8rem] items-center justify-center rounded-[1.1rem] transition-[color,opacity,transform] duration-[260ms] sm:w-[5.4rem]",
+                "relative flex h-12 w-[4.8rem] items-center justify-center rounded-[1.1rem] transition-[color,opacity,transform] duration-[260ms] sm:w-[5.4rem]",
                 mode === "sandbox"
                   ? "-translate-y-px text-emerald-700 drop-shadow-[0_3px_8px_rgba(22,163,74,0.32)]"
                   : "text-foreground/55 hover:text-foreground/82",
@@ -130,7 +130,7 @@ export function RuntimeModeToggle({
               type="button"
               aria-label={copy.hostLabel}
               className={cn(
-                "relative z-10 flex h-12 w-[4.8rem] items-center justify-center rounded-[1.1rem] transition-[color,opacity,transform] duration-[260ms] sm:w-[5.4rem]",
+                "relative flex h-12 w-[4.8rem] items-center justify-center rounded-[1.1rem] transition-[color,opacity,transform] duration-[260ms] sm:w-[5.4rem]",
                 mode === "host"
                   ? "-translate-y-px text-amber-700 drop-shadow-[0_3px_8px_rgba(217,119,6,0.35)]"
                   : "text-foreground/55 hover:text-foreground/82",
