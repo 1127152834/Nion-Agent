@@ -64,7 +64,7 @@ for t in threads:
 "
     ;;
   memory)
-    curl -s "${GATEWAY_URL}/api/memory" | python3 -m json.tool
+    curl -s "${GATEWAY_URL}/api/openviking/status" | python3 -m json.tool
     ;;
   thread)
     if [ -z "$ARG" ]; then

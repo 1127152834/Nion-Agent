@@ -18,7 +18,7 @@
 - 临时会话保护：`temporary_chat` 默认允许读取长期记忆但禁止写回，避免污染长期记忆文件
 - 聊天追问建议模型可在“模型设置”页单独指定；未设置时默认跟随当前聊天模型
 - 嵌入式会话契约：`NionClient` 与 scheduler workflow 也支持 `session_mode` / `memory_read` / `memory_write`，与 Web 聊天入口保持一致；带 checkpointer 的多轮线程会继承已持久化的记忆会话策略，不会因后续缺省调用而误恢复长期记忆注入/写回
-- Memory Core 骨架：后端已引入默认 `v2-compatible` provider/runtime/registry，prompt 注入、写回门禁与只读查询统一走兼容层，底层仍保持 `memory.json` 路线不变
+- OpenViking 单栈记忆：长期记忆统一走 `/api/openviking/*` 与 OpenViking provider，`forget/compact` 均为硬删除语义，不再保留 `memory.json` / structured 路线
 
 ---
 

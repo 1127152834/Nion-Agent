@@ -29,11 +29,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from src.agents.lead_agent.agent import _build_middlewares
 from src.agents.memory.core import MemoryReadRequest
 from src.agents.lead_agent.prompt import apply_prompt_template
 from src.agents.thread_state import ThreadState
@@ -45,6 +43,35 @@ from src.models import create_chat_model
 logger = logging.getLogger(__name__)
 
 SessionMode = Literal["normal", "temporary_chat"]
+
+
+def _load_create_agent():
+    """Load ``create_agent`` lazily to avoid import-time hard dependency failures."""
+    try:
+        from langchain.agents import create_agent as _create_agent
+    except Exception as exc:  # noqa: BLE001
+        raise ImportError(
+            "langchain.agents.create_agent is unavailable. "
+            "Please install/upgrade langchain to a compatible version."
+        ) from exc
+    return _create_agent
+
+
+def _load_build_middlewares():
+    """Load lead-agent middleware builder lazily to avoid importing heavy graph stack at module import time."""
+    from src.agents.lead_agent.agent import _build_middlewares as _build_middlewares_fn
+
+    return _build_middlewares_fn
+
+
+def create_agent(*args, **kwargs):
+    """Compatibility wrapper for tests that patch ``src.client.create_agent``."""
+    return _load_create_agent()(*args, **kwargs)
+
+
+def _build_middlewares(*args, **kwargs):
+    """Compatibility wrapper for tests that patch ``src.client._build_middlewares``."""
+    return _load_build_middlewares()(*args, **kwargs)
 
 
 @dataclass
@@ -515,7 +542,7 @@ class NionClient:
         """Get current memory data.
 
         Returns:
-            Memory data dict (see src/agents/memory/updater.py for structure).
+            Memory data dict from the active OpenViking provider.
         """
         from src.agents.memory.registry import get_default_memory_provider
 
@@ -757,17 +784,24 @@ class NionClient:
         from src.config.memory_config import get_memory_config
 
         config = get_memory_config()
+        provider = config.provider if isinstance(config.provider, str) else "openviking"
+        retrieval_mode = config.retrieval_mode if isinstance(config.retrieval_mode, str) else "find"
+        rerank_mode = config.rerank_mode if isinstance(config.rerank_mode, str) else "auto"
         return {
             "enabled": config.enabled,
-            "storage_layout": "structured-fs",
-            "provider": config.provider,
-            "legacy_json_removed": True,
-            "graph_preembedded": True,
+            "storage_layout": "openviking",
+            "provider": provider,
             "debounce_seconds": config.debounce_seconds,
             "max_facts": config.max_facts,
             "fact_confidence_threshold": config.fact_confidence_threshold,
             "injection_enabled": config.injection_enabled,
             "max_injection_tokens": config.max_injection_tokens,
+            "retrieval_mode": retrieval_mode,
+            "rerank_mode": rerank_mode,
+            "graph_enabled": config.graph_enabled,
+            "openviking_context_enabled": config.openviking_context_enabled,
+            "openviking_context_limit": config.openviking_context_limit,
+            "openviking_session_commit_enabled": config.openviking_session_commit_enabled,
         }
 
     def get_memory_status(self) -> dict:

@@ -147,10 +147,10 @@ Returns: `{"agents": [{"name": "...", ...}, ...]}`
 ### 8. Get Memory
 
 ```bash
-curl -s "$DEERFLOW_GATEWAY_URL/api/memory"
+curl -s "$DEERFLOW_GATEWAY_URL/api/openviking/status"
 ```
 
-Returns user context, facts, and conversation history summaries.
+Returns OpenViking runtime and governance status.
 
 ### 9. Upload Files to a Thread
 

@@ -1,13 +1,13 @@
 import logging
+from typing import Any
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import SummarizationMiddleware
 from langchain_core.runnables import RunnableConfig
 
 from src.agents.lead_agent.prompt import apply_prompt_template
 from src.agents.middlewares.clarification_middleware import ClarificationMiddleware
 from src.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
 from src.agents.middlewares.memory_middleware import MemoryMiddleware
+from src.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
 from src.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
 from src.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
 from src.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
@@ -26,9 +26,38 @@ from src.sandbox.middleware import SandboxMiddleware
 logger = logging.getLogger(__name__)
 
 
+def _load_create_agent():
+    """Load ``create_agent`` lazily to avoid import-time dependency hard failures."""
+    try:
+        from langchain.agents import create_agent as _create_agent
+    except Exception as exc:  # noqa: BLE001
+        raise ImportError(
+            "langchain.agents.create_agent is unavailable. "
+            "Please install/upgrade langchain to a compatible version."
+        ) from exc
+    return _create_agent
+
+
+def _load_summarization_middleware():
+    """Load SummarizationMiddleware lazily for backwards-compatible LangChain versions."""
+    try:
+        from langchain.agents.middleware import SummarizationMiddleware as _summarization_middleware
+    except Exception:  # noqa: BLE001
+        return None
+    return _summarization_middleware
+
+
+def get_app_config():
+    """Compatibility accessor for runtime app config.
+
+    Kept as a function so tests can monkeypatch the config source.
+    """
+    return ensure_latest_app_config(process_name="langgraph")
+
+
 def _resolve_model_name(requested_model_name: str | None = None) -> str:
     """Resolve a runtime model name safely, falling back to default if invalid. Returns None if no models are configured."""
-    app_config = ensure_latest_app_config(process_name="langgraph")
+    app_config = get_app_config()
     default_model_name = app_config.models[0].name if app_config.models else None
     if default_model_name is None:
         raise ValueError("No chat models are configured. Please configure at least one model in config.yaml.")
@@ -41,11 +70,16 @@ def _resolve_model_name(requested_model_name: str | None = None) -> str:
     return default_model_name
 
 
-def _create_summarization_middleware() -> SummarizationMiddleware | None:
+def _create_summarization_middleware() -> Any | None:
     """Create and configure the summarization middleware from config."""
     config = get_summarization_config()
 
     if not config.enabled:
+        return None
+
+    summarization_middleware_cls = _load_summarization_middleware()
+    if summarization_middleware_cls is None:
+        logger.warning("Summarization enabled in config, but langchain.agents.middleware is unavailable; skip summarization middleware.")
         return None
 
     # Prepare trigger parameter
@@ -80,7 +114,7 @@ def _create_summarization_middleware() -> SummarizationMiddleware | None:
     if config.summary_prompt is not None:
         kwargs["summary_prompt"] = config.summary_prompt
 
-    return SummarizationMiddleware(**kwargs)
+    return summarization_middleware_cls(**kwargs)
 
 
 def _create_todo_list_middleware(is_plan_mode: bool) -> TodoMiddleware | None:
@@ -206,6 +240,7 @@ Being proactive with task management demonstrates thoroughness and ensures all r
 # SummarizationMiddleware should be early to reduce context before other processing
 # TodoListMiddleware should be before ClarificationMiddleware to allow todo management
 # TitleMiddleware generates title after first exchange
+# OpenVikingContextMiddleware loads lightweight retrieval context before model call
 # MemoryMiddleware queues conversation for memory update (after TitleMiddleware)
 # ViewImageMiddleware should be before ClarificationMiddleware to inject image details before LLM
 # ClarificationMiddleware should be last to intercept clarification requests after model calls
@@ -241,12 +276,15 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
     # Add TitleMiddleware
     middlewares.append(TitleMiddleware())
 
+    # Add OpenVikingContextMiddleware (before MemoryMiddleware)
+    middlewares.append(OpenVikingContextMiddleware(agent_name=agent_name))
+
     # Add MemoryMiddleware (after TitleMiddleware)
     middlewares.append(MemoryMiddleware(agent_name=agent_name))
 
     # Add ViewImageMiddleware only if the current model supports vision.
     # Use the resolved runtime model_name from make_lead_agent to avoid stale config values.
-    app_config = ensure_latest_app_config(process_name="langgraph")
+    app_config = get_app_config()
     model_config = app_config.get_model_config(model_name) if model_name else None
     if model_config is not None and model_config.supports_vision:
         middlewares.append(ViewImageMiddleware())
@@ -294,7 +332,7 @@ def make_lead_agent(config: RunnableConfig):
     # Final model name resolution with request override, then agent config, then global default
     model_name = requested_model_name or agent_model_name
 
-    app_config = ensure_latest_app_config(process_name="langgraph")
+    app_config = get_app_config()
     model_config = app_config.get_model_config(model_name) if model_name else None
 
     if model_config is None:
@@ -343,7 +381,8 @@ def make_lead_agent(config: RunnableConfig):
             plugin_studio_session_id=plugin_studio_session_id,
         )
 
-        return create_agent(
+        create_agent_fn = _load_create_agent()
+        return create_agent_fn(
             model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
             tools=get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled) + [setup_agent],
             middleware=_build_middlewares(config, model_name=model_name),
@@ -352,7 +391,8 @@ def make_lead_agent(config: RunnableConfig):
         )
 
     # Default lead agent (unchanged behavior)
-    return create_agent(
+    create_agent_fn = _load_create_agent()
+    return create_agent_fn(
         model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort),
         tools=get_available_tools(model_name=model_name, groups=agent_config.tool_groups if agent_config else None, subagent_enabled=subagent_enabled),
         middleware=_build_middlewares(config, model_name=model_name, agent_name=agent_name),
