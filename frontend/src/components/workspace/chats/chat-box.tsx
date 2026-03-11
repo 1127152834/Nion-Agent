@@ -1,9 +1,17 @@
 import { Code2Icon, FileTextIcon, FolderIcon, Loader2Icon, XIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -33,7 +41,17 @@ const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
 const FRONTEND_WORKBENCH_PLUGIN_ID = "frontend-workbench";
 const DEFAULT_WORKBENCH_PATH = "/mnt/user-data/workspace";
-type ArtifactPanelMode = "directory" | "preview" | "plugin";
+type WorkingDirectoryMode = "directory" | "preview";
+type WorkbenchTargetKind = "file" | "directory" | "project";
+
+type WorkbenchPickerState = {
+  artifactPath: string;
+  targetKind: "file" | "directory";
+  candidates: Array<{
+    id: string;
+    name: string;
+  }>;
+};
 
 const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   children,
@@ -48,6 +66,8 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     artifacts,
     open: artifactsOpen,
     setOpen: setArtifactsOpen,
+    panelType,
+    setPanelType,
     setArtifacts,
     select: selectArtifact,
     deselect,
@@ -60,16 +80,24 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const artifactsRef = useRef<string[]>(artifacts);
 
   const [autoSelectFirstArtifact, setAutoSelectFirstArtifact] = useState(true);
-  const [artifactPanelMode, setArtifactPanelMode] = useState<ArtifactPanelMode>("directory");
+  const [workingDirectoryMode, setWorkingDirectoryMode] = useState<WorkingDirectoryMode>("directory");
   const [pluginSlotState, setPluginSlotState] = useState<{
     pluginId: string;
     artifactPath: string;
-    targetKind: "file" | "directory" | "project";
+    targetKind: WorkbenchTargetKind;
   }>({
     pluginId: FRONTEND_WORKBENCH_PLUGIN_ID,
     artifactPath: DEFAULT_WORKBENCH_PATH,
     targetKind: "directory",
   });
+  const [manualPluginSelection, setManualPluginSelection] = useState<{
+    pluginId: string;
+    artifactPath: string;
+    targetKind: WorkbenchTargetKind;
+  } | null>(null);
+  const [workbenchPickerState, setWorkbenchPickerState] = useState<WorkbenchPickerState | null>(
+    null,
+  );
   const appliedSlotRouteKeyRef = useRef<string | null>(null);
   const supportsWorkspaceView = env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true";
   const artifactPanelOpen = artifactsOpen;
@@ -90,17 +118,17 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     isFetching: workspaceTreeFetching,
     error: workspaceTreeError,
   } = useWorkspaceTree(threadId, {
-    enabled: artifactPanelOpen && supportsWorkspaceView,
+    enabled: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory",
     root: "/mnt/user-data/workspace",
     depth: 6,
     includeHidden: false,
     maxNodes: 5000,
-    live: artifactPanelOpen && supportsWorkspaceView && !isDesktopRuntime,
+    live: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory" && !isDesktopRuntime,
     refetchIntervalMs: 1000,
   });
 
   useWorkspaceLiveSync(threadId, {
-    enabled: artifactPanelOpen && supportsWorkspaceView && isDesktopRuntime,
+    enabled: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory" && isDesktopRuntime,
     root: "/mnt/user-data/workspace",
   });
 
@@ -161,33 +189,110 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     : true;
   const activePluginName = activePluginPackage?.metadata?.manifest.name ?? pluginSlotState.pluginId;
 
-  const resolvePluginIdForTarget = (path: string, kind: "file" | "directory" | "project") => {
-    const registry = getWorkbenchRegistry();
-    const plugin = registry.findBestMatch({
+  const directoryRootFileMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+
+    const ensureDirectory = (path: string) => {
+      if (!map.has(path)) {
+        map.set(path, []);
+      }
+    };
+    ensureDirectory(DEFAULT_WORKBENCH_PATH);
+    for (const directoryPath of workspaceDirectories) {
+      ensureDirectory(directoryPath);
+    }
+    for (const filePath of workspaceFiles) {
+      const normalizedPath = filePath.replace(/\\/g, "/");
+      const slashIndex = normalizedPath.lastIndexOf("/");
+      if (slashIndex < 0) {
+        continue;
+      }
+      const parentPath = normalizedPath.slice(0, slashIndex) || DEFAULT_WORKBENCH_PATH;
+      const fileName = normalizedPath.slice(slashIndex + 1).trim();
+      if (!fileName) {
+        continue;
+      }
+      const rootFiles = map.get(parentPath) ?? [];
+      if (!rootFiles.includes(fileName)) {
+        rootFiles.push(fileName);
+      }
+      map.set(parentPath, rootFiles);
+    }
+    return map;
+  }, [workspaceDirectories, workspaceFiles]);
+
+  const buildArtifactForTarget = useCallback((path: string, kind: WorkbenchTargetKind) => {
+    const metadata: Record<string, unknown> = {};
+    if (kind === "directory" || kind === "project") {
+      const rootFiles = directoryRootFileMap.get(path);
+      if (rootFiles) {
+        metadata.directoryRootFiles = rootFiles;
+      }
+    }
+    return {
       path,
       kind,
-      metadata: {},
-    });
-    return plugin?.id ?? FRONTEND_WORKBENCH_PLUGIN_ID;
-  };
+      metadata,
+    };
+  }, [directoryRootFileMap]);
 
-  const openPluginSlot = ({
+  const resolvePluginMatchesForTarget = useCallback(
+    (path: string, kind: WorkbenchTargetKind) => {
+      const registry = getWorkbenchRegistry();
+      return registry.findAllMatches(buildArtifactForTarget(path, kind));
+    },
+    [buildArtifactForTarget],
+  );
+
+  const resolvePluginIdForTarget = useCallback(
+    (
+      path: string,
+      kind: WorkbenchTargetKind,
+      opts?: {
+        strict?: boolean;
+      },
+    ) => {
+      const plugin = resolvePluginMatchesForTarget(path, kind)[0];
+      if (plugin) {
+        return plugin.id;
+      }
+      return opts?.strict ? null : FRONTEND_WORKBENCH_PLUGIN_ID;
+    },
+    [resolvePluginMatchesForTarget],
+  );
+
+  const openPluginSlot = useCallback(({
     pluginId,
     artifactPath,
     targetKind,
+    lockSelection,
   }: {
     pluginId?: string;
     artifactPath: string;
-    targetKind: "file" | "directory" | "project";
+    targetKind: WorkbenchTargetKind;
+    lockSelection?: boolean;
   }) => {
+    const nextPluginId = pluginId ?? resolvePluginIdForTarget(artifactPath, targetKind);
+    if (!nextPluginId) {
+      return;
+    }
     setPluginSlotState({
-      pluginId: pluginId ?? resolvePluginIdForTarget(artifactPath, targetKind),
+      pluginId: nextPluginId,
       artifactPath,
       targetKind,
     });
-    setArtifactPanelMode("plugin");
+    if (lockSelection) {
+      setManualPluginSelection({
+        pluginId: nextPluginId,
+        artifactPath,
+        targetKind,
+      });
+    } else {
+      setManualPluginSelection(null);
+    }
+    setPanelType("workbench");
     setArtifactsOpen(true);
-  };
+  }, [resolvePluginIdForTarget, setArtifactsOpen, setPanelType]);
 
   useEffect(() => {
     if (!selectedArtifact) {
@@ -217,15 +322,15 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   ]);
 
   useEffect(() => {
-    if (artifactPanelMode === "plugin") {
+    if (panelType !== "working-directory") {
       return;
     }
     if (selectedArtifact) {
-      setArtifactPanelMode("preview");
+      setWorkingDirectoryMode("preview");
       return;
     }
-    setArtifactPanelMode("directory");
-  }, [artifactPanelMode, selectedArtifact]);
+    setWorkingDirectoryMode("directory");
+  }, [panelType, selectedArtifact]);
 
   useEffect(() => {
     if (!slotRouteState) {
@@ -241,19 +346,129 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
       pluginId: slotRouteState.pluginId,
       artifactPath: slotRouteState.artifactPath,
       targetKind: slotRouteState.targetKind,
+      lockSelection: true,
     });
     if (slotRouteState.targetKind === "file") {
       if (!artifacts.includes(slotRouteState.artifactPath)) {
         setArtifacts([...artifacts, slotRouteState.artifactPath]);
       }
       selectArtifact(slotRouteState.artifactPath);
+      setPanelType("workbench");
     } else {
       deselect();
     }
-  }, [artifacts, deselect, selectArtifact, setArtifacts, slotRouteState]);
+  }, [artifacts, deselect, openPluginSlot, selectArtifact, setArtifacts, setPanelType, slotRouteState]);
+
+  useEffect(() => {
+    if (panelType !== "workbench" || slotRouteState) {
+      return;
+    }
+    const artifactPath = selectedArtifact ?? DEFAULT_WORKBENCH_PATH;
+    const targetKind: WorkbenchTargetKind = selectedArtifact ? "file" : "directory";
+    if (manualPluginSelection) {
+      if (
+        manualPluginSelection.artifactPath === artifactPath
+        && manualPluginSelection.targetKind === targetKind
+      ) {
+        return;
+      }
+      setManualPluginSelection(null);
+    }
+    const pluginId = resolvePluginIdForTarget(artifactPath, targetKind);
+    if (!pluginId) {
+      return;
+    }
+    const slotUnchanged = pluginSlotState.pluginId === pluginId
+      && pluginSlotState.artifactPath === artifactPath
+      && pluginSlotState.targetKind === targetKind;
+    if (slotUnchanged) {
+      return;
+    }
+    setPluginSlotState({
+      pluginId,
+      artifactPath,
+      targetKind,
+    });
+  }, [
+    manualPluginSelection,
+    panelType,
+    pluginSlotState,
+    resolvePluginIdForTarget,
+    selectedArtifact,
+    slotRouteState,
+  ]);
+
+  const openWorkbenchForTarget = useCallback(
+    ({
+      pluginId,
+      artifactPath,
+      targetKind,
+    }: {
+      pluginId: string;
+      artifactPath: string;
+      targetKind: "file" | "directory";
+    }) => {
+      if (targetKind === "file") {
+        if (!artifacts.includes(artifactPath)) {
+          setArtifacts([...artifacts, artifactPath]);
+        }
+        selectArtifact(artifactPath);
+      } else {
+        deselect();
+      }
+
+      openPluginSlot({
+        pluginId,
+        artifactPath,
+        targetKind,
+        lockSelection: true,
+      });
+    },
+    [artifacts, deselect, openPluginSlot, selectArtifact, setArtifacts],
+  );
+
+  const canOpenWithWorkbench = useCallback(
+    (path: string, targetKind: "file" | "directory") => {
+      return resolvePluginIdForTarget(path, targetKind, { strict: true }) !== null;
+    },
+    [resolvePluginIdForTarget],
+  );
+
+  const handleOpenWithWorkbench = useCallback(
+    (path: string, targetKind: "file" | "directory") => {
+      const matches = resolvePluginMatchesForTarget(path, targetKind);
+      if (matches.length === 0) {
+        return;
+      }
+      if (matches.length === 1) {
+        openWorkbenchForTarget({
+          pluginId: matches[0]!.id,
+          artifactPath: path,
+          targetKind,
+        });
+        return;
+      }
+
+      const registry = getWorkbenchRegistry();
+      const candidates = matches.map((plugin) => {
+        const installed = registry.getInstalled(plugin.id);
+        return {
+          id: plugin.id,
+          name: installed?.manifest.name ?? plugin.name ?? plugin.id,
+        };
+      });
+      setWorkbenchPickerState({
+        artifactPath: path,
+        targetKind,
+        candidates,
+      });
+    },
+    [openWorkbenchForTarget, resolvePluginMatchesForTarget],
+  );
 
   return (
-    <ResizablePanelGroup
+    <>
+      <ResizablePanelGroup
       id="workspace-chat-panel-group"
       orientation="horizontal"
       defaultLayout={{ chat: 100, artifacts: 0 }}
@@ -285,20 +500,24 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
           <div className="flex size-full min-w-0 flex-col rounded-lg border">
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
               <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+                {panelType === "workbench" ? (
+                  <Code2Icon className="text-muted-foreground size-4 shrink-0" />
+                ) : (
+                  <FolderIcon className="text-muted-foreground size-4 shrink-0" />
+                )}
                 <span className="truncate">
-                  {artifactPanelMode === "plugin"
+                  {panelType === "workbench"
                     ? copy.plugin
-                    : artifactPanelMode === "preview"
+                    : workingDirectoryMode === "preview"
                       ? copy.filePreview
                       : t.common.workingDirectory}
                 </span>
-                {artifactPanelMode === "directory" && supportsWorkspaceView && workspaceTreeFetching ? (
+                {panelType === "working-directory" && workingDirectoryMode === "directory" && supportsWorkspaceView && workspaceTreeFetching ? (
                   <span className="bg-emerald-500/75 size-1.5 shrink-0 rounded-full" />
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                {artifactPanelMode !== "plugin" ? (
+                {panelType === "working-directory" ? (
                   <span className="text-muted-foreground">
                     {panelFiles.length}
                     {t.common.filesSuffix}
@@ -316,48 +535,34 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               </div>
             </div>
 
-            <div className="border-b px-2 py-2">
-              <div className="inline-flex items-center gap-1 rounded-md border p-0.5">
-                <Button
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  variant={artifactPanelMode === "directory" ? "secondary" : "ghost"}
-                  onClick={() => setArtifactPanelMode("directory")}
-                >
-                  <FolderIcon className="size-3.5" />
-                  {copy.tabDirectory}
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  variant={artifactPanelMode === "preview" ? "secondary" : "ghost"}
-                  onClick={() => setArtifactPanelMode("preview")}
-                  disabled={!selectedArtifact}
-                >
-                  <FileTextIcon className="size-3.5" />
-                  {copy.tabPreview}
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  variant={artifactPanelMode === "plugin" ? "secondary" : "ghost"}
-                  onClick={() => {
-                    const artifactPath = selectedArtifact ?? DEFAULT_WORKBENCH_PATH;
-                    const targetKind = selectedArtifact ? "file" : "directory";
-                    openPluginSlot({
-                      artifactPath,
-                      targetKind,
-                    });
-                  }}
-                >
-                  <Code2Icon className="size-3.5" />
-                  {copy.tabPlugin}
-                </Button>
+            {panelType === "working-directory" ? (
+              <div className="border-b px-2 py-2">
+                <div className="inline-flex items-center gap-1 rounded-md border p-0.5">
+                  <Button
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    variant={workingDirectoryMode === "directory" ? "secondary" : "ghost"}
+                    onClick={() => setWorkingDirectoryMode("directory")}
+                  >
+                    <FolderIcon className="size-3.5" />
+                    {copy.tabDirectory}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    variant={workingDirectoryMode === "preview" ? "secondary" : "ghost"}
+                    onClick={() => setWorkingDirectoryMode("preview")}
+                    disabled={!selectedArtifact}
+                  >
+                    <FileTextIcon className="size-3.5" />
+                    {copy.tabPreview}
+                  </Button>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="min-h-0 grow">
-              {artifactPanelMode === "plugin" ? (
+              {panelType === "workbench" ? (
                 <WorkbenchSlotShell
                   title={activePluginName}
                   subtitle={`${copy.targetPrefix}: ${pluginSlotState.artifactPath}`}
@@ -401,7 +606,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                     </div>
                   )}
                 </WorkbenchSlotShell>
-              ) : artifactPanelMode === "preview" ? (
+              ) : workingDirectoryMode === "preview" ? (
                 selectedArtifact ? (
                   <ArtifactFileDetail
                     className="size-full"
@@ -427,12 +632,15 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   files={panelFiles}
                   directories={panelDirectories}
                   selectedPath={selectedArtifact}
+                  canOpenWithWorkbench={canOpenWithWorkbench}
+                  onOpenWithWorkbench={handleOpenWithWorkbench}
                   onOpenFile={(path) => {
                     if (!artifacts.includes(path)) {
                       setArtifacts([...artifacts, path]);
                     }
                     selectArtifact(path);
-                    setArtifactPanelMode("preview");
+                    setWorkingDirectoryMode("preview");
+                    setPanelType("working-directory");
                     setArtifactsOpen(true);
                   }}
                 />
@@ -442,6 +650,58 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>
+
+      <Dialog
+        open={Boolean(workbenchPickerState)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWorkbenchPickerState(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{copy.chooseWorkbenchTitle}</DialogTitle>
+            <DialogDescription>{copy.chooseWorkbenchDescription}</DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[40vh] space-y-2 overflow-y-auto py-1">
+            {workbenchPickerState?.candidates.map((candidate) => (
+              <button
+                key={candidate.id}
+                className="hover:bg-accent hover:text-accent-foreground w-full rounded-md border px-3 py-2 text-left"
+                type="button"
+                onClick={() => {
+                  if (!workbenchPickerState) {
+                    return;
+                  }
+                  openWorkbenchForTarget({
+                    pluginId: candidate.id,
+                    artifactPath: workbenchPickerState.artifactPath,
+                    targetKind: workbenchPickerState.targetKind,
+                  });
+                  setWorkbenchPickerState(null);
+                }}
+              >
+                <div className="text-sm font-medium">{candidate.name}</div>
+                <div className="text-muted-foreground mt-0.5 text-xs">{candidate.id}</div>
+              </button>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setWorkbenchPickerState(null);
+              }}
+            >
+              {t.common.cancel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

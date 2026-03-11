@@ -22,6 +22,7 @@ const VALID_TARGET_KINDS = new Set<WorkbenchSlotTargetKind>([
   "directory",
   "project",
 ]);
+const VALID_PANEL_VALUES = new Set(["console", "plugin"]);
 
 function normalizeTargetKind(raw: string | null | undefined): WorkbenchSlotTargetKind {
   if (!raw) {
@@ -36,7 +37,8 @@ function normalizeTargetKind(raw: string | null | undefined): WorkbenchSlotTarge
 export function parseWorkbenchSlotRouteState(
   searchParams: URLSearchParams | ReadonlyURLSearchParams,
 ): WorkbenchSlotRouteState | null {
-  if (searchParams.get(WORKBENCH_SLOT_QUERY_KEYS.panel) !== "plugin") {
+  const panel = (searchParams.get(WORKBENCH_SLOT_QUERY_KEYS.panel) ?? "").trim();
+  if (!VALID_PANEL_VALUES.has(panel)) {
     return null;
   }
 
@@ -66,7 +68,7 @@ export function buildWorkbenchSlotRouteURL(params: {
   withNonce?: boolean;
 }): string {
   const next = new URLSearchParams(params.searchParams?.toString() ?? "");
-  next.set(WORKBENCH_SLOT_QUERY_KEYS.panel, "plugin");
+  next.set(WORKBENCH_SLOT_QUERY_KEYS.panel, "console");
   next.set(WORKBENCH_SLOT_QUERY_KEYS.pluginId, params.pluginId);
   next.set(WORKBENCH_SLOT_QUERY_KEYS.artifactPath, params.artifactPath);
   next.set(WORKBENCH_SLOT_QUERY_KEYS.targetKind, params.targetKind ?? "file");

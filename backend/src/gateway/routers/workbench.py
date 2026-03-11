@@ -17,11 +17,13 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.config.paths import get_paths
+from src.gateway.langgraph_client import build_langgraph_upstream_url
 from src.gateway.path_utils import resolve_thread_virtual_path
 
 router = APIRouter(prefix="/api/threads/{thread_id}/workbench", tags=["workbench"])
@@ -430,6 +432,32 @@ async def stream_workbench_session(thread_id: str, session_id: str, request: Req
     return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
 
 
+async def _ensure_langgraph_thread_for_plugin_test(thread_id: str) -> None:
+    payload = {
+        "thread_id": thread_id,
+        "metadata": {
+            "source": "workbench_test",
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                build_langgraph_upstream_url("threads"),
+                json=payload,
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"LangGraph upstream unavailable: {exc}") from exc
+
+    if response.status_code in {200, 201, 409}:
+        return
+
+    detail = response.text.strip()
+    raise HTTPException(
+        status_code=502,
+        detail=detail or f"Failed to create LangGraph thread ({response.status_code})",
+    )
+
+
 @plugin_router.post(
     "/test-thread",
     response_model=PluginTestThreadResponse,
@@ -441,7 +469,8 @@ async def create_workbench_test_thread() -> PluginTestThreadResponse:
     This avoids coupling plugin tests to any existing chat thread while still
     providing a valid /mnt/user-data workspace for commandSteps execution.
     """
-    thread_id = f"workbench-test-{uuid.uuid4().hex}"
+    thread_id = str(uuid.uuid4())
+    await _ensure_langgraph_thread_for_plugin_test(thread_id)
     paths = get_paths()
     paths.ensure_thread_dirs(thread_id)
     return PluginTestThreadResponse(
@@ -906,30 +935,59 @@ def _render_plugin_studio_scaffold(session_payload: dict[str, Any]) -> None:
     )
     (assets_dir / "main.css").write_text(
         """:root {
-  color-scheme: light;
+  color-scheme: light dark;
+  /* nion-scaffold:theme-ready */
+  --wb-bg: #ffffff;
+  --wb-text: #1f2937;
+  --wb-border: #d1d5db;
+  --wb-muted: #6b7280;
+  --wb-primary: #2563eb;
 }
 html, body {
   margin: 0;
   width: 100%;
   height: 100%;
-  background: transparent;
+  background: var(--wb-bg);
+  color: var(--wb-text);
   font-family: "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
 }
 .app {
   display: flex;
-  min-height: 100%;
+  min-height: 100vh;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding: 16px;
-  color: #1f2937;
+  box-sizing: border-box;
+}
+#title {
+  margin: 0;
+}
+#desc {
+  margin: 0;
+  color: var(--wb-muted);
 }
 #toastBtn {
   width: fit-content;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--wb-border);
   border-radius: 10px;
-  padding: 6px 12px;
-  background: #ffffff;
+  padding: 8px 12px;
+  background: var(--wb-bg);
+  color: var(--wb-text);
   cursor: pointer;
+}
+#toastBtn:hover {
+  border-color: var(--wb-primary);
+}
+/* nion-scaffold:responsive-ready */
+@media (max-width: 640px) {
+  .app {
+    min-height: 100%;
+    padding: 12px;
+    gap: 10px;
+  }
+  #toastBtn {
+    width: 100%;
+  }
 }
 """,
         encoding="utf-8",
@@ -940,8 +998,29 @@ html, body {
   const title = document.getElementById("title");
   const desc = document.getElementById("desc");
   const btn = document.getElementById("toastBtn");
+  const theme = bridge && typeof bridge === "object" ? bridge.theme : null;
+
+  if (theme && typeof theme === "object") {{
+    const mode = theme.mode === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = mode;
+    document.documentElement.style.colorScheme = mode;
+    const tokens = theme.tokens && typeof theme.tokens === "object" ? theme.tokens : {{}};
+    const tokenMap = {{
+      "--wb-bg": tokens.background,
+      "--wb-text": tokens.foreground,
+      "--wb-border": tokens.border,
+      "--wb-muted": tokens["muted-foreground"],
+      "--wb-primary": tokens.primary,
+    }};
+    Object.entries(tokenMap).forEach(([key, value]) => {{
+      if (typeof value === "string" && value.trim()) {{
+        document.documentElement.style.setProperty(key, value.trim());
+      }}
+    }});
+  }}
+
   if (title) title.textContent = {plugin_name!r};
-  if (desc) desc.textContent = {description!r} || "Generated plugin scaffold is ready.";
+  if (desc) desc.textContent = {description!r} || "Generated scaffold is responsive and theme-aware by default.";
   if (btn) {{
     btn.addEventListener("click", function() {{
       if (bridge && typeof bridge.call === "function") {{
@@ -961,8 +1040,14 @@ html, body {
 ## 使用说明
 
 1. 在插件市场或本地安装 `.nwp` 包。  
-2. 在聊天页右侧切换到“插件”模式。  
+2. 在聊天页右侧切换到“操作台”模式。  
 3. 选择该插件并开始调试。  
+
+## 发布前硬性检查项
+
+- 必须支持响应式自适应：在窄宽度容器下仍可用。  
+- 必须跟随系统主题：light/dark 均保持可读与层级一致。  
+- 禁止依赖固定绝对宽高；优先流式布局与断点策略。  
 
 ## 验证门禁
 
@@ -1008,13 +1093,66 @@ def _run_plugin_studio_auto_verify(session_payload: dict[str, Any]) -> tuple[boo
     manifest_file = scaffold_dir / "manifest.json"
     entry_file = scaffold_dir / "index.html"
     readme_file = scaffold_dir / "README.md"
+    style_file = scaffold_dir / "assets" / "main.css"
+    script_file = scaffold_dir / "assets" / "main.js"
     demo_file = scaffold_dir / "docs" / "demo" / "overview.svg"
     steps = [
         _plugin_studio_step("manifest_exists", manifest_file.exists(), "manifest.json exists"),
         _plugin_studio_step("entry_exists", entry_file.exists(), "index.html exists"),
         _plugin_studio_step("readme_exists", readme_file.exists(), "README.md exists"),
+        _plugin_studio_step("style_exists", style_file.exists(), "assets/main.css exists"),
+        _plugin_studio_step("script_exists", script_file.exists(), "assets/main.js exists"),
         _plugin_studio_step("demo_image_exists", demo_file.exists(), "docs/demo/overview.svg exists"),
     ]
+
+    if style_file.exists():
+        style_text = style_file.read_text(encoding="utf-8")
+        steps.append(
+            _plugin_studio_step(
+                "responsive_contract",
+                "nion-scaffold:responsive-ready" in style_text,
+                "scaffold includes responsive baseline contract marker",
+            ),
+        )
+        steps.append(
+            _plugin_studio_step(
+                "theme_contract",
+                "nion-scaffold:theme-ready" in style_text,
+                "scaffold includes theme baseline contract marker",
+            ),
+        )
+    else:
+        steps.append(_plugin_studio_step("responsive_contract", False, "assets/main.css missing"))
+        steps.append(_plugin_studio_step("theme_contract", False, "assets/main.css missing"))
+
+    if script_file.exists():
+        script_text = script_file.read_text(encoding="utf-8")
+        steps.append(
+            _plugin_studio_step(
+                "theme_bridge_contract",
+                "bridge.theme" in script_text,
+                "scaffold consumes host theme bridge payload",
+            ),
+        )
+    else:
+        steps.append(_plugin_studio_step("theme_bridge_contract", False, "assets/main.js missing"))
+
+    if readme_file.exists():
+        readme_text = readme_file.read_text(encoding="utf-8")
+        checklist_ok = (
+            "发布前硬性检查项" in readme_text
+            and "响应式" in readme_text
+            and "主题" in readme_text
+        )
+        steps.append(
+            _plugin_studio_step(
+                "readme_contract",
+                checklist_ok,
+                "README includes responsive/theme hard checklist",
+            ),
+        )
+    else:
+        steps.append(_plugin_studio_step("readme_contract", False, "README.md missing"))
 
     manifest_ok = False
     if manifest_file.exists():

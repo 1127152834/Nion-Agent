@@ -59,7 +59,15 @@ export class WorkbenchRegistry {
         priority: plugin.canHandle(artifact),
       }))
       .filter(({ priority }) => typeof priority === "number" && priority > 0)
-      .sort((a, b) => (b.priority as number) - (a.priority as number));
+      .sort((a, b) => {
+        const priorityDiff = (b.priority as number) - (a.priority as number);
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+        return a.plugin.id.localeCompare(b.plugin.id, undefined, {
+          sensitivity: "base",
+        });
+      });
 
     return candidates.map(({ plugin }) => plugin);
   }

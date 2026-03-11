@@ -31,7 +31,7 @@
     logs: [],
     streamStopBySession: new Map(),
     leftWidth: 280,
-    rightWidth: 420,
+    rightWidth: 360,
     leftCollapsed: false,
     rightCollapsed: false,
   };
@@ -49,6 +49,34 @@
   function toast(message, type) {
     return apiCall("toast", { message, type: type || "info" }).catch(function () {
       return undefined;
+    });
+  }
+
+  function applyHostTheme() {
+    const theme = bridge && typeof bridge.theme === "object" ? bridge.theme : null;
+    if (!theme) {
+      return;
+    }
+    const mode = theme.mode === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = mode;
+    document.documentElement.style.colorScheme = mode;
+
+    const tokens = theme.tokens && typeof theme.tokens === "object" ? theme.tokens : {};
+    const tokenMap = {
+      "--bg": tokens.background,
+      "--panel": tokens.card,
+      "--panel-alt": tokens.muted,
+      "--line": tokens.border,
+      "--text": tokens.foreground,
+      "--muted": tokens["muted-foreground"],
+      "--primary": tokens.primary,
+      "--primary-contrast": tokens["primary-foreground"],
+    };
+    Object.keys(tokenMap).forEach(function (cssVar) {
+      const value = tokenMap[cssVar];
+      if (typeof value === "string" && value.trim()) {
+        document.documentElement.style.setProperty(cssVar, value.trim());
+      }
     });
   }
 
@@ -781,7 +809,7 @@
           state.leftWidth = Math.min(520, Math.max(180, startLeft + delta));
           state.leftCollapsed = false;
         } else {
-          state.rightWidth = Math.min(760, Math.max(320, startRight - delta));
+          state.rightWidth = Math.min(560, Math.max(260, startRight - delta));
           state.rightCollapsed = false;
         }
         apply();
@@ -945,6 +973,7 @@
   }
 
   function init() {
+    applyHostTheme();
     bindRefs();
     bindEvents();
     setupResizer();

@@ -1,5 +1,7 @@
 import JSZip from "jszip";
+
 import { getBackendBaseURL } from "@/core/config";
+import { isUUID } from "@/core/utils/uuid";
 
 import type {
   Artifact,
@@ -77,13 +79,31 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 let cachedPluginTestThreadId: string | null = null;
 
+async function pluginTestThreadExists(threadId: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `${getBackendBaseURL()}/api/langgraph/threads/${encodeURIComponent(threadId)}`,
+    );
+    if (response.status === 404 || response.status === 422) {
+      return false;
+    }
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Ensure a hidden sandbox thread exists for workbench plugin tests.
  * This thread is NOT tied to any chat and only backs commandSteps/manual tests.
  */
 export async function ensurePluginTestThreadId(): Promise<string> {
   if (cachedPluginTestThreadId) {
-    return cachedPluginTestThreadId;
+    const exists = await pluginTestThreadExists(cachedPluginTestThreadId);
+    if (exists) {
+      return cachedPluginTestThreadId;
+    }
+    cachedPluginTestThreadId = null;
   }
 
   // Create a hidden sandbox thread so commandSteps can run without a chat thread.
@@ -95,6 +115,9 @@ export async function ensurePluginTestThreadId(): Promise<string> {
     throw new Error(text || `Failed to create plugin test thread (${response.status})`);
   }
   const payload = (await response.json()) as PluginTestThreadResponse;
+  if (!isUUID(payload.thread_id)) {
+    throw new Error("Backend returned invalid plugin test thread id (expected UUID).");
+  }
   cachedPluginTestThreadId = payload.thread_id;
   return payload.thread_id;
 }
@@ -148,9 +171,13 @@ export async function loadPluginPackage(file: File): Promise<{
 
 function normalizeRule(rule: WorkbenchTargetRule): WorkbenchTargetRule {
   const extensions = rule.extensions?.map((ext) => ext.toLowerCase());
+  const projectMarkers = rule.projectMarkers?.map((marker) =>
+    marker.trim().toLowerCase(),
+  );
   return {
     ...rule,
     extensions,
+    projectMarkers,
     priority: rule.priority ?? 50,
   };
 }
@@ -186,7 +213,11 @@ function scoreRule(rule: WorkbenchTargetRule, artifact: Artifact): number {
   if (rule.kind === "directory" && artifact.kind !== "directory") {
     return 0;
   }
-  if (rule.kind === "project" && artifact.kind !== "project") {
+  if (
+    rule.kind === "project"
+    && artifact.kind !== "project"
+    && artifact.kind !== "directory"
+  ) {
     return 0;
   }
   if (rule.kind === "file" && artifact.kind && artifact.kind !== "file") {
@@ -208,6 +239,25 @@ function scoreRule(rule: WorkbenchTargetRule, artifact: Artifact): number {
       }
     } catch {
       return 0;
+    }
+  }
+
+  if (rule.projectMarkers && rule.projectMarkers.length > 0) {
+    const rootFilesRaw = artifact.metadata?.directoryRootFiles;
+    if (!Array.isArray(rootFilesRaw)) {
+      return 0;
+    }
+
+    const rootFiles = new Set(
+      rootFilesRaw
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim().toLowerCase()),
+    );
+    for (const marker of rule.projectMarkers) {
+      const normalizedMarker = marker.trim().toLowerCase();
+      if (!normalizedMarker || !rootFiles.has(normalizedMarker)) {
+        return 0;
+      }
     }
   }
 
@@ -400,7 +450,10 @@ export async function runInstalledPluginTest(
   }
 
   if (manifest.testSpec?.commandSteps?.length) {
-    let effectiveThreadId = opts?.threadId;
+    const candidateThreadId = opts?.threadId?.trim();
+    let effectiveThreadId = candidateThreadId && isUUID(candidateThreadId)
+      ? candidateThreadId
+      : undefined;
     if (!effectiveThreadId) {
       try {
         effectiveThreadId = await ensurePluginTestThreadId();

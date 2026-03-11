@@ -1,16 +1,18 @@
 {
   "id": "frontend-workbench",
   "name": "Frontend Workbench",
-  "description": "Old-style hardcoded frontend workbench experience with file tree, editor, build/start controls, preview and logs.",
+  "description": "Responsive frontend workbench for the console slot with adaptive layout, file tree/editor workflow, build/start controls, preview and logs, and host-theme aligned colors.",
   "entry": "index.html",
   "runtime": "iframe",
   "targets": [
     {
       "kind": "project",
+      "projectMarkers": ["package.json"],
       "priority": 100
     },
     {
       "kind": "directory",
+      "projectMarkers": ["package.json"],
       "priority": 95
     },
     {

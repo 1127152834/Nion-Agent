@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangleIcon } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useEffect, useMemo, useRef } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
@@ -26,6 +27,47 @@ type PluginBridgeDispose = {
 type PluginBridgeMessage = PluginBridgeRequest | PluginBridgeDispose;
 
 const RESOURCE_ATTRS = ["src", "href", "poster"] as const;
+const HOST_THEME_TOKEN_KEYS = [
+  "background",
+  "foreground",
+  "card",
+  "card-foreground",
+  "border",
+  "muted",
+  "muted-foreground",
+  "primary",
+  "primary-foreground",
+  "secondary",
+  "secondary-foreground",
+  "accent",
+  "accent-foreground",
+  "input",
+] as const;
+
+type WorkbenchHostThemeSnapshot = {
+  mode: "light" | "dark";
+  colorScheme: "light" | "dark";
+  tokens: Record<string, string>;
+};
+
+function collectHostThemeSnapshot(resolvedTheme: string | undefined): WorkbenchHostThemeSnapshot {
+  const mode = resolvedTheme === "dark" ? "dark" : "light";
+  const tokens: Record<string, string> = {};
+  if (typeof window !== "undefined") {
+    const computed = window.getComputedStyle(document.documentElement);
+    for (const token of HOST_THEME_TOKEN_KEYS) {
+      const value = computed.getPropertyValue(`--${token}`).trim();
+      if (value) {
+        tokens[token] = value;
+      }
+    }
+  }
+  return {
+    mode,
+    colorScheme: mode,
+    tokens,
+  };
+}
 
 function mimeTypeByPath(path: string): string {
   const lower = path.toLowerCase();
@@ -44,8 +86,8 @@ function mimeTypeByPath(path: string): string {
 function encodeTextDataURL(content: string, mimeType: string): string {
   const utf8 = new TextEncoder().encode(content);
   let binary = "";
-  for (let i = 0; i < utf8.length; i += 1) {
-    binary += String.fromCharCode(utf8[i] ?? 0);
+  for (const byte of utf8) {
+    binary += String.fromCharCode(byte);
   }
   return `data:${mimeType};base64,${btoa(binary)}`;
 }
@@ -168,6 +210,7 @@ function injectBridge(entryHtml: string, payload: {
   threadId: string;
   artifactPath: string;
   files: string[];
+  theme?: WorkbenchHostThemeSnapshot;
 }) {
   const hostStyle = `
 <style id="nion-workbench-slot-host-style">
@@ -240,6 +283,7 @@ function injectBridge(entryHtml: string, payload: {
     threadId: payload.threadId,
     artifactPath: payload.artifactPath,
     files: payload.files,
+    theme: payload.theme || null,
     call,
     startLogStream,
   };
@@ -285,9 +329,14 @@ export function WorkbenchPluginIframe({
   context: WorkbenchContext;
 }) {
   const { t } = useI18n();
+  const { resolvedTheme } = useTheme();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const streamDisposersRef = useRef<Map<string, () => void>>(new Map());
   const ownedSessionsRef = useRef<Set<string>>(new Set());
+  const hostTheme = useMemo(
+    () => collectHostThemeSnapshot(resolvedTheme),
+    [resolvedTheme],
+  );
 
   const srcDoc = useMemo(() => {
     const entry = renderPluginEntryHtml(files, plugin.manifest.entry);
@@ -301,8 +350,16 @@ export function WorkbenchPluginIframe({
       threadId: context.threadId,
       artifactPath: context.artifact.path,
       files: filePayload,
+      theme: hostTheme,
     });
-  }, [context.artifact.path, context.threadId, files, plugin.manifest.entry, plugin.manifest.id]);
+  }, [
+    context.artifact.path,
+    context.threadId,
+    files,
+    hostTheme,
+    plugin.manifest.entry,
+    plugin.manifest.id,
+  ]);
 
   useEffect(() => {
     const stopOwnedSessions = () => {

@@ -1,8 +1,9 @@
 import subprocess
 import sys
+import uuid
 from importlib import util
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -140,17 +141,36 @@ def test_plugin_test_step_accepts_virtual_path_match(tmp_path: Path):
 
 
 def test_plugin_test_thread_endpoint_creates_sandbox_dirs(tmp_path: Path):
+    ensure_thread_mock = AsyncMock(return_value=None)
     with (
         _make_client() as client,
         patch.object(workbench, "get_paths", return_value=Paths(tmp_path), create=True),
+        patch.object(workbench, "_ensure_langgraph_thread_for_plugin_test", ensure_thread_mock),
     ):
         response = client.post("/api/workbench/plugins/test-thread")
 
     assert response.status_code == 200
     payload = response.json()
     thread_id = payload["thread_id"]
-    assert thread_id.startswith("workbench-test-")
+    assert str(uuid.UUID(thread_id)) == thread_id
+    ensure_thread_mock.assert_awaited_once_with(thread_id)
     assert (tmp_path / "threads" / thread_id / "user-data" / "workspace").is_dir()
+
+
+def test_plugin_test_thread_endpoint_returns_502_when_langgraph_create_fails(tmp_path: Path):
+    with (
+        _make_client() as client,
+        patch.object(workbench, "get_paths", return_value=Paths(tmp_path), create=True),
+        patch.object(
+            workbench,
+            "_ensure_langgraph_thread_for_plugin_test",
+            AsyncMock(side_effect=HTTPException(status_code=502, detail="upstream failed")),
+        ),
+    ):
+        response = client.post("/api/workbench/plugins/test-thread")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "upstream failed"
 
 
 def test_marketplace_endpoints_list_detail_download(tmp_path: Path):
@@ -238,7 +258,13 @@ def test_plugin_studio_requires_auto_and_manual_before_package(tmp_path: Path):
 
         auto_verify_resp = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/verify/auto")
         assert auto_verify_resp.status_code == 200
-        assert auto_verify_resp.json()["passed"] is True
+        auto_payload = auto_verify_resp.json()
+        assert auto_payload["passed"] is True
+        step_ids = {step["id"] for step in auto_payload["steps"]}
+        assert "responsive_contract" in step_ids
+        assert "theme_contract" in step_ids
+        assert "theme_bridge_contract" in step_ids
+        assert "readme_contract" in step_ids
 
         package_without_manual = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/package")
         assert package_without_manual.status_code == 409
@@ -258,3 +284,36 @@ def test_plugin_studio_requires_auto_and_manual_before_package(tmp_path: Path):
         download_resp = client.get(payload["package_download_url"])
         assert download_resp.status_code == 200
         assert download_resp.content
+
+
+def test_plugin_studio_auto_verify_fails_when_responsive_contract_missing(tmp_path: Path):
+    with (
+        _make_client() as client,
+        patch.object(workbench, "get_paths", return_value=Paths(tmp_path), create=True),
+    ):
+        create_resp = client.post(
+            "/api/workbench/plugin-studio/sessions",
+            json={
+                "plugin_name": "Contract Checker",
+                "description": "demo",
+            },
+        )
+        assert create_resp.status_code == 200
+        session_id = create_resp.json()["session_id"]
+
+        generate_resp = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/generate", json={})
+        assert generate_resp.status_code == 200
+
+        style_file = tmp_path / "workbench-plugin-studio" / "sessions" / session_id / "plugin-src" / "assets" / "main.css"
+        style_text = style_file.read_text(encoding="utf-8")
+        style_file.write_text(
+            style_text.replace("/* nion-scaffold:responsive-ready */", "/* responsive-marker-removed */"),
+            encoding="utf-8",
+        )
+
+        auto_verify_resp = client.post(f"/api/workbench/plugin-studio/sessions/{session_id}/verify/auto")
+        assert auto_verify_resp.status_code == 200
+        auto_payload = auto_verify_resp.json()
+        assert auto_payload["passed"] is False
+        responsive_step = next(step for step in auto_payload["steps"] if step["id"] == "responsive_contract")
+        assert responsive_step["passed"] is False

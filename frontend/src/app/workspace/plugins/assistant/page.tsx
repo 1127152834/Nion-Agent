@@ -15,9 +15,10 @@ import {
 import { getAPIClient } from "@/core/api";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
-import type { AgentThreadContext } from "@/core/threads";
-import { useThreadStream } from "@/core/threads/hooks";
 import { useLocalSettings } from "@/core/settings";
+import type { AgentThreadContext } from "@/core/threads";
+import { isThreadNotFoundError, useThreadStream } from "@/core/threads/hooks";
+import { isUUID, uuid } from "@/core/utils/uuid";
 import {
   autoVerifyPluginStudioSession,
   createPluginStudioSession,
@@ -28,9 +29,9 @@ import {
   packagePluginStudioSession,
   type PluginStudioSession,
 } from "@/core/workbench";
-import { uuid } from "@/core/utils/uuid";
 
 const LAST_SESSION_STORAGE_KEY = "nion.workbench.plugin-assistant.last-session-id";
+const LAST_THREAD_STORAGE_KEY = "nion.workbench.plugin-assistant.last-thread-id";
 const DEFAULT_PLUGIN_NAME = "Plugin Assistant Draft";
 type AssistantInputContext = Omit<
   AgentThreadContext,
@@ -40,19 +41,8 @@ type AssistantInputContext = Omit<
   reasoning_effort?: "minimal" | "low" | "medium" | "high";
 };
 
-function isThreadNotFoundError(error: unknown): boolean {
-  if (typeof error === "object" && error !== null && "status" in error) {
-    return (error as { status?: unknown }).status === 404;
-  }
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  const lower = error.message.toLowerCase();
-  return lower.includes("not found") || error.message.includes("404");
-}
-
 function buildAssistantThreadId() {
-  return `plugin-assistant-${uuid()}`;
+  return uuid();
 }
 
 export default function PluginAssistantPage() {
@@ -91,6 +81,20 @@ export default function PluginAssistantPage() {
       return null;
     }
     return window.localStorage.getItem(LAST_SESSION_STORAGE_KEY);
+  }, []);
+
+  const persistLastThreadId = useCallback((value: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem(LAST_THREAD_STORAGE_KEY, value);
+  }, []);
+
+  const resolveLastThreadId = useCallback(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+    return window.localStorage.getItem(LAST_THREAD_STORAGE_KEY);
   }, []);
 
   const ensurePluginAssistantThreadState = useCallback(
@@ -135,14 +139,17 @@ export default function PluginAssistantPage() {
       });
       persistLastSessionId(created.sessionId);
       setSession(created);
-      setThreadId(created.chatThreadId?.trim() || desiredThreadId);
+      const resolvedThreadId = created.chatThreadId?.trim();
+      const nextThreadId = resolvedThreadId && isUUID(resolvedThreadId) ? resolvedThreadId : desiredThreadId;
+      setThreadId(nextThreadId);
+      persistLastThreadId(nextThreadId);
       setThreadExists(false);
       setPluginName(created.pluginName || nextPluginName);
       setDescription(created.description || nextDescription);
       setManualNote("");
       return created;
     },
-    [persistLastSessionId],
+    [persistLastSessionId, persistLastThreadId],
   );
 
   useEffect(() => {
@@ -172,7 +179,13 @@ export default function PluginAssistantPage() {
           return;
         }
 
-        const boundThreadId = resolvedSession.chatThreadId?.trim() || buildAssistantThreadId();
+        const candidateThreadId = resolvedSession.chatThreadId?.trim() ?? "";
+        const cachedThreadId = resolveLastThreadId()?.trim() ?? "";
+        const boundThreadId = isUUID(candidateThreadId)
+          ? candidateThreadId
+          : isUUID(cachedThreadId)
+            ? cachedThreadId
+            : buildAssistantThreadId();
         const exists = await checkThreadExists(boundThreadId);
         if (cancelled) {
           return;
@@ -181,6 +194,7 @@ export default function PluginAssistantPage() {
         setSession(resolvedSession);
         setThreadId(boundThreadId);
         setThreadExists(exists);
+        persistLastThreadId(boundThreadId);
         setPluginName(resolvedSession.pluginName || DEFAULT_PLUGIN_NAME);
         setDescription(resolvedSession.description || "");
         if (exists) {
@@ -202,7 +216,14 @@ export default function PluginAssistantPage() {
     return () => {
       cancelled = true;
     };
-  }, [checkThreadExists, ensurePluginAssistantThreadState, persistLastSessionId, resolveLastSessionId]);
+  }, [
+    checkThreadExists,
+    ensurePluginAssistantThreadState,
+    persistLastSessionId,
+    persistLastThreadId,
+    resolveLastSessionId,
+    resolveLastThreadId,
+  ]);
 
   const [thread, sendMessage] = useThreadStream({
     threadId: threadExists ? threadId : undefined,
@@ -211,6 +232,7 @@ export default function PluginAssistantPage() {
     onStart: (startedThreadId) => {
       setThreadId(startedThreadId);
       setThreadExists(true);
+      persistLastThreadId(startedThreadId);
       const currentSessionId = sessionRef.current?.sessionId;
       if (currentSessionId) {
         void ensurePluginAssistantThreadState(startedThreadId, currentSessionId);

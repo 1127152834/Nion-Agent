@@ -4,11 +4,15 @@ import type { ReactNode } from "react";
 /**
  * Artifact metadata
  */
+export interface WorkbenchArtifactMetadata extends Record<string, unknown> {
+  directoryRootFiles?: string[];
+}
+
 export interface Artifact {
   path: string;
   kind?: "file" | "directory" | "project";
   content?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: WorkbenchArtifactMetadata;
 }
 
 export interface WorkbenchPackageFile {

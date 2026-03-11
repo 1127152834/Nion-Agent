@@ -1,10 +1,11 @@
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  Code2Icon,
   FolderIcon,
   FolderOpenIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/core/i18n/hooks";
@@ -16,6 +17,7 @@ type DirectoryTreeNode =
       type: "directory";
       name: string;
       key: string;
+      artifactPath: string;
       children: DirectoryTreeNode[];
     }
   | {
@@ -24,6 +26,13 @@ type DirectoryTreeNode =
       key: string;
       artifactPath: string;
     };
+
+type WorkbenchTargetKind = "file" | "directory";
+
+type WorkbenchTarget = {
+  artifactPath: string;
+  targetKind: WorkbenchTargetKind;
+};
 
 const USER_DATA_PREFIX = "/mnt/user-data/";
 
@@ -62,6 +71,17 @@ function toDisplayParts(path: string): string[] {
   return [getFileName(normalizedPath)];
 }
 
+function toDirectoryArtifactPath(displayKey: string, originalPath: string): string {
+  const normalizedOriginalPath = normalizeArtifactPath(originalPath).replace(/\\/g, "/");
+  if (normalizedOriginalPath.startsWith(USER_DATA_PREFIX)) {
+    return `${USER_DATA_PREFIX}${displayKey}`;
+  }
+  if (normalizedOriginalPath.startsWith("/")) {
+    return `/${displayKey}`;
+  }
+  return displayKey;
+}
+
 function buildDirectoryTree(entries: DirectoryTreeEntry[]): DirectoryTreeNode[] {
   const roots: DirectoryTreeNode[] = [];
 
@@ -69,6 +89,7 @@ function buildDirectoryTree(entries: DirectoryTreeEntry[]): DirectoryTreeNode[] 
     children: DirectoryTreeNode[],
     key: string,
     name: string,
+    artifactPath: string,
   ) => {
     const existing = children.find(
       (node): node is Extract<DirectoryTreeNode, { type: "directory" }> =>
@@ -81,6 +102,7 @@ function buildDirectoryTree(entries: DirectoryTreeEntry[]): DirectoryTreeNode[] 
       type: "directory",
       name,
       key,
+      artifactPath,
       children: [],
     };
     children.push(next);
@@ -113,6 +135,7 @@ function buildDirectoryTree(entries: DirectoryTreeEntry[]): DirectoryTreeNode[] 
     for (let index = 0; index < parts.length; index += 1) {
       const part = parts[index]!;
       const nextKey = currentKey ? `${currentKey}/${part}` : part;
+      const nextArtifactPath = toDirectoryArtifactPath(nextKey, originalPath);
       const isLeaf = index === parts.length - 1 && entry.type === "file";
 
       if (isLeaf) {
@@ -130,11 +153,12 @@ function buildDirectoryTree(entries: DirectoryTreeEntry[]): DirectoryTreeNode[] 
         break;
       }
 
-      const directory = upsertDirectory(currentChildren, nextKey, part);
+      const directory = upsertDirectory(currentChildren, nextKey, part, nextArtifactPath);
       currentChildren = directory.children;
       currentKey = nextKey;
 
       if (entry.type === "directory" && index === parts.length - 1) {
+        directory.artifactPath = originalPath;
         break;
       }
     }
@@ -171,6 +195,7 @@ function DirectoryNodeItem({
   selectedPath,
   onToggleDirectory,
   onOpenFile,
+  onOpenContextMenu,
 }: {
   node: DirectoryTreeNode;
   depth: number;
@@ -178,6 +203,7 @@ function DirectoryNodeItem({
   selectedPath: string | null;
   onToggleDirectory: (key: string) => void;
   onOpenFile: (path: string) => void;
+  onOpenContextMenu: (event: ReactMouseEvent, target: WorkbenchTarget) => void;
 }) {
   const indentStyle = { paddingLeft: `${depth * 14 + 6}px` };
 
@@ -190,6 +216,11 @@ function DirectoryNodeItem({
           style={indentStyle}
           type="button"
           onClick={() => onToggleDirectory(node.key)}
+          onContextMenu={(event) =>
+            onOpenContextMenu(event, {
+              artifactPath: node.artifactPath,
+              targetKind: "directory",
+            })}
         >
           {isOpen ? (
             <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
@@ -213,6 +244,7 @@ function DirectoryNodeItem({
               selectedPath={selectedPath}
               onToggleDirectory={onToggleDirectory}
               onOpenFile={onOpenFile}
+              onOpenContextMenu={onOpenContextMenu}
             />
           ))}
       </div>
@@ -228,6 +260,11 @@ function DirectoryNodeItem({
       style={indentStyle}
       type="button"
       onClick={() => onOpenFile(node.artifactPath)}
+      onContextMenu={(event) =>
+        onOpenContextMenu(event, {
+          artifactPath: node.artifactPath,
+          targetKind: "file",
+        })}
     >
       <span className="text-muted-foreground inline-flex size-4 shrink-0 items-center justify-center">
         {getFileIcon(node.artifactPath, "size-4")}
@@ -243,12 +280,16 @@ export function ArtifactDirectoryTree({
   directories = [],
   selectedPath,
   onOpenFile,
+  canOpenWithWorkbench,
+  onOpenWithWorkbench,
 }: {
   className?: string;
   files: string[];
   directories?: string[];
   selectedPath: string | null;
   onOpenFile: (path: string) => void;
+  canOpenWithWorkbench?: (path: string, targetKind: WorkbenchTargetKind) => boolean;
+  onOpenWithWorkbench?: (path: string, targetKind: WorkbenchTargetKind) => void;
 }) {
   const { t } = useI18n();
   const tree = useMemo(
@@ -259,9 +300,13 @@ export function ArtifactDirectoryTree({
       ]),
     [directories, files],
   );
-  const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>(
-    {},
-  );
+  const [expandedDirs, setExpandedDirs] = useState<Record<string, boolean>>({});
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    target: WorkbenchTarget;
+  } | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const nextExpanded = collectInitialExpandedDirs(tree, 1);
@@ -284,32 +329,125 @@ export function ArtifactDirectoryTree({
     });
   }, [tree]);
 
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const closeMenu = () => {
+      setContextMenu(null);
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        closeMenu();
+        return;
+      }
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        closeMenu();
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("blur", closeMenu);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("blur", closeMenu);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [contextMenu]);
+
+  const handleOpenContextMenu = (event: ReactMouseEvent, target: WorkbenchTarget) => {
+    const canOpen =
+      Boolean(onOpenWithWorkbench)
+      && Boolean(canOpenWithWorkbench?.(target.artifactPath, target.targetKind));
+    if (!canOpen) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      target,
+    });
+  };
+
   return (
-    <ScrollArea className={cn("min-h-0 grow", className)}>
-      <div className="p-2">
-        {tree.length > 0 ? (
-          tree.map((node) => (
-            <DirectoryNodeItem
-              key={node.key}
-              node={node}
-              depth={0}
-              expandedDirs={expandedDirs}
-              selectedPath={selectedPath}
-              onToggleDirectory={(key) => {
-                setExpandedDirs((previous) => ({
-                  ...previous,
-                  [key]: !previous[key],
-                }));
+    <>
+      <ScrollArea className={cn("min-h-0 grow", className)}>
+        <div className="p-2">
+          {tree.length > 0 ? (
+            tree.map((node) => (
+              <DirectoryNodeItem
+                key={node.key}
+                node={node}
+                depth={0}
+                expandedDirs={expandedDirs}
+                selectedPath={selectedPath}
+                onToggleDirectory={(key) => {
+                  setExpandedDirs((previous) => ({
+                    ...previous,
+                    [key]: !previous[key],
+                  }));
+                }}
+                onOpenFile={onOpenFile}
+                onOpenContextMenu={handleOpenContextMenu}
+              />
+            ))
+          ) : (
+            <div className="text-muted-foreground rounded-md border border-dashed px-2 py-6 text-center text-xs">
+              {t.common.noFilesInDirectory}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {contextMenu ? (
+        <div
+          className="fixed inset-0 z-50"
+          onClick={() => {
+            setContextMenu(null);
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <div
+            ref={menuRef}
+            className="bg-popover text-popover-foreground fixed min-w-40 rounded-md border p-1 shadow-lg"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <button
+              className="hover:bg-accent hover:text-accent-foreground flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm"
+              type="button"
+              onClick={() => {
+                onOpenWithWorkbench?.(
+                  contextMenu.target.artifactPath,
+                  contextMenu.target.targetKind,
+                );
+                setContextMenu(null);
               }}
-              onOpenFile={onOpenFile}
-            />
-          ))
-        ) : (
-          <div className="text-muted-foreground rounded-md border border-dashed px-2 py-6 text-center text-xs">
-            {t.common.noFilesInDirectory}
+            >
+              <Code2Icon className="size-4" />
+              {t.workspace.artifactPanel.openWithWorkbench}
+            </button>
           </div>
-        )}
-      </div>
-    </ScrollArea>
+        </div>
+      ) : null}
+    </>
   );
 }

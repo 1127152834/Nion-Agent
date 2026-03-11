@@ -1,4 +1,4 @@
-import { FolderIcon } from "lucide-react";
+import { Code2Icon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/workspace/tooltip";
@@ -6,23 +6,22 @@ import { useI18n } from "@/core/i18n/hooks";
 
 import { useArtifacts } from "./context";
 
-export const WorkingDirectoryTrigger = () => {
+export const WorkbenchTrigger = () => {
   const { t } = useI18n();
-  const { deselect, setOpen: setArtifactsOpen, setPanelType } = useArtifacts();
+  const { setOpen: setArtifactsOpen, setPanelType } = useArtifacts();
 
   return (
-    <Tooltip content={t.common.browseWorkspace}>
+    <Tooltip content={t.workspace.artifactPanel.plugin}>
       <Button
         className="text-muted-foreground hover:text-foreground"
         variant="ghost"
         onClick={() => {
-          deselect();
-          setPanelType("working-directory");
+          setPanelType("workbench");
           setArtifactsOpen(true);
         }}
       >
-        <FolderIcon />
-        {t.common.workingDirectory}
+        <Code2Icon />
+        {t.workspace.artifactPanel.plugin}
       </Button>
     </Tooltip>
   );
