@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -550,16 +551,13 @@ class OpenVikingRuntime:
         with scope_lock:
             client = self._build_openviking_client(agent_name)
             try:
-                session = client.session(thread_id)
-                session.load()
-                try:
-                    from openviking.message import Part  # type: ignore
-                except Exception as exc:  # noqa: BLE001
-                    raise RuntimeError(f"OpenViking Part import failed: {exc}") from exc
-
                 for msg in normalized_messages:
-                    session.add_message(msg["role"], [Part.text(msg["content"])])
-                result = session.commit()
+                    client.add_message(
+                        thread_id,
+                        msg["role"],
+                        content=msg["content"],
+                    )
+                result = client.commit_session(thread_id)
                 try:
                     self._upsert_runtime_indexes(
                         thread_id=thread_id,
@@ -808,7 +806,10 @@ class OpenVikingRuntime:
             raise RuntimeError(f"OpenViking import failed: {exc}") from exc
 
         data_dir, conf_file = self._ensure_openviking_scope(agent_name)
-        client = ov.SyncOpenViking(path=str(data_dir), config_file=str(conf_file))
+        # OpenViking Python SDK currently resolves config via env/default path.
+        # `config_file=` is ignored by the embedded async client, so force env.
+        os.environ["OPENVIKING_CONFIG_FILE"] = str(conf_file)
+        client = ov.SyncOpenViking(path=str(data_dir))
         client.initialize()
         return client
 
@@ -818,26 +819,69 @@ class OpenVikingRuntime:
         data_dir.mkdir(parents=True, exist_ok=True)
         conf_file.parent.mkdir(parents=True, exist_ok=True)
 
-        if not conf_file.exists():
-            cfg = get_memory_config()
-            default_conf = {
-                "embedding": {
-                    "dense": {
-                        "provider": "openai",
-                        "model": cfg.embedding_model or "text-embedding-3-small",
-                        "api_key": cfg.embedding_api_key or "$OPENAI_API_KEY",
-                        "api_base": "",
-                    }
-                },
-                "vlm": {
-                    "provider": "openai",
-                    "model": cfg.model_name or "",
-                    "api_key": "$OPENAI_API_KEY",
-                    "api_base": "",
-                },
-            }
-            conf_file.write_text(json.dumps(default_conf, indent=2, ensure_ascii=False), encoding="utf-8")
+        raw_config: dict[str, Any] = {}
+        if conf_file.exists():
+            try:
+                loaded = json.loads(conf_file.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    raw_config = loaded
+            except Exception:  # noqa: BLE001
+                raw_config = {}
+
+        normalized = self._normalize_openviking_config(raw_config)
+        if normalized != raw_config:
+            conf_file.write_text(json.dumps(normalized, indent=2, ensure_ascii=False), encoding="utf-8")
         return data_dir, conf_file
+
+    def _normalize_openviking_config(self, raw: dict[str, Any]) -> dict[str, Any]:
+        config = dict(raw)
+        config["embedding"] = self._normalize_openviking_embedding_config(config.get("embedding"))
+        config["vlm"] = self._normalize_openviking_vlm_config(config.get("vlm"))
+        return config
+
+    def _normalize_openviking_embedding_config(self, raw_embedding: Any) -> dict[str, Any]:
+        memory_cfg = get_memory_config()
+        embedding = dict(raw_embedding) if isinstance(raw_embedding, dict) else {}
+        dense = dict(embedding.get("dense")) if isinstance(embedding.get("dense"), dict) else {}
+
+        provider = str(dense.get("provider") or dense.get("backend") or memory_cfg.embedding_provider or "").strip().lower()
+        if provider not in {"openai", "volcengine", "jina"}:
+            provider = "jina" if "jina" in str(memory_cfg.embedding_model or "").lower() else "openai"
+
+        model = str(dense.get("model") or memory_cfg.embedding_model or "").strip()
+        if not model:
+            model = "jina-embeddings-v3" if provider == "jina" else "text-embedding-3-small"
+
+        api_key = str(dense.get("api_key") or memory_cfg.embedding_api_key or "").strip()
+        if not api_key:
+            default_env = {
+                "openai": "OPENAI_API_KEY",
+                "volcengine": "ARK_API_KEY",
+                "jina": "JINA_API_KEY",
+            }[provider]
+            api_key = f"${default_env}"
+
+        dense["provider"] = provider
+        dense["model"] = model
+        dense["api_key"] = api_key
+        dense.setdefault("api_base", "")
+
+        embedding["dense"] = dense
+        return embedding
+
+    def _normalize_openviking_vlm_config(self, raw_vlm: Any) -> dict[str, Any]:
+        vlm = dict(raw_vlm) if isinstance(raw_vlm, dict) else {}
+        has_provider_pool = bool(vlm.get("providers"))
+        has_direct_model = bool(str(vlm.get("model") or "").strip())
+        has_direct_key = bool(str(vlm.get("api_key") or "").strip())
+
+        # Keep existing valid config untouched.
+        if has_provider_pool and has_direct_model:
+            return vlm
+        if has_direct_model and has_direct_key:
+            return vlm
+
+        return {}
 
     def _openviking_find(self, *, query: str, limit: int, agent_name: str | None) -> list[dict[str, Any]]:
         client = self._build_openviking_client(agent_name)
@@ -936,8 +980,14 @@ class OpenVikingRuntime:
     def _normalize_messages(self, messages: list[Any]) -> list[dict[str, str]]:
         normalized: list[dict[str, str]] = []
         for msg in messages:
-            role = _normalize_role(getattr(msg, "type", None) or getattr(msg, "role", None))
-            content = getattr(msg, "content", msg)
+            if isinstance(msg, dict):
+                role_raw = msg.get("type") or msg.get("role")
+                content = msg.get("content", msg)
+            else:
+                role_raw = getattr(msg, "type", None) or getattr(msg, "role", None)
+                content = getattr(msg, "content", msg)
+
+            role = _normalize_role(role_raw)
             fragments = _extract_text_fragments(content)
             if not fragments:
                 continue
