@@ -18,6 +18,7 @@ import {
   hasPresentFiles,
   hasReasoning,
   hasSubagent,
+  isClarificationToolMessage,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Subtask } from "@/core/tasks";
@@ -124,6 +125,13 @@ export function MessageList({
 
     const hasRenderableAssistantOutcome = tailMessages.some((message) => {
       if (message.type !== "ai") {
+        if (isClarificationToolMessage(message)) {
+          const clarification = extractClarificationPayload(message);
+          if (clarification?.question?.trim()) {
+            return true;
+          }
+          return extractTextFromMessage(message).trim().length > 0;
+        }
         return false;
       }
       if (hasContent(message) || hasPresentFiles(message)) {
