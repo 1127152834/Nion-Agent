@@ -47,6 +47,7 @@ import {
   useThreadStream,
 } from "@/core/threads/hooks";
 import { pathOfNewThread, pathOfThread, textOfMessage } from "@/core/threads/utils";
+import { isUUID } from "@/core/utils/uuid";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -421,6 +422,12 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (isMock || isNewThread || !threadId || threadId === "new") {
+      return;
+    }
+
+    if (!isUUID(threadId)) {
+      pruneThreadFromCache(queryClient, threadId);
+      router.replace(pathOfNewThread());
       return;
     }
 

@@ -43,6 +43,7 @@ import {
   useThreadStream,
 } from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
+import { isUUID } from "@/core/utils/uuid";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
@@ -404,6 +405,12 @@ export default function AgentChatPage() {
     const apiClient = getAPIClient();
     const fallbackPath = `/workspace/agents/${agent_name}/chats/new`;
 
+    if (!isUUID(threadId)) {
+      pruneThreadFromCache(queryClient, threadId);
+      router.replace(fallbackPath);
+      return;
+    }
+
     const confirmThreadExists = async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
@@ -543,7 +550,7 @@ export default function AgentChatPage() {
             <div className="flex w-full items-center text-sm font-medium">
               <ThreadTitle threadId={threadId} thread={thread} />
             </div>
-            <div className="mr-4 flex items-center">
+            <div className="mr-4 flex items-center gap-1">
               <Tooltip content={t.agents.newChat}>
                 <Button
                   size="sm"

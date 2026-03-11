@@ -43,7 +43,7 @@ function normalizeErrorMessage(error: unknown): string {
 export function isThreadNotFoundError(error: unknown): boolean {
   if (typeof error === "object" && error !== null && "status" in error) {
     const status = (error as { status?: unknown }).status;
-    if (status === 404) {
+    if (status === 404 || status === 422) {
       return true;
     }
   }
@@ -58,6 +58,10 @@ export function isThreadNotFoundError(error: unknown): boolean {
     || normalized.includes("thread with id")
     || normalized.includes("http 404")
     || normalized.includes("status code 404")
+    || normalized.includes("http 422")
+    || normalized.includes("status code 422")
+    || normalized.includes("invalid thread id")
+    || normalized.includes("must be a uuid")
   );
 }
 

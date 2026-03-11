@@ -218,6 +218,18 @@ export interface Translations {
     agentCreated: string;
     startChatting: string;
     backToGallery: string;
+    searchPlaceholder: string;
+    filterAll: string;
+    filterDefault: string;
+    filterHeartbeat: string;
+    filterEvolution: string;
+    viewMemory: string;
+    noToolGroups: string;
+    catalogSummary: string;
+    heartbeatOn: string;
+    heartbeatOff: string;
+    evolutionOn: string;
+    evolutionOff: string;
     picker: {
       selectAgent: string;
       defaultAgentName: string;
@@ -229,6 +241,7 @@ export interface Translations {
       pageTitle: string;
       tabs: {
         basic: string;
+        memory: string;
         heartbeat: string;
         evolution: string;
         soul: string;
@@ -236,11 +249,34 @@ export interface Translations {
         logs: string;
         reports: string;
       };
+      layout: {
+        overviewGroup: string;
+        personaGroup: string;
+        runtimeGroup: string;
+        observabilityGroup: string;
+        subtitle: string;
+        openChat: string;
+      };
       loading: string;
       loadFailed: string;
       save: string;
       saving: string;
       cancel: string;
+      memory: {
+        title: string;
+        profileTitle: string;
+        historyTitle: string;
+        entriesTitle: string;
+        searchPlaceholder: string;
+        filterAll: string;
+        emptyHint: string;
+        startChatToBuild: string;
+        defaultUsesGlobalTitle: string;
+        defaultUsesGlobalDescription: string;
+        goToGlobalMemory: string;
+        itemCount: string;
+        factCount: string;
+      };
       basic: {
         title: string;
         saved: string;
@@ -422,6 +458,9 @@ export interface Translations {
       tabDirectory: string;
       tabPreview: string;
       tabPlugin: string;
+      openWithWorkbench: string;
+      chooseWorkbenchTitle: string;
+      chooseWorkbenchDescription: string;
       targetPrefix: string;
       pluginLoading: string;
       pluginResolving: string;

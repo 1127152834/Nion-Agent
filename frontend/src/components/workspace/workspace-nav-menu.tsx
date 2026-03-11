@@ -6,6 +6,7 @@ import {
   Settings2Icon,
   SettingsIcon,
 } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import {
@@ -25,6 +26,44 @@ import { useI18n } from "@/core/i18n/hooks";
 
 import { SettingsDialog } from "./settings";
 import { useWorkspaceSidebarPresentation } from "./workspace-sidebar-routing";
+
+type MenuSettingsSection =
+  | "appearance"
+  | "models"
+  | "sessionPolicy"
+  | "memory"
+  | "embedding"
+  | "tools"
+  | "channels"
+  | "skills"
+  | "sandbox"
+  | "diagnostics"
+  | "notification"
+  | "workbench-plugins"
+  | "desktop-runtime"
+  | "about";
+
+function normalizeSettingsSection(section: string | null): MenuSettingsSection | null {
+  if (
+    section === "appearance"
+    || section === "models"
+    || section === "sessionPolicy"
+    || section === "memory"
+    || section === "embedding"
+    || section === "tools"
+    || section === "channels"
+    || section === "skills"
+    || section === "sandbox"
+    || section === "diagnostics"
+    || section === "notification"
+    || section === "workbench-plugins"
+    || section === "desktop-runtime"
+    || section === "about"
+  ) {
+    return section;
+  }
+  return null;
+}
 
 function NavMenuButtonContent({
   isSidebarOpen,
@@ -48,16 +87,31 @@ function NavMenuButtonContent({
 
 export function WorkspaceNavMenu() {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsDefaultSection, setSettingsDefaultSection] = useState<
-    "appearance" | "memory" | "tools" | "skills" | "notification" | "about"
-  >("appearance");
+  const [settingsDefaultSection, setSettingsDefaultSection] = useState<MenuSettingsSection>("appearance");
   const [mounted, setMounted] = useState(false);
   const { isExpanded } = useWorkspaceSidebarPresentation();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { t } = useI18n();
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    const section = normalizeSettingsSection(searchParams.get("settings"));
+    if (!section) {
+      return;
+    }
+    setSettingsDefaultSection(section);
+    setSettingsOpen(true);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("settings");
+    const next = params.size ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(next, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   return (
     <>
