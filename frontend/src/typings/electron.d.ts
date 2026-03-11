@@ -38,6 +38,12 @@ interface RuntimeDownloadProgressPayload {
   progress: number;
 }
 
+interface RuntimePortsPayload {
+  frontendPort: number;
+  gatewayPort: number;
+  langgraphPort: number;
+}
+
 interface ElectronAPI {
   pickHostFile: (options?: { title?: string; defaultPath?: string; kind?: "file" | "directory" }) => Promise<{ canceled: boolean; path: string | null }>;
   readHostFile: (payload: { path: string; encoding?: string }) => Promise<{ path: string; content: string; size: number; encoding: string }>;
@@ -53,6 +59,16 @@ interface ElectronAPI {
   showItemInFolder: (fullPath: string) => Promise<void>;
   onStartupStage: (callback: (data: StartupStagePayload) => void) => void;
   getRuntimeStatus: () => Promise<RuntimeStatusPayload>;
+  getRuntimePorts: () => Promise<{
+    version: string | null;
+    ports: RuntimePortsPayload;
+    active: RuntimePortsPayload | null;
+  }>;
+  updateRuntimePorts: (ports: RuntimePortsPayload) => Promise<{
+    version: string | null;
+    ports: RuntimePortsPayload;
+    active: RuntimePortsPayload;
+  }>;
   downloadRuntimeComponent: (componentName: string) => Promise<unknown>;
   retryRuntimeComponent: (componentName: string) => Promise<unknown>;
   completeRuntimeOnboarding: () => Promise<unknown>;

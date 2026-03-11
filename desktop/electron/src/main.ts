@@ -10,6 +10,11 @@ import {
   RuntimeOptionalComponentsManager,
   type RuntimeDownloadProgress,
 } from "./runtime-manager";
+import {
+  readDesktopRuntimePortsConfig,
+  writeDesktopRuntimePortsConfig,
+  type DesktopRuntimePortsConfig,
+} from "./runtime-ports-config";
 
 let mainWindow: BrowserWindow | null = null;
 let runtimePaths: DesktopRuntimePaths | null = null;
@@ -18,6 +23,8 @@ let runtimePorts: DesktopRuntimePorts | null = null;
 let runtimeOptionalComponentsManager: RuntimeOptionalComponentsManager | null = null;
 let startupInProgress = false;
 let isShuttingDown = false;
+let creatingMainWindow = false;
+let runtimeRestartInProgress = false;
 const workspaceWatchers = new Map<string, { watcher: WorkspaceDirectoryWatcher; senderId: number }>();
 
 // 单实例锁
@@ -39,7 +46,7 @@ app.on("ready", async () => {
     runtimePaths = resolveRuntimePaths();
     runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(runtimePaths);
     runtimePorts = await startupRuntime();
-    createMainWindow();
+    ensureMainWindow();
   } catch (error) {
     console.error("Startup failed:", error);
     app.quit();
@@ -54,9 +61,7 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   applyAppIcon();
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createMainWindow();
-  }
+  ensureMainWindow();
 });
 
 app.on("before-quit", async (event) => {
@@ -106,6 +111,47 @@ async function startupRuntime(): Promise<DesktopRuntimePorts> {
     return ports;
   } finally {
     startupInProgress = false;
+  }
+}
+
+function ensureRuntimePathsInitialized(): DesktopRuntimePaths {
+  if (!runtimePaths) {
+    throw new Error("Runtime paths not initialized");
+  }
+  return runtimePaths;
+}
+
+function readConfiguredRuntimePorts(): DesktopRuntimePortsConfig {
+  const paths = ensureRuntimePathsInitialized();
+  return readDesktopRuntimePortsConfig(paths);
+}
+
+async function restartRuntime(): Promise<DesktopRuntimePorts> {
+  ensureRuntimePathsInitialized();
+  if (startupInProgress) {
+    throw new Error("Runtime startup is in progress");
+  }
+  if (runtimeRestartInProgress) {
+    throw new Error("Runtime restart is already in progress");
+  }
+
+  runtimeRestartInProgress = true;
+  try {
+    if (processManager) {
+      await processManager.shutdown();
+      processManager = null;
+    }
+
+    const ports = await startupRuntime();
+    runtimePorts = ports;
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      await mainWindow.loadURL(`http://localhost:${ports.frontendPort}`);
+    }
+
+    return ports;
+  } finally {
+    runtimeRestartInProgress = false;
   }
 }
 
@@ -159,53 +205,73 @@ function applyAppIcon(): void {
 }
 
 function createMainWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return;
+  }
+
+  if (creatingMainWindow) {
+    return;
+  }
+
+  creatingMainWindow = true;
   const isMac = process.platform === "darwin";
   const iconPath = resolveAppIconPngPath();
 
-  mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1000,
-    minHeight: 600,
-    title: "Nion",
-    ...(iconPath && !isMac ? { icon: iconPath } : {}),
-    ...(isMac
-      ? {
-          titleBarStyle: "hiddenInset" as const
-        }
-      : {}),
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false
+  try {
+    mainWindow = new BrowserWindow({
+      width: 1400,
+      height: 900,
+      minWidth: 1000,
+      minHeight: 600,
+      title: "Nion",
+      ...(iconPath && !isMac ? { icon: iconPath } : {}),
+      ...(isMac
+        ? {
+            titleBarStyle: "hiddenInset" as const
+          }
+        : {}),
+      webPreferences: {
+        preload: path.join(__dirname, "preload.js"),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false
+      }
+    });
+
+    const frontendPort = runtimePorts?.frontendPort ?? 3000;
+
+    // 加载前端应用
+    mainWindow.loadURL(`http://localhost:${frontendPort}`);
+
+    // 开发模式打开 DevTools
+    if (!app.isPackaged) {
+      mainWindow.webContents.openDevTools();
     }
-  });
 
-  const frontendPort = runtimePorts?.frontendPort ?? 3000;
+    // 处理外部链接
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+      shell.openExternal(url);
+      return { action: "deny" };
+    });
 
-  // 加载前端应用
-  mainWindow.loadURL(`http://localhost:${frontendPort}`);
+    const senderId = mainWindow.webContents.id;
+    mainWindow.webContents.on("destroyed", () => {
+      void stopWorkspaceWatchersForSender(senderId);
+    });
 
-  // 开发模式打开 DevTools
-  if (!app.isPackaged) {
-    mainWindow.webContents.openDevTools();
+    mainWindow.on("closed", () => {
+      mainWindow = null;
+    });
+  } finally {
+    creatingMainWindow = false;
   }
+}
 
-  // 处理外部链接
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: "deny" };
-  });
-
-  const senderId = mainWindow.webContents.id;
-  mainWindow.webContents.on("destroyed", () => {
-    void stopWorkspaceWatchersForSender(senderId);
-  });
-
-  mainWindow.on("closed", () => {
-    mainWindow = null;
-  });
+function ensureMainWindow(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    return;
+  }
+  createMainWindow();
 }
 
 function getRuntimeOptionalManager(): RuntimeOptionalComponentsManager {
@@ -242,6 +308,39 @@ ipcMain.handle("desktop:get-paths", () => {
 ipcMain.handle("desktop:get-runtime-status", () => {
   return getRuntimeOptionalManager().getStatus();
 });
+
+ipcMain.handle("desktop:get-runtime-ports", () => {
+  const configured = readConfiguredRuntimePorts();
+  return {
+    ...configured,
+    active: runtimePorts,
+  };
+});
+
+ipcMain.handle(
+  "desktop:update-runtime-ports",
+  async (_, payload: Partial<DesktopRuntimePorts>) => {
+    const previous = readConfiguredRuntimePorts();
+    const updated = writeDesktopRuntimePortsConfig(ensureRuntimePathsInitialized(), payload);
+
+    try {
+      const active = await restartRuntime();
+      return {
+        ...updated,
+        active,
+      };
+    } catch (error) {
+      console.error("[Runtime] Failed to restart after runtime port update:", error);
+      try {
+        writeDesktopRuntimePortsConfig(ensureRuntimePathsInitialized(), previous.ports);
+        await restartRuntime();
+      } catch (rollbackError) {
+        console.error("[Runtime] Failed to rollback runtime ports:", rollbackError);
+      }
+      throw error;
+    }
+  },
+);
 
 ipcMain.handle("desktop:download-runtime-component", async (_, componentName: string) => {
   return getRuntimeOptionalManager().downloadOptionalComponent(

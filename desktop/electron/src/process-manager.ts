@@ -1,8 +1,9 @@
-import { ChildProcess, spawn } from "node:child_process";
+import { ChildProcess, spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, readFileSync, rmSync, statSync, WriteStream } from "node:fs";
 import path from "node:path";
 import { isPortInUse, waitForHttp, waitForPort } from "./health";
 import type { DesktopRuntimePaths } from "./paths";
+import { readDesktopRuntimePortsConfig, type DesktopRuntimePorts } from "./runtime-ports-config";
 
 // 关键：只管理 3 个服务（没有 contextdb）
 type ServiceName = "langgraph" | "gateway" | "frontend";
@@ -15,11 +16,7 @@ interface ManagedService {
   logStartOffset?: number;
 }
 
-export interface DesktopRuntimePorts {
-  frontendPort: number;
-  gatewayPort: number;
-  langgraphPort: number;
-}
+export type { DesktopRuntimePorts } from "./runtime-ports-config";
 
 export interface DesktopStartupObserver {
   onStageStart?: (stage: string) => void;
@@ -81,12 +78,9 @@ export class DesktopProcessManager {
   }
 
   private async assignPorts(): Promise<DesktopRuntimePorts> {
-    // 使用固定端口（与 Makefile 保持一致）
-    return {
-      langgraphPort: 2024,
-      gatewayPort: 8001,
-      frontendPort: 3000
-    };
+    const { ports } = readDesktopRuntimePortsConfig(this.paths);
+    console.log("[Runtime] Port assignment loaded from config.db:", ports);
+    return ports;
   }
 
   private async checkDependencies(): Promise<void> {
@@ -111,20 +105,164 @@ export class DesktopProcessManager {
       throw new Error("Ports not assigned");
     }
 
+    const inUsePorts = await this.findInUsePorts();
+    if (inUsePorts.length === 0) {
+      return;
+    }
+
+    console.warn(
+      `[Runtime] Port conflict detected (${inUsePorts.join(", ")}). Attempting to terminate owner processes.`
+    );
+
+    await this.forceReleasePorts(inUsePorts);
+
+    const remainingConflicts = await this.findInUsePorts();
+    if (remainingConflicts.length > 0) {
+      throw new Error(`Port conflict detected: ${remainingConflicts.join(", ")}`);
+    }
+  }
+
+  private async findInUsePorts(): Promise<number[]> {
+    if (!this.ports) {
+      return [];
+    }
+
     const checks = await Promise.all([
       isPortInUse(this.ports.langgraphPort),
       isPortInUse(this.ports.gatewayPort),
       isPortInUse(this.ports.frontendPort)
     ]);
-    const inUsePorts = [
+
+    return [
       checks[0] ? this.ports.langgraphPort : null,
       checks[1] ? this.ports.gatewayPort : null,
       checks[2] ? this.ports.frontendPort : null
     ].filter((port): port is number => port !== null);
+  }
 
-    if (inUsePorts.length > 0) {
-      throw new Error(`Port conflict detected: ${inUsePorts.join(", ")}`);
+  private async forceReleasePorts(ports: number[]): Promise<void> {
+    const pidSet = new Set<number>();
+
+    for (const port of ports) {
+      const pids = this.findPortOwnerPids(port);
+      for (const pid of pids) {
+        pidSet.add(pid);
+      }
     }
+
+    if (pidSet.size === 0) {
+      throw new Error(
+        `Port conflict detected: ${ports.join(", ")} (unable to detect owner process PID)`
+      );
+    }
+
+    console.warn(`[Runtime] Sending SIGTERM to PID(s): ${Array.from(pidSet).join(", ")}`);
+    this.killPids(pidSet, "SIGTERM");
+    await this.sleep(900);
+
+    const remainingAfterTerm = ports.filter((port) => this.isPortStillInUseSync(port));
+    if (remainingAfterTerm.length === 0) {
+      return;
+    }
+
+    console.warn(
+      `[Runtime] Port(s) still occupied after SIGTERM (${remainingAfterTerm.join(", ")}), sending SIGKILL`
+    );
+    this.killPids(pidSet, "SIGKILL");
+    await this.sleep(500);
+  }
+
+  private isPortStillInUseSync(port: number): boolean {
+    const result = spawnSync(
+      process.platform === "win32" ? "netstat" : "lsof",
+      process.platform === "win32"
+        ? ["-ano", "-p", "tcp"]
+        : ["-nP", "-t", `-iTCP:${port}`, "-sTCP:LISTEN"],
+      { encoding: "utf-8" }
+    );
+
+    if (result.error) {
+      return false;
+    }
+
+    if (process.platform === "win32") {
+      return (result.stdout ?? "")
+        .split(/\r?\n/)
+        .some((line) => /LISTEN/i.test(line) && line.includes(`:${port}`));
+    }
+
+    return (result.stdout ?? "").trim().length > 0;
+  }
+
+  private findPortOwnerPids(port: number): number[] {
+    if (process.platform === "win32") {
+      return this.findPortOwnerPidsWindows(port);
+    }
+
+    const result = spawnSync("lsof", ["-nP", "-t", `-iTCP:${port}`, "-sTCP:LISTEN"], {
+      encoding: "utf-8"
+    });
+
+    if (result.error) {
+      console.warn(`[Runtime] Failed to inspect owner PID for port ${port}:`, result.error.message);
+      return [];
+    }
+
+    return this.parsePidList(result.stdout ?? "");
+  }
+
+  private findPortOwnerPidsWindows(port: number): number[] {
+    const result = spawnSync("netstat", ["-ano", "-p", "tcp"], { encoding: "utf-8" });
+    if (result.error) {
+      console.warn(`[Runtime] Failed to inspect owner PID for port ${port}:`, result.error.message);
+      return [];
+    }
+
+    const pids = new Set<number>();
+    const lines = (result.stdout ?? "").split(/\r?\n/);
+    for (const line of lines) {
+      if (!/LISTEN/i.test(line)) {
+        continue;
+      }
+      if (!line.includes(`:${port}`)) {
+        continue;
+      }
+      const columns = line.trim().split(/\s+/);
+      const pid = Number(columns[columns.length - 1]);
+      if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+        pids.add(pid);
+      }
+    }
+    return Array.from(pids);
+  }
+
+  private parsePidList(raw: string): number[] {
+    const pids = new Set<number>();
+    for (const token of raw.split(/\s+/)) {
+      if (!token) {
+        continue;
+      }
+      const pid = Number(token);
+      if (Number.isInteger(pid) && pid > 0 && pid !== process.pid) {
+        pids.add(pid);
+      }
+    }
+    return Array.from(pids);
+  }
+
+  private killPids(pids: Set<number>, signal: NodeJS.Signals): void {
+    for (const pid of pids) {
+      try {
+        process.kill(pid, signal);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn(`[Runtime] Failed to send ${signal} to PID ${pid}: ${message}`);
+      }
+    }
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => setTimeout(resolve, ms));
   }
 
   private async startLangGraph(): Promise<void> {
