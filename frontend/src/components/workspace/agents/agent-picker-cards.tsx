@@ -1,9 +1,31 @@
 "use client";
 
-import { BotIcon, CircleCheckIcon } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import {
+  BarChart3Icon,
+  BookOpenIcon,
+  BotIcon,
+  BrainCircuitIcon,
+  CheckIcon,
+  Code2Icon,
+  GlobeIcon,
+  SparklesIcon,
+  TargetIcon,
+  WandSparklesIcon,
+} from "lucide-react";
+import {
+  AnimatePresence,
+  motion,
+  useMotionValue,
+  useTransform,
+} from "motion/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 
 import { useAgents, useDefaultAgentConfig } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
@@ -17,10 +39,16 @@ interface AgentPickerCardsProps {
 
 type PickerAgent = {
   name: string;
+  displayName: string;
   description: string;
+  role: string;
+  gradient: string;
+  Icon: typeof BotIcon;
 };
 
-type LaunchCardState = {
+type TransitionPhase = "selection" | "zooming" | "sliding";
+
+type TransitionState = {
   agent: PickerAgent;
   route: string;
   origin: {
@@ -29,8 +57,29 @@ type LaunchCardState = {
     width: number;
     height: number;
   };
-  viewportHeight: number;
 };
+
+const CARD_GRADIENTS = [
+  "from-purple-500 to-indigo-600",
+  "from-blue-500 to-cyan-600",
+  "from-emerald-500 to-teal-600",
+  "from-pink-500 to-rose-600",
+  "from-orange-500 to-red-600",
+  "from-yellow-400 to-orange-500",
+  "from-sky-500 to-indigo-600",
+  "from-fuchsia-500 to-violet-600",
+] as const;
+
+const CARD_ICONS = [
+  SparklesIcon,
+  BarChart3Icon,
+  Code2Icon,
+  BookOpenIcon,
+  TargetIcon,
+  GlobeIcon,
+  BrainCircuitIcon,
+  WandSparklesIcon,
+] as const;
 
 function routeOfAgent(agentName: string): string {
   if (agentName === "_default") {
@@ -39,76 +88,142 @@ function routeOfAgent(agentName: string): string {
   return `/workspace/agents/${encodeURIComponent(agentName)}/chats/new`;
 }
 
+function hashIndex(source: string, modulo: number): number {
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  }
+  return hash % modulo;
+}
+
 function rowGridClass(count: number): string {
   if (count <= 2) return "sm:grid-cols-2";
   if (count === 3) return "sm:grid-cols-2 lg:grid-cols-3";
   return "sm:grid-cols-2 xl:grid-cols-4";
 }
 
-function fanMetrics(index: number, count: number, isMobile: boolean): {
-  x: number;
-  y: number;
-  angle: number;
-  depth: number;
-} {
-  const center = (count - 1) / 2;
-  const offset = index - center;
-  const distance = Math.abs(offset);
-  const spread = isMobile ? Math.min(28, 10 + count * 3) : Math.min(58, 18 + count * 4.8);
-  const step = count > 1 ? spread / (count - 1) : 0;
-  const angle = -spread / 2 + index * step;
-  const x = offset * (isMobile ? 26 : 52);
-  const y = distance * (isMobile ? 4.5 : 7.5);
-  const depth = Math.round((count - distance) * 10);
-  return { x, y, angle, depth };
+function cardRole(
+  model: string | null | undefined,
+  pickerCopy: ReturnType<typeof useI18n>["t"]["agents"]["picker"],
+): string {
+  return model?.trim() ?? pickerCopy.defaultRole;
 }
 
 function PickerCardFace({
   agent,
   selected,
-  compact,
-  pickerCopy,
 }: {
   agent: PickerAgent;
   selected: boolean;
-  compact?: boolean;
-  pickerCopy: ReturnType<typeof useI18n>["t"]["agents"]["picker"];
 }) {
-  const name = agent.name === "_default" ? pickerCopy.defaultAgentName : agent.name;
-  const description = agent.description || (agent.name === "_default"
-    ? pickerCopy.defaultAgentDescription
-    : pickerCopy.noDescription);
-
   return (
     <div
       className={cn(
-        "relative h-full rounded-2xl border p-4 text-left",
-        "bg-[linear-gradient(158deg,rgba(255,255,255,0.95),rgba(246,241,232,0.88))]",
-        "shadow-[0_22px_38px_-28px_rgba(42,27,10,0.58),0_10px_20px_-16px_rgba(42,27,10,0.45)]",
-        compact ? "p-3" : "p-4",
+        "relative h-full w-full overflow-hidden rounded-2xl bg-white p-3 text-center",
+        "border transition-shadow",
         selected
-          ? "border-primary/55 ring-primary/24 ring-2"
-          : "border-border/80",
+          ? "border-emerald-500 shadow-2xl"
+          : "border-stone-200/70 shadow-sm",
       )}
     >
-      <div className="pointer-events-none absolute top-0 right-0 left-0 h-12 rounded-t-2xl bg-[linear-gradient(180deg,rgba(255,255,255,0.28),rgba(255,255,255,0))]" />
-
-      <div className="relative flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="bg-primary/12 text-primary flex size-7 shrink-0 items-center justify-center rounded-md border border-black/5">
-            <BotIcon className="size-4" />
-          </div>
-          <p className="truncate text-sm font-semibold tracking-[0.01em]">{name}</p>
-        </div>
-        {selected ? (
-          <CircleCheckIcon className="text-primary mt-0.5 size-4 shrink-0" />
-        ) : null}
+      <div
+        className={cn(
+          "mx-auto mb-2 flex size-8 items-center justify-center rounded-xl",
+          "bg-gradient-to-br text-white shadow-sm",
+          agent.gradient,
+        )}
+      >
+        <agent.Icon className="size-4" />
       </div>
 
-      <p className={cn("text-muted-foreground mt-2 text-xs leading-5", compact ? "line-clamp-1" : "line-clamp-2")}>
-        {description}
+      <h3 className="truncate text-sm font-bold tracking-tight text-stone-800">
+        {agent.displayName}
+      </h3>
+      <p className="mb-1.5 truncate text-[8px] font-semibold tracking-[0.16em] text-stone-400 uppercase">
+        {agent.role}
       </p>
+      <p className="line-clamp-4 text-[10px] leading-relaxed text-stone-500">
+        {agent.description}
+      </p>
+
+      {selected ? (
+        <div className="absolute top-2 right-2 rounded-full bg-emerald-500/10 p-1 text-emerald-600">
+          <CheckIcon className="size-3" />
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function WheelCard({
+  agent,
+  index,
+  centerIndex,
+  anglePerCard,
+  dragX,
+  selected,
+  transitioning,
+  launching,
+  onSelect,
+}: {
+  agent: PickerAgent;
+  index: number;
+  centerIndex: number;
+  anglePerCard: number;
+  dragX: ReturnType<typeof useMotionValue<number>>;
+  selected: boolean;
+  transitioning: boolean;
+  launching: boolean;
+  onSelect: (agent: PickerAgent, event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  const baseAngle = (index - centerIndex) * anglePerCard;
+  const rotationOffset = useTransform(dragX, (x) => x * 0.1);
+  const currentAngle = useTransform(rotationOffset, (rotation) => baseAngle + rotation);
+  const x = useTransform(dragX, (raw) => -raw);
+
+  const opacity = useTransform(currentAngle, [-50, -35, 0, 35, 50], [0, 1, 1, 1, 0]);
+  const scale = useTransform(currentAngle, [-50, -25, 0, 25, 50], [0.7, 0.9, 1, 0.9, 0.7]);
+  const blur = useTransform(currentAngle, [-50, -30, 0, 30, 50], ["blur(8px)", "blur(0px)", "blur(0px)", "blur(0px)", "blur(8px)"]);
+  const baseZIndex = useTransform(currentAngle, (angle) => Math.round(100 - Math.abs(angle)));
+  const pointerEvents = useTransform(currentAngle, (angle) =>
+    Math.abs(angle) > 35 ? "none" : "auto",
+  );
+
+  return (
+    <motion.button
+      type="button"
+      className="absolute bottom-0 left-1/2 -translate-x-1/2"
+      onClick={(event) => onSelect(agent, event)}
+      style={{
+        transformOrigin: "50% 350px",
+        rotate: currentAngle,
+        x,
+        zIndex: launching ? 220 : baseZIndex,
+        pointerEvents,
+        opacity: launching ? 0 : undefined,
+      }}
+      whileHover={transitioning ? undefined : { y: -16, scale: 1.05 }}
+      transition={{ duration: 0.2 }}
+    >
+      <motion.div
+        style={{ opacity: transitioning ? 0.3 : opacity, scale, filter: blur }}
+        initial={{ y: 150 }}
+        animate={{ y: selected ? -8 : 0 }}
+        transition={{
+          type: "spring",
+          stiffness: 100,
+          damping: 15,
+          delay: Math.min(index * 0.02, 0.5),
+        }}
+      >
+        <motion.div
+          layoutId={`picker-card-${agent.name}`}
+          className="h-44 w-32"
+        >
+          <PickerCardFace agent={agent} selected={selected} />
+        </motion.div>
+      </motion.div>
+    </motion.button>
   );
 }
 
@@ -123,26 +238,55 @@ export function AgentPickerCards({
   const { config: defaultAgent } = useDefaultAgentConfig();
   const { agents } = useAgents();
 
-  const cards = useMemo<PickerAgent[]>(
-    () => [
-      ...(defaultAgent ? [{ name: defaultAgent.name, description: defaultAgent.description }] : []),
+  const cards = useMemo<PickerAgent[]>(() => {
+    const input = [
+      ...(defaultAgent
+        ? [
+            {
+              name: defaultAgent.name,
+              description: defaultAgent.description,
+              model: defaultAgent.model,
+            },
+          ]
+        : []),
       ...agents.map((agent) => ({
         name: agent.name,
         description: agent.description,
+        model: agent.model,
       })),
-    ],
-    [defaultAgent, agents],
-  );
+    ];
+
+    return input.map((agent) => {
+      const gradientIndex = hashIndex(agent.name, CARD_GRADIENTS.length);
+      const iconIndex = hashIndex(`${agent.name}:icon`, CARD_ICONS.length);
+      return {
+        name: agent.name,
+        displayName:
+          agent.name === "_default" ? pickerCopy.defaultAgentName : agent.name,
+        description:
+          agent.description ||
+          (agent.name === "_default"
+            ? pickerCopy.defaultAgentDescription
+            : pickerCopy.noDescription),
+        role: cardRole(agent.model, pickerCopy),
+        gradient: CARD_GRADIENTS[gradientIndex] ?? CARD_GRADIENTS[0],
+        Icon: CARD_ICONS[iconIndex] ?? BotIcon,
+      };
+    });
+  }, [defaultAgent, agents, pickerCopy]);
 
   const [isDealt, setIsDealt] = useState(false);
   const [hoveredAgentName, setHoveredAgentName] = useState<string | null>(null);
-  const [launchState, setLaunchState] = useState<LaunchCardState | null>(null);
+  const [phase, setPhase] = useState<TransitionPhase>("selection");
+  const [transitionState, setTransitionState] = useState<TransitionState | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-  const navigateTimerRef = useRef<number | null>(null);
+
+  const dragX = useMotionValue(0);
+  const timersRef = useRef<number[]>([]);
 
   const cardCount = cards.length;
   const fanLayout = cardCount >= 5;
-  const transitioning = launchState != null;
+  const transitioning = phase !== "selection" && transitionState != null;
 
   useEffect(() => {
     if (cardCount <= 1) return;
@@ -153,7 +297,7 @@ export function AgentPickerCards({
     }
     const timer = window.setTimeout(() => setIsDealt(true), 42);
     return () => window.clearTimeout(timer);
-  }, [cardCount, fanLayout, prefersReducedMotion]);
+  }, [cardCount, prefersReducedMotion]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -164,26 +308,30 @@ export function AgentPickerCards({
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, []);
 
-  useEffect(() => () => {
-    if (navigateTimerRef.current != null) {
-      window.clearTimeout(navigateTimerRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      for (const timer of timersRef.current) {
+        window.clearTimeout(timer);
+      }
+      timersRef.current = [];
+    },
+    [],
+  );
 
-  const triggerSelect = (agent: PickerAgent, event?: MouseEvent<HTMLButtonElement>) => {
+  const triggerSelect = (agent: PickerAgent, event: MouseEvent<HTMLButtonElement>) => {
     const targetRoute = routeOfAgent(agent.name);
     const currentRoute = routeOfAgent(selectedAgentName);
     if (targetRoute === currentRoute || transitioning) {
       return;
     }
 
-    if (prefersReducedMotion || !event) {
+    if (prefersReducedMotion) {
       router.push(targetRoute);
       return;
     }
 
     const rect = event.currentTarget.getBoundingClientRect();
-    setLaunchState({
+    setTransitionState({
       agent,
       route: targetRoute,
       origin: {
@@ -192,12 +340,18 @@ export function AgentPickerCards({
         width: rect.width,
         height: rect.height,
       },
-      viewportHeight: window.innerHeight,
     });
+    setPhase("zooming");
 
-    navigateTimerRef.current = window.setTimeout(() => {
+    const zoomTimer = window.setTimeout(() => {
+      setPhase("sliding");
+    }, 1200);
+
+    const navigateTimer = window.setTimeout(() => {
       router.push(targetRoute);
-    }, 560);
+    }, 1800);
+
+    timersRef.current = [zoomTimer, navigateTimer];
   };
 
   if (cardCount <= 1) {
@@ -205,175 +359,146 @@ export function AgentPickerCards({
   }
 
   return (
-    <div className={cn("relative w-full max-w-[980px]", className)}>
-      <p className="text-muted-foreground mb-3 text-center text-xs tracking-wide">
+    <div className={cn("relative w-full max-w-4xl", className)}>
+      <p className="mb-3 text-center text-xs tracking-wide text-stone-500">
         {pickerCopy.selectAgent}
       </p>
 
       {fanLayout ? (
-        <div
-          className={cn(
-            "relative mx-auto flex w-full items-end justify-center [perspective:1400px]",
-            isMobile ? "h-[220px]" : "h-[278px]",
-          )}
-        >
-          {cards.map((agent, index) => {
-            const selected = agent.name === selectedAgentName;
-            const isHovered = hoveredAgentName === agent.name;
-            const isLaunching = launchState?.agent.name === agent.name;
-            const metrics = fanMetrics(index, cardCount, isMobile);
-            const hoverLift = isHovered ? -24 : selected ? -8 : 0;
+        (() => {
+          const anglePerCard = Math.max(6, 20 - cardCount * 0.5);
+          const centerIndex = (cardCount - 1) / 2;
+          const maxDrag = centerIndex * anglePerCard * 10;
 
-            return (
-              <motion.button
-                key={agent.name}
-                type="button"
-                onMouseEnter={() => setHoveredAgentName(agent.name)}
-                onMouseLeave={() => setHoveredAgentName((current) => (
-                  current === agent.name ? null : current
-                ))}
-                onFocus={() => setHoveredAgentName(agent.name)}
-                onBlur={() => setHoveredAgentName((current) => (
-                  current === agent.name ? null : current
-                ))}
-                onClick={(event) => triggerSelect(agent, event)}
+          return (
+            <div
+              className={cn(
+                "relative flex w-full items-end justify-center overflow-visible",
+                isMobile ? "h-[220px]" : "h-[236px]",
+              )}
+            >
+              <motion.div
+                drag="x"
+                dragConstraints={{ left: -maxDrag, right: maxDrag }}
+                dragElastic={0.1}
+                dragTransition={{
+                  power: 0.2,
+                  timeConstant: 200,
+                  bounceStiffness: 100,
+                  bounceDamping: 15,
+                }}
+                style={{ x: dragX }}
                 className={cn(
-                  "absolute bottom-0 left-1/2 w-[min(250px,64vw)] max-w-[250px] -translate-x-1/2",
-                  "rounded-2xl transition-shadow duration-300",
-                  "focus-visible:ring-primary/45 focus-visible:outline-none focus-visible:ring-2",
+                  "absolute inset-0 flex items-end justify-center",
+                  transitioning ? "cursor-default" : "cursor-grab active:cursor-grabbing",
                 )}
-                style={{
-                  zIndex: isLaunching ? 150 : metrics.depth + (isHovered ? 20 : 0),
-                  opacity: isLaunching ? 0 : undefined,
-                }}
-                initial={false}
-                animate={{
-                  x: isDealt ? metrics.x : 0,
-                  y: isDealt ? metrics.y + hoverLift : 36,
-                  rotate: isDealt ? metrics.angle : 0,
-                  rotateX: isDealt ? 5 : 0,
-                  scale: isHovered ? 1.035 : selected ? 1.015 : 1,
-                  opacity: isDealt
-                    ? transitioning
-                      ? 0.34
-                      : 1
-                    : 0,
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 26,
-                  mass: 0.85,
-                  delay: isDealt ? index * 0.035 : 0,
-                }}
               >
-                <PickerCardFace
-                  agent={agent}
-                  selected={selected}
-                  pickerCopy={pickerCopy}
-                />
-              </motion.button>
-            );
-          })}
-        </div>
+                {cards.map((agent, index) => {
+                  const selected = agent.name === selectedAgentName;
+                  const launching = transitionState?.agent.name === agent.name;
+                  return (
+                    <WheelCard
+                      key={agent.name}
+                      agent={agent}
+                      index={index}
+                      centerIndex={centerIndex}
+                      anglePerCard={anglePerCard}
+                      dragX={dragX}
+                      selected={selected}
+                      transitioning={transitioning}
+                      launching={launching}
+                      onSelect={triggerSelect}
+                    />
+                  );
+                })}
+              </motion.div>
+            </div>
+          );
+        })()
       ) : (
-        <div className={cn("grid grid-cols-1 gap-3", rowGridClass(cardCount))}>
-          {cards.map((agent, index) => {
-            const selected = agent.name === selectedAgentName;
-            const isHovered = hoveredAgentName === agent.name;
-            const isLaunching = launchState?.agent.name === agent.name;
-            return (
-              <motion.button
-                key={agent.name}
-                type="button"
-                onMouseEnter={() => setHoveredAgentName(agent.name)}
-                onMouseLeave={() => setHoveredAgentName((current) => (
-                  current === agent.name ? null : current
-                ))}
-                onFocus={() => setHoveredAgentName(agent.name)}
-                onBlur={() => setHoveredAgentName((current) => (
-                  current === agent.name ? null : current
-                ))}
-                onClick={(event) => triggerSelect(agent, event)}
-                className={cn(
-                  "w-full rounded-2xl transition-shadow duration-300",
-                  "focus-visible:ring-primary/45 focus-visible:outline-none focus-visible:ring-2",
-                )}
-                style={{ opacity: isLaunching ? 0 : undefined }}
-                initial={false}
-                animate={{
-                  y: isDealt ? (isHovered ? -14 : 0) : 22,
-                  scale: isHovered ? 1.02 : 1,
-                  opacity: isDealt
-                    ? transitioning
-                      ? 0.42
-                      : 1
-                    : 0,
-                }}
-                transition={{
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 24,
-                  mass: 0.86,
-                  delay: isDealt ? index * 0.05 : 0,
-                }}
-              >
-                <PickerCardFace
-                  agent={agent}
-                  selected={selected}
-                  compact={cardCount >= 4}
-                  pickerCopy={pickerCopy}
-                />
-              </motion.button>
-            );
-          })}
+        <div className={cn("grid grid-cols-1 gap-4", rowGridClass(cardCount))}>
+          <AnimatePresence>
+            {cards.map((agent, index) => {
+              const selected = agent.name === selectedAgentName;
+              const isHovered = hoveredAgentName === agent.name;
+              const launching = transitionState?.agent.name === agent.name;
+              return (
+                <motion.button
+                  key={agent.name}
+                  type="button"
+                  className={cn(
+                    "flex justify-center rounded-2xl",
+                    "focus-visible:ring-2 focus-visible:ring-emerald-500/45 focus-visible:outline-none",
+                  )}
+                  initial={{ opacity: 0, y: 100 }}
+                  animate={{
+                    opacity: isDealt ? (transitioning ? 0.36 : 1) : 0,
+                    y: isDealt ? (isHovered ? -15 : selected ? -8 : 0) : 60,
+                    scale: isHovered ? 1.08 : selected ? 1.03 : 1,
+                  }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 100,
+                    damping: 15,
+                    delay: isDealt ? index * 0.05 : 0,
+                  }}
+                  style={{ zIndex: launching ? 220 : selected ? 30 : 10, opacity: launching ? 0 : undefined }}
+                  onMouseEnter={() => setHoveredAgentName(agent.name)}
+                  onMouseLeave={() =>
+                    setHoveredAgentName((current) =>
+                      current === agent.name ? null : current,
+                    )
+                  }
+                  onFocus={() => setHoveredAgentName(agent.name)}
+                  onBlur={() =>
+                    setHoveredAgentName((current) =>
+                      current === agent.name ? null : current,
+                    )
+                  }
+                  onClick={(event) => triggerSelect(agent, event)}
+                >
+                  <motion.div layoutId={`picker-card-${agent.name}`} className="h-44 w-32">
+                    <PickerCardFace agent={agent} selected={selected} />
+                  </motion.div>
+                </motion.button>
+              );
+            })}
+          </AnimatePresence>
         </div>
       )}
 
       <AnimatePresence>
-        {launchState && !prefersReducedMotion ? (
+        {transitionState && !prefersReducedMotion ? (
           <>
             <motion.div
-              className="pointer-events-none fixed inset-0 z-[160] bg-black"
+              className="pointer-events-none fixed inset-0 z-[220] bg-black"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.72 }}
+              animate={{ opacity: 0.78 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
             />
 
             <motion.div
-              className="pointer-events-none fixed z-[170]"
+              className="pointer-events-none fixed z-[230]"
               style={{
-                left: launchState.origin.left,
-                top: launchState.origin.top,
-                width: launchState.origin.width,
-                height: launchState.origin.height,
+                left: transitionState.origin.left,
+                top: transitionState.origin.top,
+                width: transitionState.origin.width,
+                height: transitionState.origin.height,
               }}
-              initial={{
-                x: 0,
-                y: 0,
-                rotate: 0,
-                scale: 1,
-                opacity: 1,
-              }}
-              animate={{
-                x: [0, 12, 22],
-                y: [0, -132, launchState.viewportHeight - launchState.origin.top + 86],
-                rotate: [0, -4, 8],
-                scale: [1, 1.08, 0.96],
-                opacity: [1, 1, 0.9],
-              }}
-              transition={{
-                duration: 0.62,
-                times: [0, 0.43, 1],
-                ease: [0.22, 1, 0.36, 1],
-              }}
+              initial={{ scale: 1, y: 0, rotate: 0, opacity: 1 }}
+              animate={
+                phase === "zooming"
+                  ? { scale: 1.5, y: 0, rotate: 0, opacity: 1 }
+                  : { scale: 1.5, y: "150vh", rotate: 10, opacity: 0.94 }
+              }
+              transition={
+                phase === "zooming"
+                  ? { type: "spring", damping: 20, stiffness: 100 }
+                  : { duration: 0.6, ease: "easeIn" }
+              }
             >
-              <PickerCardFace
-                agent={launchState.agent}
-                selected={true}
-                pickerCopy={pickerCopy}
-              />
+              <PickerCardFace agent={transitionState.agent} selected={true} />
             </motion.div>
           </>
         ) : null}

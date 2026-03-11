@@ -320,6 +320,7 @@ export const enUS: Translations = {
       selectAgent: "Select an agent for this chat",
       defaultAgentName: "Default Agent",
       defaultAgentDescription: "System default agent.",
+      defaultRole: "General Assistant",
       noDescription: "No description",
       settingsTooltip: "Settings",
     },

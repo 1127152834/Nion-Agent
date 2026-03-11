@@ -234,6 +234,7 @@ export interface Translations {
       selectAgent: string;
       defaultAgentName: string;
       defaultAgentDescription: string;
+      defaultRole: string;
       noDescription: string;
       settingsTooltip: string;
     };

@@ -310,6 +310,7 @@ export const zhCN: Translations = {
       selectAgent: "选择对话智能体",
       defaultAgentName: "默认智能体",
       defaultAgentDescription: "系统默认智能体。",
+      defaultRole: "通用助手",
       noDescription: "暂无描述",
       settingsTooltip: "设置",
     },
