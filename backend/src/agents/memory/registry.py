@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from src.agents.memory.core import MemoryProvider
-from src.agents.memory.provider import V2CompatibleMemoryProvider
-from src.agents.memory.runtime import V2CompatibleMemoryRuntime
 
 
 class MemoryRegistry:
@@ -23,18 +21,20 @@ class MemoryRegistry:
 
         config = get_memory_config()
         provider_name = config.provider
+        if provider_name not in self._providers:
+            provider_name = "structured-fs"
         return self.get(provider_name)
 
 
 def _build_default_registry() -> MemoryRegistry:
-    registry = MemoryRegistry()
-
-    # V2 compatible provider
-    registry.register(V2CompatibleMemoryProvider(runtime=V2CompatibleMemoryRuntime()))
-
-    # Structured FS provider
+    from src.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
     from src.agents.memory.structured_provider import StructuredFsProvider
     from src.agents.memory.structured_runtime import StructuredFsRuntime
+
+    # Hard-cut safety: always remove legacy memory.json files on runtime init.
+    ensure_legacy_memory_removed()
+
+    registry = MemoryRegistry()
 
     registry.register(StructuredFsProvider(runtime=StructuredFsRuntime()))
 

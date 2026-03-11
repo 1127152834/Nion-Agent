@@ -18,6 +18,8 @@
 12. `/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/docs/memoh/plan/2026-03-09-phase-6-evolution-core-execution-plan.md`
 13. `/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/docs/memoh/plan/2026-03-09-phase-7-multi-agent-productization.md`
 14. `/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/docs/memoh/plan/2026-03-09-phase-7-multi-agent-productization-execution-plan.md`
+15. `/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/docs/memoh/plan/2026-03-11-memory-hardcut-as-built.md`
+16. `/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/docs/memoh/plan/2026-03-11-agent-memory-ui-closure-as-built.md`
 
 ## 每个阶段的执行原则
 

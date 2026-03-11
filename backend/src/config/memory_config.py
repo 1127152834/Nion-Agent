@@ -21,14 +21,9 @@ class MemoryConfig(BaseModel):
     storage_path: str = Field(
         default="",
         description=(
-            "Path to store memory data. "
-            "If empty, defaults to `{base_dir}/memory.json` (see Paths.memory_file). "
-            "Absolute paths are used as-is. "
-            "Relative paths are resolved against `Paths.base_dir` "
-            "(not the backend working directory). "
-            "Note: if you previously set this to `.nion/memory.json`, "
-            "the file will now be resolved as `{base_dir}/.nion/memory.json`; "
-            "migrate existing data or use an absolute path to preserve the old location."
+            "Deprecated legacy memory.json path. "
+            "Structured-fs is now the only online storage layout; "
+            "this field is kept for backward compatibility only."
         ),
     )
     debounce_seconds: int = Field(
@@ -169,8 +164,8 @@ class MemoryConfig(BaseModel):
         description="Maximum tokens to use for memory injection",
     )
     provider: str = Field(
-        default="v2-compatible",
-        description="Memory provider to use: v2-compatible | structured-fs",
+        default="structured-fs",
+        description="Memory provider to use (hard-cut default: structured-fs).",
     )
     structured_enabled: bool = Field(
         default=False,
@@ -196,4 +191,7 @@ def set_memory_config(config: MemoryConfig) -> None:
 def load_memory_config_from_dict(config_dict: dict) -> None:
     """Load memory configuration from a dictionary."""
     global _memory_config
-    _memory_config = MemoryConfig(**config_dict)
+    normalized = dict(config_dict)
+    # Hard-cut policy: structured-fs is the only online provider.
+    normalized["provider"] = "structured-fs"
+    _memory_config = MemoryConfig(**normalized)

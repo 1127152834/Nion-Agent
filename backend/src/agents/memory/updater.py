@@ -9,34 +9,31 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from src.agents.memory.core import MemoryReadRequest
 from src.agents.memory.prompt import (
     MEMORY_UPDATE_PROMPT,
     format_conversation_for_update,
 )
+from src.agents.memory.registry import get_default_memory_provider
 from src.config.memory_config import get_memory_config
-from src.config.paths import get_paths
 from src.models import create_chat_model
 
 
 def _get_memory_file_path(agent_name: str | None = None) -> Path:
-    """Get the path to the memory file.
+    """Backward-compatible helper that now points to structured manifest path.
 
     Args:
-        agent_name: If provided, returns the per-agent memory file path.
-                    If None, returns the global memory file path.
+        agent_name: If provided, returns the per-agent manifest path.
+            If None, returns the global manifest path.
 
     Returns:
-        Path to the memory file.
+        Path to the structured manifest file.
     """
-    if agent_name is not None:
-        return get_paths().agent_memory_file(agent_name)
-
-    config = get_memory_config()
-    if config.storage_path:
-        p = Path(config.storage_path)
-        # Absolute path: use as-is; relative path: resolve against base_dir
-        return p if p.is_absolute() else get_paths().base_dir / p
-    return get_paths().memory_file
+    runtime = _get_structured_runtime()
+    if hasattr(runtime, "_scope_from_agent") and hasattr(runtime, "_scope_manifest_file"):
+        scope = runtime._scope_from_agent(agent_name)
+        return runtime._scope_manifest_file(scope)
+    raise RuntimeError("Structured runtime does not expose scope manifest helpers")
 
 
 def _utcnow_iso_z() -> str:
@@ -46,7 +43,7 @@ def _utcnow_iso_z() -> str:
 def _create_empty_memory() -> dict[str, Any]:
     """Create an empty memory structure."""
     return {
-        "version": "1.0",
+        "version": "3.0",
         "lastUpdated": _utcnow_iso_z(),
         "user": {
             "workContext": {"summary": "", "updatedAt": ""},
@@ -62,84 +59,29 @@ def _create_empty_memory() -> dict[str, Any]:
     }
 
 
-# Per-agent memory cache: keyed by agent_name (None = global)
-# Value: (memory_data, file_mtime)
-_memory_cache: dict[str | None, tuple[dict[str, Any], float | None]] = {}
+def _get_structured_runtime():
+    provider = get_default_memory_provider()
+    runtime = getattr(provider, "_runtime", None)
+    if runtime is None or not hasattr(runtime, "save_memory_data"):
+        raise RuntimeError("Structured runtime is not available")
+    return runtime
 
 
 def get_memory_data(agent_name: str | None = None) -> dict[str, Any]:
-    """Get the current memory data (cached with file modification time check).
-
-    The cache is automatically invalidated if the memory file has been modified
-    since the last load, ensuring fresh data is always returned.
-
-    Args:
-        agent_name: If provided, loads per-agent memory. If None, loads global memory.
-
-    Returns:
-        The memory data dictionary.
-    """
-    file_path = _get_memory_file_path(agent_name)
-
-    # Get current file modification time
-    try:
-        current_mtime = file_path.stat().st_mtime if file_path.exists() else None
-    except OSError:
-        current_mtime = None
-
-    cached = _memory_cache.get(agent_name)
-
-    # Invalidate cache if file has been modified or doesn't exist
-    if cached is None or cached[1] != current_mtime:
-        memory_data = _load_memory_from_file(agent_name)
-        _memory_cache[agent_name] = (memory_data, current_mtime)
-        return memory_data
-
-    return cached[0]
+    """Get memory data from structured runtime by scope."""
+    provider = get_default_memory_provider()
+    return provider.get_memory_data(MemoryReadRequest(agent_name=agent_name))
 
 
 def reload_memory_data(agent_name: str | None = None) -> dict[str, Any]:
-    """Reload memory data from file, forcing cache invalidation.
-
-    Args:
-        agent_name: If provided, reloads per-agent memory. If None, reloads global memory.
-
-    Returns:
-        The reloaded memory data dictionary.
-    """
-    file_path = _get_memory_file_path(agent_name)
-    memory_data = _load_memory_from_file(agent_name)
-
-    try:
-        mtime = file_path.stat().st_mtime if file_path.exists() else None
-    except OSError:
-        mtime = None
-
-    _memory_cache[agent_name] = (memory_data, mtime)
-    return memory_data
+    """Reload memory data from structured runtime."""
+    provider = get_default_memory_provider()
+    return provider.reload_memory_data(MemoryReadRequest(agent_name=agent_name))
 
 
 def _load_memory_from_file(agent_name: str | None = None) -> dict[str, Any]:
-    """Load memory data from file.
-
-    Args:
-        agent_name: If provided, loads per-agent memory file. If None, loads global.
-
-    Returns:
-        The memory data dictionary.
-    """
-    file_path = _get_memory_file_path(agent_name)
-
-    if not file_path.exists():
-        return _create_empty_memory()
-
-    try:
-        with open(file_path, encoding="utf-8") as f:
-            data = json.load(f)
-        return data
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"Failed to load memory file: {e}")
-        return _create_empty_memory()
+    """Compatibility wrapper kept for callers importing legacy name."""
+    return get_memory_data(agent_name)
 
 
 # Matches sentences that describe a file-upload *event* rather than general
@@ -183,45 +125,18 @@ def _strip_upload_mentions_from_memory(memory_data: dict[str, Any]) -> dict[str,
     return memory_data
 
 
-def _save_memory_to_file(memory_data: dict[str, Any], agent_name: str | None = None) -> bool:
-    """Save memory data to file and update cache.
-
-    Args:
-        memory_data: The memory data to save.
-        agent_name: If provided, saves to per-agent memory file. If None, saves to global.
-
-    Returns:
-        True if successful, False otherwise.
-    """
-    file_path = _get_memory_file_path(agent_name)
-
+def _save_memory_to_file(
+    memory_data: dict[str, Any],
+    agent_name: str | None = None,
+    thread_id: str | None = None,
+) -> bool:
+    """Save memory data into structured runtime (legacy function name retained)."""
     try:
-        # Ensure directory exists
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Update lastUpdated timestamp
+        runtime = _get_structured_runtime()
         memory_data["lastUpdated"] = _utcnow_iso_z()
-
-        # Write atomically using temp file
-        temp_path = file_path.with_suffix(".tmp")
-        with open(temp_path, "w", encoding="utf-8") as f:
-            json.dump(memory_data, f, indent=2, ensure_ascii=False)
-
-        # Rename temp file to actual file (atomic on most systems)
-        temp_path.replace(file_path)
-
-        # Update cache and file modification time
-        try:
-            mtime = file_path.stat().st_mtime
-        except OSError:
-            mtime = None
-
-        _memory_cache[agent_name] = (memory_data, mtime)
-
-        print(f"Memory saved to {file_path}")
-        return True
-    except OSError as e:
-        print(f"Failed to save memory file: {e}")
+        return bool(runtime.save_memory_data(memory_data, agent_name=agent_name, thread_id=thread_id))
+    except Exception as e:
+        print(f"Failed to save structured memory: {e}")
         return False
 
 
@@ -421,7 +336,7 @@ class MemoryUpdater:
             updated_memory = _strip_upload_mentions_from_memory(updated_memory)
 
             # Save
-            return _save_memory_to_file(updated_memory, agent_name)
+            return _save_memory_to_file(updated_memory, agent_name, thread_id=thread_id)
 
         except ValueError as e:
             model_name = self._model_name or config.model_name or "default"

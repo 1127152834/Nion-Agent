@@ -759,7 +759,10 @@ class NionClient:
         config = get_memory_config()
         return {
             "enabled": config.enabled,
-            "storage_path": config.storage_path,
+            "storage_layout": "structured-fs",
+            "provider": config.provider,
+            "legacy_json_removed": True,
+            "graph_preembedded": True,
             "debounce_seconds": config.debounce_seconds,
             "max_facts": config.max_facts,
             "fact_confidence_threshold": config.fact_confidence_threshold,

@@ -1,7 +1,7 @@
 """Memory module for DeerFlow.
 
 This module provides a global memory mechanism that:
-- Stores user context and conversation history in memory.json
+- Stores long-term memory in structured-fs scope directories
 - Uses LLM to summarize and extract facts from conversations
 - Injects relevant memory into system prompts for personalized responses
 """

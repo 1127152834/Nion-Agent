@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.agents.memory.governor import get_memory_governor
 from src.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
 from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
 from src.config.paths import get_paths
@@ -153,6 +154,14 @@ def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False
     )
 
 
+def _refresh_memory_catalog_safe() -> None:
+    """Best-effort catalog refresh after agent asset/config changes."""
+    try:
+        get_memory_governor().refresh_agent_catalog()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Skip memory catalog refresh: %s", exc)
+
+
 @router.get(
     "/agents",
     response_model=AgentsListResponse,
@@ -278,6 +287,7 @@ async def create_agent_endpoint(request: AgentCreateRequest) -> AgentResponse:
         soul_file.write_text(request.soul, encoding="utf-8")
 
         logger.info(f"Created agent '{normalized_name}' at {agent_dir}")
+        _refresh_memory_catalog_safe()
 
         agent_cfg = load_agent_config(normalized_name)
         return _agent_config_to_response(agent_cfg, include_soul=True)
@@ -350,6 +360,7 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             soul_path.write_text(request.soul, encoding="utf-8")
 
         logger.info(f"Updated agent '{name}'")
+        _refresh_memory_catalog_safe()
 
         refreshed_cfg = load_agent_config(name)
         return _agent_config_to_response(refreshed_cfg, include_soul=True)
@@ -458,6 +469,7 @@ async def update_default_agent_config(request: DefaultAgentConfigUpdateRequest) 
         updated["tool_groups"] = tool_groups_value
 
     _save_default_agent_config(updated)
+    _refresh_memory_catalog_safe()
     return DefaultAgentConfigResponse(**_load_default_agent_config_dict())
 
 
@@ -490,6 +502,7 @@ async def delete_agent(name: str) -> None:
     try:
         shutil.rmtree(agent_dir)
         logger.info(f"Deleted agent '{name}' from {agent_dir}")
+        _refresh_memory_catalog_safe()
     except Exception as e:
         logger.error(f"Failed to delete agent '{name}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete agent: {str(e)}")
@@ -554,6 +567,7 @@ async def update_default_agent_soul(request: DefaultAgentAssetUpdateRequest) -> 
         soul_path.parent.mkdir(parents=True, exist_ok=True)
         soul_path.write_text(request.content, encoding="utf-8")
         logger.info(f"Updated default agent SOUL.md at {soul_path}")
+        _refresh_memory_catalog_safe()
         return DefaultAgentAssetResponse(content=request.content or None)
     except Exception as e:
         logger.error(f"Failed to update default agent soul: {e}", exc_info=True)
@@ -604,6 +618,7 @@ async def update_default_agent_identity(request: DefaultAgentAssetUpdateRequest)
         identity_path.parent.mkdir(parents=True, exist_ok=True)
         identity_path.write_text(request.content, encoding="utf-8")
         logger.info(f"Updated default agent IDENTITY.md at {identity_path}")
+        _refresh_memory_catalog_safe()
         return DefaultAgentAssetResponse(content=request.content or None)
     except Exception as e:
         logger.error(f"Failed to update default agent identity: {e}", exc_info=True)
@@ -739,6 +754,7 @@ async def update_agent_identity(name: str, request: AgentIdentityUpdateRequest) 
         identity_path.parent.mkdir(parents=True, exist_ok=True)
         identity_path.write_text(request.content, encoding="utf-8")
         logger.info(f"Updated agent '{name}' IDENTITY.md at {identity_path}")
+        _refresh_memory_catalog_safe()
         return AgentIdentityResponse(content=request.content)
     except HTTPException:
         raise

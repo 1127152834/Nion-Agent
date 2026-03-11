@@ -34,6 +34,8 @@ class HeartbeatExecutor:
                 result = await self._execute_weekly_reset(agent_name)
             elif template_id == "memory_maintenance":
                 result = await self._execute_memory_maintenance(agent_name)
+            elif template_id == "memory_governance":
+                result = await self._execute_memory_governance(agent_name)
             elif template_id == "identity_check":
                 result = await self._execute_identity_check(agent_name)
             else:
@@ -79,17 +81,20 @@ class HeartbeatExecutor:
         registry = get_memory_registry()
         provider = registry.get_default()
 
+        scope = "global" if agent_name == "_default" else "agent"
+        scope_agent_name = None if scope == "global" else agent_name
+
         # Get usage before
-        usage_before = get_usage_stats(provider._runtime)
+        usage_before = get_usage_stats(provider._runtime, scope=scope, agent_name=scope_agent_name)
 
         # Execute compact
-        compact_result = compact_memory(provider._runtime)
+        compact_result = compact_memory(provider._runtime, scope=scope, agent_name=scope_agent_name)
 
         # Execute rebuild
-        rebuild_result = rebuild_memory(provider._runtime)
+        rebuild_result = rebuild_memory(provider._runtime, scope=scope, agent_name=scope_agent_name)
 
         # Get usage after
-        usage_after = get_usage_stats(provider._runtime)
+        usage_after = get_usage_stats(provider._runtime, scope=scope, agent_name=scope_agent_name)
 
         # Generate maintenance report
         return {
@@ -114,6 +119,38 @@ class HeartbeatExecutor:
         if removed > 0:
             return f"清理了 {removed} 条过期记忆，保留 {remaining} 条有效记忆"
         return f"记忆维护完成，当前有 {remaining} 条记忆"
+
+    async def _execute_memory_governance(self, agent_name: str) -> dict:
+        """Execute memory governance batch and refresh agent catalog."""
+        from src.agents.memory.governor import get_memory_governor
+
+        if agent_name != "_default":
+            # Governance is global shared-layer maintenance.
+            return {
+                "type": "maintenance_report",
+                "timestamp": datetime.now().isoformat(),
+                "heartbeat_type": "memory_governance",
+                "result": {
+                    "summary": "Memory governance is global-only; skipped for non-default agent.",
+                    "skipped": True,
+                },
+            }
+
+        result = get_memory_governor().run()
+        return {
+            "type": "maintenance_report",
+            "timestamp": datetime.now().isoformat(),
+            "heartbeat_type": "memory_governance",
+            "result": {
+                "summary": (
+                    f"治理完成：promoted={result.get('promoted', 0)}, "
+                    f"rejected={result.get('rejected', 0)}, "
+                    f"pending={result.get('pending_count', 0)}, "
+                    f"contested={result.get('contested_count', 0)}"
+                ),
+                **result,
+            },
+        }
 
     async def _execute_identity_check(self, agent_name: str) -> dict:
         """Execute identity check for an agent.

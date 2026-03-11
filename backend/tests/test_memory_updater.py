@@ -66,11 +66,9 @@ newFacts:
 
 
 
-def test_update_memory_failure_does_not_overwrite_existing_file(tmp_path, capsys, monkeypatch):
-    import json
+def test_update_memory_failure_does_not_save_when_parse_fails(capsys, monkeypatch):
     from langchain_core.messages import AIMessage, HumanMessage
 
-    memory_file = tmp_path / "memory.json"
     existing = updater_module._create_empty_memory()
     existing["facts"] = [
         {
@@ -82,9 +80,7 @@ def test_update_memory_failure_does_not_overwrite_existing_file(tmp_path, capsys
             "source": "thread-old",
         }
     ]
-    memory_file.write_text(json.dumps(existing, ensure_ascii=False), encoding="utf-8")
-
-    monkeypatch.setattr(updater_module, "_get_memory_file_path", lambda agent_name=None: memory_file)
+    monkeypatch.setattr(updater_module, "get_memory_data", lambda agent_name=None: existing)
     monkeypatch.setattr(
         updater_module,
         "get_memory_config",
@@ -104,6 +100,13 @@ def test_update_memory_failure_does_not_overwrite_existing_file(tmp_path, capsys
         def invoke(self, prompt: str):
             return type("Resp", (), {"content": "not json at all"})()
 
+    saved: list[dict] = []
+
+    def _fake_save(memory_data, agent_name=None, thread_id=None):
+        saved.append(memory_data)
+        return True
+
+    monkeypatch.setattr(updater_module, "_save_memory_to_file", _fake_save)
     monkeypatch.setattr(updater_module.MemoryUpdater, "_get_model", lambda self: DummyModel())
 
     updater = updater_module.MemoryUpdater()
@@ -113,19 +116,16 @@ def test_update_memory_failure_does_not_overwrite_existing_file(tmp_path, capsys
     )
 
     assert ok is False
-    current = json.loads(memory_file.read_text(encoding="utf-8"))
-    assert current == existing
+    assert saved == []
     out = capsys.readouterr().out
     assert "thread-new" in out
     assert "not json at all" in out
 
 
-def test_update_memory_accepts_model_content_blocks(tmp_path, monkeypatch):
-    import json
+def test_update_memory_accepts_model_content_blocks(monkeypatch):
     from langchain_core.messages import AIMessage, HumanMessage
 
-    memory_file = tmp_path / "memory.json"
-    monkeypatch.setattr(updater_module, "_get_memory_file_path", lambda agent_name=None: memory_file)
+    monkeypatch.setattr(updater_module, "get_memory_data", lambda agent_name=None: updater_module._create_empty_memory())
     monkeypatch.setattr(
         updater_module,
         "get_memory_config",
@@ -157,6 +157,13 @@ def test_update_memory_accepts_model_content_blocks(tmp_path, monkeypatch):
                 },
             )()
 
+    saved_payload: dict = {}
+
+    def _fake_save(memory_data, agent_name=None, thread_id=None):
+        saved_payload["payload"] = memory_data
+        return True
+
+    monkeypatch.setattr(updater_module, "_save_memory_to_file", _fake_save)
     monkeypatch.setattr(updater_module.MemoryUpdater, "_get_model", lambda self: DummyModel())
 
     updater = updater_module.MemoryUpdater()
@@ -166,5 +173,5 @@ def test_update_memory_accepts_model_content_blocks(tmp_path, monkeypatch):
     )
 
     assert ok is True
-    current = json.loads(memory_file.read_text(encoding="utf-8"))
+    current = saved_payload["payload"]
     assert any(f["content"] == "User likes Java" for f in current["facts"])

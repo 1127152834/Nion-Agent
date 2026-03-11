@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.channels.event_broker import ChannelEventBroker
 from src.channels.repository import ChannelRepository
 from src.channels.runtime_manager import ChannelRuntimeManager
+from src.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
 from src.config.app_config import get_app_config
 from src.config.default_agent import ensure_default_agent
 from src.config.paths import get_paths
@@ -72,6 +73,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Default agent initialized")
     except Exception as e:
         logger.warning(f"Failed to initialize default agent (non-blocking): {e}")
+
+    # Hard-cut migration policy: remove legacy memory.json files on startup.
+    try:
+        ensure_legacy_memory_removed()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Failed to remove legacy memory.json files (non-blocking): %s", e)
 
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
