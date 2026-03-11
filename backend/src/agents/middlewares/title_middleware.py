@@ -102,7 +102,7 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
         user_msg, assistant_msg = self._get_first_exchange_texts(state)
 
         # Use a lightweight model to generate title
-        model = create_chat_model(thinking_enabled=False)
+        model = create_chat_model(name=config.model_name, thinking_enabled=False)
 
         prompt = config.prompt_template.format(
             max_words=config.max_words,
@@ -127,15 +127,16 @@ class TitleMiddleware(AgentMiddleware[TitleMiddlewareState]):
 
     @override
     def after_agent(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | None:
-        """Set a fast title after the first agent response.
-
-        Use fast deterministic title (user's question) to avoid blocking on LLM calls.
-        This ensures the conversation completes without delay from title generation.
-        """
+        """Set thread title after the first agent response."""
         if self._should_generate_title(state):
-            # Use fast title (user's question) to avoid blocking on LLM
-            title = self._generate_fast_title(state)
-            print(f"Generated thread title (fast): {title}")
+            config = get_title_config()
+            if config.mode == "llm":
+                title = self._generate_title(state)
+                print(f"Generated thread title (llm): {title}")
+            else:
+                # Use fast title (user's question) to avoid blocking on LLM
+                title = self._generate_fast_title(state)
+                print(f"Generated thread title (fast): {title}")
 
             # Store title in state (will be persisted by checkpointer if configured)
             return {"title": title}

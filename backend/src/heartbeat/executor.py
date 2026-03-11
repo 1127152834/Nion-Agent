@@ -14,20 +14,28 @@ class HeartbeatExecutor:
     def __init__(self):
         self._client = NionClient()
 
-    async def execute(self, template_id: str) -> HeartbeatLogRecord:
-        """Execute heartbeat."""
+    async def execute(self, template_id: str, agent_name: str = "_default") -> HeartbeatLogRecord:
+        """Execute heartbeat for an agent.
+
+        Args:
+            template_id: Template ID to execute
+            agent_name: Agent name (default: "_default")
+
+        Returns:
+            HeartbeatLogRecord with execution results
+        """
         start_time = datetime.now()
 
         try:
             # Route to specific execution method
             if template_id == "daily_review":
-                result = await self._execute_daily_review()
+                result = await self._execute_daily_review(agent_name)
             elif template_id == "weekly_reset":
-                result = await self._execute_weekly_reset()
+                result = await self._execute_weekly_reset(agent_name)
             elif template_id == "memory_maintenance":
-                result = await self._execute_memory_maintenance()
+                result = await self._execute_memory_maintenance(agent_name)
             elif template_id == "identity_check":
-                result = await self._execute_identity_check()
+                result = await self._execute_identity_check(agent_name)
             else:
                 raise ValueError(f"Unknown template: {template_id}")
 
@@ -44,7 +52,7 @@ class HeartbeatExecutor:
             )
 
             # Save log
-            append_log(record)
+            append_log(record, agent_name)
 
             return record
 
@@ -59,10 +67,10 @@ class HeartbeatExecutor:
                 duration_seconds=int(duration),
                 error_message=str(e),
             )
-            append_log(record)
+            append_log(record, agent_name)
             raise
 
-    async def _execute_memory_maintenance(self) -> dict:
+    async def _execute_memory_maintenance(self, agent_name: str) -> dict:
         """Execute memory maintenance."""
         from src.agents.memory.maintenance import compact_memory, get_usage_stats, rebuild_memory
         from src.agents.memory.registry import get_memory_registry
@@ -107,17 +115,24 @@ class HeartbeatExecutor:
             return f"清理了 {removed} 条过期记忆，保留 {remaining} 条有效记忆"
         return f"记忆维护完成，当前有 {remaining} 条记忆"
 
-    async def _execute_identity_check(self) -> dict:
-        """Execute identity check."""
+    async def _execute_identity_check(self, agent_name: str) -> dict:
+        """Execute identity check for an agent.
+
+        Args:
+            agent_name: Agent name
+
+        Returns:
+            Identity check result dict
+        """
         from src.agents.soul.resolver import SoulResolver
         from src.agents.soul.summarizer import SoulSummarizer
 
         resolver = SoulResolver()
         summarizer = SoulSummarizer()
 
-        # Load Soul assets
-        soul_asset = resolver.load_soul(agent_name=None)
-        identity_asset = resolver.load_identity(agent_name=None)
+        # Load Soul assets for this agent
+        soul_asset = resolver.load_soul(agent_name=agent_name if agent_name != "_default" else None)
+        identity_asset = resolver.load_identity(agent_name=agent_name if agent_name != "_default" else None)
         user_asset = resolver.load_user_profile()
 
         # Generate summaries
@@ -177,8 +192,15 @@ USER.md 摘要：
 - 总结（一句话）
 """
 
-    async def _execute_daily_review(self) -> dict:
-        """Execute daily review."""
+    async def _execute_daily_review(self, agent_name: str) -> dict:
+        """Execute daily review for an agent.
+
+        Args:
+            agent_name: Agent name
+
+        Returns:
+            Daily review result dict
+        """
         from src.agents.memory.registry import get_memory_registry
 
         # Get today's memories
@@ -201,7 +223,7 @@ USER.md 摘要：
         review_result = await asyncio.to_thread(
             self._client.chat,
             message=review_prompt,
-            thread_id=f"daily-review-{datetime.now().strftime('%Y%m%d')}",
+            thread_id=f"daily-review-{agent_name}-{datetime.now().strftime('%Y%m%d')}",
             session_mode="normal",
             memory_read=True,
             memory_write=True,
@@ -219,8 +241,15 @@ USER.md 摘要：
             },
         }
 
-    async def _execute_weekly_reset(self) -> dict:
-        """Execute weekly reset."""
+    async def _execute_weekly_reset(self, agent_name: str) -> dict:
+        """Execute weekly reset for an agent.
+
+        Args:
+            agent_name: Agent name
+
+        Returns:
+            Weekly reset result dict
+        """
         from src.agents.memory.registry import get_memory_registry
 
         # Get this week's memories
@@ -243,7 +272,7 @@ USER.md 摘要：
         reset_result = await asyncio.to_thread(
             self._client.chat,
             message=reset_prompt,
-            thread_id=f"weekly-reset-{datetime.now().strftime('%Y%m%d')}",
+            thread_id=f"weekly-reset-{agent_name}-{datetime.now().strftime('%Y%m%d')}",
             session_mode="normal",
             memory_read=True,
             memory_write=True,

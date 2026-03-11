@@ -77,13 +77,16 @@ class MemoryStatusResponse(BaseModel):
     "/memory",
     response_model=MemoryResponse,
     summary="Get Memory Data",
-    description="Retrieve the current global memory data including user context, history, and facts.",
+    description=(
+        "Retrieve global memory data including user context, history, and facts. "
+        "This endpoint is global-only and does not return per-agent memory."
+    ),
 )
 async def get_memory() -> MemoryResponse:
     """Get the current global memory data.
 
     Returns:
-        The current memory data with user context, history, and facts.
+        The current global memory data with user context, history, and facts.
 
     Example Response:
         ```json
@@ -121,7 +124,10 @@ async def get_memory() -> MemoryResponse:
     "/memory/reload",
     response_model=MemoryResponse,
     summary="Reload Memory Data",
-    description="Reload memory data from the storage file, refreshing the in-memory cache.",
+    description=(
+        "Reload global memory data from the storage file and refresh in-memory cache. "
+        "Per-agent memory is not included in this endpoint."
+    ),
 )
 async def reload_memory() -> MemoryResponse:
     """Reload memory data from file.
@@ -177,7 +183,10 @@ async def get_memory_config_endpoint() -> MemoryConfigResponse:
     "/memory/status",
     response_model=MemoryStatusResponse,
     summary="Get Memory Status",
-    description="Retrieve both memory configuration and current data in a single request.",
+    description=(
+        "Retrieve global memory configuration and current global memory data in a single request. "
+        "Per-agent memory remains runtime-scoped."
+    ),
 )
 async def get_memory_status() -> MemoryStatusResponse:
     """Get the memory system status including configuration and data.

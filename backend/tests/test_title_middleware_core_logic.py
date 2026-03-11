@@ -110,8 +110,44 @@ class TestTitleMiddlewareCoreLogic:
         assert title.endswith("...")
         assert title.startswith("这是一个非常长的问题描述")
 
-    def test_after_agent_returns_title_only_when_needed(self, monkeypatch):
+    def test_generate_title_uses_configured_model(self, monkeypatch):
+        _set_test_title_config(mode="llm", model_name="title-model")
         middleware = TitleMiddleware()
+        fake_model = MagicMock()
+        fake_model.invoke.return_value = MagicMock(content="标题")
+        captured = {}
+
+        def fake_create_chat_model(**kwargs):
+            captured.update(kwargs)
+            return fake_model
+
+        monkeypatch.setattr("src.agents.middlewares.title_middleware.create_chat_model", fake_create_chat_model)
+
+        state = {
+            "messages": [
+                HumanMessage(content="请帮我写一个脚本"),
+                AIMessage(content="好的，先确认需求"),
+            ]
+        }
+        title = middleware._generate_title(state)
+
+        assert title == "标题"
+        assert captured == {"name": "title-model", "thinking_enabled": False}
+
+    def test_after_agent_uses_fast_mode_by_default(self, monkeypatch):
+        middleware = TitleMiddleware()
+        _set_test_title_config(mode="fast")
+        monkeypatch.setattr(middleware, "_should_generate_title", lambda state: True)
+        monkeypatch.setattr(middleware, "_generate_fast_title", lambda state: "快速标题")
+        monkeypatch.setattr(middleware, "_generate_title", lambda state: "核心逻辑回归")
+
+        result = middleware.after_agent({"messages": []}, runtime=MagicMock())
+
+        assert result == {"title": "快速标题"}
+
+    def test_after_agent_uses_llm_mode_when_enabled(self, monkeypatch):
+        middleware = TitleMiddleware()
+        _set_test_title_config(mode="llm")
         monkeypatch.setattr(middleware, "_should_generate_title", lambda state: True)
         monkeypatch.setattr(middleware, "_generate_title", lambda state: "核心逻辑回归")
 
@@ -119,5 +155,9 @@ class TestTitleMiddlewareCoreLogic:
 
         assert result == {"title": "核心逻辑回归"}
 
+    def test_after_agent_returns_none_when_not_needed(self, monkeypatch):
+        middleware = TitleMiddleware()
+        _set_test_title_config(mode="llm")
         monkeypatch.setattr(middleware, "_should_generate_title", lambda state: False)
+
         assert middleware.after_agent({"messages": []}, runtime=MagicMock()) is None

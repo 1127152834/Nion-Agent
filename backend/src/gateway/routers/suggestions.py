@@ -4,6 +4,7 @@ import logging
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from src.config.suggestions_config import get_suggestions_config
 from src.models import create_chat_model
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,9 @@ async def generate_suggestions(thread_id: str, request: SuggestionsRequest) -> S
     )
 
     try:
-        model = create_chat_model(name=request.model_name, thinking_enabled=False)
+        configured_model_name = (get_suggestions_config().model_name or "").strip()
+        model_name = configured_model_name or request.model_name
+        model = create_chat_model(name=model_name, thinking_enabled=False)
         response = model.invoke(prompt)
         raw = str(response.content or "")
         suggestions = _parse_json_string_list(raw) or []

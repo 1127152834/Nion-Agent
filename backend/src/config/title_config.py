@@ -1,5 +1,7 @@
 """Configuration for automatic thread title generation."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -9,6 +11,10 @@ class TitleConfig(BaseModel):
     enabled: bool = Field(
         default=True,
         description="Whether to enable automatic title generation",
+    )
+    mode: Literal["fast", "llm"] = Field(
+        default="fast",
+        description="Title generation mode: fast (deterministic) or llm (model-based)",
     )
     max_words: int = Field(
         default=6,

@@ -20,31 +20,29 @@ class EvolutionService:
     """Evolution service."""
 
     def __init__(self):
-        self._settings = load_settings()
         self._analyzer = EvolutionAnalyzer()
 
-    def get_settings(self) -> EvolutionSettings:
-        """Get settings."""
-        return self._settings
+    def get_settings(self, agent_name: str = "_default") -> EvolutionSettings:
+        """Get settings for an agent."""
+        return load_settings(agent_name)
 
-    def update_settings(self, settings: EvolutionSettings) -> EvolutionSettings:
-        """Update settings."""
-        save_settings(settings)
-        self._settings = settings
+    def update_settings(self, settings: EvolutionSettings, agent_name: str = "_default") -> EvolutionSettings:
+        """Update settings for an agent."""
+        save_settings(settings, agent_name)
         return settings
 
-    async def run(self) -> EvolutionReport:
-        """Run Evolution analysis."""
+    async def run(self, agent_name: str = "_default") -> EvolutionReport:
+        """Run Evolution analysis for an agent."""
         start_time = datetime.now()
         report_id = start_time.strftime("%Y-%m-%dT%H-%M-%SZ")
 
         try:
             # Generate suggestions
-            suggestions = await self._analyzer.analyze(report_id)
+            suggestions = await self._analyzer.analyze(report_id, agent_name)
 
             # Save suggestions
             for suggestion in suggestions:
-                save_suggestion(suggestion)
+                save_suggestion(suggestion, agent_name)
 
             # Create report
             duration = (datetime.now() - start_time).total_seconds()
@@ -63,7 +61,7 @@ class EvolutionService:
             )
 
             # Save report
-            save_report(report)
+            save_report(report, agent_name)
 
             return report
 
@@ -79,28 +77,28 @@ class EvolutionService:
                 summary="",
                 error_message=str(e),
             )
-            save_report(report)
+            save_report(report, agent_name)
             raise
 
-    def get_reports(self, limit: int = 50) -> list[EvolutionReport]:
-        """Get reports."""
-        return load_reports(limit=limit)
+    def get_reports(self, agent_name: str = "_default", limit: int = 50) -> list[EvolutionReport]:
+        """Get reports for an agent."""
+        return load_reports(agent_name, limit=limit)
 
-    def get_report_by_id(self, report_id: str) -> EvolutionReport | None:
-        """Get report by ID."""
-        return get_report(report_id)
+    def get_report_by_id(self, report_id: str, agent_name: str = "_default") -> EvolutionReport | None:
+        """Get report by ID for an agent."""
+        return get_report(report_id, agent_name)
 
-    def get_suggestions(self, status: SuggestionStatus | None = None, limit: int = 50) -> list[EvolutionSuggestion]:
-        """Get suggestions."""
-        return load_suggestions(status=status, limit=limit)
+    def get_suggestions(self, agent_name: str = "_default", status: SuggestionStatus | None = None, limit: int = 50) -> list[EvolutionSuggestion]:
+        """Get suggestions for an agent."""
+        return load_suggestions(agent_name, status=status, limit=limit)
 
-    def dismiss_suggestion(self, suggestion_id: str) -> EvolutionSuggestion | None:
-        """Dismiss suggestion."""
-        return update_suggestion_status(suggestion_id, SuggestionStatus.DISMISSED)
+    def dismiss_suggestion(self, suggestion_id: str, agent_name: str = "_default") -> EvolutionSuggestion | None:
+        """Dismiss suggestion for an agent."""
+        return update_suggestion_status(suggestion_id, SuggestionStatus.DISMISSED, agent_name)
 
-    def accept_suggestion(self, suggestion_id: str) -> EvolutionSuggestion | None:
-        """Accept suggestion (does not auto-apply)."""
-        return update_suggestion_status(suggestion_id, SuggestionStatus.ACCEPTED)
+    def accept_suggestion(self, suggestion_id: str, agent_name: str = "_default") -> EvolutionSuggestion | None:
+        """Accept suggestion (does not auto-apply) for an agent."""
+        return update_suggestion_status(suggestion_id, SuggestionStatus.ACCEPTED, agent_name)
 
 
 # Singleton

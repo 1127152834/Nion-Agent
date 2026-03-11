@@ -86,16 +86,6 @@ class Paths:
         """Path to the global user profile file: `{base_dir}/USER.md`."""
         return self.base_dir / "USER.md"
 
-    @property
-    def default_agent_soul_file(self) -> Path:
-        """Path to default agent SOUL.md: `{base_dir}/SOUL.md`."""
-        return self.base_dir / "SOUL.md"
-
-    @property
-    def default_agent_identity_file(self) -> Path:
-        """Path to default agent IDENTITY.md: `{base_dir}/IDENTITY.md`."""
-        return self.base_dir / "IDENTITY.md"
-
     def agent_soul_file(self, name: str) -> Path:
         """Per-agent SOUL.md: `{base_dir}/agents/{name}/SOUL.md`."""
         return self.agent_dir(name) / "SOUL.md"
@@ -116,6 +106,18 @@ class Paths:
     def agent_memory_file(self, name: str) -> Path:
         """Per-agent memory file: `{base_dir}/agents/{name}/memory.json`."""
         return self.agent_dir(name) / "memory.json"
+
+    def agent_config_file(self, name: str) -> Path:
+        """Per-agent config file: `{base_dir}/agents/{name}/agent.json`."""
+        return self.agent_dir(name) / "agent.json"
+
+    def agent_heartbeat_file(self, name: str) -> Path:
+        """Per-agent heartbeat file: `{base_dir}/agents/{name}/heartbeat.json`."""
+        return self.agent_dir(name) / "heartbeat.json"
+
+    def agent_evolution_file(self, name: str) -> Path:
+        """Per-agent evolution file: `{base_dir}/agents/{name}/evolution.json`."""
+        return self.agent_dir(name) / "evolution.json"
 
     def thread_dir(self, thread_id: str) -> Path:
         """

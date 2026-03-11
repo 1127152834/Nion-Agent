@@ -13,6 +13,7 @@ class TestTitleConfig:
         """Test default configuration values."""
         config = TitleConfig()
         assert config.enabled is True
+        assert config.mode == "fast"
         assert config.max_words == 6
         assert config.max_chars == 60
         assert config.model_name is None
@@ -21,17 +22,22 @@ class TestTitleConfig:
         """Test custom configuration."""
         config = TitleConfig(
             enabled=False,
+            mode="llm",
             max_words=10,
             max_chars=100,
             model_name="gpt-4",
         )
         assert config.enabled is False
+        assert config.mode == "llm"
         assert config.max_words == 10
         assert config.max_chars == 100
         assert config.model_name == "gpt-4"
 
     def test_config_validation(self):
         """Test configuration validation."""
+        with pytest.raises(ValueError):
+            TitleConfig(mode="invalid")
+
         # max_words should be between 1 and 20
         with pytest.raises(ValueError):
             TitleConfig(max_words=0)

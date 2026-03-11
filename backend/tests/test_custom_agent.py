@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-import yaml
 from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
@@ -22,7 +22,7 @@ def _make_paths(base_dir: Path):
 
 
 def _write_agent(base_dir: Path, name: str, config: dict, soul: str = "You are helpful.") -> None:
-    """Write an agent directory with config.yaml and SOUL.md."""
+    """Write an agent directory with agent.json and SOUL.md."""
     agent_dir = base_dir / "agents" / name
     agent_dir.mkdir(parents=True, exist_ok=True)
 
@@ -30,8 +30,8 @@ def _write_agent(base_dir: Path, name: str, config: dict, soul: str = "You are h
     if "name" not in config_copy:
         config_copy["name"] = name
 
-    with open(agent_dir / "config.yaml", "w") as f:
-        yaml.dump(config_copy, f)
+    with open(agent_dir / "agent.json", "w", encoding="utf-8") as f:
+        json.dump(config_copy, f, ensure_ascii=False)
 
     (agent_dir / "SOUL.md").write_text(soul, encoding="utf-8")
 
@@ -130,7 +130,7 @@ class TestLoadAgentConfig:
                 load_agent_config("nonexistent-agent")
 
     def test_load_missing_config_yaml_raises(self, tmp_path):
-        # Create directory without config.yaml
+        # Create directory without agent.json
         (tmp_path / "agents" / "broken-agent").mkdir(parents=True)
 
         with patch("src.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
@@ -143,7 +143,7 @@ class TestLoadAgentConfig:
         """Config without 'name' field should use directory name."""
         agent_dir = tmp_path / "agents" / "inferred-name"
         agent_dir.mkdir(parents=True)
-        (agent_dir / "config.yaml").write_text("description: My agent\n")
+        (agent_dir / "agent.json").write_text(json.dumps({"description": "My agent"}), encoding="utf-8")
         (agent_dir / "SOUL.md").write_text("Hello")
 
         with patch("src.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
@@ -168,7 +168,10 @@ class TestLoadAgentConfig:
         """Unknown fields like the old prompt_file should be silently ignored."""
         agent_dir = tmp_path / "agents" / "legacy-agent"
         agent_dir.mkdir(parents=True)
-        (agent_dir / "config.yaml").write_text("name: legacy-agent\nprompt_file: system.md\n")
+        (agent_dir / "agent.json").write_text(
+            json.dumps({"name": "legacy-agent", "prompt_file": "system.md"}),
+            encoding="utf-8",
+        )
         (agent_dir / "SOUL.md").write_text("Soul content")
 
         with patch("src.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
@@ -200,7 +203,7 @@ class TestLoadAgentSoul:
     def test_missing_soul_file_returns_none(self, tmp_path):
         agent_dir = tmp_path / "agents" / "no-soul"
         agent_dir.mkdir(parents=True)
-        (agent_dir / "config.yaml").write_text("name: no-soul\n")
+        (agent_dir / "agent.json").write_text(json.dumps({"name": "no-soul"}), encoding="utf-8")
         # No SOUL.md created
 
         with patch("src.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
@@ -214,7 +217,7 @@ class TestLoadAgentSoul:
     def test_empty_soul_file_returns_none(self, tmp_path):
         agent_dir = tmp_path / "agents" / "empty-soul"
         agent_dir.mkdir(parents=True)
-        (agent_dir / "config.yaml").write_text("name: empty-soul\n")
+        (agent_dir / "agent.json").write_text(json.dumps({"name": "empty-soul"}), encoding="utf-8")
         (agent_dir / "SOUL.md").write_text("   \n   ")
 
         with patch("src.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
@@ -256,7 +259,7 @@ class TestListCustomAgents:
     def test_skips_dirs_without_config_yaml(self, tmp_path):
         # Valid agent
         _write_agent(tmp_path, "valid-agent", {"name": "valid-agent"})
-        # Invalid dir (no config.yaml)
+        # Invalid dir (no agent.json)
         (tmp_path / "agents" / "invalid-dir").mkdir(parents=True)
 
         with patch("src.config.agents_config.get_paths", return_value=_make_paths(tmp_path)):
@@ -364,7 +367,11 @@ def agent_client(tmp_path):
     """TestClient with agents router, using tmp_path as base_dir."""
     paths_instance = _make_paths(tmp_path)
 
-    with patch("src.config.agents_config.get_paths", return_value=paths_instance), patch("src.gateway.routers.agents.get_paths", return_value=paths_instance):
+    with (
+        patch("src.config.agents_config.get_paths", return_value=paths_instance),
+        patch("src.config.default_agent.get_paths", return_value=paths_instance),
+        patch("src.gateway.routers.agents.get_paths", return_value=paths_instance),
+    ):
         app = _make_test_app(tmp_path)
         with TestClient(app) as client:
             client._tmp_path = tmp_path  # type: ignore[attr-defined]
@@ -459,6 +466,10 @@ class TestAgentsAPI:
         response = agent_client.delete("/api/agents/does-not-exist")
         assert response.status_code == 404
 
+    def test_delete_default_agent_forbidden(self, agent_client):
+        response = agent_client.delete("/api/agents/_default")
+        assert response.status_code == 403
+
     def test_create_agent_with_model_and_tool_groups(self, agent_client):
         payload = {
             "name": "specialized",
@@ -478,7 +489,7 @@ class TestAgentsAPI:
 
         agent_dir = tmp_path / "agents" / "disk-check"
         assert agent_dir.exists()
-        assert (agent_dir / "config.yaml").exists()
+        assert (agent_dir / "agent.json").exists()
         assert (agent_dir / "SOUL.md").exists()
         assert (agent_dir / "SOUL.md").read_text() == "disk soul"
 
@@ -489,6 +500,54 @@ class TestAgentsAPI:
 
         agent_client.delete("/api/agents/remove-me")
         assert not agent_dir.exists()
+
+
+class TestDefaultAgentAPI:
+    def test_get_default_agent_config(self, agent_client):
+        response = agent_client.get("/api/default-agent/config")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "_default"
+        assert "heartbeat_enabled" in data
+        assert "evolution_enabled" in data
+
+    def test_update_default_agent_config(self, agent_client):
+        payload = {
+            "description": "Updated default",
+            "model": "gpt-4.1",
+            "tool_groups": ["file:read", "bash"],
+            "heartbeat_enabled": False,
+            "evolution_enabled": False,
+        }
+        response = agent_client.put("/api/default-agent/config", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "_default"
+        assert data["description"] == "Updated default"
+        assert data["model"] == "gpt-4.1"
+        assert data["tool_groups"] == ["file:read", "bash"]
+        assert data["heartbeat_enabled"] is False
+        assert data["evolution_enabled"] is False
+
+    def test_default_soul_and_identity_alias_endpoints(self, agent_client):
+        soul_payload = {"content": "Default soul alias content"}
+        identity_payload = {"content": "Default identity alias content"}
+
+        response = agent_client.put("/api/soul/default", json=soul_payload)
+        assert response.status_code == 200
+        assert response.json()["content"] == soul_payload["content"]
+
+        response = agent_client.get("/api/default-agent/soul")
+        assert response.status_code == 200
+        assert response.json()["content"] == soul_payload["content"]
+
+        response = agent_client.put("/api/soul/identity", json=identity_payload)
+        assert response.status_code == 200
+        assert response.json()["content"] == identity_payload["content"]
+
+        response = agent_client.get("/api/default-agent/identity")
+        assert response.status_code == 200
+        assert response.json()["content"] == identity_payload["content"]
 
 
 # ===========================================================================

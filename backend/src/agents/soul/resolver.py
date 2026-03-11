@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from src.agents.soul.models import SoulAsset
 from src.config.paths import get_paths
 
@@ -19,7 +17,7 @@ class SoulResolver:
         if agent_name:
             soul_path = self._paths.agent_soul_file(agent_name)
         else:
-            soul_path = self._paths.default_agent_soul_file
+            soul_path = self._paths.agent_soul_file("_default")
 
         if not soul_path.exists():
             return None
@@ -35,7 +33,7 @@ class SoulResolver:
         if agent_name:
             identity_path = self._paths.agent_identity_file(agent_name)
         else:
-            identity_path = self._paths.default_agent_identity_file
+            identity_path = self._paths.agent_identity_file("_default")
 
         if not identity_path.exists():
             return None

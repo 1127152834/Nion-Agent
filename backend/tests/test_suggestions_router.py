@@ -73,6 +73,34 @@ def test_generate_suggestions_uses_explicit_model_name(monkeypatch):
     assert captured == {"name": "suggest-model", "thinking_enabled": False}
 
 
+def test_generate_suggestions_prefers_global_configured_model(monkeypatch):
+    req = suggestions.SuggestionsRequest(
+        messages=[suggestions.SuggestionMessage(role="user", content="Hi")],
+        n=2,
+        model_name="request-model",
+    )
+    fake_model = MagicMock()
+    fake_model.invoke.return_value = MagicMock(content='["Q1", "Q2"]')
+    captured = {}
+
+    def fake_create_chat_model(**kwargs):
+        captured.update(kwargs)
+        return fake_model
+
+    monkeypatch.setattr(suggestions, "create_chat_model", fake_create_chat_model)
+    monkeypatch.setattr(
+        suggestions,
+        "get_suggestions_config",
+        lambda: type("Cfg", (), {"model_name": "global-model"})(),
+        raising=False,
+    )
+
+    result = asyncio.run(suggestions.generate_suggestions("t1", req))
+
+    assert result.suggestions == ["Q1", "Q2"]
+    assert captured == {"name": "global-model", "thinking_enabled": False}
+
+
 def test_generate_suggestions_returns_empty_on_model_error(monkeypatch):
     req = suggestions.SuggestionsRequest(
         messages=[suggestions.SuggestionMessage(role="user", content="Hi")],

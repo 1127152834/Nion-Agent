@@ -9,6 +9,7 @@ from src.channels.event_broker import ChannelEventBroker
 from src.channels.repository import ChannelRepository
 from src.channels.runtime_manager import ChannelRuntimeManager
 from src.config.app_config import get_app_config
+from src.config.default_agent import ensure_default_agent
 from src.config.paths import get_paths
 from src.gateway.config import get_gateway_config
 from src.gateway.routers import (
@@ -64,6 +65,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         error_msg = f"Failed to load configuration during gateway startup: {e}"
         logger.exception(error_msg)
         raise RuntimeError(error_msg) from e
+
+    # Initialize default agent
+    try:
+        ensure_default_agent()
+        logger.info("Default agent initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize default agent (non-blocking): {e}")
+
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
     startup_scheduler()

@@ -1,14 +1,16 @@
 """CRUD API for custom agents."""
 
+import json
 import logging
 import re
 import shutil
+from typing import Any
 
-import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
+from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
 from src.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,8 @@ class AgentResponse(BaseModel):
     description: str = Field(default="", description="Agent description")
     model: str | None = Field(default=None, description="Optional model override")
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
+    heartbeat_enabled: bool = Field(default=True, description="Whether heartbeat is enabled")
+    evolution_enabled: bool = Field(default=True, description="Whether evolution is enabled")
     soul: str | None = Field(default=None, description="SOUL.md content (included on GET /{name})")
 
 
@@ -52,6 +56,27 @@ class AgentUpdateRequest(BaseModel):
     soul: str | None = Field(default=None, description="Updated SOUL.md content")
 
 
+class DefaultAgentConfigResponse(BaseModel):
+    """Response model for default agent config."""
+
+    name: str = Field(default=DEFAULT_AGENT_NAME, description="Reserved default agent name")
+    description: str = Field(default="", description="Default agent description")
+    model: str | None = Field(default=None, description="Optional model override")
+    tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
+    heartbeat_enabled: bool = Field(default=True, description="Whether heartbeat is enabled")
+    evolution_enabled: bool = Field(default=True, description="Whether evolution is enabled")
+
+
+class DefaultAgentConfigUpdateRequest(BaseModel):
+    """Request body for updating default agent config."""
+
+    description: str | None = Field(default=None, description="Updated description")
+    model: str | None = Field(default=None, description="Updated model override")
+    tool_groups: list[str] | None = Field(default=None, description="Updated tool group whitelist")
+    heartbeat_enabled: bool | None = Field(default=None, description="Updated heartbeat switch")
+    evolution_enabled: bool | None = Field(default=None, description="Updated evolution switch")
+
+
 def _validate_agent_name(name: str) -> None:
     """Validate agent name against allowed pattern.
 
@@ -73,6 +98,44 @@ def _normalize_agent_name(name: str) -> str:
     return name.lower()
 
 
+def _is_default_agent_name(name: str) -> bool:
+    """Return whether the provided name points to the reserved default agent."""
+    return _normalize_agent_name(name) == DEFAULT_AGENT_NAME
+
+
+def _load_default_agent_config_dict() -> dict[str, Any]:
+    """Load default agent config from disk."""
+    ensure_default_agent()
+    config_file = get_paths().agent_config_file(DEFAULT_AGENT_NAME)
+    if not config_file.exists():
+        raise HTTPException(status_code=404, detail="Default agent config not found")
+
+    try:
+        with open(config_file, encoding="utf-8") as f:
+            data: dict[str, Any] = json.load(f)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse default agent config: {e}") from e
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read default agent config: {e}") from e
+
+    return {
+        "name": DEFAULT_AGENT_NAME,
+        "description": data.get("description", ""),
+        "model": data.get("model"),
+        "tool_groups": data.get("tool_groups"),
+        "heartbeat_enabled": bool(data.get("heartbeat_enabled", True)),
+        "evolution_enabled": bool(data.get("evolution_enabled", True)),
+    }
+
+
+def _save_default_agent_config(config: dict[str, Any]) -> None:
+    """Persist default agent config atomically."""
+    config_file = get_paths().agent_config_file(DEFAULT_AGENT_NAME)
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+
+
 def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False) -> AgentResponse:
     """Convert AgentConfig to AgentResponse."""
     soul: str | None = None
@@ -84,6 +147,8 @@ def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False
         description=agent_cfg.description,
         model=agent_cfg.model,
         tool_groups=agent_cfg.tool_groups,
+        heartbeat_enabled=agent_cfg.heartbeat_enabled,
+        evolution_enabled=agent_cfg.evolution_enabled,
         soul=soul,
     )
 
@@ -192,18 +257,21 @@ async def create_agent_endpoint(request: AgentCreateRequest) -> AgentResponse:
     try:
         agent_dir.mkdir(parents=True, exist_ok=True)
 
-        # Write config.yaml
-        config_data: dict = {"name": normalized_name}
-        if request.description:
-            config_data["description"] = request.description
+        # Write agent.json
+        config_data: dict = {
+            "name": normalized_name,
+            "description": request.description,
+            "heartbeat_enabled": True,
+            "evolution_enabled": True,
+        }
         if request.model is not None:
             config_data["model"] = request.model
         if request.tool_groups is not None:
             config_data["tool_groups"] = request.tool_groups
 
-        config_file = agent_dir / "config.yaml"
+        config_file = get_paths().agent_config_file(normalized_name)
         with open(config_file, "w", encoding="utf-8") as f:
-            yaml.dump(config_data, f, default_flow_style=False, allow_unicode=True)
+            json.dump(config_data, f, indent=2, ensure_ascii=False)
 
         # Write SOUL.md
         soul_file = agent_dir / "SOUL.md"
@@ -261,6 +329,8 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             updated: dict = {
                 "name": agent_cfg.name,
                 "description": request.description if request.description is not None else agent_cfg.description,
+                "heartbeat_enabled": agent_cfg.heartbeat_enabled,
+                "evolution_enabled": agent_cfg.evolution_enabled,
             }
             new_model = request.model if request.model is not None else agent_cfg.model
             if new_model is not None:
@@ -270,9 +340,9 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             if new_tool_groups is not None:
                 updated["tool_groups"] = new_tool_groups
 
-            config_file = agent_dir / "config.yaml"
+            config_file = get_paths().agent_config_file(name)
             with open(config_file, "w", encoding="utf-8") as f:
-                yaml.dump(updated, f, default_flow_style=False, allow_unicode=True)
+                json.dump(updated, f, indent=2, ensure_ascii=False)
 
         # Update SOUL.md if provided
         if request.soul is not None:
@@ -352,6 +422,45 @@ async def update_user_profile(request: UserProfileUpdateRequest) -> UserProfileR
         raise HTTPException(status_code=500, detail=f"Failed to update user profile: {str(e)}")
 
 
+@router.get(
+    "/default-agent/config",
+    response_model=DefaultAgentConfigResponse,
+    summary="Get Default Agent Config",
+    description="Read default agent config fields from agent.json.",
+)
+async def get_default_agent_config() -> DefaultAgentConfigResponse:
+    """Get default agent editable config."""
+    return DefaultAgentConfigResponse(**_load_default_agent_config_dict())
+
+
+@router.put(
+    "/default-agent/config",
+    response_model=DefaultAgentConfigResponse,
+    summary="Update Default Agent Config",
+    description="Update editable fields of default agent config.",
+)
+async def update_default_agent_config(request: DefaultAgentConfigUpdateRequest) -> DefaultAgentConfigResponse:
+    """Update default agent config while keeping its reserved name immutable."""
+    current = _load_default_agent_config_dict()
+    updated = {
+        "name": DEFAULT_AGENT_NAME,
+        "description": request.description if request.description is not None else current["description"],
+        "heartbeat_enabled": request.heartbeat_enabled if request.heartbeat_enabled is not None else current["heartbeat_enabled"],
+        "evolution_enabled": request.evolution_enabled if request.evolution_enabled is not None else current["evolution_enabled"],
+    }
+
+    model_value = request.model if request.model is not None else current["model"]
+    if model_value is not None:
+        updated["model"] = model_value
+
+    tool_groups_value = request.tool_groups if request.tool_groups is not None else current["tool_groups"]
+    if tool_groups_value is not None:
+        updated["tool_groups"] = tool_groups_value
+
+    _save_default_agent_config(updated)
+    return DefaultAgentConfigResponse(**_load_default_agent_config_dict())
+
+
 @router.delete(
     "/agents/{name}",
     status_code=204,
@@ -367,6 +476,9 @@ async def delete_agent(name: str) -> None:
     Raises:
         HTTPException: 404 if agent not found.
     """
+    if _is_default_agent_name(name):
+        raise HTTPException(status_code=403, detail="Default agent cannot be deleted")
+
     _validate_agent_name(name)
     name = _normalize_agent_name(name)
 
@@ -411,7 +523,7 @@ async def get_default_agent_soul() -> DefaultAgentAssetResponse:
         DefaultAgentAssetResponse with content=None if SOUL.md does not exist yet.
     """
     try:
-        soul_path = get_paths().default_agent_soul_file
+        soul_path = get_paths().agent_soul_file("_default")
         if not soul_path.exists():
             return DefaultAgentAssetResponse(content=None)
         raw = soul_path.read_text(encoding="utf-8").strip()
@@ -438,9 +550,10 @@ async def update_default_agent_soul(request: DefaultAgentAssetUpdateRequest) -> 
     """
     try:
         paths = get_paths()
-        paths.base_dir.mkdir(parents=True, exist_ok=True)
-        paths.default_agent_soul_file.write_text(request.content, encoding="utf-8")
-        logger.info(f"Updated default agent SOUL.md at {paths.default_agent_soul_file}")
+        soul_path = paths.agent_soul_file("_default")
+        soul_path.parent.mkdir(parents=True, exist_ok=True)
+        soul_path.write_text(request.content, encoding="utf-8")
+        logger.info(f"Updated default agent SOUL.md at {soul_path}")
         return DefaultAgentAssetResponse(content=request.content or None)
     except Exception as e:
         logger.error(f"Failed to update default agent soul: {e}", exc_info=True)
@@ -460,7 +573,7 @@ async def get_default_agent_identity() -> DefaultAgentAssetResponse:
         DefaultAgentAssetResponse with content=None if IDENTITY.md does not exist yet.
     """
     try:
-        identity_path = get_paths().default_agent_identity_file
+        identity_path = get_paths().agent_identity_file("_default")
         if not identity_path.exists():
             return DefaultAgentAssetResponse(content=None)
         raw = identity_path.read_text(encoding="utf-8").strip()
@@ -487,13 +600,151 @@ async def update_default_agent_identity(request: DefaultAgentAssetUpdateRequest)
     """
     try:
         paths = get_paths()
-        paths.base_dir.mkdir(parents=True, exist_ok=True)
-        paths.default_agent_identity_file.write_text(request.content, encoding="utf-8")
-        logger.info(f"Updated default agent IDENTITY.md at {paths.default_agent_identity_file}")
+        identity_path = paths.agent_identity_file("_default")
+        identity_path.parent.mkdir(parents=True, exist_ok=True)
+        identity_path.write_text(request.content, encoding="utf-8")
+        logger.info(f"Updated default agent IDENTITY.md at {identity_path}")
         return DefaultAgentAssetResponse(content=request.content or None)
     except Exception as e:
         logger.error(f"Failed to update default agent identity: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update default agent identity: {str(e)}")
+
+
+@router.get(
+    "/soul/default",
+    response_model=DefaultAgentAssetResponse,
+    summary="Get Default Soul (Alias)",
+    description="Alias of GET /api/default-agent/soul for docs compatibility.",
+)
+async def get_default_soul_alias() -> DefaultAgentAssetResponse:
+    return await get_default_agent_soul()
+
+
+@router.put(
+    "/soul/default",
+    response_model=DefaultAgentAssetResponse,
+    summary="Update Default Soul (Alias)",
+    description="Alias of PUT /api/default-agent/soul for docs compatibility.",
+)
+async def update_default_soul_alias(request: DefaultAgentAssetUpdateRequest) -> DefaultAgentAssetResponse:
+    return await update_default_agent_soul(request)
+
+
+@router.get(
+    "/soul/identity",
+    response_model=DefaultAgentAssetResponse,
+    summary="Get Default Identity (Alias)",
+    description="Alias of GET /api/default-agent/identity for docs compatibility.",
+)
+async def get_default_identity_alias() -> DefaultAgentAssetResponse:
+    return await get_default_agent_identity()
+
+
+@router.put(
+    "/soul/identity",
+    response_model=DefaultAgentAssetResponse,
+    summary="Update Default Identity (Alias)",
+    description="Alias of PUT /api/default-agent/identity for docs compatibility.",
+)
+async def update_default_identity_alias(request: DefaultAgentAssetUpdateRequest) -> DefaultAgentAssetResponse:
+    return await update_default_agent_identity(request)
+
+
+# ── Custom Agent Identity Endpoints ───────────────────────────────────────
+
+
+class AgentIdentityResponse(BaseModel):
+    """Response model for agent identity content."""
+
+    content: str = Field(default="", description="IDENTITY.md content")
+
+
+class AgentIdentityUpdateRequest(BaseModel):
+    """Request body for updating agent identity content."""
+
+    content: str = Field(default="", description="IDENTITY.md content")
+
+
+@router.get(
+    "/agents/{name}/identity",
+    response_model=AgentIdentityResponse,
+    summary="Get Agent Identity",
+    description="Read the agent's IDENTITY.md file.",
+)
+async def get_agent_identity(name: str) -> AgentIdentityResponse:
+    """Return the agent's IDENTITY.md content.
+
+    Args:
+        name: The agent name.
+
+    Returns:
+        AgentIdentityResponse with the IDENTITY.md content (empty string if not exists).
+
+    Raises:
+        HTTPException: 404 if agent not found.
+    """
+    _validate_agent_name(name)
+    name = _normalize_agent_name(name)
+
+    try:
+        # Verify agent exists
+        load_agent_config(name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+
+    try:
+        identity_path = get_paths().agent_identity_file(name)
+        if not identity_path.exists():
+            return AgentIdentityResponse(content="")
+        raw = identity_path.read_text(encoding="utf-8")
+        return AgentIdentityResponse(content=raw)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to read agent identity '{name}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to read agent identity: {str(e)}")
+
+
+@router.put(
+    "/agents/{name}/identity",
+    response_model=AgentIdentityResponse,
+    summary="Update Agent Identity",
+    description="Write the agent's IDENTITY.md file.",
+)
+async def update_agent_identity(name: str, request: AgentIdentityUpdateRequest) -> AgentIdentityResponse:
+    """Create or overwrite the agent's IDENTITY.md.
+
+    Args:
+        name: The agent name.
+        request: The update request with the new IDENTITY.md content.
+
+    Returns:
+        AgentIdentityResponse with the saved content.
+
+    Raises:
+        HTTPException: 404 if agent not found.
+    """
+    _validate_agent_name(name)
+    name = _normalize_agent_name(name)
+
+    try:
+        # Verify agent exists
+        load_agent_config(name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+
+    try:
+        paths = get_paths()
+        identity_path = paths.agent_identity_file(name)
+        identity_path.parent.mkdir(parents=True, exist_ok=True)
+        identity_path.write_text(request.content, encoding="utf-8")
+        logger.info(f"Updated agent '{name}' IDENTITY.md at {identity_path}")
+        return AgentIdentityResponse(content=request.content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update agent identity '{name}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update agent identity: {str(e)}")
 
 
 class SoulPreviewResponse(BaseModel):

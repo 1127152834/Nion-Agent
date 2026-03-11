@@ -19,6 +19,7 @@ from src.config.retrieval_models_config import RetrievalModelsConfig
 from src.config.sandbox_config import SandboxConfig
 from src.config.skills_config import SkillsConfig
 from src.config.subagents_config import load_subagents_config_from_dict
+from src.config.suggestions_config import load_suggestions_config_from_dict
 from src.config.summarization_config import load_summarization_config_from_dict
 from src.config.title_config import load_title_config_from_dict
 from src.config.tool_config import ToolConfig, ToolGroupConfig
@@ -78,6 +79,7 @@ class AppConfig(BaseModel):
             load_memory_config_from_dict(config_data["memory"])
         if "subagents" in config_data:
             load_subagents_config_from_dict(config_data["subagents"])
+        load_suggestions_config_from_dict(config_data.get("suggestions") or {})
         if "checkpointer" in config_data:
             load_checkpointer_config_from_dict(config_data["checkpointer"])
 

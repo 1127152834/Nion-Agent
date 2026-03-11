@@ -12,6 +12,10 @@
 
 **Tech Stack:** Python、FastAPI、Pydantic、本地文件系统、现有 `agents_config` / `paths` / `lead_agent.prompt` / `agents router` / `pytest`
 
+> As-Built 注释（2026-03-11）：
+> 默认智能体主接口当前为 `/api/default-agent/*`，并补了文档兼容别名 `/api/soul/default` 与 `/api/soul/identity`。
+> 为避免命名漂移导致的前后端割裂，前端已统一接入 default-agent 专用配置与资产接口。
+
 ---
 
 ## 0. 执行前总原则

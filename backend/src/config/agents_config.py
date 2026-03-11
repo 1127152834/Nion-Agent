@@ -1,10 +1,10 @@
 """Configuration and loaders for custom agents."""
 
+import json
 import logging
 import re
 from typing import Any
 
-import yaml
 from pydantic import BaseModel
 
 from src.config.paths import get_paths
@@ -22,6 +22,8 @@ class AgentConfig(BaseModel):
     description: str = ""
     model: str | None = None
     tool_groups: list[str] | None = None
+    heartbeat_enabled: bool = True
+    evolution_enabled: bool = True
 
 
 def load_agent_config(name: str | None) -> AgentConfig | None:
@@ -34,8 +36,8 @@ def load_agent_config(name: str | None) -> AgentConfig | None:
         AgentConfig instance.
 
     Raises:
-        FileNotFoundError: If the agent directory or config.yaml does not exist.
-        ValueError: If config.yaml cannot be parsed.
+        FileNotFoundError: If the agent directory or agent.json does not exist.
+        ValueError: If agent.json cannot be parsed.
     """
 
     if name is None:
@@ -43,26 +45,26 @@ def load_agent_config(name: str | None) -> AgentConfig | None:
 
     if not AGENT_NAME_PATTERN.match(name):
         raise ValueError(f"Invalid agent name '{name}'. Must match pattern: {AGENT_NAME_PATTERN.pattern}")
-    agent_dir = get_paths().agent_dir(name)
-    config_file = agent_dir / "config.yaml"
 
-    if not agent_dir.exists():
-        raise FileNotFoundError(f"Agent directory not found: {agent_dir}")
+    config_file = get_paths().agent_config_file(name)
+
+    if not config_file.parent.exists():
+        raise FileNotFoundError(f"Agent directory not found: {config_file.parent}")
 
     if not config_file.exists():
         raise FileNotFoundError(f"Agent config not found: {config_file}")
 
     try:
         with open(config_file, encoding="utf-8") as f:
-            data: dict[str, Any] = yaml.safe_load(f) or {}
-    except yaml.YAMLError as e:
+            data: dict[str, Any] = json.load(f)
+    except json.JSONDecodeError as e:
         raise ValueError(f"Failed to parse agent config {config_file}: {e}") from e
 
     # Ensure name is set from directory name if not in file
     if "name" not in data:
         data["name"] = name
 
-    # Strip unknown fields before passing to Pydantic (e.g. legacy prompt_file)
+    # Strip unknown fields before passing to Pydantic
     known_fields = set(AgentConfig.model_fields.keys())
     data = {k: v for k, v in data.items() if k in known_fields}
 
@@ -106,9 +108,9 @@ def list_custom_agents() -> list[AgentConfig]:
         if not entry.is_dir():
             continue
 
-        config_file = entry / "config.yaml"
+        config_file = get_paths().agent_config_file(entry.name)
         if not config_file.exists():
-            logger.debug(f"Skipping {entry.name}: no config.yaml")
+            logger.debug(f"Skipping {entry.name}: no agent.json")
             continue
 
         try:
