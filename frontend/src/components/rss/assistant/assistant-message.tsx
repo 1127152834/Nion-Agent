@@ -9,6 +9,7 @@ import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { useI18n } from "@/core/i18n/hooks";
 import type { FileInMessage } from "@/core/messages/utils";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +68,7 @@ export function AssistantMessage({
   files = [],
   isTaskMessage = false,
 }: AssistantMessageProps) {
+  const { t } = useI18n();
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
 
@@ -74,12 +76,12 @@ export function AssistantMessage({
     try {
       await navigator.clipboard.writeText(message.content);
       setCopied(true);
-      toast.success("已复制到剪贴板");
+      toast.success(t.clipboard.copiedToClipboard);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      toast.error("复制失败");
+      toast.error(t.clipboard.failedToCopyToClipboard);
     }
-  }, [message.content]);
+  }, [message.content, t.clipboard.copiedToClipboard, t.clipboard.failedToCopyToClipboard]);
 
   return (
     <motion.div
@@ -169,10 +171,10 @@ export function AssistantMessage({
                               type="button"
                               onClick={handleCopy}
                               className="absolute top-2 right-2 flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-xs text-white opacity-0 transition-opacity hover:bg-black/80 group-hover:opacity-100"
-                              title="复制代码"
+                              title={t.clipboard.copyToClipboard}
                             >
                               {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-                              {copied ? "已复制" : "复制"}
+                              {copied ? t.rssReader.selectionCopied : t.rssReader.selectionCopy}
                             </button>
                             <SyntaxHighlighter
                               style={oneDark as Record<string, CSSProperties>}
@@ -240,7 +242,7 @@ export function AssistantMessage({
               isUser ? "text-primary-foreground/80" : "text-muted-foreground",
             )}
           >
-            文件处理中...
+            {t.rssReader.assistantThinking}
           </div>
         )}
 
@@ -250,7 +252,7 @@ export function AssistantMessage({
             type="button"
             onClick={handleCopy}
             className="absolute -left-10 top-2 flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
-            title="复制消息"
+            title={t.clipboard.copyToClipboard}
           >
             {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
           </button>

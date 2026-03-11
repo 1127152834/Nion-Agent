@@ -38,6 +38,8 @@ function parseOptionalInteger(value: string): number | undefined {
 }
 
 const DEFAULT_MODEL_VALUE = "__default_model__";
+const FAST_MODE_VALUE = "fast";
+const LLM_MODE_VALUE = "llm";
 
 export function TitleSection({
   config,
@@ -71,6 +73,7 @@ export function TitleSection({
   );
 
   const selectedModel = asString(title.model_name).trim();
+  const selectedMode = asString(title.mode).trim() || FAST_MODE_VALUE;
 
   const updateTitle = (key: string, value: unknown) => {
     const next = cloneConfig(config);
@@ -119,6 +122,22 @@ export function TitleSection({
                 {model.label}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="text-xs font-medium">{copy.mode}</div>
+        <Select
+          value={selectedMode}
+          onValueChange={(value) => updateTitle("mode", value)}
+        >
+          <SelectTrigger disabled={disabled}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={FAST_MODE_VALUE}>{copy.modeFast}</SelectItem>
+            <SelectItem value={LLM_MODE_VALUE}>{copy.modeLlm}</SelectItem>
           </SelectContent>
         </Select>
       </div>

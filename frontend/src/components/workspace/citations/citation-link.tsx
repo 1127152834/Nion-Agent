@@ -7,6 +7,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 export function CitationLink({ 
@@ -14,6 +15,7 @@ export function CitationLink({
   children,
   ...props 
 }: ComponentProps<"a">) {
+  const { t } = useI18n();
   const domain = extractDomain(href ?? "");
   
   // Priority: children > domain
@@ -21,7 +23,7 @@ export function CitationLink({
     typeof children === "string"
       ? children.replace(/^citation:\s*/i, "")
       : null;
-  const isGenericText = childrenText === "Source" || childrenText === "来源";
+  const isGenericText = childrenText === t.citations.source;
   const displayText = (!isGenericText && childrenText) ?? domain;
 
   return (
@@ -64,7 +66,7 @@ export function CitationLink({
             rel="noopener noreferrer"
             className="text-primary mt-2 inline-flex items-center gap-1 text-xs hover:underline"
           >
-            Visit source
+            {t.citations.visitSource}
             <ExternalLinkIcon className="size-3" />
           </a>
         </div>

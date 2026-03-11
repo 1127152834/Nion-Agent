@@ -3,6 +3,7 @@
 import { AlertTriangleIcon } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
+import { useI18n } from "@/core/i18n/hooks";
 import type {
   InstalledPlugin,
   WorkbenchContext,
@@ -283,6 +284,7 @@ export function WorkbenchPluginIframe({
   files: Map<string, WorkbenchPackageFile>;
   context: WorkbenchContext;
 }) {
+  const { t } = useI18n();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const streamDisposersRef = useRef<Map<string, () => void>>(new Map());
   const ownedSessionsRef = useRef<Set<string>>(new Set());
@@ -489,7 +491,7 @@ export function WorkbenchPluginIframe({
     return (
       <div className="flex h-full w-full items-center justify-center gap-2 text-sm text-muted-foreground">
         <AlertTriangleIcon className="size-4" />
-        <span>插件入口文件不存在，无法加载工作台。</span>
+        <span>{t.workspace.artifactPanel.pluginEntryMissing}</span>
       </div>
     );
   }

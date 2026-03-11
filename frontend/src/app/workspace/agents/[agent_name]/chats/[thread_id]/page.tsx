@@ -1,8 +1,9 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { BotIcon, PlusSquare } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -23,11 +24,12 @@ import { InputBox } from "@/components/workspace/input-box";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
 import { NewChatStage } from "@/components/workspace/new-chat-stage";
-import { getRuntimeModeCopy, RuntimeModeToggle } from "@/components/workspace/runtime-mode-toggle";
+import { RuntimeModeToggle } from "@/components/workspace/runtime-mode-toggle";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { useAgent } from "@/core/agents";
+import { getAPIClient } from "@/core/api";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
 import { useNotification } from "@/core/notification/hooks";
@@ -35,7 +37,11 @@ import { platform } from "@/core/platform";
 import { useDesktopRuntime } from "@/core/platform/hooks";
 import { type RuntimeProfile, fetchRuntimeProfile, updateRuntimeProfile } from "@/core/runtime-profile/api";
 import { useLocalSettings } from "@/core/settings";
-import { useThreadStream } from "@/core/threads/hooks";
+import {
+  isThreadNotFoundError,
+  pruneThreadFromCache,
+  useThreadStream,
+} from "@/core/threads/hooks";
 import { textOfMessage } from "@/core/threads/utils";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
@@ -48,9 +54,10 @@ const DEFAULT_RUNTIME_PROFILE: RuntimeProfile = {
 };
 
 export default function AgentChatPage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [settings, setSettings] = useLocalSettings();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { isDesktopRuntime } = useDesktopRuntime();
 
   const { agent_name } = useParams<{
@@ -73,13 +80,13 @@ export default function AgentChatPage() {
   const [hostSetupCreateDirName, setHostSetupCreateDirName] = useState("workspace");
   const [hostSetupCreateSaving, setHostSetupCreateSaving] = useState(false);
 
-  const hostModeCopy = useMemo(() => getRuntimeModeCopy(locale), [locale]);
+  const hostModeCopy = t.workspace.runtimeMode;
   const mapRuntimeProfileError = useCallback(
     (message: string): string => {
       if (message.includes("empty directory")) {
         const foundMatch = /found:\s*([^)]+)/i.exec(message);
         if (foundMatch?.[1]) {
-          return `${hostModeCopy.hostDirMissing}（检测到：${foundMatch[1]}）`;
+          return hostModeCopy.hostDirDetected(foundMatch[1]);
         }
         return hostModeCopy.hostDirMissing;
       }
@@ -88,7 +95,7 @@ export default function AgentChatPage() {
       }
       return message;
     },
-    [hostModeCopy.hostDirLocked, hostModeCopy.hostDirMissing],
+    [hostModeCopy],
   );
 
   const [thread, sendMessage] = useThreadStream({
@@ -235,11 +242,11 @@ export default function AgentChatPage() {
     }
     const trimmedName = hostSetupCreateDirName.trim();
     if (!trimmedName) {
-      setHostSetupErrorMessage(locale.startsWith("zh") ? "请输入目录名称。" : "Please enter a folder name.");
+      setHostSetupErrorMessage(hostModeCopy.folderNameRequired);
       return;
     }
     if (/[\\/]/.test(trimmedName)) {
-      setHostSetupErrorMessage(locale.startsWith("zh") ? "目录名称不能包含 / 或 \\" : "Folder name cannot include / or \\.");
+      setHostSetupErrorMessage(hostModeCopy.folderNameInvalid);
       return;
     }
 
@@ -284,10 +291,11 @@ export default function AgentChatPage() {
     setHostSetupCreateDirName("workspace");
     setHostSetupDialogOpen(false);
   }, [
+    hostModeCopy.folderNameInvalid,
+    hostModeCopy.folderNameRequired,
     hostModeCopy.modeSaveFailed,
     hostSetupCreateBaseDir,
     hostSetupCreateDirName,
-    locale,
     persistRuntimeProfile,
   ]);
 
@@ -386,6 +394,50 @@ export default function AgentChatPage() {
       cancelled = true;
     };
   }, [hostModeCopy.modeSaveFailed, threadId]);
+
+  useEffect(() => {
+    if (isNewThread || !threadId || threadId === "new") {
+      return;
+    }
+
+    let cancelled = false;
+    const apiClient = getAPIClient();
+    const fallbackPath = `/workspace/agents/${agent_name}/chats/new`;
+
+    const confirmThreadExists = async () => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await apiClient.threads.get(threadId);
+          return;
+        } catch (error) {
+          if (!isThreadNotFoundError(error)) {
+            return;
+          }
+          if (attempt === 0) {
+            await new Promise<void>((resolve) => {
+              window.setTimeout(resolve, 220);
+            });
+            if (cancelled) {
+              return;
+            }
+            continue;
+          }
+          if (cancelled) {
+            return;
+          }
+          pruneThreadFromCache(queryClient, threadId);
+          router.replace(fallbackPath);
+          return;
+        }
+      }
+    };
+
+    void confirmThreadExists();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agent_name, isNewThread, queryClient, router, threadId]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -609,9 +661,7 @@ export default function AgentChatPage() {
             {hostSetupCreateBaseDir ? (
               <div className="rounded-md border border-border/70 bg-muted/25 px-3 py-2 text-sm">
                 <div className="text-muted-foreground">
-                  {locale.startsWith("zh")
-                    ? "当前目录非空。你可以在该目录下创建一个空目录作为本会话工作空间。"
-                    : "Selected directory is not empty. You can create an empty subfolder and use it as workspace."}
+                  {hostModeCopy.hostDirNotEmptyHint}
                 </div>
                 {!hostSetupCreateInputVisible ? (
                   <div className="mt-2">
@@ -620,7 +670,7 @@ export default function AgentChatPage() {
                       variant="outline"
                       onClick={() => setHostSetupCreateInputVisible(true)}
                     >
-                      {locale.startsWith("zh") ? "创建空目录并使用" : "Create empty folder and use"}
+                      {hostModeCopy.createEmptyFolderAndUse}
                     </Button>
                   </div>
                 ) : (
@@ -628,7 +678,7 @@ export default function AgentChatPage() {
                     <Input
                       value={hostSetupCreateDirName}
                       onChange={(event) => setHostSetupCreateDirName(event.target.value)}
-                      placeholder={locale.startsWith("zh") ? "输入目录名称（如 workspace）" : "Folder name (e.g. workspace)"}
+                      placeholder={hostModeCopy.folderNamePlaceholder}
                       className="h-9"
                     />
                     <Button
@@ -639,8 +689,8 @@ export default function AgentChatPage() {
                       disabled={hostSetupCreateSaving}
                     >
                       {hostSetupCreateSaving
-                        ? (locale.startsWith("zh") ? "创建中..." : "Creating...")
-                        : (locale.startsWith("zh") ? "确定" : "Confirm")}
+                        ? hostModeCopy.creating
+                        : hostModeCopy.confirm}
                     </Button>
                   </div>
                 )}

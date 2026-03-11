@@ -42,6 +42,7 @@ export function CodeEditor({
   disabled,
   autoFocus,
   settings,
+  onChange,
 }: {
   className?: string;
   placeholder?: string;
@@ -50,6 +51,7 @@ export function CodeEditor({
   disabled?: boolean;
   autoFocus?: boolean;
   settings?: unknown;
+  onChange?: (value: string) => void;
 }) {
   const {
     thread: { isLoading },
@@ -70,6 +72,8 @@ export function CodeEditor({
     ];
   }, []);
 
+  const isEditable = !readonly && !disabled && onChange !== undefined;
+
   return (
     <div
       className={cn(
@@ -89,8 +93,9 @@ export function CodeEditor({
         />
       ) : (
         <CodeMirror
-          readOnly={readonly ?? disabled}
+          readOnly={!isEditable}
           placeholder={placeholder}
+          onChange={onChange}
           className={cn(
             "h-full overflow-auto font-mono [&_.cm-editor]:h-full [&_.cm-focused]:outline-none!",
             "px-2 py-0! [&_.cm-line]:px-2! [&_.cm-line]:py-0!",

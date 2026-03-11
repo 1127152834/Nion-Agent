@@ -57,6 +57,7 @@ function buildAssistantThreadId() {
 
 export default function PluginAssistantPage() {
   const { t } = useI18n();
+  const copy = t.workspace.pluginAssistant;
   const [settings] = useLocalSettings();
   const [assistantContext, setAssistantContext] = useState<AssistantInputContext>({
     ...settings.context,
@@ -247,9 +248,9 @@ export default function PluginAssistantPage() {
       const normalizedName = pluginName.trim() || DEFAULT_PLUGIN_NAME;
       const normalizedDescription = description.trim();
       await createBoundSession(normalizedName, normalizedDescription);
-      toast.success("已创建新的插件助手会话。");
+      toast.success(copy.createSessionSuccess);
     });
-  }, [createBoundSession, description, pluginName, runFlowAction]);
+  }, [copy.createSessionSuccess, createBoundSession, description, pluginName, runFlowAction]);
 
   const handleGenerate = useCallback(() => {
     if (!session) {
@@ -261,9 +262,9 @@ export default function PluginAssistantPage() {
       });
       setSession(updated);
       setDescription(updated.description || description);
-      toast.success("已生成插件脚手架。");
+      toast.success(copy.generateSuccess);
     });
-  }, [description, runFlowAction, session]);
+  }, [copy.generateSuccess, description, runFlowAction, session]);
 
   const handleAutoVerify = useCallback(() => {
     if (!session) {
@@ -273,12 +274,12 @@ export default function PluginAssistantPage() {
       const report = await autoVerifyPluginStudioSession(session.sessionId);
       await refreshSession(session.sessionId);
       if (report.passed) {
-        toast.success("自动验证通过。");
+        toast.success(copy.autoVerifyPassed);
       } else {
         toast.error(report.summary);
       }
     });
-  }, [refreshSession, runFlowAction, session]);
+  }, [copy.autoVerifyPassed, refreshSession, runFlowAction, session]);
 
   const handleManualVerify = useCallback(
     (passed: boolean) => {
@@ -292,10 +293,10 @@ export default function PluginAssistantPage() {
           note: manualNote.trim() || undefined,
         });
         setSession(updated);
-        toast.success(passed ? "已标记人工验证通过。" : "已标记人工验证不通过。");
+        toast.success(passed ? copy.manualVerifyPassed : copy.manualVerifyFailed);
       });
     },
-    [manualNote, runFlowAction, session],
+    [copy.manualVerifyFailed, copy.manualVerifyPassed, manualNote, runFlowAction, session],
   );
 
   const handlePackage = useCallback(() => {
@@ -305,9 +306,9 @@ export default function PluginAssistantPage() {
     void runFlowAction("package", async () => {
       await packagePluginStudioSession(session.sessionId);
       await refreshSession(session.sessionId);
-      toast.success("已生成插件安装包。");
+      toast.success(copy.packageSuccess);
     });
-  }, [refreshSession, runFlowAction, session]);
+  }, [copy.packageSuccess, refreshSession, runFlowAction, session]);
 
   const handleDownload = useCallback(() => {
     if (!session) {
@@ -385,16 +386,16 @@ export default function PluginAssistantPage() {
       <div className="flex size-full min-h-0">
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="border-b px-4 py-3">
-            <h1 className="text-sm font-semibold">插件助手</h1>
+            <h1 className="text-sm font-semibold">{copy.title}</h1>
             <p className="text-muted-foreground mt-1 text-xs">
-              独立会话用于插件设计与交互流程推演，输出按规格模板收敛。
+              {copy.description}
             </p>
           </header>
 
           {initializing ? (
             <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center gap-2 text-sm">
               <Loader2Icon className="size-4 animate-spin" />
-              正在恢复插件助手会话...
+              {copy.restoring}
             </div>
           ) : (
             <>
@@ -422,7 +423,7 @@ export default function PluginAssistantPage() {
                   />
                 ) : (
                   <div className="text-muted-foreground py-4 text-center text-sm">
-                    会话尚未就绪，请先在右侧创建或恢复会话。
+                    {copy.sessionNotReady}
                   </div>
                 )}
               </div>

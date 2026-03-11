@@ -5,9 +5,9 @@ import type { ComponentProps, MouseEvent } from "react";
 import { Streamdown } from "streamdown";
 
 import { useI18n } from "@/core/i18n/hooks";
-import { platform } from "@/core/platform";
 import { useMemory } from "@/core/memory/hooks";
 import type { UserMemory } from "@/core/memory/types";
+import { platform } from "@/core/platform";
 import { streamdownPlugins } from "@/core/streamdown/plugins";
 import { pathOfThread } from "@/core/threads/utils";
 import { formatTimeAgo } from "@/core/utils/datetime";
@@ -236,6 +236,10 @@ export function MemorySettingsPage({ onClose }: { onClose?: () => void }) {
       title={t.settings.memory.title}
       description={t.settings.memory.description}
     >
+      <div className="bg-muted/40 mb-4 rounded-lg border px-3 py-2 text-xs">
+        <p className="font-medium">{t.settings.memory.scopeTitle}</p>
+        <p className="text-muted-foreground mt-1">{t.settings.memory.scopeDescription}</p>
+      </div>
       {isLoading ? (
         <div className="text-muted-foreground text-sm">{t.common.loading}</div>
       ) : error ? (

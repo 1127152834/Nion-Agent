@@ -7,12 +7,14 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { useWorkspaceSidebarPresentation } from "./workspace-sidebar-routing";
 
 export function WorkspaceHeader({ className }: { className?: string }) {
+  const { t } = useI18n();
   const { isCollapsed } = useWorkspaceSidebarPresentation();
   const { toggleSidebar } = useSidebar();
   const [titlebarInset, setTitlebarInset] = useState(0);
@@ -33,16 +35,25 @@ export function WorkspaceHeader({ className }: { className?: string }) {
   }, []);
 
   useEffect(() => {
+    if (!isCollapsed) {
+      animationsRef.current.forEach((anim) => anim.cancel());
+      animationsRef.current = [];
+      return;
+    }
+    const nion = nionRef.current;
     const arrow = arrowRef.current;
-    if (!arrow) {
+    if (!nion || !arrow) {
       return;
     }
     const length = arrow.getTotalLength();
     arrowLengthRef.current = length;
+    nion.style.opacity = "1";
+    nion.style.transform = "scale(1) translateX(0px)";
     arrow.style.strokeDasharray = `${length}`;
     arrow.style.strokeDashoffset = `${length}`;
     arrow.style.opacity = "0";
-  }, []);
+    arrow.style.transform = "scale(0.6) translateX(-6px)";
+  }, [isCollapsed]);
 
   const playMorph = useCallback((toArrow: boolean) => {
     const nion = nionRef.current;
@@ -105,7 +116,7 @@ export function WorkspaceHeader({ className }: { className?: string }) {
             {/* Hover morph: NION -> arrow (1s) to hint expand action. */}
             <button
               type="button"
-              aria-label="展开侧边栏"
+              aria-label={t.workspace.header.expandSidebar}
               onClick={toggleSidebar}
               onMouseEnter={() => playMorph(true)}
               onMouseLeave={() => playMorph(false)}
@@ -155,21 +166,22 @@ export function WorkspaceHeader({ className }: { className?: string }) {
             </button>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 w-full">
             {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ? (
               <Link
                 href="/"
-                className="text-primary ml-2 font-serif"
+                className="text-primary ml-2 shrink-0 font-serif"
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 Nion
               </Link>
             ) : (
-              <div className="text-primary ml-2 cursor-default font-serif">
+              <div className="text-primary ml-2 shrink-0 cursor-default font-serif">
                 Nion
               </div>
             )}
             <SidebarTrigger style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties} />
+            <div className="flex-1 min-w-0" />
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import type { AIMessage, Message } from "@langchain/langgraph-sdk";
 import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -22,6 +23,60 @@ export type ToolEndEvent = {
   name: string;
   data: unknown;
 };
+
+function normalizeErrorMessage(error: unknown): string {
+  if (typeof error === "string") {
+    return error.trim();
+  }
+  if (error instanceof Error) {
+    return error.message.trim();
+  }
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string") {
+      return message.trim();
+    }
+  }
+  return "";
+}
+
+export function isThreadNotFoundError(error: unknown): boolean {
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    if (status === 404) {
+      return true;
+    }
+  }
+
+  const normalized = normalizeErrorMessage(error).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    (normalized.includes("thread") && normalized.includes("not found"))
+    || normalized.includes("thread with id")
+    || normalized.includes("http 404")
+    || normalized.includes("status code 404")
+  );
+}
+
+function pruneThreadList(data: unknown, threadId: string) {
+  if (!Array.isArray(data)) {
+    return data;
+  }
+  return data.filter((thread) => thread?.thread_id !== threadId);
+}
+
+export function pruneThreadFromCache(queryClient: QueryClient, threadId: string) {
+  queryClient.setQueriesData(
+    {
+      queryKey: ["threads", "search"],
+      exact: false,
+    },
+    (oldData) => pruneThreadList(oldData, threadId),
+  );
+}
 
 export type ThreadStreamOptions = {
   threadId?: string | null | undefined;
@@ -81,17 +136,10 @@ export function useThreadStream({
     // LangGraph history endpoint may fail when no checkpointer is configured.
     // Keep reconnect behavior but skip history fetch to prevent startup crashes.
     fetchStateHistory: false,
+    // New-thread failures should surface immediately to avoid silently
+    // accumulating ghost sessions with inconsistent thread state.
     onError: isNewThread
       ? (error) => {
-          // For new threads, ignore 404 errors as the thread doesn't exist yet
-          if (
-            error instanceof Error &&
-            error.message.includes("Thread with ID") &&
-            error.message.includes("not found")
-          ) {
-            return;
-          }
-          // Re-throw other errors
           throw error;
         }
       : undefined,
@@ -402,7 +450,6 @@ export function useThreadStream({
             context: runtimeContext,
           },
         );
-        void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
       } catch (error) {
         setOptimisticMessages([]);
         throw error;
@@ -514,18 +561,17 @@ export function useDeleteThread() {
   const apiClient = getAPIClient();
   return useMutation({
     mutationFn: async ({ threadId }: { threadId: string }) => {
-      await apiClient.threads.delete(threadId);
+      try {
+        await apiClient.threads.delete(threadId);
+      } catch (error) {
+        // Deletion is idempotent from frontend perspective.
+        if (!isThreadNotFoundError(error)) {
+          throw error;
+        }
+      }
     },
     onSuccess(_, { threadId }) {
-      queryClient.setQueriesData(
-        {
-          queryKey: ["threads", "search"],
-          exact: false,
-        },
-        (oldData: Array<AgentThread>) => {
-          return oldData.filter((t) => t.thread_id !== threadId);
-        },
-      );
+      pruneThreadFromCache(queryClient, threadId);
     },
   });
 }

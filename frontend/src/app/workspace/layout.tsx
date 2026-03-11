@@ -1,6 +1,7 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Provider as JotaiProvider } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "sonner";
 
@@ -53,29 +54,31 @@ export default function WorkspaceLayout({
     [setSettings],
   );
   return (
-    <QueryClientProvider client={queryClient}>
-      <RSSContextProvider>
-        <RuntimeOnboardingOverlay />
-        <SchedulerReminderWatcher />
-        <RuntimeOnboardingOverlay />
-        <SidebarProvider
-          className="h-screen"
-          style={
-            {
-              "--desktop-titlebar-safe-area": `${titlebarInset}px`,
-            } as React.CSSProperties
-          }
-          open={open}
-          onOpenChange={handleOpenChange}
-        >
-          <WorkspaceSidebar />
-          <SidebarInset className="min-w-0 pt-[var(--desktop-titlebar-safe-area,0px)]">
-            <WorkspaceMobileSidebarTrigger />
-            {children}
-          </SidebarInset>
-        </SidebarProvider>
-      </RSSContextProvider>
-      <Toaster position="top-center" />
-    </QueryClientProvider>
+    <JotaiProvider>
+      <QueryClientProvider client={queryClient}>
+        <RSSContextProvider>
+          <RuntimeOnboardingOverlay />
+          <SchedulerReminderWatcher />
+          <RuntimeOnboardingOverlay />
+          <SidebarProvider
+            className="h-screen"
+            style={
+              {
+                "--desktop-titlebar-safe-area": `${titlebarInset}px`,
+              } as React.CSSProperties
+            }
+            open={open}
+            onOpenChange={handleOpenChange}
+          >
+            <WorkspaceSidebar />
+            <SidebarInset className="min-w-0 pt-[var(--desktop-titlebar-safe-area,0px)]">
+              <WorkspaceMobileSidebarTrigger />
+              {children}
+            </SidebarInset>
+          </SidebarProvider>
+        </RSSContextProvider>
+        <Toaster position="top-center" />
+      </QueryClientProvider>
+    </JotaiProvider>
   );
 }

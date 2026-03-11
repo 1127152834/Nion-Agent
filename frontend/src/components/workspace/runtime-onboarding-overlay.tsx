@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { useI18n } from "@/core/i18n/hooks";
 import { isElectron } from "@/core/platform";
 
 type ComponentStatus = "not_downloaded" | "downloading" | "downloaded" | "failed" | "skipped";
@@ -33,20 +34,20 @@ interface RuntimeProgressPayload {
   progress: number;
 }
 
-function statusText(status: ComponentStatus): string {
+function statusText(status: ComponentStatus, copy: ReturnType<typeof useI18n>["t"]["workspace"]["runtimeOnboarding"]): string {
   switch (status) {
     case "not_downloaded":
-      return "未下载";
+      return copy.status.notDownloaded;
     case "downloading":
-      return "下载中";
+      return copy.status.downloading;
     case "downloaded":
-      return "已就绪";
+      return copy.status.downloaded;
     case "failed":
-      return "下载失败";
+      return copy.status.failed;
     case "skipped":
-      return "已跳过";
+      return copy.status.skipped;
     default:
-      return "未知";
+      return copy.status.unknown;
   }
 }
 
@@ -62,6 +63,8 @@ function badgeVariant(status: ComponentStatus): "secondary" | "outline" | "destr
 }
 
 export function RuntimeOnboardingOverlay() {
+  const { t } = useI18n();
+  const copy = t.workspace.runtimeOnboarding;
   const [status, setStatus] = useState<RuntimeStatusPayload | null>(null);
   const [busyComponent, setBusyComponent] = useState<string | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, number>>({});
@@ -150,24 +153,24 @@ export function RuntimeOnboardingOverlay() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-6">
       <Card className="w-full max-w-3xl border-foreground/10">
         <CardHeader className="space-y-3">
-          <CardTitle className="text-2xl">首次运行初始化</CardTitle>
+          <CardTitle className="text-2xl">{copy.title}</CardTitle>
           <p className="text-muted-foreground text-sm">
-            核心运行时已就绪，可选组件可按需下载。你也可以先跳过，稍后在设置中继续安装。
+            {copy.description}
           </p>
           <div className="flex flex-wrap gap-2 text-xs">
             <Badge variant={status.coreReady ? "secondary" : "destructive"}>
-              核心状态: {status.coreReady ? "已就绪" : "未就绪"}
+              {copy.coreStatusLabel}: {status.coreReady ? copy.coreReady : copy.coreNotReady}
             </Badge>
-            <Badge variant="outline">版本: {status.version}</Badge>
+            <Badge variant="outline">{copy.versionLabel}: {status.version}</Badge>
             <Badge variant="outline">
-              平台: {status.platform}/{status.arch}
+              {copy.platformLabel}: {status.platform}/{status.arch}
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {status.optionalComponents.length === 0 ? (
             <div className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-              当前版本没有可选运行时组件，点击“继续进入工作区”即可。
+              {copy.noOptionalComponents}
             </div>
           ) : (
             status.optionalComponents.map((component) => {
@@ -183,7 +186,7 @@ export function RuntimeOnboardingOverlay() {
                       <div className="text-sm font-medium">{component.description}</div>
                       <div className="text-muted-foreground mt-1 text-xs font-mono">{component.assetName}</div>
                     </div>
-                    <Badge variant={badgeVariant(component.status)}>{statusText(component.status)}</Badge>
+                    <Badge variant={badgeVariant(component.status)}>{statusText(component.status, copy)}</Badge>
                   </div>
                   {(component.status === "downloading" || isBusy || progress > 0) && (
                     <Progress value={progress} className="h-2" />
@@ -199,7 +202,7 @@ export function RuntimeOnboardingOverlay() {
                         disabled={isBusy}
                       >
                         {isBusy ? <Loader2Icon className="mr-2 size-4 animate-spin" /> : null}
-                        下载组件
+                        {copy.downloadComponent}
                       </Button>
                     )}
                     {canRetry && (
@@ -210,12 +213,12 @@ export function RuntimeOnboardingOverlay() {
                         disabled={isBusy}
                       >
                         {isBusy ? <Loader2Icon className="mr-2 size-4 animate-spin" /> : null}
-                        重试
+                        {copy.retry}
                       </Button>
                     )}
                     {component.status !== "downloaded" && component.status !== "downloading" && (
                       <Button size="sm" variant="ghost" onClick={() => handleSkip(component.name)} disabled={isBusy}>
-                        跳过
+                        {copy.skip}
                       </Button>
                     )}
                   </div>
@@ -225,9 +228,9 @@ export function RuntimeOnboardingOverlay() {
           )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={handleContinue}>
-              稍后处理
+              {copy.later}
             </Button>
-            <Button onClick={handleContinue}>继续进入工作区</Button>
+            <Button onClick={handleContinue}>{copy.continueToWorkspace}</Button>
           </div>
         </CardContent>
       </Card>

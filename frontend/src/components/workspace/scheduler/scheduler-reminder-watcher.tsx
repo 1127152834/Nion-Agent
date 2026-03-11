@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
+import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import { listScheduledTasks } from "@/core/scheduler";
 import type { ScheduledTask } from "@/core/scheduler";
@@ -32,6 +33,7 @@ function reminderBody(task: ScheduledTask): string {
 }
 
 export function SchedulerReminderWatcher() {
+  const { t } = useI18n();
   const initializedRef = useRef(false);
   const lastSeenRef = useRef<Record<string, string>>({});
   const { showNotification } = useNotification();
@@ -73,7 +75,7 @@ export function SchedulerReminderWatcher() {
             continue;
           }
 
-          const title = task.reminder_title ?? task.name ?? "提醒";
+          const title = task.reminder_title ?? task.name ?? t.scheduler.taskManager.reminderFallbackTitle;
           showNotification(title, {
             body: reminderBody(task),
             tag: `scheduler-reminder-${task.id}-${task.last_run_at}`,

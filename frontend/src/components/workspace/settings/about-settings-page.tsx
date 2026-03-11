@@ -16,6 +16,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 const reveal = {
@@ -25,65 +26,65 @@ const reveal = {
   transition: { duration: 0.55, ease: "easeOut" as const },
 };
 
-const valueCards = [
-  {
-    icon: SparklesIcon,
-    title: "一句话开始",
-    description: "你只要提出目标，Nion 会理解意图并主动推进。",
-    tone: "from-amber-300/25 via-transparent to-transparent",
-  },
-  {
-    icon: BrainCircuitIcon,
-    title: "过程可见可控",
-    description: "每一步都能看到进展，随时追加要求，不会“黑箱执行”。",
-    tone: "from-sky-300/20 via-transparent to-transparent",
-  },
-  {
-    icon: ShieldCheckIcon,
-    title: "稳定且安全",
-    description: "在受控环境执行任务，保障文件与流程的可靠性。",
-    tone: "from-emerald-300/20 via-transparent to-transparent",
-  },
-];
-
-const userScenarios = [
-  {
-    title: "每天 10 分钟信息快报",
-    description: "自动整理资讯重点，给出结论与下一步建议。",
-  },
-  {
-    title: "写作助手",
-    description: "从提纲、初稿到润色，全程协作完成内容生产。",
-  },
-  {
-    title: "数字工作流自动化",
-    description: "把重复任务沉淀成固定流程，减少手工操作。",
-  },
-  {
-    title: "复杂任务拆解执行",
-    description: "多步骤目标自动分解，逐步交付而不是一次性失败。",
-  },
-];
-
-const onboardingSteps = [
-  {
-    badge: "STEP 01",
-    title: "描述你要达成的结果",
-    description: "例如：\"帮我把今天的重要资讯整理成三条结论\"。",
-  },
-  {
-    badge: "STEP 02",
-    title: "查看执行过程并实时调整",
-    description: "Nion 会持续反馈进度，你可以随时补充偏好与限制。",
-  },
-  {
-    badge: "STEP 03",
-    title: "拿到结果并一键迭代",
-    description: "继续细化输出，直到最终结果符合你的真实需求。",
-  },
-];
-
 export function AboutSettingsPage() {
+  const { t } = useI18n();
+  const copy = t.settings.aboutPage;
+  const valueCards = [
+    {
+      icon: SparklesIcon,
+      title: copy.valueCards.startTitle,
+      description: copy.valueCards.startDescription,
+      tone: "from-amber-300/25 via-transparent to-transparent",
+    },
+    {
+      icon: BrainCircuitIcon,
+      title: copy.valueCards.visibleTitle,
+      description: copy.valueCards.visibleDescription,
+      tone: "from-sky-300/20 via-transparent to-transparent",
+    },
+    {
+      icon: ShieldCheckIcon,
+      title: copy.valueCards.stableTitle,
+      description: copy.valueCards.stableDescription,
+      tone: "from-emerald-300/20 via-transparent to-transparent",
+    },
+  ];
+  const userScenarios = [
+    {
+      title: copy.scenarios.dailyBriefTitle,
+      description: copy.scenarios.dailyBriefDescription,
+    },
+    {
+      title: copy.scenarios.writingTitle,
+      description: copy.scenarios.writingDescription,
+    },
+    {
+      title: copy.scenarios.automationTitle,
+      description: copy.scenarios.automationDescription,
+    },
+    {
+      title: copy.scenarios.decompositionTitle,
+      description: copy.scenarios.decompositionDescription,
+    },
+  ];
+  const onboardingSteps = [
+    {
+      badge: copy.steps.step1Badge,
+      title: copy.steps.step1Title,
+      description: copy.steps.step1Description,
+    },
+    {
+      badge: copy.steps.step2Badge,
+      title: copy.steps.step2Title,
+      description: copy.steps.step2Description,
+    },
+    {
+      badge: copy.steps.step3Badge,
+      title: copy.steps.step3Title,
+      description: copy.steps.step3Description,
+    },
+  ];
+
   return (
     <div className="space-y-8 pb-2">
       <motion.section
@@ -96,32 +97,43 @@ export function AboutSettingsPage() {
           <div className="space-y-6">
             <Badge variant="secondary" className="w-fit gap-1.5 px-3 py-1">
               <RocketIcon className="size-3.5" />
-              新一代个人智能工作台
+              {copy.heroBadge}
             </Badge>
             <div className="space-y-3">
               <h2 className="font-serif text-4xl leading-tight font-semibold tracking-tight md:text-5xl">
-                把复杂工作
+                {copy.heroTitleLine1}
                 <br />
-                变成一段自然对话
+                {copy.heroTitleLine2}
               </h2>
               <p className="text-muted-foreground max-w-2xl text-sm leading-7 md:text-base">
-                Nion 为普通用户设计，不需要技术背景。你只要说出目标，它就会理解、拆解、执行并交付结果。
-                从信息整理到内容创作，再到日常数字任务，整个过程都清晰可见。
+                {copy.heroDescription}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">面向日常用户</Badge>
-              <Badge variant="outline">流程透明</Badge>
-              <Badge variant="outline">结果可迭代</Badge>
-              <Badge variant="outline">持续进化</Badge>
+              <Badge variant="outline">{copy.tags.forUsers}</Badge>
+              <Badge variant="outline">{copy.tags.transparent}</Badge>
+              <Badge variant="outline">{copy.tags.iterative}</Badge>
+              <Badge variant="outline">{copy.tags.evolving}</Badge>
             </div>
           </div>
 
           <div className="grid gap-3">
             {[
-              { label: "上手门槛", value: "极低", hint: "只需自然语言描述目标" },
-              { label: "响应方式", value: "多步骤推进", hint: "不是一次性输出" },
-              { label: "交付标准", value: "可直接使用", hint: "结论 + 行动建议" },
+              {
+                label: copy.metrics.lowBarrierLabel,
+                value: copy.metrics.lowBarrierValue,
+                hint: copy.metrics.lowBarrierHint,
+              },
+              {
+                label: copy.metrics.responseModeLabel,
+                value: copy.metrics.responseModeValue,
+                hint: copy.metrics.responseModeHint,
+              },
+              {
+                label: copy.metrics.deliveryLabel,
+                value: copy.metrics.deliveryValue,
+                hint: copy.metrics.deliveryHint,
+              },
             ].map((item, index) => (
               <motion.div
                 key={item.label}
@@ -142,9 +154,9 @@ export function AboutSettingsPage() {
 
       <motion.section {...reveal} className="space-y-4">
         <div className="space-y-1">
-          <h3 className="text-lg font-semibold tracking-tight">为什么这页像官网，而不是说明书</h3>
+          <h3 className="text-lg font-semibold tracking-tight">{copy.whyTitle}</h3>
           <p className="text-muted-foreground text-sm">
-            你看到的是“体验价值”，不是参数堆叠。普通用户关注的是能不能更快、更轻松地完成事情。
+            {copy.whyDescription}
           </p>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
@@ -177,7 +189,7 @@ export function AboutSettingsPage() {
           <CardContent className="p-5 md:p-6">
             <div className="mb-4 flex items-center gap-2">
               <CompassIcon className="text-primary size-4.5" />
-              <h3 className="text-base font-semibold">用户常见场景</h3>
+              <h3 className="text-base font-semibold">{copy.scenariosTitle}</h3>
             </div>
             <div className="grid gap-3">
               {userScenarios.map((item, index) => (
@@ -201,7 +213,7 @@ export function AboutSettingsPage() {
           <CardContent className="p-5 md:p-6">
             <div className="mb-4 flex items-center gap-2">
               <WandSparklesIcon className="text-primary size-4.5" />
-              <h3 className="text-base font-semibold">三步上手路径</h3>
+              <h3 className="text-base font-semibold">{copy.stepsTitle}</h3>
             </div>
             <div className="space-y-3">
               {onboardingSteps.map((item, index) => (
@@ -228,14 +240,14 @@ export function AboutSettingsPage() {
           <div className="absolute inset-0 opacity-[0.2] [background-image:radial-gradient(hsl(var(--foreground)/0.45)_1px,transparent_1px)] [background-size:12px_12px]" />
           <CardContent className="relative flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1.5">
-              <div className="font-serif text-2xl font-semibold tracking-tight">准备好把任务交给 Nion 了吗？</div>
+              <div className="font-serif text-2xl font-semibold tracking-tight">{copy.ctaTitle}</div>
               <p className="text-muted-foreground text-sm leading-6">
-                从今天开始，把重复、繁琐、耗时的流程交给它，你专注在真正重要的判断与决策。
+                {copy.ctaDescription}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Badge variant="secondary" className="px-3 py-1 text-xs">
-                持续进化中
+                {copy.ctaBadge}
               </Badge>
             </div>
           </CardContent>

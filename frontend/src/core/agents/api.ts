@@ -1,6 +1,12 @@
 import { getBackendBaseURL } from "@/core/config";
 
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from "./types";
+import type {
+  Agent,
+  CreateAgentRequest,
+  DefaultAgentConfig,
+  UpdateAgentRequest,
+  UpdateDefaultAgentConfigRequest,
+} from "./types";
 
 export async function listAgents(): Promise<Agent[]> {
   const res = await fetch(`${getBackendBaseURL()}/api/agents`);
@@ -64,4 +70,32 @@ export async function checkAgentName(
     );
   }
   return res.json() as Promise<{ available: boolean; name: string }>;
+}
+
+export async function getDefaultAgentConfig(): Promise<DefaultAgentConfig> {
+  const res = await fetch(`${getBackendBaseURL()}/api/default-agent/config`);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(
+      err.detail ?? `Failed to load default agent config: ${res.statusText}`,
+    );
+  }
+  return res.json() as Promise<DefaultAgentConfig>;
+}
+
+export async function updateDefaultAgentConfig(
+  request: UpdateDefaultAgentConfigRequest,
+): Promise<DefaultAgentConfig> {
+  const res = await fetch(`${getBackendBaseURL()}/api/default-agent/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(
+      err.detail ?? `Failed to update default agent config: ${res.statusText}`,
+    );
+  }
+  return res.json() as Promise<DefaultAgentConfig>;
 }

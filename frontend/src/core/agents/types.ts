@@ -3,6 +3,8 @@ export interface Agent {
   description: string;
   model: string | null;
   tool_groups: string[] | null;
+  heartbeat_enabled?: boolean;
+  evolution_enabled?: boolean;
   soul?: string | null;
 }
 
@@ -19,4 +21,21 @@ export interface UpdateAgentRequest {
   model?: string | null;
   tool_groups?: string[] | null;
   soul?: string | null;
+}
+
+export interface DefaultAgentConfig {
+  name: "_default";
+  description: string;
+  model: string | null;
+  tool_groups: string[] | null;
+  heartbeat_enabled: boolean;
+  evolution_enabled: boolean;
+}
+
+export interface UpdateDefaultAgentConfigRequest {
+  description?: string | null;
+  model?: string | null;
+  tool_groups?: string[] | null;
+  heartbeat_enabled?: boolean;
+  evolution_enabled?: boolean;
 }

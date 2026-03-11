@@ -4,7 +4,7 @@ import { BotIcon, PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { useAgents } from "@/core/agents";
+import { useAgents, useDefaultAgentConfig } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { AgentCard } from "./agent-card";
@@ -12,6 +12,7 @@ import { AgentCard } from "./agent-card";
 export function AgentGallery() {
   const { t } = useI18n();
   const { agents, isLoading } = useAgents();
+  const { config: defaultAgent, isLoading: defaultAgentLoading } = useDefaultAgentConfig();
   const router = useRouter();
 
   const handleNewAgent = () => {
@@ -36,11 +37,11 @@ export function AgentGallery() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
-        {isLoading ? (
+        {isLoading || defaultAgentLoading ? (
           <div className="text-muted-foreground flex h-40 items-center justify-center text-sm">
             {t.common.loading}
           </div>
-        ) : agents.length === 0 ? (
+        ) : agents.length === 0 && !defaultAgent ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
             <div className="bg-muted flex h-14 w-14 items-center justify-center rounded-full">
               <BotIcon className="text-muted-foreground h-7 w-7" />
@@ -58,6 +59,9 @@ export function AgentGallery() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {defaultAgent ? (
+              <AgentCard agent={defaultAgent} isDefault />
+            ) : null}
             {agents.map((agent) => (
               <AgentCard key={agent.name} agent={agent} />
             ))}

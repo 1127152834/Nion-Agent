@@ -59,6 +59,11 @@ export interface Translations {
     linkCopied: string;
   };
 
+  citations: {
+    source: string;
+    visitSource: string;
+  };
+
   // Input Box
   inputBox: {
     placeholder: string;
@@ -84,6 +89,12 @@ export interface Translations {
     reasoningEffortHigh: string;
     reasoningEffortHighDescription: string;
     searchModels: string;
+    contextLabel: string;
+    skillLabel: string;
+    mcpLabel: string;
+    searchMcpTools: string;
+    noMcpTools: string;
+    generatingFollowUpSuggestions: string;
     surpriseMe: string;
     surpriseMePrompt: string;
     temporaryChat: string;
@@ -185,6 +196,7 @@ export interface Translations {
   agents: {
     title: string;
     description: string;
+    defaultBadge: string;
     newAgent: string;
     emptyTitle: string;
     emptyDescription: string;
@@ -206,6 +218,116 @@ export interface Translations {
     agentCreated: string;
     startChatting: string;
     backToGallery: string;
+    picker: {
+      selectAgent: string;
+      defaultAgentName: string;
+      defaultAgentDescription: string;
+      noDescription: string;
+      settingsTooltip: string;
+    };
+    settings: {
+      pageTitle: string;
+      tabs: {
+        basic: string;
+        heartbeat: string;
+        evolution: string;
+        soul: string;
+        identity: string;
+        logs: string;
+        reports: string;
+      };
+      loading: string;
+      loadFailed: string;
+      save: string;
+      saving: string;
+      cancel: string;
+      basic: {
+        title: string;
+        saved: string;
+        saveFailed: string;
+        nameLabel: string;
+        nameImmutableHint: string;
+        descriptionLabel: string;
+        descriptionPlaceholder: string;
+        modelLabel: string;
+        modelPlaceholder: string;
+        toolGroupsLabel: string;
+        toolGroupsPlaceholder: string;
+        heartbeatTitle: string;
+        heartbeatDescription: string;
+        evolutionTitle: string;
+        evolutionDescription: string;
+      };
+      editor: {
+        soulTitle: string;
+        identityTitle: string;
+        loadSoulFailed: string;
+        loadIdentityFailed: string;
+      };
+      heartbeat: {
+        title: string;
+        enabledLabel: string;
+        timezoneLabel: string;
+        templatesLabel: string;
+        templatesComingSoon: string;
+        saveSettings: string;
+      };
+      evolution: {
+        title: string;
+        enabledLabel: string;
+        intervalHoursLabel: string;
+        autoTriggerLabel: string;
+        saveSettings: string;
+      };
+      logs: {
+        reportsTitle: string;
+        suggestionsTitle: string;
+        executionLogsTitle: string;
+        allStatus: string;
+        loading: string;
+        loadLogsFailed: string;
+        noLogs: string;
+        logDetailsTitle: string;
+        duration: string;
+        error: string;
+        result: string;
+        loadReportsFailed: string;
+        noReports: string;
+        suggestionUnit: string;
+        loadSuggestionsFailed: string;
+        noSuggestions: string;
+        confidence: string;
+        suggestionDetailsTitle: string;
+        suggestionContent: string;
+        evidenceSummary: string;
+        impactScope: string;
+        processing: string;
+        dismiss: string;
+        accept: string;
+        status: {
+          success: string;
+          failed: string;
+          running: string;
+          completed: string;
+          pending: string;
+          accepted: string;
+          dismissed: string;
+        };
+        priority: {
+          high: string;
+          medium: string;
+          low: string;
+        };
+      };
+      toasts: {
+        soulSaved: string;
+        identitySaved: string;
+        heartbeatSaved: string;
+        evolutionSaved: string;
+        suggestionDismissed: string;
+        suggestionAccepted: string;
+      };
+    };
   };
 
   // Breadcrumb
@@ -243,6 +365,114 @@ export interface Translations {
     todoList: {
       title: string;
     };
+    runtimeMode: {
+      sandboxLabel: string;
+      hostLabel: string;
+      pickDir: string;
+      hostDialogTitle: string;
+      hostDialogDescription: string;
+      hostDialogCurrentDir: string;
+      hostDialogChooseDir: string;
+      hostDialogCancel: string;
+      hostBoundDirectory: string;
+      hostDirLocked: string;
+      hostDirMissing: string;
+      hostDirDetected: (path: string) => string;
+      hostDirNotEmptyHint: string;
+      createEmptyFolderAndUse: string;
+      folderNamePlaceholder: string;
+      folderNameRequired: string;
+      folderNameInvalid: string;
+      creating: string;
+      confirm: string;
+      locked: string;
+      lockedTip: string;
+      desktopOnly: string;
+      modeSaveFailed: string;
+      sandboxTip: string;
+      hostTip: string;
+    };
+    runtimeOnboarding: {
+      title: string;
+      description: string;
+      coreStatusLabel: string;
+      coreReady: string;
+      coreNotReady: string;
+      versionLabel: string;
+      platformLabel: string;
+      noOptionalComponents: string;
+      downloadComponent: string;
+      retry: string;
+      skip: string;
+      later: string;
+      continueToWorkspace: string;
+      status: {
+        notDownloaded: string;
+        downloading: string;
+        downloaded: string;
+        failed: string;
+        skipped: string;
+        unknown: string;
+      };
+    };
+    artifactPanel: {
+      plugin: string;
+      filePreview: string;
+      directory: string;
+      tabDirectory: string;
+      tabPreview: string;
+      tabPlugin: string;
+      targetPrefix: string;
+      pluginLoading: string;
+      pluginResolving: string;
+      pluginMissingOrDisabled: string;
+      pluginUnsupportedSurface: string;
+      retryLoad: string;
+      selectFileHint: string;
+      pluginEntryMissing: string;
+    };
+    pluginAssistant: {
+      title: string;
+      description: string;
+      restoring: string;
+      sessionNotReady: string;
+      createSessionSuccess: string;
+      generateSuccess: string;
+      autoVerifyPassed: string;
+      manualVerifyPassed: string;
+      manualVerifyFailed: string;
+      packageSuccess: string;
+      flow: {
+        title: string;
+        subtitle: string;
+        sessionConfig: string;
+        pluginNamePlaceholder: string;
+        descriptionPlaceholder: string;
+        createSession: string;
+        sessionStatus: string;
+        uninitialized: string;
+        actions: string;
+        generate: string;
+        autoVerify: string;
+        manualPass: string;
+        manualFail: string;
+        package: string;
+        download: string;
+        manualNotePlaceholder: string;
+        artifacts: string;
+        demoImage: string;
+        states: {
+          draft: string;
+          generated: string;
+          autoVerified: string;
+          manualVerified: string;
+          packaged: string;
+        };
+      };
+    };
+    header: {
+      expandSidebar: string;
+    };
   };
 
   // Conversation
@@ -255,6 +485,53 @@ export interface Translations {
   chats: {
     searchChats: string;
     awaitingResponse: string;
+  };
+
+  scheduler: {
+    taskManager: {
+      reminderFallbackTitle: string;
+      createTitle: string;
+      taskNameLabel: string;
+      triggerTypeLabel: string;
+      triggerTypeInterval: string;
+      triggerTypeOnce: string;
+      triggerValueLabelCron: string;
+      triggerValueLabelInterval: string;
+      triggerValueLabelOnce: string;
+      promptLabel: string;
+      promptPlaceholder: string;
+      createTask: string;
+      creatingTask: string;
+      taskListTitle: string;
+      refresh: string;
+      loading: string;
+      noTasks: string;
+      nextRunPrefix: string;
+      runNow: string;
+      deleteTask: string;
+      historyTitle: string;
+      historySelectHint: string;
+      noHistory: string;
+      startPrefix: string;
+      endPrefix: string;
+      errorPrefix: string;
+      createValidation: string;
+      invalidInterval: string;
+      invalidScheduleTime: string;
+      createSuccess: string;
+      createFailed: string;
+      deleteSuccess: string;
+      deleteFailed: string;
+      runSuccess: string;
+      runFailed: string;
+      status: {
+        completed: string;
+        running: string;
+        failed: string;
+        cancelled: string;
+        pending: string;
+      };
+    };
   };
 
   // Page titles (document title)
@@ -423,6 +700,7 @@ export interface Translations {
     assistantThinking: string;
     assistantInputPlaceholder: string;
     assistantSend: string;
+    assistantInputShortcutHint: string;
     assistantRestoreSelection: string;
     selectionCopied: string;
     selectionCopy: string;
@@ -482,6 +760,7 @@ export interface Translations {
     description: string;
     sections: {
       appearance: string;
+      sessionPolicy: string;
       memory: string;
       embedding: string;
       tools: string;
@@ -489,6 +768,7 @@ export interface Translations {
       skills: string;
       notification: string;
       diagnostics: string;
+      desktopRuntime: string;
       about: string;
     };
     validation: {
@@ -504,6 +784,7 @@ export interface Translations {
       models: Record<string, any>;
       rss: Record<string, any>;
       sandbox: Record<string, any>;
+      suggestions: Record<string, any>;
       subagents: Record<string, any>;
       summarization: Record<string, any>;
       title: Record<string, any>;
@@ -519,6 +800,8 @@ export interface Translations {
     memory: {
       title: string;
       description: string;
+      scopeTitle: string;
+      scopeDescription: string;
       empty: string;
       rawJson: string;
       hub: Record<string, string>;
@@ -575,6 +858,10 @@ export interface Translations {
       title: string;
       description: string;
     };
+    sessionPolicy: {
+      title: string;
+      description: string;
+    };
     sandbox: {
       title: string;
       description: string;
@@ -605,6 +892,26 @@ export interface Translations {
       booleanTrue: string;
       booleanFalse: string;
     };
+    desktopRuntime: {
+      title: string;
+      description: string;
+      desktopOnlyHint: string;
+      restartHint: string;
+      configVersion: string;
+      activePorts: string;
+      frontendPortLabel: string;
+      gatewayPortLabel: string;
+      langgraphPortLabel: string;
+      validationInteger: string;
+      validationRange: string;
+      validationDistinct: string;
+      loadFailed: string;
+      saveSuccess: string;
+      saveFailed: string;
+      reset: string;
+      save: string;
+      saving: string;
+    };
     retrieval: Record<string, any>;
     skills: {
       title: string;
@@ -628,6 +935,65 @@ export interface Translations {
     acknowledge: {
       emptyTitle: string;
       emptyDescription: string;
+    };
+    aboutPage: {
+      heroBadge: string;
+      heroTitleLine1: string;
+      heroTitleLine2: string;
+      heroDescription: string;
+      tags: {
+        forUsers: string;
+        transparent: string;
+        iterative: string;
+        evolving: string;
+      };
+      metrics: {
+        lowBarrierLabel: string;
+        lowBarrierValue: string;
+        lowBarrierHint: string;
+        responseModeLabel: string;
+        responseModeValue: string;
+        responseModeHint: string;
+        deliveryLabel: string;
+        deliveryValue: string;
+        deliveryHint: string;
+      };
+      whyTitle: string;
+      whyDescription: string;
+      valueCards: {
+        startTitle: string;
+        startDescription: string;
+        visibleTitle: string;
+        visibleDescription: string;
+        stableTitle: string;
+        stableDescription: string;
+      };
+      scenariosTitle: string;
+      scenarios: {
+        dailyBriefTitle: string;
+        dailyBriefDescription: string;
+        writingTitle: string;
+        writingDescription: string;
+        automationTitle: string;
+        automationDescription: string;
+        decompositionTitle: string;
+        decompositionDescription: string;
+      };
+      stepsTitle: string;
+      steps: {
+        step1Badge: string;
+        step1Title: string;
+        step1Description: string;
+        step2Badge: string;
+        step2Title: string;
+        step2Description: string;
+        step3Badge: string;
+        step3Title: string;
+        step3Description: string;
+      };
+      ctaTitle: string;
+      ctaDescription: string;
+      ctaBadge: string;
     };
     workbenchPlugins: {
       title: string;

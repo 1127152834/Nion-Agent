@@ -1,6 +1,6 @@
 "use client";
 
-import { BotIcon, MessageSquareIcon, Trash2Icon } from "lucide-react";
+import { BotIcon, MessageSquareIcon, SettingsIcon, Trash2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -29,15 +29,20 @@ import { useI18n } from "@/core/i18n/hooks";
 
 interface AgentCardProps {
   agent: Agent;
+  isDefault?: boolean;
 }
 
-export function AgentCard({ agent }: AgentCardProps) {
+export function AgentCard({ agent, isDefault = false }: AgentCardProps) {
   const { t } = useI18n();
   const router = useRouter();
   const deleteAgent = useDeleteAgent();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   function handleChat() {
+    if (isDefault) {
+      router.push("/workspace/chats/new");
+      return;
+    }
     router.push(`/workspace/agents/${agent.name}/chats/new`);
   }
 
@@ -64,6 +69,11 @@ export function AgentCard({ agent }: AgentCardProps) {
                 <CardTitle className="truncate text-base">
                   {agent.name}
                 </CardTitle>
+                {isDefault ? (
+                  <Badge variant="outline" className="mt-0.5 text-xs">
+                    {t.agents.defaultBadge}
+                  </Badge>
+                ) : null}
                 {agent.model && (
                   <Badge variant="secondary" className="mt-0.5 text-xs">
                     {agent.model}
@@ -100,18 +110,29 @@ export function AgentCard({ agent }: AgentCardProps) {
             <Button
               size="icon"
               variant="ghost"
-              className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
-              onClick={() => setDeleteOpen(true)}
-              title={t.agents.delete}
+              className="h-8 w-8 shrink-0"
+              onClick={() => router.push(`/workspace/agents/${agent.name}/settings`)}
+              title={t.agents.picker.settingsTooltip}
             >
-              <Trash2Icon className="h-3.5 w-3.5" />
+              <SettingsIcon className="h-3.5 w-3.5" />
             </Button>
+            {isDefault ? null : (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
+                onClick={() => setDeleteOpen(true)}
+                title={t.agents.delete}
+              >
+                <Trash2Icon className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         </CardFooter>
       </Card>
 
       {/* Delete Confirm */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+      <Dialog open={!isDefault && deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t.agents.delete}</DialogTitle>

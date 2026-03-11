@@ -359,7 +359,7 @@ export function FloatingEntryAssistant({
                 </div>
 
                 <div>
-                  <h3 className="text-3xl font-semibold text-foreground">阅读助手</h3>
+                  <h3 className="text-3xl font-semibold text-foreground">{t.rssReader.aiPanelTitle}</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {t.rssReader.aiPanelSubtitle}
                   </p>
@@ -415,7 +415,7 @@ export function FloatingEntryAssistant({
         <AssistantInput
           onSend={sendPromptWithToast}
           isLoading={thread.isLoading}
-          placeholder={t.rssReader.aiComposerPlaceholder || "问我任何关于这篇文章的问题..."}
+          placeholder={t.rssReader.aiComposerPlaceholder}
         />
       </div>
     </div>

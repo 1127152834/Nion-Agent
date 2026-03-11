@@ -3,11 +3,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createAgent,
   deleteAgent,
+  getDefaultAgentConfig,
   getAgent,
   listAgents,
   updateAgent,
+  updateDefaultAgentConfig,
 } from "./api";
-import type { CreateAgentRequest, UpdateAgentRequest } from "./types";
+import type {
+  CreateAgentRequest,
+  UpdateAgentRequest,
+  UpdateDefaultAgentConfigRequest,
+} from "./types";
 
 export function useAgents() {
   const { data, isLoading, error } = useQuery({
@@ -58,6 +64,26 @@ export function useDeleteAgent() {
   return useMutation({
     mutationFn: (name: string) => deleteAgent(name),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+  });
+}
+
+export function useDefaultAgentConfig() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["agents", "default-config"],
+    queryFn: () => getDefaultAgentConfig(),
+  });
+  return { config: data ?? null, isLoading, error };
+}
+
+export function useUpdateDefaultAgentConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: UpdateDefaultAgentConfigRequest) =>
+      updateDefaultAgentConfig(request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["agents", "default-config"] });
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
     },
   });

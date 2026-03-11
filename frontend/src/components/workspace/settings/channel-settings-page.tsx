@@ -172,7 +172,7 @@ function describeSessionConfig(
 ): string[] {
   const labels = options ?? {};
   if (!session) {
-    return [labels.emptyLabel ?? "继承默认值"];
+    return [labels.emptyLabel ?? "Inherit defaults"];
   }
   const items: string[] = [];
   if (session.assistant_id) {
@@ -190,7 +190,7 @@ function describeSessionConfig(
   if (typeof session.context?.subagent_enabled === "boolean") {
     items.push(`${labels.subagentLabel ?? "Subagent"}: ${session.context.subagent_enabled ? "On" : "Off"}`);
   }
-  return items.length > 0 ? items : [labels.emptyLabel ?? "继承默认值"];
+  return items.length > 0 ? items : [labels.emptyLabel ?? "Inherit defaults"];
 }
 
 const PLATFORM_FIELDS: Record<ChannelPlatform, CredentialFieldSpec[]> = {
@@ -666,7 +666,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
     ((testConnection.data?.success ?? false) || (runtimeStatus?.connected ?? false))
     && authorizedUsers.length === 0;
   const sessionSummaryOptions = useMemo(() => ({
-    emptyLabel: m?.sessionInheritLabel ?? "继承当前默认值",
+    emptyLabel: m?.sessionInheritLabel ?? "Inherit current defaults",
     assistantLabel: m?.sessionAssistantIdLabel ?? "Assistant",
     recursionLabel: m?.sessionRecursionLimitLabel ?? "Recursion",
     thinkingLabel: m?.sessionThinkingLabel ?? "Thinking",
@@ -943,7 +943,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
               </div>
               <div className="text-muted-foreground text-xs leading-5">
                 {m?.sessionDefaultsDescription
-                  ?? "为这个通道配置默认会话参数。只有显式填写的字段才会下发到运行时。"}
+                  ?? "Configure default session parameters for this channel. Only explicitly filled fields are sent to runtime."}
               </div>
             </div>
             <SessionSummaryBadges items={sessionDefaultsSummary} />
@@ -958,7 +958,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                     ...prev,
                     assistant_id: event.target.value,
                   }))}
-                placeholder={m?.sessionAssistantIdPlaceholder ?? "留空表示使用 lead_agent"}
+                placeholder={m?.sessionAssistantIdPlaceholder ?? "Leave empty to use lead_agent"}
               />
             </div>
             <div className="space-y-1.5">
@@ -971,7 +971,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                     recursion_limit: event.target.value.replace(/[^\d]/g, ""),
                   }))}
                 inputMode="numeric"
-                placeholder={m?.sessionRecursionLimitPlaceholder ?? "留空表示不下发"}
+                placeholder={m?.sessionRecursionLimitPlaceholder ?? "Leave empty to skip sending this field"}
               />
             </div>
             <div className="space-y-1.5">
@@ -983,9 +983,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                     ...prev,
                     thinking_enabled: value,
                   }))}
-                inheritLabel={m?.sessionInheritOption ?? "继承"}
-                enabledLabel={m?.sessionEnabledOption ?? "启用"}
-                disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                inheritLabel={m?.sessionInheritOption ?? "Inherit"}
+                enabledLabel={m?.sessionEnabledOption ?? "Enabled"}
+                disabledLabel={m?.sessionDisabledOption ?? "Disabled"}
               />
             </div>
             <div className="space-y-1.5">
@@ -997,9 +997,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                     ...prev,
                     is_plan_mode: value,
                   }))}
-                inheritLabel={m?.sessionInheritOption ?? "继承"}
-                enabledLabel={m?.sessionEnabledOption ?? "启用"}
-                disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                inheritLabel={m?.sessionInheritOption ?? "Inherit"}
+                enabledLabel={m?.sessionEnabledOption ?? "Enabled"}
+                disabledLabel={m?.sessionDisabledOption ?? "Disabled"}
               />
             </div>
             <div className="space-y-1.5">
@@ -1011,9 +1011,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                     ...prev,
                     subagent_enabled: value,
                   }))}
-                inheritLabel={m?.sessionInheritOption ?? "继承"}
-                enabledLabel={m?.sessionEnabledOption ?? "启用"}
-                disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                inheritLabel={m?.sessionInheritOption ?? "Inherit"}
+                enabledLabel={m?.sessionEnabledOption ?? "Enabled"}
+                disabledLabel={m?.sessionDisabledOption ?? "Disabled"}
               />
             </div>
           </div>
@@ -1106,7 +1106,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
             <div className="text-sm font-medium">{m?.runtimeStatusTitle ?? "Runtime Status"}</div>
             <div className="text-muted-foreground text-xs">
               {m?.runtimeStatusDescription
-                ?? "仅展示关键运行信息，详细诊断请查看日志。"}
+                ?? "Only key runtime status is shown here. Check logs for detailed diagnostics."}
             </div>
           </div>
           <Button
@@ -1372,7 +1372,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
             <DialogTitle>{m?.sessionOverrideDialogTitle ?? "Edit Session Override"}</DialogTitle>
             <DialogDescription>
               {m?.sessionOverrideDialogDescription
-                ?? "为授权用户配置更高优先级的会话参数。留空或选择继承表示回退到通道默认值。"}
+                ?? "Configure higher-priority session parameters for authorized users. Leave empty or choose inherit to fall back to channel defaults."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1399,7 +1399,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                       ...prev,
                       assistant_id: event.target.value,
                     }))}
-                  placeholder={m?.sessionAssistantIdPlaceholder ?? "留空表示继承"}
+                  placeholder={m?.sessionAssistantIdPlaceholder ?? "Leave empty to inherit"}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1412,7 +1412,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                       recursion_limit: event.target.value.replace(/[^\d]/g, ""),
                     }))}
                   inputMode="numeric"
-                  placeholder={m?.sessionRecursionLimitPlaceholder ?? "留空表示继承"}
+                  placeholder={m?.sessionRecursionLimitPlaceholder ?? "Leave empty to inherit"}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1424,9 +1424,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                       ...prev,
                       thinking_enabled: value,
                     }))}
-                  inheritLabel={m?.sessionInheritOption ?? "继承"}
-                  enabledLabel={m?.sessionEnabledOption ?? "启用"}
-                  disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                  inheritLabel={m?.sessionInheritOption ?? "Inherit"}
+                  enabledLabel={m?.sessionEnabledOption ?? "Enabled"}
+                  disabledLabel={m?.sessionDisabledOption ?? "Disabled"}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1438,9 +1438,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                       ...prev,
                       is_plan_mode: value,
                     }))}
-                  inheritLabel={m?.sessionInheritOption ?? "继承"}
-                  enabledLabel={m?.sessionEnabledOption ?? "启用"}
-                  disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                  inheritLabel={m?.sessionInheritOption ?? "Inherit"}
+                  enabledLabel={m?.sessionEnabledOption ?? "Enabled"}
+                  disabledLabel={m?.sessionDisabledOption ?? "Disabled"}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1452,9 +1452,9 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                       ...prev,
                       subagent_enabled: value,
                     }))}
-                  inheritLabel={m?.sessionInheritOption ?? "继承"}
-                  enabledLabel={m?.sessionEnabledOption ?? "启用"}
-                  disabledLabel={m?.sessionDisabledOption ?? "关闭"}
+                  inheritLabel={m?.sessionInheritOption ?? "Inherit"}
+                  enabledLabel={m?.sessionEnabledOption ?? "Enabled"}
+                  disabledLabel={m?.sessionDisabledOption ?? "Disabled"}
                 />
               </div>
             </div>
@@ -1468,7 +1468,7 @@ function ChannelPlatformPanel({ platform }: { platform: ChannelPlatform }) {
                 setAuthorizedUserSessionForm(DEFAULT_SESSION_FORM_STATE);
               }}
             >
-              {m?.sessionResetAction ?? "恢复继承"}
+              {m?.sessionResetAction ?? "Reset to inherit"}
             </Button>
             <Button
               type="button"

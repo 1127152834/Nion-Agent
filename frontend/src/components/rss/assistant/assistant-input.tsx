@@ -134,7 +134,7 @@ function AddAttachmentsButton({ className }: { className?: string }) {
 export function AssistantInput({
   onSend,
   isLoading = false,
-  placeholder = "问我任何关于这篇文章的问题...",
+  placeholder,
   className,
 }: AssistantInputProps) {
   const { t, locale } = useI18n();
@@ -145,6 +145,7 @@ export function AssistantInput({
   const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([]);
   const [skillQuery, setSkillQuery] = useState("");
   const [mcpQuery, setMcpQuery] = useState("");
+  const resolvedPlaceholder = placeholder ?? t.rssReader.assistantInputPlaceholder;
 
   const skillOptions = useMemo<MentionOption[]>(
     () =>
@@ -281,7 +282,7 @@ export function AssistantInput({
       <PromptInputBody>
         <PromptInputTextarea
           className="max-h-48 min-h-[68px] border-0 bg-transparent text-sm shadow-none"
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           disabled={isLoading}
         />
       </PromptInputBody>
@@ -429,7 +430,7 @@ export function AssistantInput({
       </PromptInputFooter>
 
       <div className="text-muted-foreground px-3 pb-3 text-xs">
-        Enter 发送 · Shift + Enter 换行
+        {t.rssReader.assistantInputShortcutHint}
       </div>
     </PromptInput>
   );

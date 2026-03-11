@@ -12,6 +12,7 @@ import {
   WrenchIcon,
   BotIcon,
   BoxIcon,
+  ServerIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -25,21 +26,25 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AboutSettingsPage } from "@/components/workspace/settings/about-settings-page";
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
 import { ChannelSettingsPage } from "@/components/workspace/settings/channel-settings-page";
+import { DesktopRuntimeSettingsPage } from "@/components/workspace/settings/desktop-runtime-settings-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
 import { NotificationSettingsPage } from "@/components/workspace/settings/notification-settings-page";
 import { RetrievalSettingsPage } from "@/components/workspace/settings/retrieval-settings-page";
 import { RuntimeTopologySettingsPage } from "@/components/workspace/settings/runtime-topology-settings-page";
 import { SandboxSettingsPage } from "@/components/workspace/settings/sandbox-settings-page";
+import { SessionPolicySettingsPage } from "@/components/workspace/settings/session-policy-settings-page";
 import { SkillSettingsPage } from "@/components/workspace/settings/skill-settings-page";
 import { ToolSettingsPage } from "@/components/workspace/settings/tool-settings-page";
 import { WorkbenchPluginsPage } from "@/components/workspace/settings/workbench-plugins-page";
 import { useI18n } from "@/core/i18n/hooks";
+import { useDesktopRuntime } from "@/core/platform/hooks";
 import { cn } from "@/lib/utils";
 
 type SettingsSection =
   | "appearance"
   | "models"
+  | "sessionPolicy"
   | "memory"
   | "embedding"
   | "tools"
@@ -49,6 +54,7 @@ type SettingsSection =
   | "diagnostics"
   | "notification"
   | "workbench-plugins"
+  | "desktop-runtime"
   | "about";
 
 type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
@@ -57,7 +63,8 @@ type SettingsDialogProps = React.ComponentProps<typeof Dialog> & {
 
 export function SettingsDialog(props: SettingsDialogProps) {
   const { defaultSection = "appearance", ...dialogProps } = props;
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
+  const { mounted, isDesktopRuntime } = useDesktopRuntime();
   const [activeSection, setActiveSection] =
     useState<SettingsSection>(defaultSection);
 
@@ -82,6 +89,24 @@ export function SettingsDialog(props: SettingsDialogProps) {
         icon: BotIcon,
       },
       {
+        id: "sessionPolicy",
+        label: t.settings.sections.sessionPolicy,
+        icon: SparklesIcon,
+      },
+      {
+        id: "memory",
+        label: t.settings.sections.memory,
+        icon: BrainIcon,
+      },
+      {
+        id: "embedding",
+        label: t.settings.sections.embedding ?? t.settings.retrieval?.title ?? "Retrieval",
+        icon: DatabaseIcon,
+      },
+      { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
+      { id: "channels", label: t.settings.sections.channels, icon: Link2Icon },
+      { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
+      {
         id: "notification",
         label: t.settings.sections.notification,
         icon: BellIcon,
@@ -91,41 +116,31 @@ export function SettingsDialog(props: SettingsDialogProps) {
         label: t.settings.sections.diagnostics,
         icon: ActivityIcon,
       },
-      {
-        id: "memory",
-        label: t.settings.sections.memory,
-        icon: BrainIcon,
-      },
-      {
-        id: "embedding",
-        label:
-          t.settings.sections.embedding
-          ?? t.settings.retrieval?.title
-          ?? (locale === "zh-CN" ? "检索模型" : "Retrieval"),
-        icon: DatabaseIcon,
-      },
-      { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
-      { id: "channels", label: t.settings.sections.channels, icon: Link2Icon },
-      { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
       { id: "workbench-plugins", label: t.settings.workbenchPlugins?.title ?? "Workbench plugins", icon: BoxIcon },
       { id: "sandbox", label: t.settings.sandbox?.title ?? "Sandbox", icon: BoxIcon },
+      ...(mounted && isDesktopRuntime
+        ? [{ id: "desktop-runtime", label: t.settings.sections.desktopRuntime, icon: ServerIcon }]
+        : []),
       { id: "about", label: t.settings.sections.about, icon: InfoIcon },
     ],
     [
       t.settings.sections.appearance,
       t.settings.models?.title,
-      t.settings.sections.notification,
-      t.settings.sections.diagnostics,
+      t.settings.sections.sessionPolicy,
       t.settings.sections.memory,
       t.settings.sections.embedding,
       t.settings.retrieval?.title,
       t.settings.sections.tools,
       t.settings.sections.channels,
       t.settings.sections.skills,
+      t.settings.sections.notification,
+      t.settings.sections.diagnostics,
       t.settings.workbenchPlugins?.title,
       t.settings.sandbox?.title,
+      t.settings.sections.desktopRuntime,
       t.settings.sections.about,
-      locale,
+      mounted,
+      isDesktopRuntime,
     ],
   );
   return (
@@ -172,6 +187,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             <div className="space-y-8 p-6">
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "models" && <ModelSettingsPage />}
+              {activeSection === "sessionPolicy" && <SessionPolicySettingsPage />}
               {activeSection === "memory" && (
                 <MemorySettingsPage
                   onClose={() => props.onOpenChange?.(false)}
@@ -191,6 +207,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 />
               )}
               {activeSection === "sandbox" && <SandboxSettingsPage />}
+              {activeSection === "desktop-runtime" && <DesktopRuntimeSettingsPage />}
               {activeSection === "notification" && <NotificationSettingsPage />}
               {activeSection === "diagnostics" && <RuntimeTopologySettingsPage />}
               {activeSection === "about" && <AboutSettingsPage />}

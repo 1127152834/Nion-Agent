@@ -40,6 +40,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   threadId,
 }) => {
   const { t } = useI18n();
+  const copy = t.workspace.artifactPanel;
   const searchParams = useSearchParams();
   const { thread } = useThread();
   const layoutRef = useRef<GroupImperativeHandle>(null);
@@ -287,9 +288,9 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                 <FolderIcon className="text-muted-foreground size-4 shrink-0" />
                 <span className="truncate">
                   {artifactPanelMode === "plugin"
-                    ? "插件"
+                    ? copy.plugin
                     : artifactPanelMode === "preview"
-                      ? "文件预览"
+                      ? copy.filePreview
                       : t.common.workingDirectory}
                 </span>
                 {artifactPanelMode === "directory" && supportsWorkspaceView && workspaceTreeFetching ? (
@@ -324,7 +325,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   onClick={() => setArtifactPanelMode("directory")}
                 >
                   <FolderIcon className="size-3.5" />
-                  目录
+                  {copy.tabDirectory}
                 </Button>
                 <Button
                   size="sm"
@@ -334,7 +335,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   disabled={!selectedArtifact}
                 >
                   <FileTextIcon className="size-3.5" />
-                  文件预览
+                  {copy.tabPreview}
                 </Button>
                 <Button
                   size="sm"
@@ -350,7 +351,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   }}
                 >
                   <Code2Icon className="size-3.5" />
-                  插件
+                  {copy.tabPlugin}
                 </Button>
               </div>
             </div>
@@ -359,7 +360,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
               {artifactPanelMode === "plugin" ? (
                 <WorkbenchSlotShell
                   title={activePluginName}
-                  subtitle={`目标：${pluginSlotState.artifactPath}`}
+                  subtitle={`${copy.targetPrefix}: ${pluginSlotState.artifactPath}`}
                 >
                   {activePluginEnabled && activePluginSupportsSidebarSlot ? (
                     <WorkbenchContainer
@@ -369,7 +370,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                       pluginId={pluginSlotState.pluginId}
                     >
                       <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                        插件加载中...
+                        {copy.pluginLoading}
                       </div>
                     </WorkbenchContainer>
                   ) : (
@@ -377,14 +378,14 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                       {activePluginLoading ? (
                         <div className="flex items-center gap-2">
                           <Loader2Icon className="size-4 animate-spin" />
-                          正在加载插件...
+                          {copy.pluginResolving}
                         </div>
                       ) : (
                         <>
                           <div>
                             {activePluginSupportsSidebarSlot
-                              ? "插件未安装或未启用，请先在插件设置中安装并启用。"
-                              : "该插件未声明侧边插槽渲染能力，无法在此容器中运行。"}
+                              ? copy.pluginMissingOrDisabled
+                              : copy.pluginUnsupportedSurface}
                           </div>
                           <Button
                             size="sm"
@@ -393,7 +394,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                               void refetchActivePlugin();
                             }}
                           >
-                            重试加载
+                            {copy.retryLoad}
                           </Button>
                         </>
                       )}
@@ -410,7 +411,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   />
                 ) : (
                   <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                    请先在目录中选择文件。
+                    {copy.selectFileHint}
                   </div>
                 )
               ) : supportsWorkspaceView && workspaceTreeLoading && !workspaceTree ? (

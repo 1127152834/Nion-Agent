@@ -55,6 +55,7 @@ import {
   useThreads,
 } from "@/core/threads/hooks";
 import {
+  isGhostThread,
   isHiddenWorkspaceThread,
   isThreadAwaitingResponse,
   pathOfNewThread,
@@ -77,15 +78,18 @@ export function RecentChatList() {
   const pathname = usePathname();
   const handleNavigate = useWorkspaceSidebarNavigation();
   const { thread_id: threadIdFromPath } = useParams<{ thread_id: string }>();
+  const currentThreadId =
+    threadIdFromPath && threadIdFromPath !== "new" ? threadIdFromPath : null;
   const { data: threads = [] } = useThreads();
   const visibleThreads = useMemo(
     () =>
       threads.filter(
         (thread) =>
           thread.values?.session_mode !== "temporary_chat"
-          && !isHiddenWorkspaceThread(thread),
+          && !isHiddenWorkspaceThread(thread)
+          && (!isGhostThread(thread) || thread.thread_id === currentThreadId),
       ),
-    [threads],
+    [currentThreadId, threads],
   );
   const visibleThreadIds = useMemo(
     () => visibleThreads.map((thread) => thread.thread_id),
@@ -101,8 +105,6 @@ export function RecentChatList() {
   const [selectedThreadIds, setSelectedThreadIds] = useState<string[]>([]);
   const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
-  const currentThreadId =
-    threadIdFromPath && threadIdFromPath !== "new" ? threadIdFromPath : null;
   const [currentThreadDeleteIntent, setCurrentThreadDeleteIntent] =
     useState<CurrentThreadDeleteIntent>(null);
   const [currentThreadDeleteDialogOpen, setCurrentThreadDeleteDialogOpen] =
@@ -210,24 +212,18 @@ export function RecentChatList() {
     [currentThreadId, visibleThreads],
   );
 
-  const navigateAwayFromCurrentThread = useCallback(async (targetPath: string) => {
-    router.push(targetPath);
-    await new Promise<void>((resolve) => {
-      window.setTimeout(resolve, 80);
-    });
+  const navigateAwayFromCurrentThread = useCallback((targetPath: string) => {
+    router.replace(targetPath);
   }, [router]);
 
   const deleteSingleThread = useCallback(
     async (threadId: string, options?: { redirectPath?: string | null }) => {
       if (options?.redirectPath) {
-        await navigateAwayFromCurrentThread(options.redirectPath);
+        navigateAwayFromCurrentThread(options.redirectPath);
       }
       await deleteThreadAsync({ threadId });
-      if (options?.redirectPath) {
-        router.push(options.redirectPath);
-      }
     },
-    [deleteThreadAsync, navigateAwayFromCurrentThread, router],
+    [deleteThreadAsync, navigateAwayFromCurrentThread],
   );
 
   const handleDelete = useCallback(
@@ -289,7 +285,7 @@ export function RecentChatList() {
       setIsBatchDeleting(true);
       try {
         if (options?.redirectPath) {
-          await navigateAwayFromCurrentThread(options.redirectPath);
+          navigateAwayFromCurrentThread(options.redirectPath);
         }
 
         const results = await Promise.allSettled(
@@ -298,10 +294,6 @@ export function RecentChatList() {
 
         const successCount = results.filter((result) => result.status === "fulfilled").length;
         const failedCount = results.length - successCount;
-        if (options?.redirectPath) {
-          router.push(options.redirectPath);
-        }
-
         if (failedCount === 0) {
           toast.success(t.sidebar.bulkDeleteSuccess);
         } else if (successCount > 0) {
@@ -324,7 +316,7 @@ export function RecentChatList() {
         setIsBatchDeleting(false);
       }
     },
-    [deleteThreadAsync, exitSelectionMode, isBatchDeleting, navigateAwayFromCurrentThread, router, t.sidebar],
+    [deleteThreadAsync, exitSelectionMode, isBatchDeleting, navigateAwayFromCurrentThread, t.sidebar],
   );
 
   const handleRequestBatchDelete = useCallback(() => {

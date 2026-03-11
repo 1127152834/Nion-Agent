@@ -5,6 +5,7 @@ import { CheckCircle2Icon, DownloadIcon, FileTextIcon, ImageIcon, Loader2Icon, P
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/core/i18n/hooks";
 import type { PluginStudioSession } from "@/core/workbench";
 import { cn } from "@/lib/utils";
 
@@ -17,14 +18,6 @@ type FlowAction =
   | "package"
   | "download"
   | null;
-
-const STATUS_LABELS: Record<PluginStudioSession["state"], string> = {
-  draft: "草稿",
-  generated: "已生成",
-  auto_verified: "自动验证通过",
-  manual_verified: "人工确认通过",
-  packaged: "已打包",
-};
 
 function statusTone(state: PluginStudioSession["state"]) {
   if (state === "packaged" || state === "manual_verified" || state === "auto_verified") {
@@ -69,6 +62,15 @@ export function PluginAssistantFlowPanel({
   onPackage: () => void;
   onDownload: () => void;
 }) {
+  const { t } = useI18n();
+  const copy = t.workspace.pluginAssistant.flow;
+  const statusLabels: Record<PluginStudioSession["state"], string> = {
+    draft: copy.states.draft,
+    generated: copy.states.generated,
+    auto_verified: copy.states.autoVerified,
+    manual_verified: copy.states.manualVerified,
+    packaged: copy.states.packaged,
+  };
   const actionBusy = (name: Exclude<FlowAction, null>) => activeAction === name;
   const currentSession = session;
   const hasSession = Boolean(session);
@@ -84,26 +86,26 @@ export function PluginAssistantFlowPanel({
       <header className="border-b px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-semibold">
           <SparklesIcon className="size-4" />
-          插件助手流程
+          {copy.title}
         </div>
         <p className="text-muted-foreground mt-1 text-xs">
-          右侧步骤为半自动门禁流，聊天用于规格澄清与交互设计。
+          {copy.subtitle}
         </p>
       </header>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <section className="space-y-2 rounded-lg border bg-background p-3">
-          <div className="text-xs font-medium">会话配置</div>
+          <div className="text-xs font-medium">{copy.sessionConfig}</div>
           <Input
             value={pluginName}
             onChange={(event) => onPluginNameChange(event.target.value)}
-            placeholder="插件名称"
+            placeholder={copy.pluginNamePlaceholder}
             className="h-8 text-xs"
           />
           <textarea
             value={description}
             onChange={(event) => onDescriptionChange(event.target.value)}
-            placeholder="描述目标能力与交互意图"
+            placeholder={copy.descriptionPlaceholder}
             className="border-input bg-background min-h-[84px] w-full rounded-md border px-2 py-1.5 text-xs outline-none"
           />
           <Button
@@ -113,19 +115,19 @@ export function PluginAssistantFlowPanel({
             disabled={actionBusy("create") || !pluginName.trim()}
           >
             {actionBusy("create") ? <Loader2Icon className="size-3.5 animate-spin" /> : <RefreshCcwIcon className="size-3.5" />}
-            新建/重置会话
+            {copy.createSession}
           </Button>
         </section>
 
         <section className="space-y-2 rounded-lg border bg-background p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium">会话状态</span>
+            <span className="text-xs font-medium">{copy.sessionStatus}</span>
             {currentSession ? (
               <Badge className={cn("border text-[10px]", statusTone(currentSession.state))}>
-                {STATUS_LABELS[currentSession.state]}
+                {statusLabels[currentSession.state]}
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-[10px]">未初始化</Badge>
+              <Badge variant="outline" className="text-[10px]">{copy.uninitialized}</Badge>
             )}
           </div>
           {currentSession ? (
@@ -138,7 +140,7 @@ export function PluginAssistantFlowPanel({
         </section>
 
         <section className="space-y-2 rounded-lg border bg-background p-3">
-          <div className="text-xs font-medium">流程操作</div>
+          <div className="text-xs font-medium">{copy.actions}</div>
           <div className="grid grid-cols-2 gap-2">
             <Button
               size="sm"
@@ -148,7 +150,7 @@ export function PluginAssistantFlowPanel({
               disabled={!canGenerate || actionBusy("generate")}
             >
               {actionBusy("generate") ? <Loader2Icon className="size-3.5 animate-spin" /> : <SparklesIcon className="size-3.5" />}
-              生成脚手架
+              {copy.generate}
             </Button>
             <Button
               size="sm"
@@ -158,7 +160,7 @@ export function PluginAssistantFlowPanel({
               disabled={!canAutoVerify || actionBusy("auto-verify")}
             >
               {actionBusy("auto-verify") ? <Loader2Icon className="size-3.5 animate-spin" /> : <ShieldCheckIcon className="size-3.5" />}
-              自动验证
+              {copy.autoVerify}
             </Button>
             <Button
               size="sm"
@@ -168,7 +170,7 @@ export function PluginAssistantFlowPanel({
               disabled={!canManualPass || actionBusy("manual-pass")}
             >
               {actionBusy("manual-pass") ? <Loader2Icon className="size-3.5 animate-spin" /> : <CheckCircle2Icon className="size-3.5" />}
-              人工通过
+              {copy.manualPass}
             </Button>
             <Button
               size="sm"
@@ -178,7 +180,7 @@ export function PluginAssistantFlowPanel({
               disabled={!canManualFail || actionBusy("manual-fail")}
             >
               {actionBusy("manual-fail") ? <Loader2Icon className="size-3.5 animate-spin" /> : <ShieldXIcon className="size-3.5" />}
-              标记不通过
+              {copy.manualFail}
             </Button>
             <Button
               size="sm"
@@ -187,7 +189,7 @@ export function PluginAssistantFlowPanel({
               disabled={!canPackage || actionBusy("package")}
             >
               {actionBusy("package") ? <Loader2Icon className="size-3.5 animate-spin" /> : <PackageIcon className="size-3.5" />}
-              打包
+              {copy.package}
             </Button>
             <Button
               size="sm"
@@ -197,20 +199,20 @@ export function PluginAssistantFlowPanel({
               disabled={!canDownload || actionBusy("download")}
             >
               {actionBusy("download") ? <Loader2Icon className="size-3.5 animate-spin" /> : <DownloadIcon className="size-3.5" />}
-              下载
+              {copy.download}
             </Button>
           </div>
           <textarea
             value={manualNote}
             onChange={(event) => onManualNoteChange(event.target.value)}
-            placeholder="人工确认备注（可选）"
+            placeholder={copy.manualNotePlaceholder}
             className="border-input bg-background min-h-[72px] w-full rounded-md border px-2 py-1.5 text-xs outline-none"
           />
         </section>
 
         {currentSession && (currentSession.readmeUrl || currentSession.demoImageUrls.length > 0) ? (
           <section className="space-y-2 rounded-lg border bg-background p-3">
-            <div className="text-xs font-medium">生成产物</div>
+            <div className="text-xs font-medium">{copy.artifacts}</div>
             <div className="space-y-2 text-xs">
               {currentSession.readmeUrl ? (
                 <a href={currentSession.readmeUrl} target="_blank" rel="noreferrer" className="text-primary inline-flex items-center gap-1 hover:underline">
@@ -227,7 +229,7 @@ export function PluginAssistantFlowPanel({
                   className="text-primary inline-flex items-center gap-1 hover:underline"
                 >
                   <ImageIcon className="size-3.5" />
-                  演示图
+                  {copy.demoImage}
                 </a>
               ))}
             </div>
