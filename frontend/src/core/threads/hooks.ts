@@ -11,7 +11,6 @@ import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { getAPIClient } from "../api";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
-import { useRSSContext } from "../rss";
 import type { LocalSettings } from "../settings";
 import { useUpdateSubtask } from "../tasks/context";
 import type { UploadedFileInfo } from "../uploads";
@@ -129,7 +128,6 @@ export function useThreadStream({
 
   const queryClient = useQueryClient();
   const updateSubtask = useUpdateSubtask();
-  const { blocks: rssContextBlocks } = useRSSContext();
   const previousLoadingRef = useRef(false);
   const stopRequestedRef = useRef(false);
   const thread = useStream<AgentThreadState>({
@@ -378,35 +376,6 @@ export function useThreadStream({
           (info) => toFileInMessage(info),
         );
 
-        const rssContext = rssContextBlocks.map((block) => {
-          if (block.type === "selectedText") {
-            return {
-              type: block.type,
-              selected_text: block.value,
-              entry_id: block.metadata?.entry_id,
-              feed_id: block.metadata?.feed_id,
-              title: block.metadata?.title,
-              url: block.metadata?.url,
-              summary: block.metadata?.summary,
-            };
-          }
-
-          return {
-            type: block.type,
-            entry_id:
-              block.type === "mainEntry"
-                ? block.value
-                : block.metadata?.entry_id,
-            feed_id:
-              block.type === "mainFeed"
-                ? block.value
-                : block.metadata?.feed_id,
-            title: block.metadata?.title,
-            url: block.metadata?.url,
-            summary: block.metadata?.summary,
-          };
-        });
-
         const runtimeContext: Record<string, unknown> = {
           ...extraContext,
           ...context,
@@ -416,9 +385,6 @@ export function useThreadStream({
           user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           thread_id: threadId,
         };
-        if (rssContext.length > 0) {
-          runtimeContext.rss_context = rssContext;
-        }
 
         const messageAdditionalKwargs: Record<string, unknown> = {};
         if (filesForSubmit.length > 0) {
@@ -459,7 +425,7 @@ export function useThreadStream({
         throw error;
       }
     },
-    [rssContextBlocks, thread, t.uploads.uploadingFiles, context, queryClient],
+    [thread, t.uploads.uploadingFiles, context, queryClient],
   );
 
   // Wrap stream with a safe adapter:

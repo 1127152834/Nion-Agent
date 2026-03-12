@@ -9,7 +9,6 @@ import { pathOfChatsIndex, pathOfNewThread } from "@/core/threads/utils";
 export type WorkspaceSidebarSection =
   | "chats"
   | "agents"
-  | "rss"
   | "scheduler"
   | null;
 
@@ -17,7 +16,6 @@ const WORKSPACE_SIDEBAR_PREFETCH_ROUTES = [
   pathOfNewThread(),
   pathOfChatsIndex(),
   "/workspace/agents",
-  "/workspace/rss",
   "/workspace/scheduler",
 ] as const;
 
@@ -36,10 +34,6 @@ export function getWorkspaceSidebarSection(
 
   if (pathname.startsWith("/workspace/agents")) {
     return "agents";
-  }
-
-  if (pathname.startsWith("/workspace/rss")) {
-    return "rss";
   }
 
   if (pathname.startsWith("/workspace/scheduler")) {

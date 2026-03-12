@@ -1,6 +1,6 @@
 "use client";
 
-import { BotIcon, Clock3Icon, Loader2, MessagesSquare, NewspaperIcon } from "lucide-react";
+import { BotIcon, Clock3Icon, Loader2, MessagesSquare } from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -25,7 +25,6 @@ export function WorkspaceNavChatList() {
   const section = useWorkspaceSidebarSection();
   const chatsLink = useWorkspaceSidebarLink(pathOfChatsIndex());
   const agentsLink = useWorkspaceSidebarLink("/workspace/agents", { match: "prefix" });
-  const rssLink = useWorkspaceSidebarLink("/workspace/rss", { match: "prefix" });
   const schedulerLink = useWorkspaceSidebarLink("/workspace/scheduler", { match: "prefix" });
 
   return (
@@ -64,24 +63,6 @@ export function WorkspaceNavChatList() {
             >
               {agentsLink.isNavigating ? <Loader2 className="animate-spin" /> : <BotIcon />}
               <span>{t.sidebar.agents}</span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            isActive={section === "rss" || rssLink.isNavigating}
-            tooltip={t.sidebar.rss}
-            asChild
-          >
-            <Link
-              className={cn(
-                "text-muted-foreground",
-                rssLink.isNavigating && "cursor-progress",
-              )}
-              {...rssLink.linkProps}
-            >
-              {rssLink.isNavigating ? <Loader2 className="animate-spin" /> : <NewspaperIcon />}
-              <span>{t.sidebar.rss}</span>
             </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>

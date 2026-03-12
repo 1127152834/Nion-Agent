@@ -9,7 +9,6 @@ import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/com
 import { RuntimeOnboardingOverlay } from "@/components/workspace/runtime-onboarding-overlay";
 import { SchedulerReminderWatcher } from "@/components/workspace/scheduler/scheduler-reminder-watcher";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
-import { RSSContextProvider } from "@/core/rss";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
 
 const queryClient = new QueryClient();
@@ -56,27 +55,25 @@ export default function WorkspaceLayout({
   return (
     <JotaiProvider>
       <QueryClientProvider client={queryClient}>
-        <RSSContextProvider>
-          <RuntimeOnboardingOverlay />
-          <SchedulerReminderWatcher />
-          <RuntimeOnboardingOverlay />
-          <SidebarProvider
-            className="h-screen"
-            style={
-              {
-                "--desktop-titlebar-safe-area": `${titlebarInset}px`,
-              } as React.CSSProperties
-            }
-            open={open}
-            onOpenChange={handleOpenChange}
-          >
-            <WorkspaceSidebar />
-            <SidebarInset className="min-w-0 pt-[var(--desktop-titlebar-safe-area,0px)]">
-              <WorkspaceMobileSidebarTrigger />
-              {children}
-            </SidebarInset>
-          </SidebarProvider>
-        </RSSContextProvider>
+        <RuntimeOnboardingOverlay />
+        <SchedulerReminderWatcher />
+        <RuntimeOnboardingOverlay />
+        <SidebarProvider
+          className="h-screen"
+          style={
+            {
+              "--desktop-titlebar-safe-area": `${titlebarInset}px`,
+            } as React.CSSProperties
+          }
+          open={open}
+          onOpenChange={handleOpenChange}
+        >
+          <WorkspaceSidebar />
+          <SidebarInset className="min-w-0 pt-[var(--desktop-titlebar-safe-area,0px)]">
+            <WorkspaceMobileSidebarTrigger />
+            {children}
+          </SidebarInset>
+        </SidebarProvider>
         <Toaster position="top-center" />
       </QueryClientProvider>
     </JotaiProvider>
