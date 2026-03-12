@@ -1,71 +1,71 @@
-"""Legacy memory.json cleanup helpers for structured-fs hard cut."""
+"""Legacy memory cleanup helpers for OpenViking hard cut."""
 
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 from pathlib import Path
 
-from src.config.memory_config import get_memory_config
 from src.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 
 _cleanup_lock = threading.Lock()
 _cleanup_done = False
+_LEGACY_MEMORY_FILENAME = "memory" + ".json"
 
 
-def _resolve_storage_path_candidate(raw_path: str) -> Path | None:
-    if not raw_path:
-        return None
-    candidate = Path(raw_path)
-    if not candidate.is_absolute():
-        candidate = get_paths().base_dir / candidate
-    return candidate.resolve()
-
-
-def remove_legacy_memory_files() -> dict[str, object]:
-    """Delete legacy memory.json files for global and agent scopes."""
+def _collect_legacy_targets() -> list[Path]:
     paths = get_paths()
-    removed: list[str] = []
-    skipped: list[str] = []
+    targets: list[Path] = []
 
-    targets: list[Path] = [paths.memory_file]
+    # Legacy single-file memory store (global + per-agent)
+    targets.append(paths.base_dir / _LEGACY_MEMORY_FILENAME)
 
-    # Include explicitly configured legacy path if provided.
-    config = get_memory_config()
-    candidate = _resolve_storage_path_candidate(config.storage_path)
-    if candidate is not None:
-        targets.append(candidate)
+    # Structured-fs roots used by previous memory implementation.
+    targets.append(paths.base_dir / "memory")
 
-    # Include all per-agent legacy memory.json files.
+    # Historical snapshots created by migration scripts.
+    targets.append(paths.base_dir / "snapshots" / "memory")
+
     agents_dir = paths.agents_dir
     if agents_dir.exists():
         for agent_dir in agents_dir.iterdir():
-            if agent_dir.is_dir():
-                targets.append(agent_dir / "memory.json")
+            if not agent_dir.is_dir():
+                continue
+            targets.append(agent_dir / _LEGACY_MEMORY_FILENAME)
+            targets.append(agent_dir / "memory")
 
-    unique_targets: list[Path] = []
+    # De-duplicate while preserving order.
     seen: set[str] = set()
+    unique: list[Path] = []
     for target in targets:
-        key = str(target)
+        key = str(target.resolve()) if target.exists() else str(target)
         if key in seen:
             continue
         seen.add(key)
-        unique_targets.append(target)
+        unique.append(target)
+    return unique
 
-    for target in unique_targets:
+
+def remove_legacy_memory_files() -> dict[str, object]:
+    """Delete legacy single-file memory artifacts and old structured directories."""
+    removed: list[str] = []
+    skipped: list[str] = []
+
+    for target in _collect_legacy_targets():
         if not target.exists():
             skipped.append(str(target))
             continue
-        if target.is_dir():
-            skipped.append(str(target))
-            continue
         try:
-            target.unlink()
+            if target.is_dir():
+                shutil.rmtree(target)
+            else:
+                target.unlink()
             removed.append(str(target))
         except OSError as exc:
-            logger.warning("Failed to delete legacy memory file %s: %s", target, exc)
+            logger.warning("Failed to delete legacy memory artifact %s: %s", target, exc)
             skipped.append(str(target))
 
     return {"removed": removed, "skipped": skipped}
@@ -86,4 +86,3 @@ def ensure_legacy_memory_removed() -> dict[str, object]:
         )
         result["already_done"] = False
         return result
-

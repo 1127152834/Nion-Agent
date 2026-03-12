@@ -2,12 +2,12 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type {
   AgentDirectoryCard,
-  GovernanceStatus,
-  MemoryItem,
-  UserMemory,
+  OpenVikingGovernanceStatus,
+  OpenVikingMemoryItem,
+  OpenVikingStatus,
 } from "./types";
 
-export type MemoryViewScope = "global" | "agent";
+export type MemoryViewScope = "global" | "agent" | "auto";
 
 function toErrorMessage(payload: unknown, fallback: string): string {
   if (
@@ -27,71 +27,132 @@ function buildScopeSearch(
 ): string {
   const search = new URLSearchParams();
   search.set("scope", scope);
-  if (scope === "agent" && agentName) {
+  if ((scope === "agent" || scope === "auto") && agentName) {
     search.set("agent_name", agentName);
   }
   return search.toString();
 }
 
-export async function loadMemoryView(params?: {
-  scope?: MemoryViewScope;
-  agentName?: string | null;
-}): Promise<UserMemory> {
-  const scope = params?.scope ?? "global";
-  const search = buildScopeSearch(scope, params?.agentName);
-  const endpoint =
-    scope === "global"
-      ? `${getBackendBaseURL()}/api/memory`
-      : `${getBackendBaseURL()}/api/memory/view?${search}`;
-  const res = await fetch(endpoint);
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(
-      toErrorMessage(err, `Failed to load memory view: ${res.statusText}`),
-    );
-  }
-  return (await res.json()) as UserMemory;
-}
-
 export async function loadMemoryItems(params?: {
   scope?: MemoryViewScope;
   agentName?: string | null;
-}): Promise<MemoryItem[]> {
-  const scope = params?.scope ?? "global";
+}): Promise<OpenVikingMemoryItem[]> {
+  const scope = params?.scope ?? "auto";
   const search = buildScopeSearch(scope, params?.agentName);
-  const res = await fetch(`${getBackendBaseURL()}/api/memory/items?${search}`);
+  const res = await fetch(`${getBackendBaseURL()}/api/openviking/items?${search}`);
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { detail?: string };
     throw new Error(
-      toErrorMessage(err, `Failed to load memory items: ${res.statusText}`),
+      toErrorMessage(err, `Failed to load OpenViking items: ${res.statusText}`),
     );
   }
-  const json = (await res.json()) as { items?: MemoryItem[] };
+  const json = (await res.json()) as { items?: OpenVikingMemoryItem[] };
   return Array.isArray(json.items) ? json.items : [];
 }
 
-export async function loadMemoryCatalog(): Promise<AgentDirectoryCard[]> {
-  const res = await fetch(`${getBackendBaseURL()}/api/memory/catalog`);
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(
-      toErrorMessage(err, `Failed to load memory catalog: ${res.statusText}`),
-    );
-  }
-  const json = (await res.json()) as { items?: AgentDirectoryCard[] };
-  return Array.isArray(json.items) ? json.items : [];
-}
-
-export async function loadGovernanceStatus(): Promise<GovernanceStatus> {
-  const res = await fetch(`${getBackendBaseURL()}/api/memory/governance/status`);
+export async function loadGovernanceStatus(): Promise<OpenVikingGovernanceStatus> {
+  const res = await fetch(`${getBackendBaseURL()}/api/openviking/governance/status`);
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { detail?: string };
     throw new Error(
       toErrorMessage(
         err,
-        `Failed to load memory governance status: ${res.statusText}`,
+        `Failed to load OpenViking governance status: ${res.statusText}`,
       ),
     );
   }
-  return (await res.json()) as GovernanceStatus;
+  return (await res.json()) as OpenVikingGovernanceStatus;
+}
+
+export async function loadMemoryCatalog(): Promise<AgentDirectoryCard[]> {
+  const governance = await loadGovernanceStatus();
+  return Array.isArray(governance.catalog) ? governance.catalog : [];
+}
+
+export async function loadOpenVikingStatus(): Promise<OpenVikingStatus> {
+  const res = await fetch(`${getBackendBaseURL()}/api/openviking/status`);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(
+      toErrorMessage(
+        err,
+        `Failed to load OpenViking status: ${res.statusText}`,
+      ),
+    );
+  }
+  return (await res.json()) as OpenVikingStatus;
+}
+
+export async function runOpenVikingGovernance(): Promise<Record<string, unknown>> {
+  const res = await fetch(`${getBackendBaseURL()}/api/openviking/governance/run`, {
+    method: "POST",
+  });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to run OpenViking governance: ${res.statusText}`),
+    );
+  }
+  return payload;
+}
+
+export async function compactOpenVikingMemory(params?: {
+  ratio?: number;
+  scope?: MemoryViewScope;
+  agentName?: string | null;
+}): Promise<Record<string, unknown>> {
+  const res = await fetch(`${getBackendBaseURL()}/api/openviking/compact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ratio: params?.ratio ?? 0.8,
+      scope: params?.scope ?? "auto",
+      agent_name: params?.agentName ?? undefined,
+    }),
+  });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to compact OpenViking memory: ${res.statusText}`),
+    );
+  }
+  return payload;
+}
+
+export async function forgetOpenVikingMemory(params: {
+  memoryId: string;
+  scope?: MemoryViewScope;
+  agentName?: string | null;
+}): Promise<Record<string, unknown>> {
+  const res = await fetch(`${getBackendBaseURL()}/api/openviking/forget`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      memory_id: params.memoryId,
+      scope: params.scope ?? "auto",
+      agent_name: params.agentName ?? undefined,
+    }),
+  });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to forget OpenViking memory: ${res.statusText}`),
+    );
+  }
+  return payload;
+}
+
+export async function reindexOpenVikingVectors(includeAgents = true): Promise<Record<string, unknown>> {
+  const res = await fetch(`${getBackendBaseURL()}/api/openviking/reindex-vectors`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ include_agents: includeAgents }),
+  });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to reindex OpenViking vectors: ${res.statusText}`),
+    );
+  }
+  return payload;
 }

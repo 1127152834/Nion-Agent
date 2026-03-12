@@ -1,4 +1,4 @@
-"""Configuration for memory mechanism."""
+"""Configuration for OpenViking memory mechanism."""
 
 from pydantic import BaseModel, Field
 
@@ -7,24 +7,12 @@ class MemoryConfig(BaseModel):
     """Configuration for global memory mechanism."""
 
     version: str = Field(
-        default="2.0",
+        default="4.0",
         description="Memory system version identifier.",
-    )
-    fallback_to_v1: bool = Field(
-        default=True,
-        description="Whether to include legacy v1 compatible memory payload.",
     )
     enabled: bool = Field(
         default=True,
         description="Whether to enable memory mechanism",
-    )
-    storage_path: str = Field(
-        default="",
-        description=(
-            "Deprecated legacy memory.json path. "
-            "Structured-fs is now the only online storage layout; "
-            "this field is kept for backward compatibility only."
-        ),
     )
     debounce_seconds: int = Field(
         default=30,
@@ -142,10 +130,10 @@ class MemoryConfig(BaseModel):
         description="Minimum usage count to keep category untouched during optimization.",
     )
     max_facts: int = Field(
-        default=100,
+        default=200,
         ge=10,
-        le=500,
-        description="Maximum number of facts to store",
+        le=1000,
+        description="Maximum number of facts to cache in compatibility views",
     )
     fact_confidence_threshold: float = Field(
         default=0.7,
@@ -164,12 +152,34 @@ class MemoryConfig(BaseModel):
         description="Maximum tokens to use for memory injection",
     )
     provider: str = Field(
-        default="structured-fs",
-        description="Memory provider to use (hard-cut default: structured-fs).",
+        default="openviking",
+        description="Memory provider (fixed to openviking).",
     )
-    structured_enabled: bool = Field(
-        default=False,
-        description="Whether to enable structured memory storage",
+    openviking_context_enabled: bool = Field(
+        default=True,
+        description="Whether to inject OpenViking lightweight context before model calls.",
+    )
+    openviking_context_limit: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Max OpenViking context hits used for prompt injection.",
+    )
+    openviking_session_commit_enabled: bool = Field(
+        default=True,
+        description="Whether to commit session to OpenViking after each chat round.",
+    )
+    retrieval_mode: str = Field(
+        default="find",
+        description="Retrieval routing mode: find | vector_auto | vector_forced",
+    )
+    rerank_mode: str = Field(
+        default="auto",
+        description="Rerank mode: off | auto | forced",
+    )
+    graph_enabled: bool = Field(
+        default=True,
+        description="Whether to enable SQLite memory graph indexing and querying.",
     )
 
 
@@ -192,6 +202,18 @@ def load_memory_config_from_dict(config_dict: dict) -> None:
     """Load memory configuration from a dictionary."""
     global _memory_config
     normalized = dict(config_dict)
-    # Hard-cut policy: structured-fs is the only online provider.
-    normalized["provider"] = "structured-fs"
+
+    # OpenViking hard-cut: provider is always fixed.
+    normalized["provider"] = "openviking"
+
+    retrieval_mode = str(normalized.get("retrieval_mode", "find")).strip().lower()
+    if retrieval_mode not in {"find", "vector_auto", "vector_forced"}:
+        retrieval_mode = "find"
+    normalized["retrieval_mode"] = retrieval_mode
+
+    rerank_mode = str(normalized.get("rerank_mode", "auto")).strip().lower()
+    if rerank_mode not in {"off", "auto", "forced"}:
+        rerank_mode = "auto"
+    normalized["rerank_mode"] = rerank_mode
+
     _memory_config = MemoryConfig(**normalized)

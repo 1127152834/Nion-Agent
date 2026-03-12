@@ -1,11 +1,7 @@
-"""OpenViking-backed runtime.
+"""OpenViking-only runtime.
 
-This runtime mirrors Memoh-v2's two key behaviors:
-1) before-chat semantic retrieval for context injection
-2) after-chat session commit for long-term extraction
-
-`structured-fs` is only used as an optional adapter layer for compatibility
-views/maintenance when `openviking_mirror_structured=true`.
+This runtime keeps the online memory stack single-provider (OpenViking) and uses
+local SQLite tables only as query/index/governance ledger.
 """
 
 from __future__ import annotations
@@ -23,9 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from src.agents.memory.core import MemoryReadRequest, MemoryWriteRequest
-from src.agents.memory.queue import get_memory_queue
 from src.agents.memory.sqlite_index import OpenVikingSQLiteIndex
-from src.agents.memory.structured_runtime import StructuredFsRuntime
 from src.config.app_config import get_app_config
 from src.config.memory_config import get_memory_config
 from src.config.paths import get_paths
@@ -85,65 +79,11 @@ def _is_ambiguous_query(query: str) -> bool:
     return len(normalized) <= 8
 
 
-def _is_location_dependent_query(query: str) -> bool:
-    normalized = query.strip().lower()
-    if not normalized:
-        return False
-    keywords = (
-        "城市",
-        "地区",
-        "位置",
-        "所在地",
-        "在哪",
-        "哪里",
-        "哪儿",
-        "天气",
-        "气温",
-        "温度",
-        "下雨",
-        "降雨",
-        "湿度",
-        "风力",
-        "weather",
-        "forecast",
-        "temperature",
-        "rain",
-        "wind",
-    )
-    return any(keyword in normalized for keyword in keywords)
-
-
-def _looks_like_location_fact(content: str, category: str | None = None) -> bool:
-    _ = category
-    lowered = content.strip().lower()
-    if not lowered:
-        return False
-    location_keywords = (
-        "城市",
-        "位置",
-        "所在地",
-        "居住",
-        "住在",
-        "来自",
-        "地区",
-        "省份",
-        "location",
-        "city",
-        "province",
-        "region",
-        "based in",
-        "live in",
-        "from ",
-    )
-    return any(keyword in lowered for keyword in location_keywords)
-
-
 class OpenVikingRuntime:
-    """OpenViking runtime with deterministic adapter behavior for Nion."""
+    """OpenViking runtime with local ledger/index support."""
 
     def __init__(self):
         self._paths = get_paths()
-        self._structured = StructuredFsRuntime()
         self._sqlite_index = OpenVikingSQLiteIndex(self._paths.openviking_index_db)
         self._scope_locks: dict[str, threading.Lock] = {}
         self._scope_locks_guard = threading.Lock()
@@ -153,32 +93,61 @@ class OpenVikingRuntime:
         self._last_fallback_reason: dict[str, str] = {}
         self._rerank_min_candidates = 6
         self._rerank_overfetch_ratio = 3
-
-    def __getattr__(self, name: str):
-        # Keep maintenance APIs and legacy callers compatible.
-        return getattr(self._structured, name)
+        self._governance_promote_threshold = 0.55
 
     # ------------------------------------------------------------------
-    # MemoryRuntime protocol (compatibility surface used by provider/updater)
+    # MemoryRuntime protocol
     # ------------------------------------------------------------------
     def get_memory_data(self, request: MemoryReadRequest) -> dict[str, Any]:
-        return self._structured.get_memory_data(request)
+        items = self._sqlite_index.list_resources(agent_name=request.agent_name)
+        facts: list[dict[str, Any]] = []
+        last_updated = ""
+        for item in items:
+            updated_at = str(item.get("updated_at") or "")
+            if updated_at and updated_at > last_updated:
+                last_updated = updated_at
+            facts.append(
+                {
+                    "id": item.get("memory_id", ""),
+                    "content": item.get("summary", ""),
+                    "category": "openviking",
+                    "confidence": float(item.get("score", 0.0) or 0.0),
+                    "createdAt": item.get("created_at", ""),
+                    "source": item.get("source_thread_id", ""),
+                    "status": item.get("status", "active"),
+                    "uri": item.get("uri", ""),
+                    "last_used_at": item.get("last_used_at", ""),
+                    "use_count": int(item.get("use_count", 0) or 0),
+                }
+            )
+
+        return {
+            "version": "4.0",
+            "scope": self._scope_name(request.agent_name),
+            "storage_layout": "openviking",
+            "lastUpdated": last_updated,
+            "user": {
+                "workContext": {"summary": "", "updatedAt": ""},
+                "personalContext": {"summary": "", "updatedAt": ""},
+                "topOfMind": {"summary": "", "updatedAt": ""},
+            },
+            "history": {
+                "recentMonths": {"summary": "", "updatedAt": ""},
+                "earlierContext": {"summary": "", "updatedAt": ""},
+                "longTermBackground": {"summary": "", "updatedAt": ""},
+            },
+            "facts": facts,
+            "agent_catalog": self._sqlite_index.list_agent_catalog() if request.agent_name is None else [],
+        }
 
     def reload_memory_data(self, request: MemoryReadRequest) -> dict[str, Any]:
-        return self._structured.reload_memory_data(request)
+        return self.get_memory_data(request)
 
     def queue_update(self, request: MemoryWriteRequest) -> None:
         config = get_memory_config()
         if config.openviking_session_commit_enabled:
-            # OpenViking session commit is asynchronous and best-effort.
+            # Session commit is best-effort and must never block the user turn.
             self._commit_session_async(
-                thread_id=request.thread_id,
-                messages=request.messages,
-                agent_name=request.agent_name,
-            )
-        if config.openviking_mirror_structured:
-            # Optional compatibility mirror only.
-            get_memory_queue().add(
                 thread_id=request.thread_id,
                 messages=request.messages,
                 agent_name=request.agent_name,
@@ -191,11 +160,32 @@ class OpenVikingRuntime:
         agent_name: str | None = None,
         thread_id: str | None = None,
     ) -> bool:
-        return self._structured.save_memory_data(
-            memory_data,
-            agent_name=agent_name,
-            thread_id=thread_id,
-        )
+        facts = memory_data.get("facts") or []
+        if not isinstance(facts, list):
+            return True
+        source_thread = (thread_id or "manual-save").strip() or "manual-save"
+        for fact in facts:
+            if not isinstance(fact, dict):
+                continue
+            memory_id = str(fact.get("id") or "").strip() or hashlib.sha1(
+                str(fact.get("content") or "").encode("utf-8")
+            ).hexdigest()[:20]
+            summary = str(fact.get("content") or "").strip()
+            if not summary:
+                continue
+            uri = str(fact.get("uri") or "").strip() or f"viking://nion/{memory_id}"
+            score = float(fact.get("confidence", 0.0) or 0.0)
+            self._sqlite_index.upsert_resource(
+                agent_name=agent_name,
+                memory_id=memory_id,
+                uri=uri,
+                summary=summary,
+                source_thread_id=source_thread,
+                score=score,
+                status=str(fact.get("status") or "active"),
+                metadata={"source": "save_memory_data"},
+            )
+        return True
 
     # ------------------------------------------------------------------
     # OpenViking primary behaviors
@@ -235,6 +225,7 @@ class OpenVikingRuntime:
                     force_vector=(mode == "vector_forced"),
                 )
                 if vector_results:
+                    self._record_search_results(query=query, results=vector_results, agent_name=agent_name)
                     return vector_results
             except Exception as exc:  # noqa: BLE001
                 self._set_last_fallback_reason(
@@ -245,8 +236,8 @@ class OpenVikingRuntime:
         try:
             results = self._openviking_find(query=query, limit=limit, agent_name=agent_name)
             if results:
-                if mode == "find":
-                    self._set_last_fallback_reason(agent_name=agent_name, reason="")
+                self._set_last_fallback_reason(agent_name=agent_name, reason="")
+                self._record_search_results(query=query, results=results, agent_name=agent_name)
                 return results
         except Exception as exc:  # noqa: BLE001
             self._set_last_fallback_reason(
@@ -254,14 +245,6 @@ class OpenVikingRuntime:
                 reason=f"openviking_find_error: {exc}",
             )
             logger.debug("OpenViking find failed: %s", exc)
-        # Read fallback: keep old structured memory retrievable during migration/cutover.
-        # This keeps user profile context (e.g. city/location) available before OpenViking
-        # index is fully populated.
-        if config.openviking_mirror_structured or config.fallback_to_v1:
-            fallback = self._search_structured_memory(query=query, limit=limit, agent_name=agent_name)
-            if fallback:
-                self._set_last_fallback_reason(agent_name=agent_name, reason="fallback_structured_memory")
-                return fallback
         return []
 
     def store_memory(
@@ -287,154 +270,151 @@ class OpenVikingRuntime:
 
         fact_id = f"ov_{hashlib.sha1(f'{agent_name}:{text}'.encode()).hexdigest()[:16]}"
         now = _utc_iso()
-        if get_memory_config().openviking_mirror_structured:
-            memory_data = self._structured.get_memory_data(MemoryReadRequest(agent_name=agent_name))
-            facts = list(memory_data.get("facts") or [])
-            facts.append(
-                {
-                    "id": fact_id,
-                    "content": text,
-                    "category": "openviking",
-                    "confidence": max(0.0, min(1.0, float(confidence))),
-                    "createdAt": now,
-                    "source": source or thread,
-                    "status": "active",
-                    "metadata": metadata or {},
-                }
-            )
-            memory_data["facts"] = facts
-            self._structured.save_memory_data(memory_data, agent_name=agent_name, thread_id=thread)
+        resolved_uri = f"viking://nion/{fact_id}"
+        resolved_score = max(0.0, min(1.0, float(confidence)))
+
+        try:
+            hits = self._openviking_find(query=text, limit=1, agent_name=agent_name)
+            if hits:
+                top = hits[0]
+                resolved_uri = str(top.get("uri") or resolved_uri)
+                resolved_score = float(top.get("score") or resolved_score)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("OpenViking post-store lookup skipped: %s", exc)
+
+        self._sqlite_index.upsert_resource(
+            agent_name=agent_name,
+            memory_id=fact_id,
+            uri=resolved_uri,
+            summary=text,
+            source_thread_id=source or thread,
+            score=resolved_score,
+            status="active",
+            metadata=metadata or {},
+            bump_usage=True,
+        )
+
         return {
-            "id": fact_id,
-            "thread_id": thread,
+            "memory_id": fact_id,
+            "uri": resolved_uri,
             "stored_at": now,
-            "scope": f"agent:{agent_name}" if agent_name else "global",
+            "scope": self._scope_name(agent_name),
+            "score": resolved_score,
             "commit_status": commit_result.get("status"),
         }
 
-    def compact_memory(self, *, ratio: float = 0.8, scope: str = "global", agent_name: str | None = None) -> dict[str, Any]:
-        if not get_memory_config().openviking_mirror_structured:
-            return {
-                "status": "skipped",
-                "reason": "openviking_compact_not_supported_without_structured_mirror",
-                "ratio": ratio,
-                "scope": f"agent:{agent_name}" if agent_name else "global",
+    def get_memory_items(self, *, scope: str = "global", agent_name: str | None = None) -> list[dict[str, Any]]:
+        resolved_agent = self._resolve_scope_agent(scope=scope, agent_name=agent_name)
+        rows = self._sqlite_index.list_resources(agent_name=resolved_agent)
+        return [
+            {
+                "memory_id": row["memory_id"],
+                "uri": row["uri"],
+                "score": row["score"],
+                "status": row["status"],
+                "last_used_at": row["last_used_at"],
+                "use_count": row["use_count"],
+                "summary": row["summary"],
+                "source_thread_id": row["source_thread_id"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "scope": row["scope"],
+                # Backward-compatible fields consumed by existing UI/tests.
+                "entry_type": "openviking_resource",
+                "tags": [],
+                "entity_refs": [],
+                "relations": [],
+                "source_refs": [],
+                "confidence": row["score"],
+                "metadata": row.get("metadata") or {},
             }
-        resolved_scope = self._structured._resolve_scope_arg(scope=scope, agent_name=agent_name)
-        manifest = self._structured._read_manifest(resolved_scope)
+            for row in rows
+        ]
 
-        active = [entry for entry in manifest.entries if entry.status == "active"]
-        if not active:
-            return {"before_count": 0, "after_count": 0, "removed_count": 0, "ratio": ratio}
+    def compact_memory(self, *, ratio: float = 0.8, scope: str = "global", agent_name: str | None = None) -> dict[str, Any]:
+        resolved_agent = self._resolve_scope_agent(scope=scope, agent_name=agent_name)
+        rows = self._sqlite_index.list_resources(agent_name=resolved_agent, status="active")
+        if not rows:
+            return {
+                "before_count": 0,
+                "after_count": 0,
+                "removed_count": 0,
+                "ratio": ratio,
+                "scope": self._scope_name(resolved_agent),
+            }
 
         bounded_ratio = max(0.1, min(1.0, float(ratio)))
-        target_count = max(1, int(round(len(active) * bounded_ratio)))
-        active_sorted = sorted(
-            active,
-            key=lambda item: (item.last_used_at or item.updated_at or item.created_at),
+        target_count = max(1, int(round(len(rows) * bounded_ratio)))
+        rows_sorted = sorted(
+            rows,
+            key=lambda item: (item.get("last_used_at") or item.get("updated_at") or item.get("created_at") or ""),
             reverse=True,
         )
-        keep_ids = {entry.memory_id for entry in active_sorted[:target_count]}
+        to_remove = rows_sorted[target_count:]
+        if not to_remove:
+            return {
+                "before_count": len(rows),
+                "after_count": len(rows),
+                "removed_count": 0,
+                "ratio": bounded_ratio,
+                "scope": self._scope_name(resolved_agent),
+            }
 
-        removed_count = 0
-        for entry in manifest.entries:
-            if entry.status != "active":
-                continue
-            if entry.memory_id in keep_ids:
-                continue
-            entry.status = "archived"
-            entry.updated_at = _utc_iso()
-            removed_count += 1
+        removed_uris: list[str] = []
+        for item in to_remove:
+            uri = str(item.get("uri") or "").strip()
+            if not uri:
+                raise RuntimeError(f"Missing uri for memory_id={item.get('memory_id')}")
+            self._openviking_rm(uri=uri, agent_name=resolved_agent)
+            removed_uris.append(uri)
 
-        self._structured._write_manifest(manifest, resolved_scope)
-        self._structured._write_overview(resolved_scope, manifest)
-        self._structured._write_graph_index(resolved_scope, manifest)
-        self._structured._cache.pop(resolved_scope, None)
+        with self._sqlite_index.transaction() as conn:
+            for item in to_remove:
+                self._sqlite_index.delete_resource(
+                    agent_name=resolved_agent,
+                    memory_id=str(item.get("memory_id") or ""),
+                    conn=conn,
+                )
 
         return {
-            "before_count": len(active),
-            "after_count": len(active) - removed_count,
-            "removed_count": removed_count,
+            "before_count": len(rows),
+            "after_count": len(rows) - len(to_remove),
+            "removed_count": len(to_remove),
+            "removed_uris": removed_uris,
             "ratio": bounded_ratio,
-            "scope": resolved_scope,
+            "scope": self._scope_name(resolved_agent),
         }
 
     def forget_memory(self, *, memory_id: str, scope: str = "global", agent_name: str | None = None) -> dict[str, Any]:
         target_id = memory_id.strip()
         if not target_id:
             raise ValueError("memory_id is required")
-        if not get_memory_config().openviking_mirror_structured:
-            return {
-                "status": "skipped",
-                "reason": "openviking_forget_not_supported_without_structured_mirror",
-                "memory_id": target_id,
-                "scope": f"agent:{agent_name}" if agent_name else "global",
-            }
 
-        resolved_scope = self._structured._resolve_scope_arg(scope=scope, agent_name=agent_name)
-        manifest = self._structured._read_manifest(resolved_scope)
-        updated = False
-        for entry in manifest.entries:
-            if entry.memory_id != target_id:
-                continue
-            entry.status = "archived"
-            entry.updated_at = _utc_iso()
-            updated = True
+        resolved_agent = self._resolve_scope_agent(scope=scope, agent_name=agent_name)
+        row = self._sqlite_index.get_resource(agent_name=resolved_agent, memory_id=target_id)
+        if row is None:
+            raise ValueError(f"memory_id not found: {target_id}")
 
-        if updated:
-            self._structured._write_manifest(manifest, resolved_scope)
-            self._structured._write_overview(resolved_scope, manifest)
-            self._structured._write_graph_index(resolved_scope, manifest)
-            self._structured._cache.pop(resolved_scope, None)
+        uri = str(row.get("uri") or "").strip()
+        if not uri:
+            raise RuntimeError(f"memory_id {target_id} does not have a deletable uri")
 
-        return {"memory_id": target_id, "updated": updated, "scope": resolved_scope}
+        self._openviking_rm(uri=uri, agent_name=resolved_agent)
 
-    def migrate_from_structured(self, *, include_agents: bool = True) -> dict[str, Any]:
-        """Idempotent migration by replaying facts into OpenViking sessions."""
-        migrated = 0
-        skipped = 0
-        failures: list[dict[str, str]] = []
-
-        scopes: list[tuple[str | None, str]] = [(None, "global")]
-        if include_agents:
-            agents_dir = self._paths.agents_dir
-            if agents_dir.exists():
-                for agent_dir in agents_dir.iterdir():
-                    if agent_dir.is_dir():
-                        scopes.append((agent_dir.name, f"agent:{agent_dir.name}"))
-
-        for agent_name, scope_name in scopes:
-            data = self._structured.get_memory_data(MemoryReadRequest(agent_name=agent_name))
-            facts = data.get("facts") or []
-            for fact in facts:
-                fact_id = str(fact.get("id", "")).strip()
-                if not fact_id:
-                    skipped += 1
-                    continue
-                if str(fact.get("category", "")).strip().lower() == "openviking":
-                    skipped += 1
-                    continue
-                text = str(fact.get("content", "")).strip()
-                if not text:
-                    skipped += 1
-                    continue
-                source_thread = str(fact.get("source", "")).strip() or f"migration-{scope_name}"
-                try:
-                    self.commit_session(
-                        thread_id=f"{source_thread}-migrate",
-                        messages=[{"role": "user", "content": text}],
-                        agent_name=agent_name,
-                    )
-                    migrated += 1
-                except Exception as exc:  # noqa: BLE001
-                    failures.append({"scope": scope_name, "fact_id": fact_id, "error": str(exc)})
+        with self._sqlite_index.transaction() as conn:
+            deleted = self._sqlite_index.delete_resource(
+                agent_name=resolved_agent,
+                memory_id=target_id,
+                conn=conn,
+            )
+        if deleted <= 0:
+            raise RuntimeError(f"Local ledger delete failed for memory_id={target_id}")
 
         return {
-            "migrated_count": migrated,
-            "skipped_count": skipped,
-            "failed_count": len(failures),
-            "failures": failures,
-            "completed_at": _utc_iso(),
+            "memory_id": target_id,
+            "uri": uri,
+            "scope": self._scope_name(resolved_agent),
+            "deleted": True,
         }
 
     def get_retrieval_status(self, *, agent_name: str | None = None) -> dict[str, Any]:
@@ -445,7 +425,8 @@ class OpenVikingRuntime:
         if embedding_configured and embedding_model:
             health_ok, health_message = self._check_embedding_health(embedding_model)
         index_count = self._sqlite_index.vector_count(agent_name=agent_name)
-        scope = f"agent:{agent_name}" if agent_name else "global"
+        item_count = self._sqlite_index.count_resources(agent_name=agent_name)
+        scope = self._scope_name(agent_name)
         fallback_reason = self._last_fallback_reason.get(scope, "")
         return {
             "scope": scope,
@@ -458,6 +439,7 @@ class OpenVikingRuntime:
             "embedding_health_message": health_message,
             "index_available": index_count > 0,
             "index_count": index_count,
+            "ledger_item_count": item_count,
             "last_fallback_reason": fallback_reason,
             "graph_stats": self._sqlite_index.graph_stats(agent_name=agent_name),
         }
@@ -487,16 +469,15 @@ class OpenVikingRuntime:
 
         for scoped_agent in scopes:
             self._sqlite_index.clear_vectors(agent_name=scoped_agent)
-            data = self._structured.get_memory_data(MemoryReadRequest(agent_name=scoped_agent))
-            for fact in data.get("facts") or []:
-                memory_id = str(fact.get("id", "")).strip()
-                content = str(fact.get("content", "")).strip()
+            for item in self._sqlite_index.list_resources(agent_name=scoped_agent, status="active"):
+                memory_id = str(item.get("memory_id", "")).strip()
+                content = str(item.get("summary", "")).strip()
                 if not memory_id or not content:
                     continue
                 vector = self._embed_text_local(content, embedding_model)
                 if not vector:
                     continue
-                thread_id = str(fact.get("source", "")).strip() or "reindex"
+                thread_id = str(item.get("source_thread_id", "")).strip() or "reindex"
                 self._sqlite_index.upsert_vector(
                     agent_name=scoped_agent,
                     memory_id=memory_id,
@@ -558,23 +539,179 @@ class OpenVikingRuntime:
                         content=msg["content"],
                     )
                 result = client.commit_session(thread_id)
-                try:
-                    self._upsert_runtime_indexes(
-                        thread_id=thread_id,
-                        messages=normalized_messages,
-                        agent_name=agent_name,
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    logger.debug("OpenViking local index update skipped: %s", exc)
-                return {
-                    "status": "committed",
-                    "result": self._to_jsonable(result),
-                    "message_count": len(normalized_messages),
-                }
             finally:
                 close_fn = getattr(client, "close", None)
                 if callable(close_fn):
                     close_fn()
+
+        try:
+            self._upsert_runtime_indexes(
+                thread_id=thread_id,
+                messages=normalized_messages,
+                agent_name=agent_name,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("OpenViking local index update skipped: %s", exc)
+
+        return {
+            "status": "committed",
+            "result": self._to_jsonable(result),
+            "message_count": len(normalized_messages),
+        }
+
+    # ------------------------------------------------------------------
+    # Governance
+    # ------------------------------------------------------------------
+    def get_governance_status(self, *, agent_name: str | None = None) -> dict[str, Any]:
+        status = self._sqlite_index.get_governance_status(agent_name=agent_name)
+        status["catalog"] = self._sqlite_index.list_agent_catalog() if agent_name is None else []
+        return status
+
+    def replace_agent_catalog(self, cards: list[dict[str, Any]]) -> None:
+        self._sqlite_index.replace_agent_catalog(cards)
+
+    def list_agent_catalog(self) -> list[dict[str, Any]]:
+        return self._sqlite_index.list_agent_catalog()
+
+    def run_governance(self, *, agent_name: str | None = None) -> dict[str, Any]:
+        pending = self._sqlite_index.list_resources(agent_name=agent_name, status="pending")
+        promoted = 0
+        rejected = 0
+        now = _utc_iso()
+
+        with self._sqlite_index.transaction() as conn:
+            for item in pending:
+                memory_id = str(item.get("memory_id") or "")
+                score = float(item.get("score") or 0.0)
+                if score >= self._governance_promote_threshold:
+                    self._sqlite_index.set_resource_status(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        status="active",
+                        conn=conn,
+                    )
+                    action = "promote"
+                    status = "applied"
+                    reason = "score_above_threshold"
+                    promoted += 1
+                else:
+                    self._sqlite_index.set_resource_status(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        status="archived",
+                        conn=conn,
+                    )
+                    action = "reject"
+                    status = "applied"
+                    reason = "score_below_threshold"
+                    rejected += 1
+                decision_id = f"gov-{memory_id}-{hashlib.sha1(now.encode('utf-8')).hexdigest()[:8]}"
+                self._sqlite_index.record_governance_decision(
+                    agent_name=agent_name,
+                    decision_id=decision_id,
+                    memory_id=memory_id,
+                    action=action,
+                    status=status,
+                    reason=reason,
+                    candidate={"memory_id": memory_id, "score": score},
+                    decided_by="system",
+                    decided_at=now,
+                    conn=conn,
+                )
+
+        self._sqlite_index.set_governance_last_run(agent_name=agent_name, last_run_at=now)
+        status_payload = self._sqlite_index.get_governance_status(agent_name=agent_name)
+        return {
+            "promoted": promoted,
+            "rejected": rejected,
+            "pending_count": status_payload.get("pending_count", 0),
+            "contested_count": status_payload.get("contested_count", 0),
+            "last_run_at": status_payload.get("last_run_at", ""),
+            "scope": self._scope_name(agent_name),
+        }
+
+    def apply_governance_decision(
+        self,
+        *,
+        decision_id: str,
+        action: str,
+        override_summary: str | None = None,
+        decided_by: str = "user",
+        agent_name: str | None = None,
+    ) -> dict[str, Any]:
+        normalized_id = decision_id.strip()
+        normalized_action = action.strip().lower()
+        if not normalized_id:
+            raise ValueError("decision_id is required")
+        if normalized_action not in {"promote", "reject", "override"}:
+            raise ValueError(f"Unsupported action: {action}")
+
+        status_payload = self._sqlite_index.get_governance_status(agent_name=agent_name)
+        queue = status_payload.get("queue") or []
+        target = next((item for item in queue if item.get("decision_id") == normalized_id), None)
+        if target is None:
+            raise ValueError(f"Unknown decision_id: {normalized_id}")
+
+        memory_id = str(target.get("memory_id") or "").strip()
+        if not memory_id:
+            raise ValueError(f"decision_id {normalized_id} has no memory_id")
+
+        now = _utc_iso()
+        with self._sqlite_index.transaction() as conn:
+            if normalized_action == "reject":
+                self._sqlite_index.set_resource_status(
+                    agent_name=agent_name,
+                    memory_id=memory_id,
+                    status="archived",
+                    conn=conn,
+                )
+                applied_reason = "manual_reject"
+            else:
+                self._sqlite_index.set_resource_status(
+                    agent_name=agent_name,
+                    memory_id=memory_id,
+                    status="active",
+                    conn=conn,
+                )
+                applied_reason = "manual_promote"
+                if normalized_action == "override" and override_summary:
+                    row = self._sqlite_index.get_resource(agent_name=agent_name, memory_id=memory_id)
+                    if row is not None:
+                        self._sqlite_index.upsert_resource(
+                            agent_name=agent_name,
+                            memory_id=memory_id,
+                            uri=str(row.get("uri") or f"viking://nion/{memory_id}"),
+                            summary=override_summary.strip(),
+                            source_thread_id=str(row.get("source_thread_id") or ""),
+                            score=float(row.get("score") or 0.0),
+                            status="active",
+                            metadata={"override": True, "decision_id": normalized_id},
+                            conn=conn,
+                        )
+                        applied_reason = "manual_override"
+
+            self._sqlite_index.record_governance_decision(
+                agent_name=agent_name,
+                decision_id=normalized_id,
+                memory_id=memory_id,
+                action=normalized_action,
+                status="decided",
+                reason=applied_reason,
+                candidate={"memory_id": memory_id},
+                decided_by=decided_by,
+                decided_at=now,
+                conn=conn,
+            )
+
+        updated = self._sqlite_index.get_resource(agent_name=agent_name, memory_id=memory_id)
+        return {
+            "decision_id": normalized_id,
+            "memory_id": memory_id,
+            "action": normalized_action,
+            "decided_by": decided_by,
+            "decided_at": now,
+            "resource": updated,
+        }
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -582,8 +719,43 @@ class OpenVikingRuntime:
     def _scope_name(self, agent_name: str | None) -> str:
         return f"agent:{agent_name}" if agent_name else "global"
 
+    def _resolve_scope_agent(self, *, scope: str, agent_name: str | None) -> str | None:
+        normalized_scope = (scope or "global").strip().lower()
+        if normalized_scope == "global":
+            return None
+        if normalized_scope == "agent":
+            if not agent_name:
+                raise ValueError("agent_name is required when scope=agent")
+            return agent_name
+        if normalized_scope == "auto":
+            return agent_name
+        raise ValueError(f"Unsupported scope: {scope}")
+
     def _set_last_fallback_reason(self, *, agent_name: str | None, reason: str) -> None:
         self._last_fallback_reason[self._scope_name(agent_name)] = reason
+
+    def _record_search_results(self, *, query: str, results: list[dict[str, Any]], agent_name: str | None) -> None:
+        source = f"find:{hashlib.sha1(query.encode('utf-8')).hexdigest()[:10]}"
+        for item in results:
+            uri = str(item.get("uri") or "").strip()
+            if not uri:
+                continue
+            memory_id = str(item.get("id") or "").strip() or hashlib.sha1(uri.encode("utf-8")).hexdigest()[:20]
+            summary = str(item.get("abstract") or item.get("memory") or "").strip()
+            if not summary:
+                continue
+            score = float(item.get("score") or 0.0)
+            self._sqlite_index.upsert_resource(
+                agent_name=agent_name,
+                memory_id=memory_id,
+                uri=uri,
+                summary=summary,
+                source_thread_id=source,
+                score=score,
+                status="active",
+                metadata={"source": "openviking.find"},
+                bump_usage=True,
+            )
 
     def _resolve_local_embedding_model(self) -> tuple[bool, str | None]:
         cfg = get_memory_config()
@@ -698,7 +870,6 @@ class OpenVikingRuntime:
                     reason=f"rerank_failed:{exc}",
                 )
                 if force_vector:
-                    # Keep vector results even if rerank fails under forced mode.
                     pass
 
         self._set_last_fallback_reason(agent_name=agent_name, reason="")
@@ -763,6 +934,19 @@ class OpenVikingRuntime:
             memory_id = hashlib.sha1(
                 f"{agent_name or 'global'}:{thread_id}:{role}:{content}".encode()
             ).hexdigest()[:20]
+            uri = f"viking://session/{thread_id}/{memory_id}"
+            self._sqlite_index.upsert_resource(
+                agent_name=agent_name,
+                memory_id=memory_id,
+                uri=uri,
+                summary=content,
+                source_thread_id=thread_id,
+                score=0.6,
+                status="active",
+                metadata={"source": "session_commit", "role": role},
+                bump_usage=True,
+            )
+
             vector = self._embed_text_local(content, model_name)
             if not vector:
                 continue
@@ -807,11 +991,22 @@ class OpenVikingRuntime:
 
         data_dir, conf_file = self._ensure_openviking_scope(agent_name)
         # OpenViking Python SDK currently resolves config via env/default path.
-        # `config_file=` is ignored by the embedded async client, so force env.
         os.environ["OPENVIKING_CONFIG_FILE"] = str(conf_file)
         client = ov.SyncOpenViking(path=str(data_dir))
         client.initialize()
         return client
+
+    def _openviking_rm(self, *, uri: str, agent_name: str | None) -> None:
+        client = self._build_openviking_client(agent_name)
+        try:
+            rm_fn = getattr(client, "rm", None)
+            if not callable(rm_fn):
+                raise RuntimeError("OpenViking client does not expose rm(uri)")
+            rm_fn(uri)
+        finally:
+            close_fn = getattr(client, "close", None)
+            if callable(close_fn):
+                close_fn()
 
     def _ensure_openviking_scope(self, agent_name: str | None) -> tuple[Path, Path]:
         data_dir = self._paths.openviking_data_dir(agent_name)
@@ -875,7 +1070,6 @@ class OpenVikingRuntime:
         has_direct_model = bool(str(vlm.get("model") or "").strip())
         has_direct_key = bool(str(vlm.get("api_key") or "").strip())
 
-        # Keep existing valid config untouched.
         if has_provider_pool and has_direct_model:
             return vlm
         if has_direct_model and has_direct_key:
@@ -911,71 +1105,6 @@ class OpenVikingRuntime:
             close_fn = getattr(client, "close", None)
             if callable(close_fn):
                 close_fn()
-
-    def _search_structured_memory(self, *, query: str, limit: int, agent_name: str | None) -> list[dict[str, Any]]:
-        data = self._structured.get_memory_data(MemoryReadRequest(agent_name=agent_name))
-        facts = data.get("facts") or []
-        needle = query.strip().lower()
-        if not needle:
-            return []
-        query_tokens = _tokenize(needle)
-        scored: list[tuple[float, dict[str, Any]]] = []
-        for fact in facts:
-            content = str(fact.get("content", "")).strip()
-            if not content:
-                continue
-            lowered = content.lower()
-            confidence = float(fact.get("confidence", 0.5) or 0.5)
-            relevance_score = 0.0
-            if needle in lowered:
-                relevance_score += 0.65
-            if query_tokens:
-                doc_tokens = _tokenize(lowered)
-                overlap = len(query_tokens & doc_tokens) / max(1, len(query_tokens))
-                relevance_score += overlap * 0.35
-            if relevance_score <= 0:
-                continue
-            score = min(1.0, relevance_score + min(0.2, confidence * 0.2))
-            scored.append(
-                (
-                    score,
-                    {
-                        "id": str(fact.get("id", "")),
-                        "uri": "viking://session/memory",
-                        "score": score,
-                        "abstract": content,
-                        "memory": content,
-                        "source": fact.get("source", ""),
-                    },
-                )
-            )
-        if not scored and _is_location_dependent_query(query):
-            location_scored: list[tuple[float, dict[str, Any]]] = []
-            for fact in facts:
-                content = str(fact.get("content", "")).strip()
-                if not content:
-                    continue
-                category = str(fact.get("category", "") or "")
-                if not _looks_like_location_fact(content, category):
-                    continue
-                confidence = float(fact.get("confidence", 0.5) or 0.5)
-                score = min(1.0, 0.45 + confidence * 0.25)
-                location_scored.append(
-                    (
-                        score,
-                        {
-                            "id": str(fact.get("id", "")),
-                            "uri": "viking://session/memory",
-                            "score": score,
-                            "abstract": content,
-                            "memory": content,
-                            "source": fact.get("source", ""),
-                        },
-                    )
-                )
-            scored.extend(location_scored)
-        scored.sort(key=lambda item: item[0], reverse=True)
-        return [item for _, item in scored[: max(1, limit)]]
 
     def _normalize_messages(self, messages: list[Any]) -> list[dict[str, str]]:
         normalized: list[dict[str, str]] = []

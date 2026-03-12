@@ -24,8 +24,8 @@ from src.gateway.routers import (
     heartbeat,
     langgraph_proxy,
     mcp,
-    memory,
     models,
+    openviking,
     retrieval_models,
     rss,
     runtime_profile,
@@ -74,11 +74,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.warning(f"Failed to initialize default agent (non-blocking): {e}")
 
-    # Hard-cut migration policy: remove legacy memory.json files on startup.
+    # Hard-cut migration policy: remove legacy single-file memory artifacts on startup.
     try:
         ensure_legacy_memory_removed()
     except Exception as e:  # noqa: BLE001
-        logger.warning("Failed to remove legacy memory.json files (non-blocking): %s", e)
+        logger.warning("Failed to remove legacy memory artifacts (non-blocking): %s", e)
 
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
@@ -158,8 +158,8 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
                 "description": "Manage Model Context Protocol (MCP) server configurations",
             },
             {
-                "name": "memory",
-                "description": "Access and manage global memory data for personalized conversations",
+                "name": "openviking",
+                "description": "OpenViking memory retrieval/store/governance APIs",
             },
             {
                 "name": "skills",
@@ -254,8 +254,8 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
     # MCP API is mounted at /api/mcp
     app.include_router(mcp.router)
 
-    # Memory API is mounted at /api/memory
-    app.include_router(memory.router)
+    # OpenViking API is mounted at /api/openviking/*
+    app.include_router(openviking.router)
 
     # Skills API is mounted at /api/skills
     app.include_router(skills.router)

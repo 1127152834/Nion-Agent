@@ -952,8 +952,6 @@ class RetrievalModelsService:
 
             config_dict["memory"] = {
                 "enabled": memory_cfg.enabled,
-                "fallback_to_v1": memory_cfg.fallback_to_v1,
-                "storage_path": memory_cfg.storage_path,
                 "debounce_seconds": memory_cfg.debounce_seconds,
                 "model_name": memory_cfg.model_name,
                 "embedding_provider": memory_cfg.embedding_provider,

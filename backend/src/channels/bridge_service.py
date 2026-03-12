@@ -330,6 +330,81 @@ def get_workspace_path_resolver(*, paths: Paths) -> _WorkspacePathResolver:
     return _WorkspacePathResolver(paths)
 
 
+class _ThreadWorkspaceBindingRepository:
+    """Persist thread -> workspace bindings for channel-created threads."""
+
+    def __init__(self, paths: Paths):
+        self._bindings_file = paths.base_dir / "channel_thread_workspace_bindings.json"
+        self._bindings_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def bind(self, thread_id: str, workspace_id: str, *, allow_rebind: bool = False) -> None:
+        normalized_thread_id = _safe_text(thread_id)
+        normalized_workspace_id = _safe_text(workspace_id)
+        if not normalized_thread_id:
+            raise ValueError("thread_id is required")
+        if not normalized_workspace_id:
+            raise ValueError("workspace_id is required")
+
+        payload = self._read_payload()
+        bindings = payload.setdefault("bindings", {})
+        current = bindings.get(normalized_thread_id)
+        if isinstance(current, dict):
+            current_workspace_id = _safe_text(current.get("workspace_id"))
+            if current_workspace_id and current_workspace_id != normalized_workspace_id and not allow_rebind:
+                raise RuntimeError(
+                    f"Thread {normalized_thread_id} already bound to workspace {current_workspace_id}"
+                )
+
+        bindings[normalized_thread_id] = {
+            "workspace_id": normalized_workspace_id,
+            "updated_at": _utcnow(),
+        }
+        self._write_payload(payload)
+
+    def get_workspace_id(self, thread_id: str) -> str | None:
+        normalized_thread_id = _safe_text(thread_id)
+        if not normalized_thread_id:
+            return None
+        payload = self._read_payload()
+        binding = payload.get("bindings", {}).get(normalized_thread_id)
+        if not isinstance(binding, dict):
+            return None
+        workspace_id = binding.get("workspace_id")
+        return _safe_text(workspace_id) or None
+
+    def _read_payload(self) -> dict[str, Any]:
+        if not self._bindings_file.exists():
+            return {"bindings": {}}
+        try:
+            raw = self._bindings_file.read_text(encoding="utf-8")
+        except OSError:
+            return {"bindings": {}}
+
+        try:
+            payload = json.loads(raw) if raw.strip() else {}
+        except json.JSONDecodeError:
+            return {"bindings": {}}
+        if not isinstance(payload, dict):
+            return {"bindings": {}}
+
+        bindings = payload.get("bindings")
+        if not isinstance(bindings, dict):
+            payload["bindings"] = {}
+        return payload
+
+    def _write_payload(self, payload: dict[str, Any]) -> None:
+        temp_path = self._bindings_file.with_suffix(".tmp")
+        temp_path.write_text(
+            json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2),
+            encoding="utf-8",
+        )
+        temp_path.replace(self._bindings_file)
+
+
+def get_thread_workspace_binding_repository(*, paths: Paths) -> _ThreadWorkspaceBindingRepository:
+    return _ThreadWorkspaceBindingRepository(paths)
+
+
 def _dedupe_artifact_paths(thread_id: str, artifact_paths: list[str]) -> list[str]:
     deduped: list[str] = []
     seen: set[str] = set()

@@ -21,9 +21,15 @@ def reset_state():
     """Reset singleton state before each test."""
     set_checkpointer_config(None)
     reset_checkpointer()
+    original_client_module = sys.modules.get("src.client")
     yield
     set_checkpointer_config(None)
     reset_checkpointer()
+    # Avoid leaking dynamically reloaded src.client into other test modules.
+    if original_client_module is None:
+        sys.modules.pop("src.client", None)
+    else:
+        sys.modules["src.client"] = original_client_module
 
 
 def _load_client_module():

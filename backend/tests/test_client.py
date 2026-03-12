@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa
 from src.agents.memory.core import MemoryReadRequest
 from src.client import NionClient
 from src.gateway.routers.mcp import McpConfigResponse
-from src.gateway.routers.memory import MemoryConfigResponse, MemoryStatusResponse
+from src.gateway.routers.openviking import OpenVikingConfigResponse
 from src.gateway.routers.models import ModelResponse, ModelsListResponse
 from src.gateway.routers.skills import SkillInstallResponse, SkillResponse, SkillsListResponse
 from src.gateway.routers.uploads import UploadResponse
@@ -760,12 +760,17 @@ class TestMemoryManagement:
     def test_get_memory_config(self, client):
         config = MagicMock()
         config.enabled = True
-        config.storage_path = ".nion/memory.json"
         config.debounce_seconds = 30
         config.max_facts = 100
         config.fact_confidence_threshold = 0.7
         config.injection_enabled = True
         config.max_injection_tokens = 2000
+        config.retrieval_mode = "find"
+        config.rerank_mode = "auto"
+        config.graph_enabled = True
+        config.openviking_context_enabled = True
+        config.openviking_context_limit = 3
+        config.openviking_session_commit_enabled = True
 
         with patch("src.config.memory_config.get_memory_config", return_value=config):
             result = client.get_memory_config()
@@ -776,18 +781,25 @@ class TestMemoryManagement:
     def test_get_memory_status(self, client):
         config = MagicMock()
         config.enabled = True
-        config.storage_path = ".nion/memory.json"
         config.debounce_seconds = 30
         config.max_facts = 100
         config.fact_confidence_threshold = 0.7
         config.injection_enabled = True
         config.max_injection_tokens = 2000
+        config.retrieval_mode = "find"
+        config.rerank_mode = "auto"
+        config.graph_enabled = True
+        config.openviking_context_enabled = True
+        config.openviking_context_limit = 3
+        config.openviking_session_commit_enabled = True
 
         data = {"version": "1.0", "facts": []}
+        provider = MagicMock()
+        provider.get_memory_data.return_value = data
 
         with (
             patch("src.config.memory_config.get_memory_config", return_value=config),
-            patch("src.agents.memory.updater.get_memory_data", return_value=data),
+            patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider),
         ):
             result = client.get_memory_status()
 
@@ -1407,12 +1419,17 @@ class TestScenarioMemoryWorkflow:
 
         config = MagicMock()
         config.enabled = True
-        config.storage_path = ".nion/memory.json"
         config.debounce_seconds = 30
         config.max_facts = 100
         config.fact_confidence_threshold = 0.7
         config.injection_enabled = True
         config.max_injection_tokens = 2000
+        config.retrieval_mode = "find"
+        config.rerank_mode = "auto"
+        config.graph_enabled = True
+        config.openviking_context_enabled = True
+        config.openviking_context_limit = 3
+        config.openviking_session_commit_enabled = True
 
         provider = MagicMock()
         provider.get_memory_data.return_value = initial_data
@@ -1765,29 +1782,39 @@ class TestGatewayConformance:
     def test_get_memory_config(self, client):
         mem_cfg = MagicMock()
         mem_cfg.enabled = True
-        mem_cfg.storage_path = ".nion/memory.json"
         mem_cfg.debounce_seconds = 30
         mem_cfg.max_facts = 100
         mem_cfg.fact_confidence_threshold = 0.7
         mem_cfg.injection_enabled = True
         mem_cfg.max_injection_tokens = 2000
+        mem_cfg.retrieval_mode = "find"
+        mem_cfg.rerank_mode = "auto"
+        mem_cfg.graph_enabled = True
+        mem_cfg.openviking_context_enabled = True
+        mem_cfg.openviking_context_limit = 3
+        mem_cfg.openviking_session_commit_enabled = True
 
         with patch("src.config.memory_config.get_memory_config", return_value=mem_cfg):
             result = client.get_memory_config()
 
-        parsed = MemoryConfigResponse(**result)
+        parsed = OpenVikingConfigResponse(**result)
         assert parsed.enabled is True
         assert parsed.max_facts == 100
 
     def test_get_memory_status(self, client):
         mem_cfg = MagicMock()
         mem_cfg.enabled = True
-        mem_cfg.storage_path = ".nion/memory.json"
         mem_cfg.debounce_seconds = 30
         mem_cfg.max_facts = 100
         mem_cfg.fact_confidence_threshold = 0.7
         mem_cfg.injection_enabled = True
         mem_cfg.max_injection_tokens = 2000
+        mem_cfg.retrieval_mode = "find"
+        mem_cfg.rerank_mode = "auto"
+        mem_cfg.graph_enabled = True
+        mem_cfg.openviking_context_enabled = True
+        mem_cfg.openviking_context_limit = 3
+        mem_cfg.openviking_session_commit_enabled = True
 
         memory_data = {
             "version": "1.0",
@@ -1813,6 +1840,5 @@ class TestGatewayConformance:
         ):
             result = client.get_memory_status()
 
-        parsed = MemoryStatusResponse(**result)
-        assert parsed.config.enabled is True
-        assert parsed.data.version == "1.0"
+        assert result["config"]["enabled"] is True
+        assert result["data"]["version"] == "1.0"

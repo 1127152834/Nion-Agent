@@ -14,6 +14,7 @@ class _FakeAppConfig:
 
 
 def test_web_search_auto_falls_back_to_searxng(monkeypatch):
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.setattr(web_search_tools, "get_app_config", lambda: _FakeAppConfig(extra={"provider": "auto"}))
 
     monkeypatch.setattr(

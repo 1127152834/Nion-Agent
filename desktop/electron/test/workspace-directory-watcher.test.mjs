@@ -49,5 +49,6 @@ test('workspace watcher emits for create and delete in nested directories', asyn
 
   await watcher.close();
 
-  assert.ok(events.length >= 3);
+  assert.ok(events.some((event) => event.path === filePath));
+  assert.ok(events.some((event) => event.type === 'rename' && event.path === filePath));
 });

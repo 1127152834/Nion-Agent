@@ -3,7 +3,6 @@ from typing import Any
 
 from src.agents.memory.core import MemoryReadRequest
 from src.agents.memory.registry import get_default_memory_provider
-from src.config.agents_config import load_agent_soul
 from src.skills import load_skills
 
 
@@ -176,6 +175,7 @@ You are {agent_name}, an open-source super agent.
 {soul}
 {user_profile}
 {memory_context}
+{memory_policy_section}
 {rss_context_section}
 
 <thinking_style>
@@ -532,6 +532,32 @@ def _build_plugin_assistant_section(
     )
 
 
+def _build_memory_policy_section(
+    *,
+    session_mode: str | None,
+    memory_read: bool | None,
+    memory_write: bool | None,
+) -> str:
+    from src.agents.memory.policy import resolve_memory_policy
+
+    policy = resolve_memory_policy(
+        runtime_context={
+            "session_mode": session_mode,
+            "memory_read": memory_read,
+            "memory_write": memory_write,
+        }
+    )
+    return (
+        "<memory_policy>\n"
+        f"- session_mode: {policy.session_mode}\n"
+        f"- memory_read: {'enabled' if policy.allow_read else 'disabled'}\n"
+        f"- memory_write: {'enabled' if policy.allow_write else 'disabled'}\n"
+        "- You MUST NOT claim \"I have no long-term memory\" as a generic statement.\n"
+        "- If asked about memory, explain current session policy precisely using the flags above.\n"
+        "</memory_policy>\n"
+    )
+
+
 def apply_prompt_template(
     subagent_enabled: bool = False,
     max_concurrent_subagents: int = 3,
@@ -548,6 +574,11 @@ def apply_prompt_template(
     # Get memory context
     memory_context = _get_memory_context(
         agent_name,
+        session_mode=session_mode,
+        memory_read=memory_read,
+        memory_write=memory_write,
+    )
+    memory_policy_section = _build_memory_policy_section(
         session_mode=session_mode,
         memory_read=memory_read,
         memory_write=memory_write,
@@ -594,6 +625,7 @@ def apply_prompt_template(
         skills_section=skills_section,
         plugin_assistant_section=plugin_assistant_section,
         memory_context=memory_context,
+        memory_policy_section=memory_policy_section,
         rss_context_section=rss_context_section,
         subagent_section=subagent_section,
         subagent_reminder=subagent_reminder,

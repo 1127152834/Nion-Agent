@@ -1,75 +1,28 @@
-export interface UserMemory {
-  version: string;
-  scope?: string;
-  storage_layout?: string;
-  lastUpdated: string;
-  user: {
-    workContext: {
-      summary: string;
-      updatedAt: string;
-    };
-    personalContext: {
-      summary: string;
-      updatedAt: string;
-    };
-    topOfMind: {
-      summary: string;
-      updatedAt: string;
-    };
-  };
-  history: {
-    recentMonths: {
-      summary: string;
-      updatedAt: string;
-    };
-    earlierContext: {
-      summary: string;
-      updatedAt: string;
-    };
-    longTermBackground: {
-      summary: string;
-      updatedAt: string;
-    };
-  };
-  facts: {
-    id: string;
-    content: string;
-    category: string;
-    confidence: number;
-    createdAt: string;
-    source: string;
-    status?: string;
-    entity_refs?: string[];
-    relations?: {
-      type: string;
-      target_id: string;
-      weight: number;
-      evidence: string;
-    }[];
-    source_refs?: string[];
-  }[];
-  agent_catalog?: AgentDirectoryCard[];
-}
-
-export interface MemoryItem {
+export interface OpenVikingMemoryItem {
   memory_id: string;
-  entry_type: string;
-  scope: string;
-  source_thread_id?: string | null;
+  uri: string;
   summary: string;
-  tags: string[];
-  entity_refs: string[];
-  relations: {
+  score: number;
+  status: string;
+  use_count: number;
+  last_used_at: string;
+  source_thread_id: string;
+  created_at: string;
+  updated_at: string;
+  scope: string;
+  metadata?: Record<string, unknown>;
+  // Backward-compatible fields still used in some UI cards.
+  entry_type?: string;
+  tags?: string[];
+  entity_refs?: string[];
+  relations?: {
     type: string;
     target_id: string;
     weight: number;
     evidence: string;
   }[];
-  source_refs: string[];
-  confidence: number;
-  status: string;
-  created_at: string;
-  updated_at: string;
+  source_refs?: string[];
+  confidence?: number;
 }
 
 export interface AgentDirectoryCard {
@@ -81,17 +34,65 @@ export interface AgentDirectoryCard {
   updated_at: string;
 }
 
-export interface GovernanceStatus {
+export interface GovernanceQueueItem {
+  decision_id: string;
+  memory_id: string;
+  action: string;
+  status: string;
+  reason: string;
+  created_at: string;
+  decided_at?: string;
+  decided_by?: string;
+  candidate?: Record<string, unknown>;
+}
+
+export interface OpenVikingGovernanceStatus {
   pending_count: number;
   contested_count: number;
   last_run_at: string;
-  queue: {
-    decision_id: string;
-    source_scope: string;
-    status: string;
-    reason: string;
-    created_at: string;
-    decided_at?: string;
-    candidate?: Record<string, unknown>;
-  }[];
+  queue: GovernanceQueueItem[];
+  catalog?: AgentDirectoryCard[];
+}
+
+export interface OpenVikingRetrievalStatus {
+  scope: string;
+  retrieval_mode: string;
+  rerank_mode: string;
+  graph_enabled: boolean;
+  local_embedding_configured: boolean;
+  local_embedding_model?: string | null;
+  embedding_health_ok: boolean;
+  embedding_health_message: string;
+  index_available: boolean;
+  index_count: number;
+  ledger_item_count?: number;
+  last_fallback_reason?: string;
+  graph_stats?: {
+    nodes: number;
+    edges: number;
+    memory_links: number;
+  };
+}
+
+export interface OpenVikingConfig {
+  enabled: boolean;
+  provider: string;
+  storage_layout: string;
+  debounce_seconds: number;
+  max_facts: number;
+  fact_confidence_threshold: number;
+  injection_enabled: boolean;
+  max_injection_tokens: number;
+  retrieval_mode: string;
+  rerank_mode: string;
+  graph_enabled: boolean;
+  openviking_context_enabled: boolean;
+  openviking_context_limit: number;
+  openviking_session_commit_enabled: boolean;
+}
+
+export interface OpenVikingStatus {
+  config: OpenVikingConfig;
+  retrieval: OpenVikingRetrievalStatus;
+  governance: OpenVikingGovernanceStatus;
 }

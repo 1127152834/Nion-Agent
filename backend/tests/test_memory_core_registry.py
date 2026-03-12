@@ -10,7 +10,7 @@ def test_default_provider_is_registered():
 
     provider = get_default_memory_provider()
 
-    assert provider.name == "structured-fs"
+    assert provider.name == "openviking"
     assert get_memory_registry().get_default() is provider
 
 
@@ -22,4 +22,4 @@ def test_reset_memory_registry_rebuilds_default_provider():
     provider_after = get_default_memory_provider()
 
     assert provider_before is not provider_after
-    assert provider_after.name == "structured-fs"
+    assert provider_after.name == "openviking"

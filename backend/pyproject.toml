@@ -52,4 +52,11 @@ override-dependencies = ["langgraph==1.1.0"]
 [tool.pytest.ini_options]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "unit: deterministic unit tests",
+    "integration: module integration tests",
+    "e2e: end-to-end flow tests",
+    "nonfunc: non-functional tests (performance/resilience/security)",
+    "real: tests that require real external dependencies/credentials",
+    "runtime: tests that validate desktop/runtime behavior",
+    "parity: tests that validate source/runtime parity",
 ]

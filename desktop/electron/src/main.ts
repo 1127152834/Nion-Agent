@@ -282,10 +282,29 @@ async function loadMainWindowFrontend(): Promise<void> {
     return;
   }
 
-  const targetUrl = `http://localhost:${runtimePorts.frontendPort}`;
+  const frontendOrigin = `http://localhost:${runtimePorts.frontendPort}`;
   const currentUrl = mainWindow.webContents.getURL();
-  if (currentUrl === targetUrl) {
-    return;
+
+  // App activate is triggered when switching back to Nion on macOS.
+  // If we're already on the same frontend origin, keep current route and avoid reloading.
+  let targetUrl = frontendOrigin;
+  if (currentUrl) {
+    try {
+      const current = new URL(currentUrl);
+      if (current.origin === frontendOrigin) {
+        return;
+      }
+      if (
+        (current.protocol === "http:" || current.protocol === "https:")
+        && (current.pathname !== "/" || current.search.length > 0 || current.hash.length > 0)
+      ) {
+        targetUrl = `${frontendOrigin}${current.pathname}${current.search}${current.hash}`;
+      }
+    } catch {
+      if (currentUrl === frontendOrigin) {
+        return;
+      }
+    }
   }
 
   try {

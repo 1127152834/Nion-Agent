@@ -241,7 +241,7 @@ class SQLiteConfigStore:
             raise RuntimeError("Config store initialization failed")
 
         config_data = yaml.safe_load(row["config_json"]) or {}
-        return self._coerce_bootstrap_config(config_data), str(row["version"]), self._db_path
+        return config_data, str(row["version"]), self._db_path
 
     def write(self, config_dict: dict[str, Any], expected_version: str) -> str:
         """Write configuration to database with version check.
@@ -267,7 +267,7 @@ class SQLiteConfigStore:
                 raise VersionConflictError(current_version=str(current_version))
 
             next_version = current_version + 1
-            serialized = yaml.safe_dump(self._coerce_bootstrap_config(config_dict), sort_keys=False, allow_unicode=True)
+            serialized = yaml.safe_dump(config_dict, sort_keys=False, allow_unicode=True)
             conn.execute(
                 f"UPDATE {self.TABLE_NAME} SET version = ?, config_json = ? WHERE id = 1",
                 (next_version, serialized),

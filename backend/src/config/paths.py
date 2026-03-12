@@ -14,13 +14,16 @@ class Paths:
 
     Directory layout (host side):
         {base_dir}/
-        ├── memory.json
-        ├── USER.md          <-- global user profile (injected into all agents)
+        ├── USER.md
         ├── agents/
         │   └── {agent_name}/
-        │       ├── config.yaml
-        │       ├── SOUL.md  <-- agent personality/identity (injected alongside lead prompt)
-        │       └── memory.json
+        │       ├── agent.json
+        │       ├── SOUL.md
+        │       └── IDENTITY.md
+        ├── openviking/
+        │   ├── global/
+        │   ├── agent-*/
+        │   └── memory_index.db
         └── threads/
             └── {thread_id}/
                 └── user-data/         <-- mounted as /mnt/user-data/ inside sandbox
@@ -54,34 +57,6 @@ class Paths:
         return Path.home() / ".nion"
 
     @property
-    def memory_file(self) -> Path:
-        """Path to the persisted memory file: `{base_dir}/memory.json`."""
-        return self.base_dir / "memory.json"
-
-    @property
-    def structured_memory_root(self) -> Path:
-        """Root directory for structured memory: `{base_dir}/memory/`."""
-        return self.base_dir / "memory"
-
-    @property
-    def memory_overview_file(self) -> Path:
-        """Overview file: `{memory_root}/MEMORY.md`."""
-        return self.structured_memory_root / "MEMORY.md"
-
-    @property
-    def memory_manifest_file(self) -> Path:
-        """Manifest file: `{memory_root}/index/manifest.json`."""
-        return self.structured_memory_root / "index" / "manifest.json"
-
-    def memory_day_file(self, date: str) -> Path:
-        """Day file: `{memory_root}/memory/YYYY-MM-DD.md`."""
-        return self.structured_memory_root / "memory" / f"{date}.md"
-
-    def memory_snapshot_dir(self, timestamp: str) -> Path:
-        """Snapshot directory: `{memory_root}/snapshots/memory-v2-{timestamp}/`."""
-        return self.structured_memory_root / "snapshots" / f"memory-v2-{timestamp}"
-
-    @property
     def user_md_file(self) -> Path:
         """Path to the global user profile file: `{base_dir}/USER.md`."""
         return self.base_dir / "USER.md"
@@ -102,10 +77,6 @@ class Paths:
     def agent_dir(self, name: str) -> Path:
         """Directory for a specific agent: `{base_dir}/agents/{name}/`."""
         return self.agents_dir / name.lower()
-
-    def agent_memory_file(self, name: str) -> Path:
-        """Per-agent memory file: `{base_dir}/agents/{name}/memory.json`."""
-        return self.agent_dir(name) / "memory.json"
 
     def agent_config_file(self, name: str) -> Path:
         """Per-agent config file: `{base_dir}/agents/{name}/agent.json`."""
@@ -170,6 +141,32 @@ class Paths:
     def retrieval_models_dir(self) -> Path:
         """Root directory for retrieval models (embedding + rerank models): `{base_dir}/retrieval_models/`."""
         return self.base_dir / "retrieval_models"
+
+    @property
+    def openviking_root(self) -> Path:
+        """Root directory for OpenViking scopes: `{base_dir}/openviking/`."""
+        return self.base_dir / "openviking"
+
+    def openviking_scope_dir(self, agent_name: str | None = None) -> Path:
+        """Scope directory for OpenViking data."""
+        if agent_name:
+            scope_name = f"agent-{agent_name.lower()}"
+        else:
+            scope_name = "global"
+        return self.openviking_root / scope_name
+
+    @property
+    def openviking_index_db(self) -> Path:
+        """SQLite database for OpenViking local ledger/index metadata."""
+        return self.openviking_root / "memory_index.db"
+
+    def openviking_data_dir(self, agent_name: str | None = None) -> Path:
+        """OpenViking data directory for a scope."""
+        return self.openviking_scope_dir(agent_name) / "data"
+
+    def openviking_config_file(self, agent_name: str | None = None) -> Path:
+        """OpenViking config file for a scope."""
+        return self.openviking_scope_dir(agent_name) / "ov.conf"
 
     @property
     def security_dir(self) -> Path:

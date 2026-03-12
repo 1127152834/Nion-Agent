@@ -7,10 +7,14 @@ from langgraph.types import Command
 from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
-from src.config.paths import VIRTUAL_PATH_PREFIX
-from src.gateway.path_utils import resolve_thread_virtual_path
+from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
 
 OUTPUTS_VIRTUAL_PREFIX = f"{VIRTUAL_PATH_PREFIX}/outputs"
+
+
+def resolve_thread_virtual_path(thread_id: str, virtual_path: str) -> Path:
+    """Compatibility wrapper for virtual-path resolution in present_files."""
+    return get_paths().resolve_virtual_path(thread_id, virtual_path)
 
 
 def _normalize_presented_filepath(

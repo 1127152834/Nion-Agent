@@ -17,27 +17,20 @@ class MemoryRegistry:
             raise KeyError(f"Unknown memory provider: {name}") from exc
 
     def get_default(self) -> MemoryProvider:
-        from src.config.memory_config import get_memory_config
-
-        config = get_memory_config()
-        provider_name = config.provider
-        if provider_name not in self._providers:
-            provider_name = "structured-fs"
-        return self.get(provider_name)
+        # OpenViking is the only online provider in hard-cut mode.
+        return self.get("openviking")
 
 
 def _build_default_registry() -> MemoryRegistry:
     from src.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
-    from src.agents.memory.structured_provider import StructuredFsProvider
-    from src.agents.memory.structured_runtime import StructuredFsRuntime
+    from src.agents.memory.openviking_provider import OpenVikingMemoryProvider
+    from src.agents.memory.openviking_runtime import OpenVikingRuntime
 
-    # Hard-cut safety: always remove legacy memory.json files on runtime init.
+    # Hard-cut safety: always remove legacy/structured artifacts on runtime init.
     ensure_legacy_memory_removed()
 
     registry = MemoryRegistry()
-
-    registry.register(StructuredFsProvider(runtime=StructuredFsRuntime()))
-
+    registry.register(OpenVikingMemoryProvider(runtime=OpenVikingRuntime()))
     return registry
 
 

@@ -31,10 +31,11 @@ def test_heartbeat_template_model():
 def test_default_templates():
     """Test default templates."""
     templates = get_default_templates()
-    assert len(templates) == 4
+    assert len(templates) == 5
     assert "daily_review" in templates
     assert "weekly_reset" in templates
     assert "memory_maintenance" in templates
+    assert "memory_governance" in templates
     assert "identity_check" in templates
 
 

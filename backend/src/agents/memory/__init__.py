@@ -1,10 +1,4 @@
-"""Memory module for DeerFlow.
-
-This module provides a global memory mechanism that:
-- Stores long-term memory in structured-fs scope directories
-- Uses LLM to summarize and extract facts from conversations
-- Injects relevant memory into system prompts for personalized responses
-"""
+"""Memory module for Nion (OpenViking single-stack)."""
 
 from src.agents.memory.core import MemoryProvider, MemoryReadRequest, MemoryRuntime, MemoryWriteRequest
 from src.agents.memory.prompt import (
@@ -13,7 +7,6 @@ from src.agents.memory.prompt import (
     format_conversation_for_update,
     format_memory_for_injection,
 )
-from src.agents.memory.provider import V2CompatibleMemoryProvider
 from src.agents.memory.queue import (
     ConversationContext,
     MemoryUpdateQueue,
@@ -25,13 +18,6 @@ from src.agents.memory.registry import (
     get_default_memory_provider,
     get_memory_registry,
     reset_memory_registry,
-)
-from src.agents.memory.runtime import V2CompatibleMemoryRuntime
-from src.agents.memory.updater import (
-    MemoryUpdater,
-    get_memory_data,
-    reload_memory_data,
-    update_memory_from_conversation,
 )
 
 __all__ = [
@@ -45,10 +31,8 @@ __all__ = [
     "FACT_EXTRACTION_PROMPT",
     "format_memory_for_injection",
     "format_conversation_for_update",
-    # Provider / registry / runtime
+    # Registry
     "MemoryRegistry",
-    "V2CompatibleMemoryProvider",
-    "V2CompatibleMemoryRuntime",
     "get_default_memory_provider",
     "get_memory_registry",
     "reset_memory_registry",
@@ -57,9 +41,4 @@ __all__ = [
     "MemoryUpdateQueue",
     "get_memory_queue",
     "reset_memory_queue",
-    # Updater
-    "MemoryUpdater",
-    "get_memory_data",
-    "reload_memory_data",
-    "update_memory_from_conversation",
 ]

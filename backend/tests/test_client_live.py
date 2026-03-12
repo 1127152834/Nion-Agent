@@ -1,28 +1,40 @@
 """Live integration tests for NionClient with real API.
 
-These tests require a working config.yaml with valid API credentials.
-They are skipped in CI and must be run explicitly:
+These tests require a real Config Center payload with valid API credentials.
+They run only when `NION_REAL_E2E=1`:
 
-    PYTHONPATH=. uv run pytest tests/test_client_live.py -v -s
+    NION_REAL_E2E=1 PYTHONPATH=. uv run pytest tests/test_client_live.py -v -s
 """
 
 import json
 import os
-from pathlib import Path
 
 import pytest
 
 from src.client import NionClient, StreamEvent
+from src.config.app_config import AppConfig
+from src.config.config_store import create_config_store, resolve_config_db_path
 
-# Skip entire module in CI or when no config.yaml exists
-_skip_reason = None
-if os.environ.get("CI"):
-    _skip_reason = "Live tests skipped in CI"
-elif not Path(__file__).resolve().parents[2].joinpath("config.yaml").exists():
-    _skip_reason = "No config.yaml found — live tests require valid API credentials"
+# Real-environment E2E is opt-in locally but mandatory in CI gates that set NION_REAL_E2E=1.
+pytestmark = [pytest.mark.real, pytest.mark.e2e]
 
-if _skip_reason:
-    pytest.skip(_skip_reason, allow_module_level=True)
+_real_e2e_enabled = os.environ.get("NION_REAL_E2E") == "1"
+
+if not _real_e2e_enabled:
+    pytest.skip("Set NION_REAL_E2E=1 to run real-environment E2E tests", allow_module_level=True)
+_config_store = create_config_store()
+if not _config_store.exists():
+    raise RuntimeError(
+        "NION_REAL_E2E=1 but Config Store is not initialized; "
+        f"expected db at: {resolve_config_db_path()}. "
+        "Configure in Settings page first, or inject Config Store before running real E2E."
+    )
+_runtime_config = AppConfig.from_store_or_file(strict_env=False)
+if len(_runtime_config.models) == 0:
+    raise RuntimeError(
+        "NION_REAL_E2E=1 but Config Store has no models configured; "
+        "configure at least one model in Settings page before running real E2E."
+    )
 
 # ---------------------------------------------------------------------------
 # Fixtures

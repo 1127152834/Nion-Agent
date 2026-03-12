@@ -170,7 +170,7 @@ FastAPI application on port 8001 with health check at `GET /health`.
 | **Models** (`/api/models`) | `GET /` - list models; `GET /{name}` - model details |
 | **MCP** (`/api/mcp`) | `GET /config` - get config; `PUT /config` - update config (saves to extensions_config.json) |
 | **Skills** (`/api/skills`) | `GET /` - list skills; `GET /{name}` - details; `PUT /{name}` - update enabled; `POST /install` - install from .skill archive |
-| **Memory** (`/api/memory`) | `GET /` - memory data; `POST /reload` - force reload; `GET /config` - config; `GET /status` - config + data |
+| **OpenViking** (`/api/openviking`) | query/store/items/forget/compact/governance/retrieval/reindex/graph/session/config/status |
 | **Uploads** (`/api/threads/{id}/uploads`) | `POST /` - upload files (auto-converts PDF/PPT/Excel/Word); `GET /list` - list; `DELETE /{filename}` - delete |
 | **Artifacts** (`/api/threads/{id}/artifacts`) | `GET /{path}` - serve artifacts; `?download=true` for file download |
 | **Suggestions** (`/api/threads/{id}/suggestions`) | `POST /` - generate follow-up questions; accepts optional `model_name` override |
@@ -281,33 +281,34 @@ Browser traffic should use Gateway as the only API facade. In Web mode nginx for
 
 ### Memory System (`src/agents/memory/`)
 
+OpenViking is the only online memory stack (no structured fallback, no legacy single-file read/write path).
+
 **Components**:
 - `policy.py` - Shared memory session policy resolution (`normal` vs `temporary_chat`, explicit read/write overrides)
-- `core.py` / `provider.py` / `runtime.py` / `registry.py` - Minimal Memory Core skeleton. Default provider is `v2-compatible`, which keeps the existing `memory.json` read/write path but gives prompt injection, write gating, Gateway memory endpoints, and embedded read-only memory APIs a shared abstraction layer
-- `updater.py` - LLM-based memory updates with fact extraction and atomic file I/O
-- `queue.py` - Debounced update queue (per-thread deduplication, configurable wait time)
-- `prompt.py` - Prompt templates for memory updates
+- `core.py` / `openviking_provider.py` / `openviking_runtime.py` / `registry.py` - Single-provider memory core (provider fixed to `openviking`)
+- `sqlite_index.py` - Local SQLite ledger (resource metadata, governance queue/state, vector/graph index)
+- `queue.py` - Optional debounced session-commit queue
+- `prompt.py` - Prompt templates for memory injection formatting
+- `legacy_cleanup.py` - Startup cleanup for legacy single-file memory artifacts and old structured directories
 
-**Data Structure** (stored in `backend/.nion/memory.json`):
-- **User Context**: `workContext`, `personalContext`, `topOfMind` (1-3 sentence summaries)
-- **History**: `recentMonths`, `earlierContext`, `longTermBackground`
-- **Facts**: Discrete facts with `id`, `content`, `category` (preference/knowledge/context/behavior/goal), `confidence` (0-1), `createdAt`, `source`
+**OpenViking API Surface**:
+- `POST /api/openviking/query`
+- `POST /api/openviking/store`
+- `GET /api/openviking/items`
+- `POST /api/openviking/forget` (hard delete)
+- `POST /api/openviking/compact` (hard delete by ratio)
+- `GET/POST /api/openviking/governance/*`
+- `GET /api/openviking/retrieval/status`
+- `POST /api/openviking/reindex-vectors`
+- `POST /api/openviking/graph/query`
+- `POST /api/openviking/session/commit`
+- `GET /api/openviking/config`
+- `GET /api/openviking/status`
 
-**Workflow**:
-1. `MemoryMiddleware` first resolves the memory session policy; `memory_write=false` or `temporary_chat` skips queueing entirely
-2. `MemoryMiddleware` filters messages (user inputs + final AI responses) and queues conversation
-3. Queue debounces (30s default), batches updates, deduplicates per-thread
-4. Background thread invokes LLM to extract context updates and facts
-5. Applies updates atomically (temp file + rename) with cache invalidation
-6. Next interaction injects context summaries plus up to 10 high-confidence facts into `<memory>` tags in system prompt when `memory_read` is allowed
-
-**Configuration** (`config.yaml` → `memory`):
-- `enabled` / `injection_enabled` - Master switches
-- `storage_path` - Path to memory.json
-- `debounce_seconds` - Wait time before processing (default: 30)
-- `model_name` - LLM for updates (null = default model)
-- `max_facts` / `fact_confidence_threshold` - Fact storage limits (100 / 0.7)
-- `max_injection_tokens` - Token limit for prompt injection (2000)
+**Hard-delete Contract**:
+1. `forget/compact` first call OpenViking `rm(uri)` to delete remote memory.
+2. Only after remote deletion succeeds, local SQLite ledger changes are committed.
+3. If remote deletion fails, local state is not committed.
 
 ### Heartbeat System (`src/heartbeat/`)
 
@@ -396,7 +397,7 @@ Browser traffic should use Gateway as the only API facade. In Web mode nginx for
 - `title` - Auto-title generation (enabled, max_words, max_chars, prompt_template)
 - `summarization` - Context summarization (enabled, trigger conditions, keep policy)
 - `subagents.enabled` - Master switch for subagent delegation
-- `memory` - Memory system (enabled, storage_path, debounce_seconds, model_name, max_facts, fact_confidence_threshold, injection_enabled, max_injection_tokens)
+- `memory` - OpenViking memory system (enabled, debounce_seconds, model_name, max_facts, fact_confidence_threshold, injection_enabled, max_injection_tokens, retrieval/rerank, graph)
 
 **`extensions_config.json`**:
 - `mcpServers` - Map of server name → config (enabled, type, command, args, env, url, headers, oauth, description)

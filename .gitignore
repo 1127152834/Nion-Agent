@@ -33,6 +33,18 @@ extensions_config.json
 # Coverage report
 coverage.xml
 coverage/
+
+# Test directories and test artifacts
+backend/tests/
+frontend/tests/
+desktop/electron/test/
+backend/docs/
+docs/
+docs/testing/
+scripts/testing/
+frontend/test-results/
+reports/testing/
+
 .nion/
 .claude/
 skills/custom/*

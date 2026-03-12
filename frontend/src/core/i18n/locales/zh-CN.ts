@@ -1439,7 +1439,7 @@ export const zhCN: Translations = {
         "Nion 会在后台不断从你的对话中自动学习。这些记忆能帮助 Nion 更好地理解你，并提供更个性化的体验。",
       scopeTitle: "全局记忆视图",
       scopeDescription:
-        "此页仅展示全局治理共享记忆（/api/memory）。智能体局部记忆请前往对应智能体管理页查看。",
+        "此页仅展示 OpenViking 治理记忆（/api/openviking/*）。智能体局部记忆请前往对应智能体管理页查看。",
       empty: "暂无可展示的记忆数据。",
       rawJson: "原始 JSON",
       hub: withFallbackLabels({

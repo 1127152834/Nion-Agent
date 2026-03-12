@@ -1369,7 +1369,7 @@ export const enUS: Translations = {
         "Nion automatically learns from your conversations in the background. These memories help Nion understand you better and deliver a more personalized experience.",
       scopeTitle: "Global memory view",
       scopeDescription:
-        "This page now focuses on global governance memory (/api/memory). Agent-scoped memory is available in each agent settings page.",
+        "This page now focuses on OpenViking governance memory (/api/openviking/*). Agent-scoped memory is available in each agent settings page.",
       empty: "No memory data to display.",
       rawJson: "Raw JSON",
       hub: withFallbackLabels({

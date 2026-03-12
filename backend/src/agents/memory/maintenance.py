@@ -1,96 +1,49 @@
-"""Maintenance tools for structured memory storage."""
+"""Maintenance helpers for OpenViking memory runtime."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from src.agents.memory.structured_runtime import StructuredFsRuntime
+from typing import Any
 
 
-def get_usage_stats(runtime: StructuredFsRuntime, *, scope: str = "global", agent_name: str | None = None) -> dict:
-    """Get memory usage statistics.
+def _resolve_scope_agent(scope: str, agent_name: str | None) -> str | None:
+    normalized = (scope or "global").strip().lower()
+    if normalized == "global":
+        return None
+    if normalized == "agent":
+        if not agent_name:
+            raise ValueError("agent_name is required when scope=agent")
+        return agent_name
+    raise ValueError(f"Unsupported scope: {scope}")
 
-    Args:
-        runtime: StructuredFsRuntime instance
 
-    Returns:
-        Dictionary with usage statistics
-    """
-    resolved_scope = runtime._resolve_scope_arg(scope=scope, agent_name=agent_name)
-    manifest = runtime._read_manifest(resolved_scope)
+def get_usage_stats(runtime: Any, *, scope: str = "global", agent_name: str | None = None) -> dict:
+    """Get usage statistics from OpenViking local ledger."""
+    resolved_agent = _resolve_scope_agent(scope, agent_name)
+    items = runtime.get_memory_items(scope=scope, agent_name=resolved_agent)
+    active_items = [item for item in items if str(item.get("status") or "active") == "active"]
+    archived_items = [item for item in items if str(item.get("status") or "") == "archived"]
 
-    active_entries = [e for e in manifest.entries if e.status == "active"]
-    archived_entries = [e for e in manifest.entries if e.status == "archived"]
-
-    # Calculate total size
-    total_size = 0
-    manifest_file = runtime._scope_manifest_file(resolved_scope)
-    if manifest_file.exists():
-        total_size += manifest_file.stat().st_size
-
-    # Add day files size
-    memory_dir = runtime._scope_root(resolved_scope) / "memory"
-    if memory_dir.exists():
-        for day_file in memory_dir.glob("*.md"):
-            total_size += day_file.stat().st_size
+    total_chars = sum(len(str(item.get("summary") or "")) for item in items)
 
     return {
-        "total_entries": len(manifest.entries),
-        "active_entries": len(active_entries),
-        "archived_entries": len(archived_entries),
-        "total_size_bytes": total_size,
-        "scope": resolved_scope,
+        "total_entries": len(items),
+        "active_entries": len(active_items),
+        "archived_entries": len(archived_items),
+        "estimated_size_chars": total_chars,
+        "scope": f"agent:{resolved_agent}" if resolved_agent else "global",
     }
 
 
-def compact_memory(runtime: StructuredFsRuntime, *, scope: str = "global", agent_name: str | None = None) -> dict:
-    """Compact memory by removing archived entries.
-
-    Args:
-        runtime: StructuredFsRuntime instance
-
-    Returns:
-        Dictionary with compaction results
-    """
-    resolved_scope = runtime._resolve_scope_arg(scope=scope, agent_name=agent_name)
-    manifest = runtime._read_manifest(resolved_scope)
-
-    before_count = len(manifest.entries)
-    manifest.entries = [e for e in manifest.entries if e.status == "active"]
-    after_count = len(manifest.entries)
-
-    runtime._write_manifest(manifest, resolved_scope)
-    runtime._write_overview(resolved_scope, manifest)
-    runtime._write_graph_index(resolved_scope, manifest)
-    runtime._cache.pop(resolved_scope, None)
-
-    return {
-        "removed_count": before_count - after_count,
-        "remaining_count": after_count,
-        "scope": resolved_scope,
-    }
+def compact_memory(runtime: Any, *, scope: str = "global", agent_name: str | None = None) -> dict:
+    """Compact memory via OpenViking hard-delete path."""
+    resolved_agent = _resolve_scope_agent(scope, agent_name)
+    return runtime.compact_memory(ratio=0.8, scope=scope, agent_name=resolved_agent)
 
 
-def rebuild_memory(runtime: StructuredFsRuntime, *, scope: str = "global", agent_name: str | None = None) -> dict:
-    """Rebuild memory manifest from day files.
-
-    Args:
-        runtime: StructuredFsRuntime instance
-
-    Returns:
-        Dictionary with rebuild results
-    """
-    # For now, just validate the manifest
-    resolved_scope = runtime._resolve_scope_arg(scope=scope, agent_name=agent_name)
-    manifest = runtime._read_manifest(resolved_scope)
-    runtime._write_manifest(manifest, resolved_scope)
-    runtime._write_overview(resolved_scope, manifest)
-    runtime._write_graph_index(resolved_scope, manifest)
-    runtime._cache.pop(resolved_scope, None)
-
-    return {
-        "entries_count": len(manifest.entries),
-        "status": "rebuilt",
-        "scope": resolved_scope,
-    }
+def rebuild_memory(runtime: Any, *, scope: str = "global", agent_name: str | None = None) -> dict:
+    """Rebuild vector/graph index from OpenViking ledger."""
+    resolved_agent = _resolve_scope_agent(scope, agent_name)
+    if resolved_agent is None:
+        return runtime.reindex_vectors(include_agents=True)
+    # Agent-only rebuild keeps behavior deterministic for heartbeat agent jobs.
+    return runtime.reindex_vectors(include_agents=False)

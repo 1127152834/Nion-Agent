@@ -50,19 +50,19 @@ class TestPaths:
         paths = _make_paths(tmp_path)
         assert paths.agent_dir("code-reviewer") == tmp_path / "agents" / "code-reviewer"
 
-    def test_agent_memory_file(self, tmp_path):
+    def test_openviking_scope_dir(self, tmp_path):
         paths = _make_paths(tmp_path)
-        assert paths.agent_memory_file("code-reviewer") == tmp_path / "agents" / "code-reviewer" / "memory.json"
+        assert paths.openviking_scope_dir("code-reviewer") == tmp_path / "openviking" / "agent-code-reviewer"
 
     def test_user_md_file(self, tmp_path):
         paths = _make_paths(tmp_path)
         assert paths.user_md_file == tmp_path / "USER.md"
 
-    def test_paths_are_different_from_global(self, tmp_path):
+    def test_openviking_global_and_agent_paths_are_different(self, tmp_path):
         paths = _make_paths(tmp_path)
-        assert paths.memory_file != paths.agent_memory_file("my-agent")
-        assert paths.memory_file == tmp_path / "memory.json"
-        assert paths.agent_memory_file("my-agent") == tmp_path / "agents" / "my-agent" / "memory.json"
+        assert paths.openviking_scope_dir(None) != paths.openviking_scope_dir("my-agent")
+        assert paths.openviking_scope_dir(None) == tmp_path / "openviking" / "global"
+        assert paths.openviking_scope_dir("my-agent") == tmp_path / "openviking" / "agent-my-agent"
 
 
 # ===========================================================================
@@ -297,92 +297,6 @@ class TestListCustomAgents:
 
         names = [a.name for a in agents]
         assert names == sorted(names)
-
-
-# ===========================================================================
-# 7. Memory isolation: _get_memory_file_path
-# ===========================================================================
-
-
-class TestMemoryFilePath:
-    def test_global_memory_path(self, tmp_path):
-        """None agent_name should return global structured manifest."""
-        import src.agents.memory.updater as updater_mod
-        from src.config.memory_config import MemoryConfig
-
-        with (
-            patch("src.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
-            patch("src.agents.memory.updater.get_default_memory_provider") as mock_provider,
-        ):
-            class _Runtime:
-                def _scope_from_agent(self, agent_name):
-                    return "global" if agent_name is None else f"agent:{agent_name}"
-
-                def _scope_manifest_file(self, scope):
-                    if scope == "global":
-                        return tmp_path / "memory" / "index" / "manifest.json"
-                    return tmp_path / "agents" / scope.split(":", 1)[1] / "memory" / "index" / "manifest.json"
-
-                def save_memory_data(self, *args, **kwargs):
-                    return True
-
-            mock_provider.return_value = type("Provider", (), {"_runtime": _Runtime()})()
-            path = updater_mod._get_memory_file_path(None)
-        assert path == tmp_path / "memory" / "index" / "manifest.json"
-
-    def test_agent_memory_path(self, tmp_path):
-        """Providing agent_name should return per-agent structured manifest."""
-        import src.agents.memory.updater as updater_mod
-        from src.config.memory_config import MemoryConfig
-
-        with (
-            patch("src.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
-            patch("src.agents.memory.updater.get_default_memory_provider") as mock_provider,
-        ):
-            class _Runtime:
-                def _scope_from_agent(self, agent_name):
-                    return "global" if agent_name is None else f"agent:{agent_name}"
-
-                def _scope_manifest_file(self, scope):
-                    if scope == "global":
-                        return tmp_path / "memory" / "index" / "manifest.json"
-                    return tmp_path / "agents" / scope.split(":", 1)[1] / "memory" / "index" / "manifest.json"
-
-                def save_memory_data(self, *args, **kwargs):
-                    return True
-
-            mock_provider.return_value = type("Provider", (), {"_runtime": _Runtime()})()
-            path = updater_mod._get_memory_file_path("code-reviewer")
-        assert path == tmp_path / "agents" / "code-reviewer" / "memory" / "index" / "manifest.json"
-
-    def test_different_paths_for_different_agents(self, tmp_path):
-        import src.agents.memory.updater as updater_mod
-        from src.config.memory_config import MemoryConfig
-
-        with (
-            patch("src.agents.memory.updater.get_memory_config", return_value=MemoryConfig(storage_path="")),
-            patch("src.agents.memory.updater.get_default_memory_provider") as mock_provider,
-        ):
-            class _Runtime:
-                def _scope_from_agent(self, agent_name):
-                    return "global" if agent_name is None else f"agent:{agent_name}"
-
-                def _scope_manifest_file(self, scope):
-                    if scope == "global":
-                        return tmp_path / "memory" / "index" / "manifest.json"
-                    return tmp_path / "agents" / scope.split(":", 1)[1] / "memory" / "index" / "manifest.json"
-
-                def save_memory_data(self, *args, **kwargs):
-                    return True
-
-            mock_provider.return_value = type("Provider", (), {"_runtime": _Runtime()})()
-            path_global = updater_mod._get_memory_file_path(None)
-            path_a = updater_mod._get_memory_file_path("agent-a")
-            path_b = updater_mod._get_memory_file_path("agent-b")
-
-        assert path_global != path_a
-        assert path_global != path_b
-        assert path_a != path_b
 
 
 # ===========================================================================

@@ -18,6 +18,15 @@ _SEVERITY_WEIGHT: dict[Severity, int] = {
     "high": 3,
 }
 
+
+def severity_at_least(current: Severity, threshold: Severity) -> bool:
+    """Return True when ``current`` severity is equal or higher than ``threshold``."""
+    if current not in _SEVERITY_WEIGHT:
+        raise ValueError(f"Unknown severity: {current}")
+    if threshold not in _SEVERITY_WEIGHT:
+        raise ValueError(f"Unknown severity threshold: {threshold}")
+    return _SEVERITY_WEIGHT[current] >= _SEVERITY_WEIGHT[threshold]
+
 _RISKY_HOST_PATH_PREFIXES = [
     "/",
     "/Users",
@@ -224,4 +233,3 @@ def run_security_audit(
         generated_at=datetime.now(UTC).isoformat(),
         findings=findings,
     )
-

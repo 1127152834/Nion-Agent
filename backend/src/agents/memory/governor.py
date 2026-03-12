@@ -1,13 +1,11 @@
-"""Memory governance service (system capability, not chat agent)."""
+"""Memory governance service (OpenViking single-stack)."""
 
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
-from src.agents.memory.structured_models import AgentDirectoryCard
-from src.agents.memory.structured_runtime import StructuredFsRuntime
 from src.agents.memory.registry import get_default_memory_provider
 from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
 from src.config.paths import get_paths
@@ -34,25 +32,25 @@ def _summarize_markdown(content: str, *, max_chars: int = 180) -> str:
 
 
 class MemoryGovernor:
-    """Coordinates governance queue, promotion, and agent catalog refresh."""
+    """Coordinates governance queue and agent catalog refresh."""
 
     def __init__(self):
         provider = get_default_memory_provider()
         runtime = getattr(provider, "_runtime", None)
-        if not isinstance(runtime, StructuredFsRuntime):
-            raise RuntimeError("Memory governor requires StructuredFsRuntime")
+        if runtime is None:
+            raise RuntimeError("Memory governor requires OpenViking runtime")
         self._runtime = runtime
         self._paths = get_paths()
 
     def run(self) -> dict:
-        result = self._runtime.run_governance()
+        result = self._runtime.run_governance(agent_name=None)
         cards = self.refresh_agent_catalog()
         result["catalog_size"] = len(cards)
         return result
 
     def status(self) -> dict:
-        status = self._runtime.get_governance_status()
-        status["catalog_size"] = len(self._runtime.get_agent_catalog())
+        status = self._runtime.get_governance_status(agent_name=None)
+        status["catalog_size"] = len(self._runtime.list_agent_catalog())
         return status
 
     def decide(
@@ -68,12 +66,13 @@ class MemoryGovernor:
             action=action,
             override_summary=override_summary,
             decided_by=decided_by,
+            agent_name=None,
         )
 
     def refresh_agent_catalog(self) -> list[dict]:
         ensure_default_agent()
 
-        cards: list[AgentDirectoryCard] = []
+        cards: list[dict] = []
         for agent_name, agent_dir in self._iter_agent_dirs():
             config_payload = self._load_agent_config(agent_dir / "agent.json")
             soul_content = self._load_text(agent_dir / "SOUL.md")
@@ -87,19 +86,19 @@ class MemoryGovernor:
             style_hint = _summarize_markdown(identity_content, max_chars=120)
 
             cards.append(
-                AgentDirectoryCard(
-                    agent_name=agent_name,
-                    role=role,
-                    capability_summary=capability_summary,
-                    persona_summary=persona_summary,
-                    style_hint=style_hint,
-                    updated_at=self._latest_updated_at(agent_dir),
-                )
+                {
+                    "agent_name": agent_name,
+                    "role": role,
+                    "capability_summary": capability_summary,
+                    "persona_summary": persona_summary,
+                    "style_hint": style_hint,
+                    "updated_at": self._latest_updated_at(agent_dir),
+                }
             )
 
-        cards.sort(key=lambda item: item.agent_name)
-        self._runtime.set_agent_catalog(cards)
-        return [card.to_dict() for card in cards]
+        cards.sort(key=lambda item: str(item.get("agent_name") or ""))
+        self._runtime.replace_agent_catalog(cards)
+        return cards
 
     def _iter_agent_dirs(self) -> list[tuple[str, Path]]:
         result: list[tuple[str, Path]] = []
@@ -142,7 +141,7 @@ class MemoryGovernor:
                 continue
         if latest_mtime <= 0:
             return ""
-        return datetime.utcfromtimestamp(latest_mtime).isoformat() + "Z"
+        return datetime.fromtimestamp(latest_mtime, tz=UTC).isoformat().replace("+00:00", "Z")
 
 
 _governor: MemoryGovernor | None = None

@@ -91,13 +91,13 @@ Async task delegation with concurrent execution:
 
 ### Memory System
 
-LLM-powered persistent context retention across conversations:
+OpenViking-only persistent context retention across conversations:
 
-- **Automatic extraction**: Analyzes conversations for user context, facts, and preferences
-- **Structured storage**: User context (work, personal, top-of-mind), history, and confidence-scored facts
-- **Debounced updates**: Batches updates to minimize LLM calls (configurable wait time)
-- **System prompt injection**: Top facts + context injected into agent prompts
-- **Storage**: JSON file with mtime-based cache invalidation
+- **Single provider**: `openviking` is the only online memory provider
+- **Resource ledger**: Local SQLite ledger tracks `memory_id`, `uri`, score, status, and usage metadata
+- **Hard delete**: `forget` / `compact` first call OpenViking `rm(uri)`, then commit local ledger changes
+- **Governance**: Queue/status/run/decide flows built on OpenViking ledger tables
+- **No legacy path**: structured memory and old single-file memory artifacts are cleaned at startup
 
 ### Tool Ecosystem
 
@@ -119,10 +119,20 @@ FastAPI application providing REST endpoints for frontend integration:
 | `GET/PUT /api/mcp/config` | Manage MCP server configurations |
 | `GET/PUT /api/skills` | List and manage skills |
 | `POST /api/skills/install` | Install skill from `.skill` archive |
-| `GET /api/memory` | Retrieve memory data |
-| `POST /api/memory/reload` | Force memory reload |
-| `GET /api/memory/config` | Memory configuration |
-| `GET /api/memory/status` | Combined config + data |
+| `POST /api/openviking/query` | Query OpenViking memory |
+| `POST /api/openviking/store` | Store memory into OpenViking |
+| `GET /api/openviking/items` | List ledger items |
+| `POST /api/openviking/forget` | Hard-delete one memory item |
+| `POST /api/openviking/compact` | Hard-delete by retention ratio |
+| `GET /api/openviking/governance/status` | Governance status |
+| `POST /api/openviking/governance/run` | Run governance |
+| `POST /api/openviking/governance/decide` | Apply governance decision |
+| `GET /api/openviking/retrieval/status` | Retrieval runtime status |
+| `POST /api/openviking/reindex-vectors` | Rebuild vector index |
+| `POST /api/openviking/graph/query` | Query memory graph |
+| `POST /api/openviking/session/commit` | Commit session batch |
+| `GET /api/openviking/config` | OpenViking config |
+| `GET /api/openviking/status` | Combined config + retrieval + governance |
 | `GET /api/runtime/topology` | Read-only runtime topology diagnostics |
 | `POST /api/threads/{id}/uploads` | Upload files (auto-converts PDF/PPT/Excel/Word to Markdown) |
 | `GET /api/threads/{id}/uploads/list` | List uploaded files |
@@ -204,7 +214,7 @@ backend/
 │   ├── agents/                  # Agent system
 │   │   ├── lead_agent/         # Main agent (factory, prompts)
 │   │   ├── middlewares/        # 9 middleware components
-│   │   ├── memory/             # Memory extraction & storage
+│   │   ├── memory/             # OpenViking runtime, policy, governance, ledger
 │   │   └── thread_state.py    # ThreadState schema
 │   ├── gateway/                # FastAPI Gateway API
 │   │   ├── app.py             # Application setup
@@ -251,7 +261,7 @@ Key sections:
 - `title` - Auto-title generation settings
 - `summarization` - Context summarization settings
 - `subagents` - Subagent system (enabled/disabled)
-- `memory` - Memory system settings (enabled, storage, debounce, facts limits)
+- `memory` - OpenViking settings (enabled, debounce, retrieval/rerank, facts limits)
 
 Provider note:
 - `models[*].use` references provider classes by module path (for example `langchain_openai:ChatOpenAI`).

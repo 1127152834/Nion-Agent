@@ -26,8 +26,26 @@ fi
 # Create backend directory
 mkdir -p "$BACKEND_DEST"
 
-# Copy backend source files
+# Copy backend source files.
+# Exclude runtime/state/build artifacts so package contents are deterministic.
 echo "Copying backend source files..."
-rsync -av --exclude='.venv' --exclude='__pycache__' --exclude='*.pyc'   --exclude='.pytest_cache' --exclude='.ruff_cache' --exclude='tests'   "$BACKEND_SRC/" "$BACKEND_DEST/"
+rsync -a \
+  --exclude='.venv' \
+  --exclude='__pycache__' \
+  --exclude='*.pyc' \
+  --exclude='.pytest_cache' \
+  --exclude='.ruff_cache' \
+  --exclude='.mypy_cache' \
+  --exclude='.coverage' \
+  --exclude='.coverage.*' \
+  --exclude='.nion' \
+  --exclude='.langgraph_api' \
+  --exclude='build' \
+  --exclude='dist' \
+  --exclude='dist-*' \
+  --exclude='*.egg-info' \
+  --exclude='reports' \
+  --exclude='tests' \
+  "$BACKEND_SRC/" "$BACKEND_DEST/"
 
 echo "Backend packed successfully at: $BACKEND_DEST"
