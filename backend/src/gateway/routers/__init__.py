@@ -11,7 +11,6 @@ _ROUTER_MODULES = {
     "openviking",
     "models",
     "retrieval_models",
-    "rss",
     "runtime_profile",
     "runtime_topology",
     "scheduler",

@@ -571,7 +571,7 @@ async def get_working_directory_index(thread_id: str) -> WorkingDirectoryIndexRe
 
 1. 在 import 中添加 `working_directory`:
 ```python
-from src.gateway.routers import agents, artifacts, config, mcp, memory, models, rss, skills, uploads, working_directory
+from src.gateway.routers import agents, artifacts, config, mcp, memory, models, skills, uploads, working_directory
 ```
 
 2. 在 `create_app()` 函数中添加路由:

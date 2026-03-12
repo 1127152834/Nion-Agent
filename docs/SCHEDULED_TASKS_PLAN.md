@@ -4,7 +4,7 @@
 
 创建一个强大的定时任务系统，支持：
 - **定时触发**: Cron 表达式、固定间隔、指定时间
-- **条件触发**: 事件驱动（如 RSS 新条目、文件变化、Webhook）
+- **条件触发**: 事件驱动（如用户事件、文件变化、Webhook）
 - **多智能体协作**: 串行/并行执行，支持依赖关系
 - **任务指标**: 完成后回调、状态报告、输出验证
 - **资源指定**: 指定使用哪些 skill、MCP 工具、上下文
@@ -66,7 +66,7 @@ class TriggerConfig:
     interval_seconds: int | None = None
     # Once: "2026-03-07T09:00:00"
     scheduled_time: datetime | None = None
-    # Event: ["rss_new_entry", "file_changed"]
+    # Event: ["user_created", "file_changed"]
     event_type: str | None = None
     event_filters: dict | None = None
 
@@ -467,28 +467,7 @@ async def get_task_history(task_id: str) -> list[dict]:
 
 ## Phase 4: 事件触发器
 
-### 4.1 RSS 触发器
-
-```python
-# backend/src/scheduler/triggers/rss.py
-class RSSTrigger:
-    def __init__(self, feed_url: str, poll_interval: int = 300):
-        self._feed_url = feed_url
-        self._last_entry_time: datetime | None = None
-
-    async def check(self) -> list[dict]:
-        """检查新条目"""
-        entries = await fetch_feed(self._feed_url)
-        new_entries = [
-            e for e in entries
-            if self._last_entry_time and e.published > self._last_entry_time
-        ]
-        if new_entries:
-            self._last_entry_time = new_entries[0].published
-        return new_entries
-```
-
-### 4.2 文件变化触发器
+### 4.1 文件变化触发器
 
 ```python
 # backend/src/scheduler/triggers/filesystem.py
@@ -549,7 +528,6 @@ class FileWatchTrigger:
 - [ ] 失败回调正确发送
 - [ ] 前端任务创建表单验证通过
 - [ ] 前端任务历史显示正确
-- [ ] RSS 事件触发正确启动任务
 - [ ] 自然语言解析生成正确配置
 
 ---

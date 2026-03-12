@@ -318,7 +318,6 @@ def make_lead_agent(config: RunnableConfig):
     max_concurrent_subagents = cfg.get("max_concurrent_subagents", 3)
     is_bootstrap = cfg.get("is_bootstrap", False)
     agent_name = cfg.get("agent_name")
-    rss_context = cfg.get("rss_context")
     session_mode = cfg.get("session_mode")
     memory_read = cfg.get("memory_read")
     memory_write = cfg.get("memory_write")
@@ -373,7 +372,6 @@ def make_lead_agent(config: RunnableConfig):
             subagent_enabled=subagent_enabled,
             max_concurrent_subagents=max_concurrent_subagents,
             available_skills=set(["bootstrap"]),
-            rss_context=rss_context,
             session_mode=session_mode,
             memory_read=memory_read,
             memory_write=memory_write,
@@ -400,7 +398,6 @@ def make_lead_agent(config: RunnableConfig):
             subagent_enabled=subagent_enabled,
             max_concurrent_subagents=max_concurrent_subagents,
             agent_name=agent_name,
-            rss_context=rss_context,
             session_mode=session_mode,
             memory_read=memory_read,
             memory_write=memory_write,

@@ -148,7 +148,7 @@ def scheduler_create_task_tool(
     if trigger_type == "event" and not (event_type or "").strip():
         return _build_clarification_response(
             message="创建失败：event 触发缺少 event_type。",
-            question="请告诉我事件类型，例如 rss_new_entry、user_created。",
+            question="请告诉我事件类型，例如 user_created、task_completed。",
             missing_fields=["event_type"],
         )
 

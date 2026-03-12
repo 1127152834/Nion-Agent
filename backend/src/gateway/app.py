@@ -27,7 +27,6 @@ from src.gateway.routers import (
     models,
     openviking,
     retrieval_models,
-    rss,
     runtime_profile,
     runtime_topology,
     scheduler,
@@ -186,10 +185,6 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
                 "description": "Inspect runtime topology and active network facade configuration",
             },
             {
-                "name": "rss",
-                "description": "RSS feed subscription, refresh and entry management",
-            },
-            {
                 "name": "channels",
                 "description": "Message channel integration for Lark and DingTalk",
             },
@@ -277,9 +272,6 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
 
     # Agents API is mounted at /api/agents
     app.include_router(agents.router)
-
-    # RSS API is mounted at /api/rss
-    app.include_router(rss.router)
 
     # Channels API is mounted at /api/channels
     app.include_router(channels.router)

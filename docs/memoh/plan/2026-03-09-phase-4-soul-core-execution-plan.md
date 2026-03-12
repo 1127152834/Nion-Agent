@@ -318,13 +318,11 @@ Expected:
 Run:
 ```bash
 pytest backend/tests/test_prompt_soul_injection.py -q
-pytest backend/tests/test_lead_agent_rss_context.py -q
 ```
 
 Expected:
 - summary 注入工作正常
 - `memory_read` 边界未被破坏
-- RSS 相关 prompt 测试不回退
 
 **给 Claude 的任务 Prompt**
 

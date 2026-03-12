@@ -109,7 +109,7 @@ CI runs these regression tests for every pull request via [.github/workflows/bac
 - Uses custom reducers: `merge_artifacts` (deduplicate), `merge_viewed_images` (merge/clear)
 
 **Runtime Configuration**:
-- HTTP / LangGraph SDK run requests should keep runtime fields on the `context` lane (`thread_id`, `model_name`, `thinking_enabled`, `is_plan_mode`, `subagent_enabled`, `reasoning_effort`, `agent_name`, `session_mode`, `memory_read`, `memory_write`, optional `rss_context`).
+- HTTP / LangGraph SDK run requests should keep runtime fields on the `context` lane (`thread_id`, `model_name`, `thinking_enabled`, `is_plan_mode`, `subagent_enabled`, `reasoning_effort`, `agent_name`, `session_mode`, `memory_read`, `memory_write`).
 - Do not send `config.configurable` together with `context` in the same browser/Electron HTTP run request; current LangGraph rejects that payload with HTTP 400. Runtime-only middleware inputs continue to flow through `context` (for example `thread_id`, `user_timezone`, runtime profile fields such as `execution_mode` / `host_workdir`).
 
 Fields resolved by the lead agent/runtime:

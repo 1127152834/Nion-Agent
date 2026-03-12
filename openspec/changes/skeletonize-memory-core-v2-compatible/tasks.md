@@ -27,7 +27,7 @@
 ## 5. 测试、文档、验证、评审
 
 - [x] 5.1 新增 `backend/tests/test_memory_core_registry.py` 与 `backend/tests/test_memory_core_provider.py`
-- [x] 5.2 扩展 `backend/tests/test_lead_agent_rss_context.py`、`backend/tests/test_memory_upload_filtering.py`、`backend/tests/test_client.py`
+- [x] 5.2 扩展 `backend/tests/test_memory_upload_filtering.py`、`backend/tests/test_client.py`
 - [x] 5.3 运行最小相关后端测试与 Phase 1 回归测试
 - [x] 5.4 更新 `backend/CLAUDE.md`、`README.md`、`docs/memoh/plan/2026-03-09-phase-2-memory-core.md`
 - [x] 5.5 再次运行 `openspec validate skeletonize-memory-core-v2-compatible --type change --strict`

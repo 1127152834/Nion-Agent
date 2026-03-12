@@ -3,7 +3,7 @@
 - [x] 1.1 完成 `proposal.md`、`specs/memory-session-policy/spec.md`、`design.md`、`tasks.md`
 - [x] 1.2 运行 `openspec validate enforce-memory-session-runtime-contract --type change --strict`
 - [x] 1.3 新增 `backend/tests/test_memory_session_policy.py`，先写失败测试锁定默认规则与写链路禁写行为
-- [x] 1.4 扩展 `backend/tests/test_runtime_profile_middleware.py` 与 `backend/tests/test_lead_agent_rss_context.py`，先让会话字段透传相关用例失败
+- [x] 1.4 扩展 `backend/tests/test_runtime_profile_middleware.py`，先让会话字段透传相关用例失败
 
 ## 2. 后端线程契约与 `policy.py`
 
