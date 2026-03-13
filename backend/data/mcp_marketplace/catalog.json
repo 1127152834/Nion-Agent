@@ -1,0 +1,122 @@
+{
+  "servers": [
+    {
+      "id": "fetch",
+      "name": "Fetch",
+      "author": "modelcontextprotocol",
+      "category": "web",
+      "description": "Fetch and convert HTML pages to markdown.",
+      "tags": ["web-fetching", "html-to-markdown", "content-extraction"],
+      "verified": true,
+      "featured": true,
+      "version": "1.0.0",
+      "docs_url": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+      "readme_asset": "fetch/README.md",
+      "demo_images": [],
+      "install_options": [
+        {
+          "id": "uvx",
+          "label": "UVX",
+          "transport": "stdio",
+          "prerequisites": ["uvx"],
+          "template": {
+            "enabled": true,
+            "type": "stdio",
+            "command": "uvx",
+            "args": ["mcp-server-fetch"],
+            "env": {},
+            "description": "Fetch and convert HTML pages to markdown."
+          },
+          "inputs": [
+            {
+              "id": "http_proxy",
+              "label": "HTTP_PROXY",
+              "type": "string",
+              "required": false,
+              "placeholder": "http://127.0.0.1:7890",
+              "apply": { "kind": "env", "key": "HTTP_PROXY", "format": "{value}" }
+            },
+            {
+              "id": "https_proxy",
+              "label": "HTTPS_PROXY",
+              "type": "string",
+              "required": false,
+              "placeholder": "http://127.0.0.1:7890",
+              "apply": { "kind": "env", "key": "HTTPS_PROXY", "format": "{value}" }
+            }
+          ]
+        },
+        {
+          "id": "python",
+          "label": "Python (module)",
+          "transport": "stdio",
+          "prerequisites": ["python"],
+          "template": {
+            "enabled": true,
+            "type": "stdio",
+            "command": "python",
+            "args": ["-m", "mcp_server_fetch"],
+            "env": {},
+            "description": "Fetch and convert HTML pages to markdown."
+          },
+          "inputs": []
+        }
+      ]
+    },
+    {
+      "id": "context7",
+      "name": "Context7",
+      "author": "Upstash",
+      "category": "docs",
+      "description": "Get up-to-date documentation and code examples into your agent via Context7.",
+      "tags": ["docs", "retrieval"],
+      "verified": true,
+      "featured": false,
+      "version": "1.0.0",
+      "docs_url": "https://context7.com/docs/installation",
+      "readme_asset": "context7/README.md",
+      "demo_images": [],
+      "install_options": [
+        {
+          "id": "npx",
+          "label": "NPX",
+          "transport": "stdio",
+          "prerequisites": ["node", "npx"],
+          "template": {
+            "enabled": true,
+            "type": "stdio",
+            "command": "npx",
+            "args": ["-y", "@upstash/context7-mcp@latest"],
+            "env": {},
+            "description": "Context7 MCP server (documentation retrieval)."
+          },
+          "inputs": []
+        },
+        {
+          "id": "http",
+          "label": "HTTP (Remote)",
+          "transport": "http",
+          "prerequisites": [],
+          "template": {
+            "enabled": true,
+            "type": "http",
+            "url": "https://mcp.context7.com/mcp",
+            "headers": {},
+            "description": "Context7 MCP server (remote HTTP)."
+          },
+          "inputs": [
+            {
+              "id": "api_key",
+              "label": "API Key",
+              "type": "secret",
+              "required": true,
+              "placeholder": "ctx_...",
+              "help": "Required for Context7 HTTP access.",
+              "apply": { "kind": "header", "key": "Authorization", "format": "Bearer {value}" }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
