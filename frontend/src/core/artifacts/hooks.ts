@@ -316,7 +316,7 @@ export function useWorkspaceTree(
         depth,
         includeHidden,
         maxNodes,
-      }),
+    }),
     enabled: enabled && Boolean(threadId),
     refetchInterval: enabled && live ? refetchIntervalMs : false,
     refetchOnWindowFocus: false,

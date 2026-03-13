@@ -84,12 +84,16 @@ export class DesktopProcessManager {
   }
 
   private async checkDependencies(): Promise<void> {
-    // 检查 uv；开发态前端还需要 pnpm，打包态使用 bundled frontend server
-    const { spawnSync } = await import("node:child_process");
+    // 依赖策略：
+    // - 优先使用打包内置的 Python（runtime/core/python）。
+    // - 若无内置 Python，则退化为开发态依赖 uv（让 uv 管理 Python/依赖）。
+    const bundledPython = this.paths.pythonExecutable;
 
-    const uvCheck = spawnSync("uv", ["--version"], { stdio: "ignore" });
-    if (uvCheck.error || uvCheck.status !== 0) {
-      throw new Error("uv not found. Please install: curl -LsSf https://astral.sh/uv/install.sh | sh");
+    if (!bundledPython) {
+      const uvCheck = spawnSync("uv", ["--version"], { stdio: "ignore" });
+      if (uvCheck.error || uvCheck.status !== 0) {
+        throw new Error("uv not found. Please install: curl -LsSf https://astral.sh/uv/install.sh | sh");
+      }
     }
 
     if (!this.paths.frontendServerEntry) {
@@ -276,21 +280,35 @@ export class DesktopProcessManager {
       NO_COLOR: "1"
     };
 
-    // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量
+    // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量（用于 LocalSandbox 等场景）
     if (this.paths.pythonExecutable) {
       env.NION_PYTHON_PATH = this.paths.pythonExecutable;
+      const venvBinDir = path.dirname(this.paths.pythonExecutable);
+      const venvRoot = path.dirname(venvBinDir);
+      env.VIRTUAL_ENV = venvRoot;
+      env.PATH = `${venvBinDir}${path.delimiter}${process.env.PATH ?? ""}`;
       console.log(`[LangGraph] Using bundled Python: ${this.paths.pythonExecutable}`);
     }
 
-    const child = spawn(
-      "uv",
-      ["run", "langgraph", "dev", "--no-browser", "--allow-blocking", "--no-reload"],
-      {
-        cwd: this.paths.backendCwd,
-        env,
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
+    const child = this.paths.pythonExecutable
+      ? spawn(
+          this.paths.pythonExecutable,
+          ["-m", "langgraph_cli", "dev", "--no-browser", "--allow-blocking", "--no-reload"],
+          {
+            cwd: this.paths.backendCwd,
+            env,
+            stdio: ["ignore", "pipe", "pipe"]
+          }
+        )
+      : spawn(
+          "uv",
+          ["run", "langgraph", "dev", "--no-browser", "--allow-blocking", "--no-reload"],
+          {
+            cwd: this.paths.backendCwd,
+            env,
+            stdio: ["ignore", "pipe", "pipe"]
+          }
+        );
 
     child.stdout?.pipe(logStream);
     child.stderr?.pipe(logStream);
@@ -313,21 +331,35 @@ export class DesktopProcessManager {
       LANGGRAPH_SERVER_BASE_URL: `http://localhost:${this.ports!.langgraphPort}`,
     };
 
-    // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量
+    // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量（用于 LocalSandbox 等场景）
     if (this.paths.pythonExecutable) {
       env.NION_PYTHON_PATH = this.paths.pythonExecutable;
+      const venvBinDir = path.dirname(this.paths.pythonExecutable);
+      const venvRoot = path.dirname(venvBinDir);
+      env.VIRTUAL_ENV = venvRoot;
+      env.PATH = `${venvBinDir}${path.delimiter}${process.env.PATH ?? ""}`;
       console.log(`[Gateway] Using bundled Python: ${this.paths.pythonExecutable}`);
     }
 
-    const child = spawn(
-      "uv",
-      ["run", "uvicorn", "src.gateway.app:app", "--host", "0.0.0.0", "--port", String(this.ports!.gatewayPort)],
-      {
-        cwd: this.paths.backendCwd,
-        env,
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
+    const child = this.paths.pythonExecutable
+      ? spawn(
+          this.paths.pythonExecutable,
+          ["-m", "uvicorn", "src.gateway.app:app", "--host", "0.0.0.0", "--port", String(this.ports!.gatewayPort)],
+          {
+            cwd: this.paths.backendCwd,
+            env,
+            stdio: ["ignore", "pipe", "pipe"]
+          }
+        )
+      : spawn(
+          "uv",
+          ["run", "uvicorn", "src.gateway.app:app", "--host", "0.0.0.0", "--port", String(this.ports!.gatewayPort)],
+          {
+            cwd: this.paths.backendCwd,
+            env,
+            stdio: ["ignore", "pipe", "pipe"]
+          }
+        );
 
     child.stdout?.pipe(logStream);
     child.stderr?.pipe(logStream);

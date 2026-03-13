@@ -82,3 +82,29 @@ def test_present_files_runtime_rejects_missing_file(tmp_path):
 
     assert command.update is not None
     assert command.update["messages"][0].content.startswith("Error: File not found")
+
+
+def test_present_files_runtime_accepts_virtual_path_when_only_sandbox_has_file(tmp_path):
+    outputs_dir = tmp_path / "outputs"
+    outputs_dir.mkdir(parents=True)
+    virtual_path = "/mnt/user-data/outputs/remote.html"
+    host_path = outputs_dir / "remote.html"
+
+    runtime = SimpleNamespace(
+        state={"thread_data": {"outputs_path": str(outputs_dir)}},
+        context={"thread_id": "thread-1"},
+    )
+
+    with (
+        patch("src.tools.builtins.present_file_tool.resolve_thread_virtual_path", return_value=host_path),
+        patch("src.tools.builtins.present_file_tool._sandbox_file_exists", return_value=True),
+    ):
+        command = present_file_tool.func(
+            runtime=runtime,
+            filepaths=[virtual_path],
+            tool_call_id="tool-5",
+        )
+
+    assert command.update is not None
+    assert command.update["artifacts"] == [virtual_path]
+    assert command.update["messages"][0].content == "Successfully presented files"

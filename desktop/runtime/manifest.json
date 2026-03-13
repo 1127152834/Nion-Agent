@@ -2,6 +2,12 @@
   "version": "0.1.0",
   "platform": "multi",
   "arch": "multi",
+  "coreBundle": {
+    "name": "runtime-core",
+    "description": "运行时核心（Python + Backend + Frontend）",
+    "assetName": "nion-runtime-core-{platform}-{arch}-v{version}.tar.gz",
+    "sha256": ""
+  },
   "coreComponents": [
     {
       "name": "python-runtime",

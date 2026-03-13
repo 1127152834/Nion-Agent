@@ -9,10 +9,12 @@
     "test": "pnpm run build && node --test test/*.test.mjs",
     "dev": "pnpm run icons:generate && pnpm run build && electron dist/main.js",
     "start": "pnpm run icons:generate && pnpm run build && electron dist/main.js",
-    "prepare-runtime": "bash ../runtime/prepare-runtime-core.sh",
+    "prepare-runtime": "bash ../runtime/prepare-runtime-core.sh && bash ../runtime/create-runtime-core-bundle.sh",
     "dist": "pnpm run icons:generate && pnpm run build && pnpm run prepare-runtime && electron-builder --config electron-builder.yml",
+    "dist:slim": "pnpm run icons:generate && pnpm run build && electron-builder --config electron-builder.slim.yml",
     "icons:generate": "uv run --with pillow python ./scripts/generate-app-icons.py",
-    "dist:unsigned": "pnpm run icons:generate && pnpm run build && pnpm run prepare-runtime && electron-builder --config electron-builder.yml --config.mac.identity=null"
+    "dist:unsigned": "pnpm run icons:generate && pnpm run build && pnpm run prepare-runtime && electron-builder --config electron-builder.yml --config.mac.identity=null",
+    "dist:slim:unsigned": "pnpm run icons:generate && pnpm run build && electron-builder --config electron-builder.slim.yml --config.mac.identity=null"
   },
   "nionRuntimeDownload": {
     "owner": "huanxi",

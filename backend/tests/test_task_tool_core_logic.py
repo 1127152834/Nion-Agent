@@ -207,7 +207,7 @@ def test_task_tool_returns_timed_out_message(monkeypatch):
 
 def test_task_tool_polling_safety_timeout(monkeypatch):
     config = _make_subagent_config()
-    # Keep max_poll_count small for test speed: (1 + 60) // 5 = 12
+    # Keep timeout small for test speed.
     config.timeout_seconds = 1
     events = []
 
@@ -236,7 +236,7 @@ def test_task_tool_polling_safety_timeout(monkeypatch):
         tool_call_id="tc-safety-timeout",
     )
 
-    assert output.startswith("Task polling timed out after 0 minutes")
+    assert output.startswith("Task timed out after 0 minutes")
     assert events[0]["type"] == "task_started"
     assert events[-1]["type"] == "task_timed_out"
 
@@ -362,14 +362,14 @@ def test_cleanup_called_on_timed_out(monkeypatch):
 
 
 def test_cleanup_not_called_on_polling_safety_timeout(monkeypatch):
-    """Verify cleanup_background_task is NOT called on polling safety timeout.
+    """Verify cleanup_background_task is NOT called on safety timeout.
 
     This prevents race conditions where the background task is still running
-    but the polling loop gives up. The cleanup should happen later when the
+    but the wait loop gives up. The cleanup should happen later when the
     executor completes and sets a terminal status.
     """
     config = _make_subagent_config()
-    # Keep max_poll_count small for test speed: (1 + 60) // 5 = 12
+    # Keep timeout small for test speed.
     config.timeout_seconds = 1
     events = []
     cleanup_calls = []
@@ -404,6 +404,6 @@ def test_cleanup_not_called_on_polling_safety_timeout(monkeypatch):
         tool_call_id="tc-no-cleanup-safety-timeout",
     )
 
-    assert output.startswith("Task polling timed out after 0 minutes")
+    assert output.startswith("Task timed out after 0 minutes")
     # cleanup should NOT be called because the task is still RUNNING
     assert cleanup_calls == []

@@ -45,8 +45,15 @@ app.on("ready", async () => {
     applyAppIcon();
     runtimePaths = resolveRuntimePaths();
     runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(runtimePaths);
-    runtimePorts = await startupRuntime();
     ensureMainWindow();
+
+    const status = runtimeOptionalComponentsManager.getStatus();
+    if (app.isPackaged && !status.coreReady) {
+      await loadRuntimeBootstrap();
+      return;
+    }
+
+    runtimePorts = await startupRuntime();
     await loadMainWindowFrontend();
   } catch (error) {
     console.error("Startup failed:", error);
@@ -277,6 +284,260 @@ function ensureMainWindow(): void {
   createMainWindow();
 }
 
+function renderRuntimeBootstrapHtml(): string {
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Nion 初始化运行时</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #0b1020;
+        --card: rgba(255, 255, 255, 0.08);
+        --stroke: rgba(255, 255, 255, 0.16);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.72);
+        --danger: #ff5a70;
+        --accent: #7ae1ff;
+        --accent2: #6dffb1;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        background: radial-gradient(1200px 700px at 20% 10%, rgba(122, 225, 255, 0.25), transparent 60%),
+          radial-gradient(900px 600px at 80% 20%, rgba(109, 255, 177, 0.18), transparent 55%),
+          radial-gradient(800px 500px at 40% 90%, rgba(255, 90, 112, 0.12), transparent 60%),
+          var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 28px 18px;
+        box-sizing: border-box;
+      }
+
+      .card {
+        width: min(840px, 100%);
+        border: 1px solid var(--stroke);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.06));
+        backdrop-filter: blur(12px);
+        border-radius: 18px;
+        padding: 22px 22px 18px;
+        box-shadow: 0 22px 70px rgba(0, 0, 0, 0.35);
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        font-size: 22px;
+      }
+
+      p {
+        margin: 0 0 14px;
+        color: var(--muted);
+        line-height: 1.55;
+        font-size: 13px;
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+        margin-top: 16px;
+      }
+
+      .meta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(0, 0, 0, 0.14);
+      }
+
+      .k {
+        color: rgba(255, 255, 255, 0.58);
+        font-size: 11px;
+      }
+
+      .v {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        font-size: 12px;
+      }
+
+      button {
+        appearance: none;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        background: linear-gradient(180deg, rgba(122, 225, 255, 0.20), rgba(109, 255, 177, 0.18));
+        color: var(--text);
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-weight: 700;
+        cursor: pointer;
+        min-width: 180px;
+      }
+
+      button[disabled] {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      .progress {
+        margin-top: 12px;
+        border-radius: 999px;
+        height: 10px;
+        background: rgba(255, 255, 255, 0.10);
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, rgba(122, 225, 255, 0.9), rgba(109, 255, 177, 0.9));
+      }
+
+      .hint {
+        margin-top: 10px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.72);
+      }
+
+      .err {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--danger);
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>需要初始化运行时</h1>
+        <p>
+          当前安装包未内置运行时核心（Python + 后端 + 前端），需要下载并安装后才能启动。
+          若你处于内网或无法访问外网环境，请使用完整离线包。
+        </p>
+
+        <div class="meta">
+          <div>
+            <div class="k">版本</div>
+            <div class="v" id="ver">-</div>
+          </div>
+          <div>
+            <div class="k">平台/架构</div>
+            <div class="v" id="plat">-</div>
+          </div>
+          <div>
+            <div class="k">运行时状态</div>
+            <div class="v" id="status">-</div>
+          </div>
+          <div>
+            <div class="k">下载进度</div>
+            <div class="v" id="pct">-</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <div class="progress" aria-label="download progress">
+              <div class="bar" id="bar"></div>
+            </div>
+            <div class="hint" id="hint">准备就绪</div>
+            <div class="err" id="err"></div>
+          </div>
+          <button id="btn">安装并启动</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const btn = $("btn");
+      const err = $("err");
+      const bar = $("bar");
+      const pct = $("pct");
+      const hint = $("hint");
+
+      function setBusy(busy) {
+        btn.disabled = busy;
+        btn.textContent = busy ? "安装中..." : "安装并启动";
+      }
+
+      function setProgress(progress) {
+        const value = Math.max(0, Math.min(1, Number(progress) || 0));
+        bar.style.width = String(Math.round(value * 100)) + "%";
+        pct.textContent = String(Math.round(value * 100)) + "%";
+      }
+
+      async function refreshStatus() {
+        const version = await window.electronAPI.getAppVersion();
+        const platform = await window.electronAPI.getPlatform();
+        $("ver").textContent = version;
+        $("plat").textContent = platform.platform + "/" + platform.arch;
+        const status = await window.electronAPI.getRuntimeStatus();
+        $("status").textContent = status.coreReady ? "coreReady" : "missing";
+      }
+
+      window.electronAPI.onRuntimeDownloadProgress((data) => {
+        if (!data || data.name !== "runtime-core") return;
+        setProgress(data.progress);
+        const received = (data.receivedBytes || 0) / 1024 / 1024;
+        const total = (data.totalBytes || 0) / 1024 / 1024;
+        hint.textContent = total > 0
+          ? ("已下载 " + received.toFixed(1) + "MB / " + total.toFixed(1) + "MB")
+          : ("已下载 " + received.toFixed(1) + "MB");
+      });
+
+      btn.addEventListener("click", async () => {
+        err.textContent = "";
+        setBusy(true);
+        hint.textContent = "开始安装运行时...";
+        setProgress(0);
+
+        try {
+          await window.electronAPI.installRuntimeCore();
+        } catch (e) {
+          err.textContent = String(e && e.message ? e.message : e);
+          hint.textContent = "安装失败";
+          setBusy(false);
+        }
+      });
+
+      refreshStatus().catch((e) => {
+        err.textContent = String(e && e.message ? e.message : e);
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+async function loadRuntimeBootstrap(): Promise<void> {
+  ensureMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const html = renderRuntimeBootstrapHtml();
+  await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+}
+
 async function loadMainWindowFrontend(): Promise<void> {
   if (!runtimePorts || !mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -346,6 +607,22 @@ ipcMain.handle("desktop:get-paths", () => {
 });
 
 ipcMain.handle("desktop:get-runtime-status", () => {
+  return getRuntimeOptionalManager().getStatus();
+});
+
+ipcMain.handle("desktop:install-runtime-core", async () => {
+  const manager = getRuntimeOptionalManager();
+  const current = manager.getStatus();
+  if (!current.coreReady) {
+    await manager.downloadCoreBundle(emitRuntimeDownloadProgress);
+  }
+
+  runtimePaths = resolveRuntimePaths();
+  runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(ensureRuntimePathsInitialized());
+
+  runtimePorts = await startupRuntime();
+  await loadMainWindowFrontend();
+
   return getRuntimeOptionalManager().getStatus();
 });
 

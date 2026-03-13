@@ -7,8 +7,7 @@ import json
 import threading
 from typing import Literal
 
-from langchain.tools import ToolRuntime, tool
-from langgraph.typing import ContextT
+from src.tools.builtins.langchain_compat import ToolRuntime, tool
 
 from src.agents.thread_state import ThreadState
 from src.config import get_app_config
@@ -49,7 +48,7 @@ def _run_async(coro):
     return result.get("value")
 
 
-def _runtime_thread_id(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str | None:
+def _runtime_thread_id(runtime: ToolRuntime | None) -> str | None:
     if runtime is None:
         return None
     context = runtime.context or {}
@@ -62,7 +61,7 @@ def _runtime_thread_id(runtime: ToolRuntime[ContextT, ThreadState] | None) -> st
 
 @tool("skills_manage")
 def skills_manage_tool(
-    runtime: ToolRuntime[ContextT, ThreadState],
+    runtime: ToolRuntime,
     action: Literal["list", "set_enabled", "install"],
     skill_name: str | None = None,
     enabled: bool | None = None,

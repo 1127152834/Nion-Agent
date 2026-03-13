@@ -13,21 +13,14 @@ files:
 extraResources:
   - from: ../runtime/manifest.json
     to: runtime/manifest.json
-  - from: ../runtime/core
-    to: runtime/core
-    filter:
-      - "**/*"
-  - from: ../runtime/optional
-    to: runtime/optional
-    filter:
-      - "**/*"
+  - from: ../runtime/bundles/runtime-core.tar.gz
+    to: runtime/assets/runtime-core.tar.gz
 
 # macOS 配置
 mac:
   category: public.app-category.developer-tools
   target:
     - target: dmg
-      arch: [x64, arm64]
   icon: build/icon.icns
   hardenedRuntime: true
   gatekeeperAssess: false

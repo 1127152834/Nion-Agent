@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 
 import type { DesktopRuntimePaths } from "./paths";
 
@@ -128,13 +129,28 @@ function runPythonScript(
   script: string,
   args: string[] = [],
 ): string {
-  const result = spawnSync("uv", ["run", "python", "-c", script, ...args], {
+  const bundledPython = paths.pythonExecutable;
+  const command = bundledPython ?? "uv";
+  const commandArgs = bundledPython
+    ? ["-c", script, ...args]
+    : ["run", "python", "-c", script, ...args];
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NION_HOME: paths.appDataDir,
+    NION_DESKTOP_RUNTIME: "1",
+  };
+
+  if (bundledPython) {
+    const venvBinDir = path.dirname(bundledPython);
+    const venvRoot = path.dirname(venvBinDir);
+    env.VIRTUAL_ENV = venvRoot;
+    env.PATH = `${venvBinDir}${path.delimiter}${process.env.PATH ?? ""}`;
+  }
+
+  const result = spawnSync(command, commandArgs, {
     cwd: paths.backendCwd,
-    env: {
-      ...process.env,
-      NION_HOME: paths.appDataDir,
-      NION_DESKTOP_RUNTIME: "1",
-    },
+    env,
     encoding: "utf-8",
   });
 

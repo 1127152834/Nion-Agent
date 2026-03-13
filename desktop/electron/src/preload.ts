@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // 运行时组件状态与下载
   getRuntimeStatus: () => ipcRenderer.invoke("desktop:get-runtime-status"),
+  installRuntimeCore: () => ipcRenderer.invoke("desktop:install-runtime-core"),
   getRuntimePorts: () => ipcRenderer.invoke("desktop:get-runtime-ports"),
   updateRuntimePorts: (ports: { frontendPort: number; gatewayPort: number; langgraphPort: number }) =>
     ipcRenderer.invoke("desktop:update-runtime-ports", ports),
@@ -63,6 +64,7 @@ export interface ElectronAPI {
   showItemInFolder: (fullPath: string) => Promise<void>;
   onStartupStage: (callback: (data: any) => void) => void;
   getRuntimeStatus: () => Promise<any>;
+  installRuntimeCore: () => Promise<any>;
   getRuntimePorts: () => Promise<{
     version: string | null;
     ports: { frontendPort: number; gatewayPort: number; langgraphPort: number };

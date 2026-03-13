@@ -28,8 +28,15 @@ Electron 应用会自动：
 ### 构建安装包
 
 ```bash
-pnpm run dist  # 构建 macOS/Windows/Linux 安装包
+pnpm run dist  # 构建“完整离线包”（包含离线 runtime-core 资产，体积较大）
+
+# 或构建“slim 包”（不包含离线 runtime-core 资产，首次启动需要联网下载并安装）
+pnpm run dist:slim
 ```
+
+> 说明：
+> - 完整离线包用于内网/离线环境；slim 包用于对体积敏感、可联网初始化的场景。
+> - macOS 的完整离线包必须按架构分别构建（arm64/x64），避免把某一架构的 Python native 依赖打进另一架构的安装包。
 
 ## 数据目录
 
@@ -87,12 +94,21 @@ Electron 自动管理以下服务：
 
 ### 运行时打包
 
-将 Python 环境打包到安装包中：
+完整离线包会把运行时核心以单个压缩包形式内置到安装包中（`runtime/assets/runtime-core.tar.gz`），首次启动会解压到 `~/.nion/runtime/core` 并使用该运行时启动服务。
+
+为避免把开发机运行时状态带进去，打包流程会在产物生成前进行清理（例如 `core/backend/.nion`、`core/backend/.langgraph_api` 等）。
+
+如果你要为 slim 包准备可下载的运行时核心资产（runtime-core）：
+
 ```bash
 cd desktop/runtime
-./build-python-runtime.sh
-./create-runtime-bundle.sh
+./prepare-runtime-core.sh
+./create-runtime-core-asset.sh
 ```
+
+生成的资产名为 `nion-runtime-core-{platform}-{arch}-v{version}.tar.gz`（含 `core/` + `manifest.json`），用于桌面端首次启动下载并安装。
+
+slim 包下载源默认从 GitHub Releases 获取（见 `desktop/electron/package.json` 的 `nionRuntimeDownload` 配置），优先按 tag `v{version}` 查找，找不到则回退 latest。
 
 ### 自动更新
 

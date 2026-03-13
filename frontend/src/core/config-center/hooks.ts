@@ -32,7 +32,6 @@ export function useConfigCenter({ enabled = true }: { enabled?: boolean } = {}) 
     queryKey: ["configCenter", "runtimeStatus"],
     queryFn: () => loadConfigRuntimeStatus(),
     enabled,
-    refetchInterval: 5000,
   });
 
   return {
@@ -68,6 +67,5 @@ export function useConfigRuntimeStatus({ enabled = true }: { enabled?: boolean }
     queryKey: ["configCenter", "runtimeStatus"],
     queryFn: () => loadConfigRuntimeStatus(),
     enabled,
-    refetchInterval: 5000,
   });
 }

@@ -36,6 +36,8 @@ export interface WorkspaceMetaResponse {
   actual_root: string;
   execution_mode: "sandbox" | "host" | string;
   host_workdir: string | null;
+  tree_backend?: "host" | "sandbox" | string;
+  watch_supported?: boolean;
   generated_at: string;
 }
 

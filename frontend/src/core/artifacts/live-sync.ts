@@ -56,7 +56,13 @@ export function useWorkspaceLiveSync(
   });
 
   useEffect(() => {
-    if (!enabled || !isDesktopRuntime || !threadId || !workspaceMeta.data?.actual_root) {
+    if (
+      !enabled
+      || !isDesktopRuntime
+      || !threadId
+      || !workspaceMeta.data?.actual_root
+      || workspaceMeta.data?.watch_supported === false
+    ) {
       return;
     }
 
@@ -116,7 +122,15 @@ export function useWorkspaceLiveSync(
         });
       }
     };
-  }, [enabled, isDesktopRuntime, queryClient, root, threadId, workspaceMeta.data?.actual_root]);
+  }, [
+    enabled,
+    isDesktopRuntime,
+    queryClient,
+    root,
+    threadId,
+    workspaceMeta.data?.actual_root,
+    workspaceMeta.data?.watch_supported,
+  ]);
 
   return workspaceMeta;
 }

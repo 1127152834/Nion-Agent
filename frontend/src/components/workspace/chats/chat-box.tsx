@@ -112,6 +112,13 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     refetch: refetchActivePlugin,
   } = useInstalledPluginPackage(pluginSlotState.pluginId);
 
+  const workspaceMeta = useWorkspaceLiveSync(threadId, {
+    enabled: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory" && isDesktopRuntime,
+    root: "/mnt/user-data/workspace",
+  });
+
+  const shouldPollWorkspaceTree = !isDesktopRuntime || workspaceMeta.data?.watch_supported === false;
+
   const {
     data: workspaceTree,
     isLoading: workspaceTreeLoading,
@@ -123,13 +130,8 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     depth: 6,
     includeHidden: false,
     maxNodes: 5000,
-    live: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory" && !isDesktopRuntime,
+    live: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory" && shouldPollWorkspaceTree,
     refetchIntervalMs: 1000,
-  });
-
-  useWorkspaceLiveSync(threadId, {
-    enabled: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory" && isDesktopRuntime,
-    root: "/mnt/user-data/workspace",
   });
 
   useEffect(() => {

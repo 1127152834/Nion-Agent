@@ -3,7 +3,10 @@
 /frontend/
 /python/
 /release/
+/bundles/
 
 # Core build artifacts
 /core/backend/
 /core/frontend/
+/core/python/
+/core/optional/

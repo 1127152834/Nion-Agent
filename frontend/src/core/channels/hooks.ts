@@ -60,21 +60,18 @@ export function useTestChannelConnection(platform: ChannelPlatform) {
 
 export function useChannelRuntimeStatus(
   platform: ChannelPlatform,
-  options?: { enabled?: boolean; refetchIntervalMs?: number },
+  options?: { enabled?: boolean },
 ) {
   const enabled = options?.enabled ?? true;
-  const refetchIntervalMs = options?.refetchIntervalMs ?? 0;
   return useQuery({
     queryKey: channelQueryKeys(platform).runtime,
     queryFn: () => getChannelRuntimeStatus(platform),
     enabled,
-    refetchInterval: refetchIntervalMs > 0 ? refetchIntervalMs : false,
   });
 }
 
 type ChannelListQueryOptions = {
   enabled?: boolean;
-  refetchIntervalMs?: number;
 };
 
 export function useCreatePairingCode(platform: ChannelPlatform) {
@@ -88,12 +85,10 @@ export function usePendingPairRequests(
   options?: ChannelListQueryOptions,
 ) {
   const enabled = options?.enabled ?? true;
-  const refetchIntervalMs = options?.refetchIntervalMs ?? 0;
   return useQuery({
     queryKey: channelQueryKeys(platform).pending,
     queryFn: () => listPairRequests(platform, "pending"),
     enabled,
-    refetchInterval: refetchIntervalMs > 0 ? refetchIntervalMs : false,
   });
 }
 
@@ -139,12 +134,10 @@ export function useAuthorizedUsers(
   options?: ChannelListQueryOptions,
 ) {
   const enabled = options?.enabled ?? true;
-  const refetchIntervalMs = options?.refetchIntervalMs ?? 0;
   return useQuery({
     queryKey: channelQueryKeys(platform).users,
     queryFn: () => listAuthorizedUsers(platform, true),
     enabled,
-    refetchInterval: refetchIntervalMs > 0 ? refetchIntervalMs : false,
   });
 }
 

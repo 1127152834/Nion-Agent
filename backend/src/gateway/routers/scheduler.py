@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import queue
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.scheduler import store
+from src.scheduler.events import SchedulerEvent, get_scheduler_event_hub
 from src.scheduler.models import (
     RetryPolicy,
     ScheduledTask,
@@ -307,6 +311,44 @@ async def get_task_history(task_id: str) -> list[TaskExecutionRecord]:
     if scheduler.get_task(task_id) is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
     return scheduler.list_history(task_id)
+
+
+@router.get("/events", summary="Subscribe scheduler events (SSE)")
+async def stream_scheduler_events(request: Request) -> StreamingResponse:
+    scheduler = _scheduler_started()
+    hub = get_scheduler_event_hub()
+    q = hub.subscribe()
+
+    tasks = [task for task in scheduler.list_tasks() if not _is_system_task(task)]
+    snapshot = SchedulerEvent(
+        type="snapshot",
+        data={
+            "timestamp": datetime.now(UTC).isoformat(),
+            "tasks": [task.model_dump(mode="json") for task in tasks],
+        },
+    ).to_sse()
+
+    async def event_stream():
+        try:
+            yield SchedulerEvent(type="ready", data={"timestamp": datetime.now(UTC).isoformat()}).to_sse()
+            yield snapshot
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    event = await asyncio.to_thread(q.get, True, 20.0)
+                    yield event.to_sse()
+                except queue.Empty:
+                    yield SchedulerEvent(type="heartbeat", data={"timestamp": datetime.now(UTC).isoformat()}).to_sse()
+        finally:
+            hub.unsubscribe(q)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
 
 
 @router.post("/events")

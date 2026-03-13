@@ -1,6 +1,7 @@
 import { app } from "electron";
 import { createHash } from "node:crypto";
-import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import https from "node:https";
 import path from "node:path";
 
@@ -19,6 +20,7 @@ interface RuntimeManifest {
   version: string;
   platform: string;
   arch: string;
+  coreBundle?: RuntimeManifestComponent;
   coreComponents: Array<{ name: string; path: string }>;
   optionalComponents: RuntimeManifestComponent[];
   checksums: Record<string, string>;
@@ -36,6 +38,7 @@ interface RuntimeState {
   platform: string;
   arch: string;
   onboardingCompleted: boolean;
+  coreBundle?: RuntimeComponentState;
   optionalComponents: Record<string, RuntimeComponentState>;
 }
 
@@ -56,6 +59,7 @@ export interface RuntimeStatus {
   arch: string;
   coreReady: boolean;
   onboardingCompleted: boolean;
+  coreBundle: RuntimeStatusComponent | null;
   optionalComponents: RuntimeStatusComponent[];
 }
 
@@ -83,6 +87,18 @@ export class RuntimeOptionalComponentsManager {
 
   getStatus(): RuntimeStatus {
     const state = this.readState();
+    const coreBundleManifest = this.manifest.coreBundle;
+    const coreBundleState = state.coreBundle ?? null;
+    const coreBundle: RuntimeStatusComponent | null = coreBundleManifest
+      ? {
+          ...coreBundleManifest,
+          status: coreBundleState?.status ?? "not_downloaded",
+          assetPath: coreBundleState?.assetPath,
+          downloadedAt: coreBundleState?.downloadedAt,
+          error: coreBundleState?.error,
+        }
+      : null;
+
     const optionalComponents = this.manifest.optionalComponents.map((component) => {
       const persisted = state.optionalComponents[component.name] ?? { status: "not_downloaded" as const };
       return {
@@ -100,8 +116,90 @@ export class RuntimeOptionalComponentsManager {
       arch: state.arch,
       coreReady: this.isCoreReady(),
       onboardingCompleted: state.onboardingCompleted,
+      coreBundle,
       optionalComponents,
     };
+  }
+
+  async downloadCoreBundle(
+    onProgress?: (progress: RuntimeDownloadProgress) => void,
+  ): Promise<RuntimeStatus> {
+    const component = this.manifest.coreBundle;
+    if (!component) {
+      throw new Error("Core runtime bundle is not configured in runtime manifest");
+    }
+
+    const state = this.readState();
+    state.coreBundle = { status: "downloading" };
+    this.writeState(state);
+
+    try {
+      const bundledCorePath = this.resolveBundledCoreBundlePath();
+      if (bundledCorePath) {
+        const size = statSync(bundledCorePath).size;
+        onProgress?.({
+          name: component.name,
+          receivedBytes: 0,
+          totalBytes: size,
+          progress: 0,
+        });
+        await this.installCoreBundle(bundledCorePath);
+        onProgress?.({
+          name: component.name,
+          receivedBytes: size,
+          totalBytes: size,
+          progress: 1,
+        });
+
+        state.coreBundle = {
+          status: "downloaded",
+          assetPath: bundledCorePath,
+          downloadedAt: new Date().toISOString(),
+        };
+        this.writeState(state);
+        return this.getStatus();
+      }
+
+      const resolvedAssetName = this.resolveAssetName(component.assetName);
+      const releaseAsset = await this.resolveReleaseAsset(resolvedAssetName);
+
+      const downloadsDir = path.join(this.paths.runtimeStateDir, "downloads");
+      this.ensureDir(downloadsDir);
+
+      const tempPath = path.join(downloadsDir, `${resolvedAssetName}.download`);
+      const finalPath = path.join(downloadsDir, resolvedAssetName);
+
+      await this.downloadAssetFile(releaseAsset.url, tempPath, component.name, onProgress);
+      if (component.sha256) {
+        await this.verifySha256(tempPath, component.sha256);
+      }
+      rmSync(finalPath, { force: true });
+      renameSync(tempPath, finalPath);
+
+      await this.installCoreBundle(finalPath);
+
+      state.coreBundle = {
+        status: "downloaded",
+        assetPath: finalPath,
+        downloadedAt: new Date().toISOString(),
+      };
+      this.writeState(state);
+    } catch (error) {
+      state.coreBundle = {
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      };
+      this.writeState(state);
+      throw error;
+    }
+
+    return this.getStatus();
+  }
+
+  async retryCoreBundle(
+    onProgress?: (progress: RuntimeDownloadProgress) => void,
+  ): Promise<RuntimeStatus> {
+    return this.downloadCoreBundle(onProgress);
   }
 
   async downloadOptionalComponent(
@@ -130,6 +228,7 @@ export class RuntimeOptionalComponentsManager {
       if (component.sha256) {
         await this.verifySha256(tempPath, component.sha256);
       }
+      rmSync(finalPath, { force: true });
       renameSync(tempPath, finalPath);
 
       state.optionalComponents[componentName] = {
@@ -266,9 +365,20 @@ export class RuntimeOptionalComponentsManager {
   }
 
   private isCoreReady(): boolean {
-    return this.manifest.coreComponents.every((component) =>
-      existsSync(path.resolve(this.paths.runtimeDir, component.path)),
-    );
+    const roots = new Set<string>([this.paths.runtimeDir]);
+    if (this.paths.runtimeStateDir && this.paths.runtimeStateDir !== this.paths.runtimeDir) {
+      roots.add(this.paths.runtimeStateDir);
+    }
+
+    for (const root of roots) {
+      const ready = this.manifest.coreComponents.every((component) =>
+        existsSync(path.resolve(root, component.path)),
+      );
+      if (ready) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private areAllOptionalComponentsReady(state: RuntimeState): boolean {
@@ -437,5 +547,74 @@ export class RuntimeOptionalComponentsManager {
     if (current !== expected) {
       throw new Error(`SHA256 mismatch for ${path.basename(filePath)}: expected ${expected}, got ${current}`);
     }
+  }
+
+  private resolveBundledCoreBundlePath(): string | null {
+    // Offline installer embeds the core bundle as a single archive to avoid codesign issues
+    // caused by Python venv symlinks inside the app bundle.
+    const candidate = path.join(this.paths.runtimeDir, "assets", "runtime-core.tar.gz");
+    return existsSync(candidate) ? candidate : null;
+  }
+
+  private async installCoreBundle(archivePath: string): Promise<void> {
+    const installRoot = this.paths.runtimeStateDir;
+    this.ensureDir(installRoot);
+
+    const tempDirName = `.install-core-${Date.now()}`;
+    const tempInstallDir = path.join(installRoot, tempDirName);
+    this.ensureDir(tempInstallDir);
+
+    try {
+      await this.extractTarGz(archivePath, tempInstallDir);
+
+      const extractedCoreDir = path.join(tempInstallDir, "core");
+      const requiredDirs = [
+        path.join(extractedCoreDir, "python"),
+        path.join(extractedCoreDir, "backend"),
+        path.join(extractedCoreDir, "frontend"),
+      ];
+      for (const required of requiredDirs) {
+        if (!existsSync(required)) {
+          throw new Error(`Core bundle is missing required path: ${required}`);
+        }
+      }
+
+      const targetCoreDir = path.join(installRoot, "core");
+      rmSync(targetCoreDir, { recursive: true, force: true });
+      renameSync(extractedCoreDir, targetCoreDir);
+
+      const extractedManifestPath = path.join(tempInstallDir, "manifest.json");
+      const targetManifestPath = path.join(installRoot, "manifest.json");
+      if (existsSync(extractedManifestPath)) {
+        rmSync(targetManifestPath, { force: true });
+        renameSync(extractedManifestPath, targetManifestPath);
+      } else if (!existsSync(targetManifestPath)) {
+        writeFileSync(targetManifestPath, JSON.stringify(this.manifest, null, 2));
+      }
+    } finally {
+      rmSync(tempInstallDir, { recursive: true, force: true });
+    }
+  }
+
+  private async extractTarGz(archivePath: string, destDir: string): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn("tar", ["-xzf", archivePath, "-C", destDir], {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+
+      let stderr = "";
+      child.stderr?.on("data", (chunk) => {
+        stderr += chunk.toString();
+      });
+
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`Failed to extract runtime bundle (${code}): ${stderr.trim()}`));
+      });
+    });
   }
 }

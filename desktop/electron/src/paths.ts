@@ -7,6 +7,7 @@ export interface DesktopRuntimePaths {
   repoRoot: string;
   appDataDir: string;
   logsDir: string;
+  runtimeStateDir: string;
   runtimeDir: string;
   runtimeManifestPath: string;
   runtimeStatePath: string;
@@ -61,23 +62,43 @@ export function resolveRuntimePaths(): DesktopRuntimePaths {
   const runtimeStateDir = ensureDir(path.join(appDataDir, "runtime"));
   const runtimeOptionalDir = ensureDir(path.join(runtimeStateDir, "optional"));
 
+  const packagedRuntimeDir = app.isPackaged ? path.join(process.resourcesPath, "runtime") : null;
+  const downloadedRuntimeDir = runtimeStateDir;
+  const downloadedRuntimeManifestPath = path.join(downloadedRuntimeDir, "manifest.json");
+
   const runtimeDir = app.isPackaged
-    ? path.join(process.resourcesPath, "runtime")
+    ? (() => {
+        const packagedCoreDir = path.join(packagedRuntimeDir!, "core");
+        if (existsSync(packagedCoreDir)) {
+          return packagedRuntimeDir!;
+        }
+
+        const downloadedCoreDir = path.join(downloadedRuntimeDir, "core");
+        if (existsSync(downloadedCoreDir) && existsSync(downloadedRuntimeManifestPath)) {
+          return downloadedRuntimeDir;
+        }
+
+        // Slim installer: only manifest is bundled, core will be installed to runtimeStateDir later.
+        return packagedRuntimeDir!;
+      })()
     : path.join(repoRoot, "desktop", "runtime");
   const runtimeManifestPath = path.join(runtimeDir, "manifest.json");
 
   const runtimeCoreDir = path.join(runtimeDir, "core");
-  const pythonExecutable = app.isPackaged
-    ? resolvePackagedPythonExecutable(runtimeCoreDir)
-    : null;
+  let pythonExecutable: string | null = null;
+  if (app.isPackaged) {
+    const candidate = resolvePackagedPythonExecutable(runtimeCoreDir);
+    pythonExecutable = existsSync(candidate) ? candidate : null;
+  }
   const frontendCwd = app.isPackaged
     ? path.join(runtimeCoreDir, "frontend")
     : path.join(repoRoot, "frontend");
   const backendCwd = app.isPackaged
     ? path.join(runtimeCoreDir, "backend")
     : path.join(repoRoot, "backend");
-  const frontendServerEntry = app.isPackaged
-    ? path.join(frontendCwd, "server.js")
+  const frontendServerEntryCandidate = app.isPackaged ? path.join(frontendCwd, "server.js") : null;
+  const frontendServerEntry = frontendServerEntryCandidate && existsSync(frontendServerEntryCandidate)
+    ? frontendServerEntryCandidate
     : null;
   const skillsPath = path.join(repoRoot, "skills");
 
@@ -85,6 +106,7 @@ export function resolveRuntimePaths(): DesktopRuntimePaths {
     repoRoot,
     appDataDir,
     logsDir,
+    runtimeStateDir,
     runtimeDir,
     runtimeManifestPath,
     runtimeStatePath: path.join(runtimeStateDir, "state.json"),
