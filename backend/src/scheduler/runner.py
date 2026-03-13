@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import time
 import uuid
@@ -19,6 +20,7 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.processlog.service import get_processlog_service
+from src.scheduler.events import SchedulerEvent, get_scheduler_event_hub
 from src.scheduler import store
 from src.scheduler.models import ScheduledTask, TaskExecutionRecord, TaskMode, TaskStatus, TriggerType
 
@@ -42,6 +44,75 @@ class TaskScheduler:
         self._lock = threading.RLock()
         self._tasks: dict[str, ScheduledTask] = {}
         self._started = False
+        self._events = get_scheduler_event_hub()
+
+    def _should_emit_task_event(self, task: ScheduledTask | None) -> bool:
+        if task is None:
+            return False
+        return not (task.created_by == "heartbeat" or task.name.startswith("heartbeat:"))
+
+    def _publish_event(self, event_type: str, data: dict[str, Any]) -> None:
+        try:
+            self._events.publish(SchedulerEvent(type=event_type, data=data))
+        except Exception:  # noqa: BLE001 - events are best-effort and must not break scheduler
+            logger.debug("Failed to publish scheduler event: %s", event_type, exc_info=True)
+
+    def _should_generate_enhanced_execution_log(self) -> bool:
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            return False
+        raw = (os.getenv("NION_SCHEDULER_ENHANCED_EXECUTION_LOG") or "true").strip().lower()
+        return raw not in {"0", "false", "no", "off"}
+
+    def _update_history_execution_log(self, task_id: str, run_id: str, execution_log: str) -> bool:
+        history = store.load_history()
+        records = history.get(task_id) or []
+        updated = False
+        for idx, record in enumerate(records):
+            if record.run_id != run_id:
+                continue
+            result = record.result if isinstance(record.result, dict) else {}
+            result["execution_log"] = execution_log
+            record.result = result
+            records[idx] = record
+            updated = True
+            break
+        if not updated:
+            return False
+        history[task_id] = records
+        store.save_history(history)
+        return True
+
+    def _enqueue_enhanced_execution_log(self, task: ScheduledTask, record: TaskExecutionRecord) -> None:
+        if not self._should_generate_enhanced_execution_log():
+            return
+        if task.mode != TaskMode.WORKFLOW or not record.thread_id:
+            return
+        if not self._should_emit_task_event(task):
+            return
+
+        task_snapshot = task.model_copy(deep=True)
+        record_snapshot = record.model_copy(deep=True)
+
+        def worker() -> None:
+            try:
+                execution_log = self._generate_execution_log(task_snapshot, record_snapshot)
+                if not execution_log.strip():
+                    return
+                if not self._update_history_execution_log(task_snapshot.id, record_snapshot.run_id, execution_log):
+                    return
+                self._publish_event(
+                    "task_run_log_updated",
+                    {"task_id": task_snapshot.id, "run_id": record_snapshot.run_id},
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "Failed to generate enhanced execution_log for task %s run %s",
+                    task_snapshot.id,
+                    record_snapshot.run_id,
+                    exc_info=True,
+                )
+
+        self._execution_pool.submit(worker)
 
     def _get_workflow_executor(self) -> WorkflowExecutor:
         if self._workflow_executor is not None:
@@ -85,7 +156,10 @@ class TaskScheduler:
             self._tasks[task.id] = task
             self._schedule_task(task)
             store.save_tasks(self._tasks)
-            return task
+            task_payload = task.model_dump(mode="json")
+        if self._should_emit_task_event(task):
+            self._publish_event("task_upserted", {"reason": "created", "task": task_payload})
+        return task
 
     def update_task(self, task_id: str, updated: ScheduledTask) -> ScheduledTask:
         with self._lock:
@@ -101,16 +175,23 @@ class TaskScheduler:
             self._tasks[task_id] = updated
             self._schedule_task(updated)
             store.save_tasks(self._tasks)
-            return updated
+            task_payload = updated.model_dump(mode="json")
+        if self._should_emit_task_event(updated):
+            self._publish_event("task_upserted", {"reason": "updated", "task": task_payload})
+        return updated
 
     def remove_task(self, task_id: str) -> bool:
         with self._lock:
             if task_id not in self._tasks:
                 return False
+            task = self._tasks.get(task_id)
             self._unschedule_task(task_id)
             del self._tasks[task_id]
             store.save_tasks(self._tasks)
-            return True
+            agent_name = task.agent_name if task is not None else None
+        if self._should_emit_task_event(task):
+            self._publish_event("task_deleted", {"task_id": task_id, "agent_name": agent_name})
+        return True
 
     def list_history(self, task_id: str) -> list[TaskExecutionRecord]:
         history = store.load_history()
@@ -120,7 +201,7 @@ class TaskScheduler:
         """Enqueue a task run and return immediately.
 
         The run will execute in the scheduler background pool. Frontend should
-        observe status changes via polling `/api/scheduler/tasks`.
+        observe status changes via SSE `/api/scheduler/events`.
         """
         with self._lock:
             task = self._tasks.get(task_id)
@@ -150,7 +231,19 @@ class TaskScheduler:
                 status=TaskStatus.RUNNING,
                 success=False,
             )
+            task_payload = task.model_dump(mode="json")
+            record_payload = record.model_dump(mode="json")
 
+        if self._should_emit_task_event(task):
+            self._publish_event(
+                "task_run_started",
+                {
+                    "task_id": task_id,
+                    "agent_name": task_payload.get("agent_name"),
+                    "task": task_payload,
+                    "record": record_payload,
+                },
+            )
         self._execution_pool.submit(self._execute_task, task_id, True, record)
         return record
 
@@ -250,6 +343,7 @@ class TaskScheduler:
         manual: bool = False,
         record: TaskExecutionRecord | None = None,
     ) -> TaskExecutionRecord:
+        caller_provided_record = record is not None
         with self._lock:
             task = self._tasks.get(task_id)
             if task is None:
@@ -310,6 +404,19 @@ class TaskScheduler:
             task.last_run_at = record.started_at
             task.last_error = None
             store.save_tasks(self._tasks)
+            task_payload = task.model_dump(mode="json")
+            record_payload = record.model_dump(mode="json")
+
+        if (not caller_provided_record) and self._should_emit_task_event(task):
+            self._publish_event(
+                "task_run_started",
+                {
+                    "task_id": task_id,
+                    "agent_name": task_payload.get("agent_name"),
+                    "task": task_payload,
+                    "record": record_payload,
+                },
+            )
 
         run_id = record.run_id
         trace_id = record.trace_id or record.run_id
@@ -470,8 +577,11 @@ class TaskScheduler:
                 )
 
         record.completed_at = datetime.now(UTC)
+
+        # Attach a deterministic fallback execution log immediately so history is available
+        # without waiting for best-effort LLM summarization.
         try:
-            execution_log = self._generate_execution_log(task, record)
+            execution_log = self._build_execution_log_fallback(task, record)
             if isinstance(record.result, dict):
                 record.result.setdefault("execution_log", execution_log)
             else:
@@ -482,8 +592,12 @@ class TaskScheduler:
                     current.last_result = record.result
                     store.save_tasks(self._tasks)
         except Exception:  # noqa: BLE001
-            logger.exception("Failed to attach execution_log for task %s", task_id)
+            logger.exception("Failed to attach execution_log fallback for task %s", task_id)
+
         store.append_history(task_id, record)
+
+        # Generate an enhanced descriptive execution log in background (SSE will notify UI).
+        self._enqueue_enhanced_execution_log(task, record)
 
         if task.notification_webhook:
             artifacts: list[str] = []
@@ -525,6 +639,26 @@ class TaskScheduler:
                 "error": record.error,
             },
         )
+
+        try:
+            final_task_payload: dict[str, Any] | None = None
+            with self._lock:
+                current = self._tasks.get(task_id)
+                if current is not None:
+                    final_task_payload = current.model_dump(mode="json")
+
+            if self._should_emit_task_event(task):
+                self._publish_event(
+                    "task_run_finished",
+                    {
+                        "task_id": task_id,
+                        "agent_name": final_task_payload.get("agent_name") if isinstance(final_task_payload, dict) else None,
+                        "task": final_task_payload,
+                        "record": record.model_dump(mode="json"),
+                    },
+                )
+        except Exception:  # noqa: BLE001 - events are best-effort
+            logger.debug("Failed to publish scheduler finished event for task %s", task_id, exc_info=True)
 
         return record
 
