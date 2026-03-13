@@ -39,7 +39,9 @@ backend/tests/
 frontend/tests/
 desktop/electron/test/
 backend/docs/
-docs/
+docs/*
+!docs/product-design/
+!docs/product-design/**
 docs/testing/
 scripts/testing/
 frontend/test-results/
