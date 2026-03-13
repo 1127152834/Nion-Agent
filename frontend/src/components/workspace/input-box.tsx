@@ -14,16 +14,17 @@ import {
   RocketIcon,
   SquareTerminalIcon,
   WrenchIcon,
-  XIcon,
   ZapIcon,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  Fragment,
   useMemo,
   useState,
   type ComponentProps,
+  type ReactNode,
 } from "react";
 
 import {
@@ -1107,6 +1108,10 @@ export function InputBox({
     setSelectedCliTools((prev) => prev.filter((item) => item !== value));
   }, []);
 
+  const removeSelectedMcpTool = useCallback((value: string) => {
+    setSelectedMcpTools((prev) => prev.filter((item) => item !== value));
+  }, []);
+
   const focusMessageInput = useCallback(() => {
     return document.querySelector<HTMLTextAreaElement>("textarea[name='message']");
   }, []);
@@ -1446,6 +1451,171 @@ export function InputBox({
     );
   }
 
+  const MAX_INLINE_MENTION_SUMMARY_ITEMS = 3;
+  const hasAnySelectedMentions =
+    selectedContexts.length > 0
+    || selectedSkills.length > 0
+    || selectedMcpTools.length > 0
+    || selectedCliTools.length > 0;
+
+  const mentionSummaryGroups: Array<{ id: string; node: ReactNode }> = [];
+
+  if (selectedContexts.length > 0) {
+    const previewContexts = selectedContexts.slice(0, MAX_INLINE_MENTION_SUMMARY_ITEMS);
+    const hiddenCount = selectedContexts.length - previewContexts.length;
+    mentionSummaryGroups.push({
+      id: "contexts",
+      node: (
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground shrink-0 whitespace-nowrap text-[11px]">
+            {mentionLabels?.contextLabel ?? defaultContextLabel}
+          </span>
+          <div className="flex items-center gap-1">
+            {previewContexts.map((context) => (
+              <button
+                key={context.value}
+                type="button"
+                className="bg-muted/50 hover:bg-muted text-foreground inline-flex max-w-32 items-center gap-1 rounded-md px-2 py-0.5 text-[11px]"
+                title={context.value}
+                onClick={() => removeSelectedContext(context.value)}
+              >
+                {context.kind === "directory" ? (
+                  <FolderIcon className="size-3 shrink-0" />
+                ) : (
+                  <FileIcon className="size-3 shrink-0" />
+                )}
+                <span className="min-w-0 truncate">{basename(context.value)}</span>
+              </button>
+            ))}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                className="bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px]"
+                onClick={() => setContextSelectorOpen(true)}
+              >
+                +{hiddenCount}
+              </button>
+            )}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  if (selectedSkills.length > 0) {
+    const previewSkills = selectedSkills.slice(0, MAX_INLINE_MENTION_SUMMARY_ITEMS);
+    const hiddenCount = selectedSkills.length - previewSkills.length;
+    mentionSummaryGroups.push({
+      id: "skills",
+      node: (
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px]">
+            <SparklesIcon className="size-3" />
+            {mentionLabels?.skillLabel ?? defaultSkillLabel}
+          </span>
+          <div className="flex items-center gap-1">
+            {previewSkills.map((skill) => (
+              <button
+                key={skill}
+                type="button"
+                className="bg-muted/50 hover:bg-muted text-foreground inline-flex max-w-40 items-center gap-1 rounded-md px-2 py-0.5 text-[11px]"
+                title={getLocalizedSkillName(skill, locale)}
+                onClick={() => removeSelectedSkill(skill)}
+              >
+                <span className="min-w-0 truncate">{getLocalizedSkillName(skill, locale)}</span>
+              </button>
+            ))}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                className="bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px]"
+                onClick={() => setSkillSelectorOpen(true)}
+              >
+                +{hiddenCount}
+              </button>
+            )}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  if (selectedMcpTools.length > 0) {
+    const previewTools = selectedMcpTools.slice(0, MAX_INLINE_MENTION_SUMMARY_ITEMS);
+    const hiddenCount = selectedMcpTools.length - previewTools.length;
+    mentionSummaryGroups.push({
+      id: "mcp",
+      node: (
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px]">
+            <WrenchIcon className="size-3" />
+            {mentionLabels?.mcpLabel ?? defaultMcpLabel}
+          </span>
+          <div className="flex items-center gap-1">
+            {previewTools.map((tool) => (
+              <button
+                key={tool}
+                type="button"
+                className="bg-muted/50 hover:bg-muted text-foreground inline-flex max-w-32 items-center gap-1 rounded-md px-2 py-0.5 text-[11px]"
+                title={tool}
+                onClick={() => removeSelectedMcpTool(tool)}
+              >
+                <span className="min-w-0 truncate">{tool}</span>
+              </button>
+            ))}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                className="bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px]"
+                onClick={() => setMcpSelectorOpen(true)}
+              >
+                +{hiddenCount}
+              </button>
+            )}
+          </div>
+        </div>
+      ),
+    });
+  }
+
+  if (selectedCliTools.length > 0) {
+    const previewTools = selectedCliTools.slice(0, MAX_INLINE_MENTION_SUMMARY_ITEMS);
+    const hiddenCount = selectedCliTools.length - previewTools.length;
+    mentionSummaryGroups.push({
+      id: "cli",
+      node: (
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px]">
+            <SquareTerminalIcon className="size-3" />
+            {mentionLabels?.cliLabel ?? defaultCliLabel}
+          </span>
+          <div className="flex items-center gap-1">
+            {previewTools.map((tool) => (
+              <button
+                key={tool}
+                type="button"
+                className="bg-muted/50 hover:bg-muted text-foreground inline-flex max-w-32 items-center gap-1 rounded-md px-2 py-0.5 text-[11px]"
+                title={tool}
+                onClick={() => removeSelectedCliTool(tool)}
+              >
+                <span className="min-w-0 truncate">{tool}</span>
+              </button>
+            ))}
+            {hiddenCount > 0 && (
+              <button
+                type="button"
+                className="bg-muted/30 hover:bg-muted text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[11px]"
+                onClick={() => setCliSelectorOpen(true)}
+              >
+                +{hiddenCount}
+              </button>
+            )}
+          </div>
+        </div>
+      ),
+    });
+  }
+
   return (
     <PromptInput
       className={cn(
@@ -1578,63 +1748,20 @@ export function InputBox({
           </div>
         </div>
       )}
-      {/* Selected skills tags */}
-      {selectedSkills.length > 0 && (
+      {/* Mention summary bar: keep selected references single-line to avoid input height jitter. */}
+      {hasAnySelectedMentions && (
         <div className="order-last w-full px-3 pb-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {selectedSkills.map((skill) => (
-              <button
-                key={skill}
-                type="button"
-                className="bg-muted/70 text-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
-                onClick={() => removeSelectedSkill(skill)}
-              >
-                <SparklesIcon className="size-3" />
-                <span>{getLocalizedSkillName(skill, locale)}</span>
-                <XIcon className="text-muted-foreground size-3" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Selected CLI tools tags */}
-      {selectedCliTools.length > 0 && (
-        <div className="order-last w-full px-3 pb-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {selectedCliTools.map((tool) => (
-              <button
-                key={tool}
-                type="button"
-                className="bg-muted/70 text-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
-                onClick={() => removeSelectedCliTool(tool)}
-              >
-                <SquareTerminalIcon className="size-3" />
-                <span>{tool}</span>
-                <XIcon className="text-muted-foreground size-3" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {/* Selected contexts tags */}
-      {selectedContexts.length > 0 && (
-        <div className="order-last w-full px-3 pb-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {selectedContexts.map((context) => (
-              <button
-                key={context.value}
-                type="button"
-                className="bg-muted/70 text-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
-                onClick={() => removeSelectedContext(context.value)}
-              >
-                {context.kind === "directory" ? (
-                  <FolderIcon className="size-3" />
-                ) : (
-                  <FileIcon className="size-3" />
-                )}
-                <span>{basename(context.value)}</span>
-                <XIcon className="text-muted-foreground size-3" />
-              </button>
+          <div className="flex max-w-full flex-nowrap items-center gap-2 overflow-x-auto py-0.5">
+            {mentionSummaryGroups.map((group, index) => (
+              <Fragment key={group.id}>
+                {index > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="bg-border/80 h-4 w-px shrink-0"
+                  />
+                ) : null}
+                <div className="shrink-0">{group.node}</div>
+              </Fragment>
             ))}
           </div>
         </div>
