@@ -19,6 +19,7 @@ from src.gateway.routers import (
     artifacts,
     channels,
     cli,
+    cli_interactive,
     config,
     embedding_models,
     evolution,
@@ -266,6 +267,9 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
 
     # CLI API is mounted at /api/cli
     app.include_router(cli.router)
+
+    # CLI Interactive API is mounted at /api/cli (WebSocket endpoints)
+    app.include_router(cli_interactive.router)
 
     # Artifacts API is mounted at /api/threads/{thread_id}/artifacts
     app.include_router(artifacts.router)
