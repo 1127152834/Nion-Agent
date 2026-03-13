@@ -1,12 +1,15 @@
-"""CLI Terminal component with xterm.js integration."""
+/**
+ * CLI Terminal component with xterm.js integration.
+ */
 "use client";
 
-import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Terminal } from "@xterm/xterm";
 import { XIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
 
 import "@xterm/xterm/css/xterm.css";
 
@@ -157,7 +160,7 @@ export function CLITerminal({ sessionId, toolId, command, onClose }: CLITerminal
   }, [sessionId, toolId, command]);
 
   const handleTerminate = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "terminate" }));
     }
     onClose?.();
