@@ -1,0 +1,87 @@
+{
+  "tools": [
+    {
+      "id": "ripgrep",
+      "name": "rg",
+      "author": "BurntSushi",
+      "category": "dev",
+      "description": "Fast text search.",
+      "tags": ["search", "dev"],
+      "verified": true,
+      "featured": true,
+      "version": "14.1.0",
+      "docs_url": "https://github.com/BurntSushi/ripgrep",
+      "platforms": [
+        {
+          "os": "macos",
+          "arch": "arm64",
+          "package": {
+            "kind": "http",
+            "url": "https://github.com/BurntSushi/ripgrep/releases/download/14.1.0/ripgrep-14.1.0-aarch64-apple-darwin.tar.gz",
+            "sha256": "fc59ca3eaa5b5bcfa1488eeb80291bad0e8e2842e05d4400fc7b29d5ee4bd26b"
+          },
+          "bins": [{ "name": "rg", "path_in_archive": "rg" }]
+        }
+      ],
+      "healthcheck": { "argv": ["--version"], "expect_contains": "ripgrep" }
+    },
+    {
+      "id": "xhs-cli",
+      "name": "xhs-cli",
+      "author": "jackwener",
+      "category": "automation",
+      "description": "小红书 CLI：搜索、阅读笔记、查看用户。",
+      "tags": ["xhs", "xiaohongshu", "cli"],
+      "verified": false,
+      "featured": false,
+      "version": "0.1.4",
+      "docs_url": "https://github.com/jackwener/xhs-cli",
+      "interactive_commands": [
+        {
+          "pattern": "login",
+          "type": "input",
+          "prompt": "请输入小红书登录凭证（cookie 字符串）",
+          "input_method": "stdin"
+        }
+      ],
+      "platforms": [
+        {
+          "os": "macos",
+          "arch": "arm64",
+          "package": { "kind": "uv", "spec": "xhs-cli==0.1.4" },
+          "bins": [{ "name": "xhs" }]
+        },
+        {
+          "os": "macos",
+          "arch": "x86_64",
+          "package": { "kind": "uv", "spec": "xhs-cli==0.1.4" },
+          "bins": [{ "name": "xhs" }]
+        },
+        {
+          "os": "linux",
+          "arch": "arm64",
+          "package": { "kind": "uv", "spec": "xhs-cli==0.1.4" },
+          "bins": [{ "name": "xhs" }]
+        },
+        {
+          "os": "linux",
+          "arch": "x86_64",
+          "package": { "kind": "uv", "spec": "xhs-cli==0.1.4" },
+          "bins": [{ "name": "xhs" }]
+        },
+        {
+          "os": "windows",
+          "arch": "arm64",
+          "package": { "kind": "uv", "spec": "xhs-cli==0.1.4" },
+          "bins": [{ "name": "xhs" }]
+        },
+        {
+          "os": "windows",
+          "arch": "x86_64",
+          "package": { "kind": "uv", "spec": "xhs-cli==0.1.4" },
+          "bins": [{ "name": "xhs" }]
+        }
+      ]
+    }
+  ]
+}

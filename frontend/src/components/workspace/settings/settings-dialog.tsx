@@ -10,6 +10,7 @@ import {
   PaletteIcon,
   SparklesIcon,
   WrenchIcon,
+  SquareTerminalIcon,
   BotIcon,
   BoxIcon,
   ServerIcon,
@@ -26,6 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AboutSettingsPage } from "@/components/workspace/settings/about-settings-page";
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
 import { ChannelSettingsPage } from "@/components/workspace/settings/channel-settings-page";
+import { CliToolsPage } from "@/components/workspace/settings/cli-tools-page";
 import { DesktopRuntimeSettingsPage } from "@/components/workspace/settings/desktop-runtime-settings-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
 import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
@@ -48,6 +50,7 @@ type SettingsSection =
   | "memory"
   | "embedding"
   | "tools"
+  | "cliTools"
   | "channels"
   | "skills"
   | "sandbox"
@@ -104,6 +107,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
         icon: DatabaseIcon,
       },
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
+      { id: "cliTools", label: t.settings.sections.cliTools ?? "CLI 工具", icon: SquareTerminalIcon },
       { id: "channels", label: t.settings.sections.channels, icon: Link2Icon },
       { id: "skills", label: t.settings.sections.skills, icon: SparklesIcon },
       {
@@ -131,6 +135,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.sections.embedding,
       t.settings.retrieval?.title,
       t.settings.sections.tools,
+      t.settings.sections.cliTools,
       t.settings.sections.channels,
       t.settings.sections.skills,
       t.settings.sections.notification,
@@ -195,6 +200,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               )}
               {activeSection === "embedding" && <RetrievalSettingsPage />}
               {activeSection === "tools" && <ToolSettingsPage />}
+              {activeSection === "cliTools" && <CliToolsPage />}
               {activeSection === "channels" && <ChannelSettingsPage />}
               {activeSection === "skills" && (
                 <SkillSettingsPage

@@ -4,6 +4,7 @@ from pathlib import Path
 
 # Virtual path prefix seen by agents inside the sandbox
 VIRTUAL_PATH_PREFIX = "/mnt/user-data"
+CLIS_VIRTUAL_ROOT = "/mnt/clis"
 
 _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
 
@@ -178,6 +179,28 @@ class Paths:
         self.sandbox_work_dir(thread_id).mkdir(parents=True, exist_ok=True)
         self.sandbox_uploads_dir(thread_id).mkdir(parents=True, exist_ok=True)
         self.sandbox_outputs_dir(thread_id).mkdir(parents=True, exist_ok=True)
+
+    # ── CLI toolchain (global, non-thread) ───────────────────────────────
+
+    @property
+    def clis_root_dir(self) -> Path:
+        """Root directory for managed CLIs: `{base_dir}/clis/`."""
+        return self.base_dir / "clis"
+
+    @property
+    def clis_store_dir(self) -> Path:
+        """Managed CLI store directory: `{base_dir}/clis/store/`."""
+        return self.clis_root_dir / "store"
+
+    @property
+    def clis_bin_dir(self) -> Path:
+        """Managed CLI bin directory (shims): `{base_dir}/clis/bin/`."""
+        return self.clis_root_dir / "bin"
+
+    @property
+    def clis_manifests_dir(self) -> Path:
+        """Managed CLI manifests directory: `{base_dir}/clis/manifests/`."""
+        return self.clis_root_dir / "manifests"
 
     def resolve_virtual_path(self, thread_id: str, virtual_path: str) -> Path:
         """Resolve a sandbox virtual path to the actual host filesystem path.

@@ -738,6 +738,7 @@ export const enUS: Translations = {
       memory: "Memory",
       embedding: "Embedding",
       tools: "Tools",
+      cliTools: "CLI tools",
       channels: "Channels",
       skills: "Skills",
       notification: "Notification",

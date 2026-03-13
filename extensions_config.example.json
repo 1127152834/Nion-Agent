@@ -67,5 +67,21 @@
     "frontend-design": {
       "enabled": true
     }
+  },
+  "clis": {
+    "ripgrep": {
+      "enabled": true,
+      "source": "managed"
+    },
+    "git": {
+      "enabled": false,
+      "source": "system",
+      "exec": "git"
+    },
+    "custom:mytool": {
+      "enabled": false,
+      "source": "custom",
+      "exec": "/abs/path/to/mytool"
+    }
   }
 }

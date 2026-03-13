@@ -47,6 +47,17 @@ class LocalSandboxProvider(SandboxProvider):
         """
         mappings = {}
 
+        # Map global managed CLIs directory so tools can execute shims using /mnt/clis/*
+        try:
+            from src.config.paths import CLIS_VIRTUAL_ROOT, get_paths
+
+            clis_dir = get_paths().clis_root_dir
+            clis_dir.mkdir(parents=True, exist_ok=True)
+            mappings[CLIS_VIRTUAL_ROOT] = str(clis_dir)
+        except Exception as e:
+            # Log but don't fail if config loading fails
+            print(f"Warning: Could not setup CLI path mapping: {e}")
+
         # Map skills container path to local skills directory
         try:
             from src.config import get_app_config

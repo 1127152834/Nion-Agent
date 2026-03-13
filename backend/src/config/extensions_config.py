@@ -52,6 +52,21 @@ class SkillStateConfig(BaseModel):
     enabled: bool = Field(default=True, description="Whether this skill is enabled")
 
 
+class CliStateConfig(BaseModel):
+    """Configuration for a single managed/system/custom CLI tool."""
+
+    enabled: bool = Field(default=False, description="Whether this CLI tool is enabled for agents")
+    source: Literal["managed", "system", "custom"] = Field(
+        default="managed",
+        description="CLI source: managed marketplace install, system PATH, or custom absolute path",
+    )
+    exec: str | None = Field(
+        default=None,
+        description="Executable name or absolute path (required when source is system/custom)",
+    )
+    model_config = ConfigDict(extra="allow")
+
+
 class ExtensionsConfig(BaseModel):
     """Unified configuration for MCP servers and skills."""
 
@@ -63,6 +78,10 @@ class ExtensionsConfig(BaseModel):
     skills: dict[str, SkillStateConfig] = Field(
         default_factory=dict,
         description="Map of skill name to state configuration",
+    )
+    clis: dict[str, CliStateConfig] = Field(
+        default_factory=dict,
+        description="Map of CLI tool id to state configuration",
     )
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
@@ -131,7 +150,7 @@ class ExtensionsConfig(BaseModel):
         resolved_path = cls.resolve_config_path(config_path)
         if resolved_path is None:
             # Return empty config if extensions config file is not found
-            return cls(mcp_servers={}, skills={})
+            return cls(mcp_servers={}, skills={}, clis={})
 
         with open(resolved_path, encoding="utf-8") as f:
             config_data = json.load(f)

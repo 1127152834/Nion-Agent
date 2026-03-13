@@ -18,6 +18,7 @@ from src.gateway.routers import (
     artifact_groups,
     artifacts,
     channels,
+    cli,
     config,
     embedding_models,
     evolution,
@@ -262,6 +263,9 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
 
     # Skills API is mounted at /api/skills
     app.include_router(skills.router)
+
+    # CLI API is mounted at /api/cli
+    app.include_router(cli.router)
 
     # Artifacts API is mounted at /api/threads/{thread_id}/artifacts
     app.include_router(artifacts.router)

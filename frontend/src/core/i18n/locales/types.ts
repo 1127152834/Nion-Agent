@@ -644,6 +644,7 @@ export interface Translations {
       memory: string;
       embedding: string;
       tools: string;
+      cliTools: string;
       channels: string;
       skills: string;
       notification: string;

@@ -6,6 +6,7 @@ _ROUTER_MODULES = {
     "artifact_groups",
     "artifacts",
     "channels",
+    "cli",
     "langgraph_proxy",
     "mcp",
     "openviking",

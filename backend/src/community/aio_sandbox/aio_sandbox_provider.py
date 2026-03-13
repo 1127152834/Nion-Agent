@@ -194,6 +194,11 @@ class AioSandboxProvider(SandboxProvider):
             mounts.append(skills_mount)
             logger.info(f"Adding skills mount: {skills_mount}")
 
+        clis_mount = self._get_clis_mount()
+        if clis_mount:
+            mounts.append(clis_mount)
+            logger.info(f"Adding CLI mount: {clis_mount}")
+
         return mounts
 
     @staticmethod
@@ -225,6 +230,19 @@ class AioSandboxProvider(SandboxProvider):
                 return (str(skills_path), container_path, True)  # Read-only for security
         except Exception as e:
             logger.warning(f"Could not setup skills mount: {e}")
+        return None
+
+    @staticmethod
+    def _get_clis_mount() -> tuple[str, str, bool] | None:
+        """Get the managed CLIs directory mount configuration."""
+        try:
+            from src.config.paths import CLIS_VIRTUAL_ROOT, get_paths
+
+            clis_dir = get_paths().clis_root_dir
+            clis_dir.mkdir(parents=True, exist_ok=True)
+            return (str(clis_dir), CLIS_VIRTUAL_ROOT, True)  # Read-only; installs happen outside sandbox.
+        except Exception as e:
+            logger.warning(f"Could not setup CLI mount: {e}")
         return None
 
     # ── Idle timeout management ──────────────────────────────────────────
