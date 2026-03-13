@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeftIcon, BotIcon, OrbitIcon, RadarIcon, SparklesIcon } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { use } from "react";
 import type { ComponentType } from "react";
 
@@ -14,8 +14,10 @@ import { EvolutionReportsViewer } from "@/components/workspace/agents/settings/e
 import { EvolutionSettingsComponent } from "@/components/workspace/agents/settings/evolution-settings";
 import { HeartbeatLogsViewer } from "@/components/workspace/agents/settings/heartbeat-logs";
 import { HeartbeatSettingsComponent } from "@/components/workspace/agents/settings/heartbeat-settings";
+import { AgentSchedulerSettingsSection } from "@/components/workspace/agents/settings/scheduler-settings";
 import { useAgent, useDefaultAgentConfig } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
+import { useAppRouter } from "@/core/navigation";
 import { cn } from "@/lib/utils";
 
 type AgentSettingsSection =
@@ -24,6 +26,7 @@ type AgentSettingsSection =
   | "soul"
   | "identity"
   | "heartbeat"
+  | "scheduler"
   | "evolution"
   | "logs"
   | "reports";
@@ -40,6 +43,7 @@ function normalizeSection(value: string | null): AgentSettingsSection {
     || value === "soul"
     || value === "identity"
     || value === "heartbeat"
+    || value === "scheduler"
     || value === "evolution"
     || value === "logs"
     || value === "reports"
@@ -57,7 +61,7 @@ export default function AgentSettingsPage({
   const { agent_name } = use(params);
   const decodedAgentName = decodeURIComponent(agent_name);
   const isDefaultAgent = decodedAgentName === "_default";
-  const router = useRouter();
+  const router = useAppRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { t } = useI18n();
@@ -109,6 +113,7 @@ export default function AgentSettingsPage({
       icon: OrbitIcon,
       items: [
         { id: "heartbeat", label: copy.tabs.heartbeat },
+        { id: "scheduler", label: copy.tabs.scheduler },
         { id: "evolution", label: copy.tabs.evolution },
       ],
     },
@@ -197,6 +202,7 @@ export default function AgentSettingsPage({
             {activeSection === "basic" ? <BasicSettings agentName={decodedAgentName} /> : null}
             {activeSection === "memory" ? <AgentMemorySection agentName={decodedAgentName} /> : null}
             {activeSection === "heartbeat" ? <HeartbeatSettingsComponent agentName={decodedAgentName} /> : null}
+            {activeSection === "scheduler" ? <AgentSchedulerSettingsSection agentName={decodedAgentName} /> : null}
             {activeSection === "evolution" ? <EvolutionSettingsComponent agentName={decodedAgentName} /> : null}
             {activeSection === "soul" ? <SoulEditor agentName={decodedAgentName} /> : null}
             {activeSection === "identity" ? <IdentityEditor agentName={decodedAgentName} /> : null}

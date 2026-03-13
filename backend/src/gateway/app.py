@@ -26,6 +26,7 @@ from src.gateway.routers import (
     mcp,
     models,
     openviking,
+    processlog,
     retrieval_models,
     runtime_profile,
     runtime_topology,
@@ -161,6 +162,10 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
                 "description": "OpenViking memory retrieval/store/governance APIs",
             },
             {
+                "name": "processlog",
+                "description": "Trace/chat process diagnostics export",
+            },
+            {
                 "name": "skills",
                 "description": "Manage skills and their configurations",
             },
@@ -251,6 +256,9 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
 
     # OpenViking API is mounted at /api/openviking/*
     app.include_router(openviking.router)
+
+    # ProcessLog export API is mounted at /api/processlog/*
+    app.include_router(processlog.router)
 
     # Skills API is mounted at /api/skills
     app.include_router(skills.router)

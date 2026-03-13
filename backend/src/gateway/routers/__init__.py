@@ -9,6 +9,7 @@ _ROUTER_MODULES = {
     "langgraph_proxy",
     "mcp",
     "openviking",
+    "processlog",
     "models",
     "retrieval_models",
     "runtime_profile",

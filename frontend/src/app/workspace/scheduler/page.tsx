@@ -1,5 +1,5 @@
-import { ScheduledTaskManager } from "@/components/workspace/scheduler/task-manager";
+import { SchedulerDashboard } from "@/components/workspace/scheduler/scheduler-dashboard";
 
 export default function SchedulerPage() {
-  return <ScheduledTaskManager />;
+  return <SchedulerDashboard />;
 }

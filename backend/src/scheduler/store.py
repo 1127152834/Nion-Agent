@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from src.config.paths import get_paths
 from src.scheduler.models import ScheduledTask, TaskExecutionRecord
 
 _LOCK = threading.Lock()
+logger = logging.getLogger(__name__)
 
 
 def _scheduler_dir() -> Path:
@@ -46,7 +48,16 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 def load_tasks() -> dict[str, ScheduledTask]:
     with _LOCK:
         raw = _read_json(_tasks_file(), {})
-    return {task_id: ScheduledTask.model_validate(item) for task_id, item in raw.items()}
+    tasks: dict[str, ScheduledTask] = {}
+    for task_id, item in raw.items():
+        try:
+            task = ScheduledTask.model_validate(item)
+        except Exception as exc:  # noqa: BLE001
+            # Breakable upgrade policy: skip invalid legacy entries, never crash on startup.
+            logger.warning("Skip invalid scheduler task %s: %s", task_id, exc)
+            continue
+        tasks[task_id] = task
+    return tasks
 
 
 def save_tasks(tasks: dict[str, ScheduledTask]) -> None:

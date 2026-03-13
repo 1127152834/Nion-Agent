@@ -6,19 +6,46 @@ import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import urlsplit
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from src.config.paths import Paths
+from src.gateway.routers.scheduler import router as scheduler_router
 from src.scheduler.models import AgentStep, ScheduledTask, TriggerConfig, TriggerType, WorkflowStep
 from src.scheduler.service import get_scheduler, shutdown_scheduler
 from src.tools.builtins.scheduler_manage_tools import scheduler_create_task_tool, scheduler_operate_task_tool
 
 
-def _runtime(thread_id: str = "thread-test", timezone: str = "Asia/Shanghai") -> SimpleNamespace:
-    return SimpleNamespace(context={"thread_id": thread_id, "user_timezone": timezone})
+def _make_app() -> FastAPI:
+    app = FastAPI()
+    app.include_router(scheduler_router)
+    return app
+
+
+def _httpx_request_via_test_client(client: TestClient):
+    def _request(method: str, url: str, *, json=None, timeout=None):  # noqa: ANN001, ANN002, ARG001
+        parts = urlsplit(url)
+        path = parts.path
+        if parts.query:
+            path = f"{path}?{parts.query}"
+        return client.request(method, path, json=json)
+
+    return _request
+
+
+def _runtime(
+    thread_id: str = "thread-test",
+    timezone: str = "Asia/Shanghai",
+    agent_name: str = "agent-a",
+) -> SimpleNamespace:
+    return SimpleNamespace(context={"thread_id": thread_id, "user_timezone": timezone, "agent_name": agent_name})
 
 
 def _workflow_task() -> ScheduledTask:
     return ScheduledTask(
+        agent_name="agent-a",
         name="test-task",
         description="for delete test",
         trigger=TriggerConfig(
@@ -50,28 +77,34 @@ def _workflow_task() -> ScheduledTask:
 def test_scheduler_create_task_tool_creates_reminder_with_runtime_timezone(tmp_path):
     paths = Paths(base_dir=tmp_path)
     with patch("src.scheduler.store.get_paths", return_value=paths):
-        scheduler = get_scheduler()
-        scheduler.start()
+        app = _make_app()
+        with TestClient(app) as client:
+            with patch(
+                "src.tools.builtins.scheduler_manage_tools.httpx.request",
+                new=_httpx_request_via_test_client(client),
+            ):
+                scheduler = get_scheduler()
+                scheduler.start()
 
-        raw = scheduler_create_task_tool.func(
-            runtime=_runtime(),
-            name="drink-water",
-            mode="reminder",
-            trigger_type="cron",
-            cron_expression="0 9 * * *",
-            reminder_title="喝水提醒",
-            reminder_message="请喝水",
-        )
-        payload = json.loads(raw)
-        assert payload["success"] is True
-        task_id = payload["data"]["task_id"]
-        created = scheduler.get_task(task_id)
-        assert created is not None
-        assert created.mode.value == "reminder"
-        assert created.trigger.timezone == "Asia/Shanghai"
-        assert created.reminder_message == "请喝水"
+                raw = scheduler_create_task_tool.func(
+                    runtime=_runtime(),
+                    name="drink-water",
+                    mode="reminder",
+                    trigger_type="cron",
+                    cron_expression="0 9 * * *",
+                    reminder_title="喝水提醒",
+                    reminder_message="请喝水",
+                )
+                payload = json.loads(raw)
+                assert payload["success"] is True
+                task_id = payload["data"]["task_id"]
+                created = scheduler.get_task(task_id)
+                assert created is not None
+                assert created.mode.value == "reminder"
+                assert created.trigger.timezone == "Asia/Shanghai"
+                assert created.reminder_message == "请喝水"
 
-        shutdown_scheduler()
+                shutdown_scheduler()
 
 
 def test_scheduler_create_task_missing_cron_returns_clarification(tmp_path):
@@ -97,27 +130,33 @@ def test_scheduler_create_task_missing_cron_returns_clarification(tmp_path):
 def test_scheduler_operate_task_requires_confirmation_for_delete(tmp_path):
     paths = Paths(base_dir=tmp_path)
     with patch("src.scheduler.store.get_paths", return_value=paths):
-        scheduler = get_scheduler()
-        scheduler.start()
-        created = scheduler.add_task(_workflow_task())
+        app = _make_app()
+        with TestClient(app) as client:
+            with patch(
+                "src.tools.builtins.scheduler_manage_tools.httpx.request",
+                new=_httpx_request_via_test_client(client),
+            ):
+                scheduler = get_scheduler()
+                scheduler.start()
+                created = scheduler.add_task(_workflow_task())
 
-        first_raw = scheduler_operate_task_tool.func(
-            task_id=created.id,
-            operation="delete",
-        )
-        first = json.loads(first_raw)
-        assert first["success"] is False
-        assert first["requires_confirmation"] is True
-        token = first["confirmation_token"]
-        assert isinstance(token, str) and token
+                first_raw = scheduler_operate_task_tool.func(
+                    task_id=created.id,
+                    operation="delete",
+                )
+                first = json.loads(first_raw)
+                assert first["success"] is False
+                assert first["requires_confirmation"] is True
+                token = first["confirmation_token"]
+                assert isinstance(token, str) and token
 
-        second_raw = scheduler_operate_task_tool.func(
-            task_id=created.id,
-            operation="delete",
-            confirmation_token=token,
-        )
-        second = json.loads(second_raw)
-        assert second["success"] is True
-        assert scheduler.get_task(created.id) is None
+                second_raw = scheduler_operate_task_tool.func(
+                    task_id=created.id,
+                    operation="delete",
+                    confirmation_token=token,
+                )
+                second = json.loads(second_raw)
+                assert second["success"] is True
+                assert scheduler.get_task(created.id) is None
 
-        shutdown_scheduler()
+                shutdown_scheduler()

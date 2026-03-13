@@ -3,6 +3,7 @@ import { getBackendBaseURL } from "@/core/config";
 import type {
   CreateScheduledTaskRequest,
   ScheduledTask,
+  SchedulerDashboard,
   TaskExecutionRecord,
   UpdateScheduledTaskRequest,
 } from "./types";
@@ -27,8 +28,23 @@ function extractErrorDetail(data: unknown): string | undefined {
   return undefined;
 }
 
-export async function listScheduledTasks(): Promise<ScheduledTask[]> {
-  const response = await fetch(`${getBackendBaseURL()}/api/scheduler/tasks`);
+function withSearchParams(url: string, params: Record<string, string | undefined>) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      search.set(key, value);
+    }
+  }
+  const query = search.toString();
+  return query ? `${url}?${query}` : url;
+}
+
+export async function listScheduledTasks(agentName?: string): Promise<ScheduledTask[]> {
+  const response = await fetch(
+    withSearchParams(`${getBackendBaseURL()}/api/scheduler/tasks`, {
+      agent_name: agentName,
+    }),
+  );
   const payload = (await parseJSONOrNull(response)) as ScheduledTask[] | null;
   if (!response.ok) {
     throw new Error(
@@ -52,6 +68,21 @@ export async function getScheduledTask(taskId: string): Promise<ScheduledTask> {
   }
   if (!payload) {
     throw new Error("Scheduled task not found");
+  }
+  return payload;
+}
+
+export async function getSchedulerDashboard(): Promise<SchedulerDashboard> {
+  const response = await fetch(`${getBackendBaseURL()}/api/scheduler/dashboard`);
+  const payload = (await parseJSONOrNull(response)) as SchedulerDashboard | null;
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to load scheduler dashboard (${response.status})`,
+    );
+  }
+  if (!payload) {
+    throw new Error("Scheduler dashboard not found");
   }
   return payload;
 }

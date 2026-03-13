@@ -4,6 +4,7 @@ import {
   createScheduledTask,
   deleteScheduledTask,
   getScheduledTask,
+  getSchedulerDashboard,
   listScheduledTaskHistory,
   listScheduledTasks,
   runScheduledTaskNow,
@@ -16,11 +17,27 @@ import type {
 
 const SCHEDULER_TASKS_QUERY_KEY = ["scheduler", "tasks"] as const;
 const SCHEDULER_HISTORY_QUERY_KEY = ["scheduler", "history"] as const;
+const SCHEDULER_DASHBOARD_QUERY_KEY = ["scheduler", "dashboard"] as const;
 
-export function useScheduledTasks() {
+export function useSchedulerDashboard() {
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
-    queryKey: SCHEDULER_TASKS_QUERY_KEY,
-    queryFn: () => listScheduledTasks(),
+    queryKey: SCHEDULER_DASHBOARD_QUERY_KEY,
+    queryFn: () => getSchedulerDashboard(),
+  });
+
+  return {
+    dashboard: data ?? null,
+    isLoading,
+    error,
+    refetch,
+    isRefetching,
+  };
+}
+
+export function useScheduledTasks(agentName?: string | null) {
+  const { data, isLoading, error, refetch, isRefetching } = useQuery({
+    queryKey: [...SCHEDULER_TASKS_QUERY_KEY, agentName ?? "all"],
+    queryFn: () => listScheduledTasks(agentName ?? undefined),
   });
 
   return {
@@ -34,7 +51,7 @@ export function useScheduledTasks() {
 
 export function useScheduledTask(taskId: string | null | undefined) {
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: [...SCHEDULER_TASKS_QUERY_KEY, taskId],
+    queryKey: [...SCHEDULER_TASKS_QUERY_KEY, "detail", taskId],
     queryFn: () => getScheduledTask(taskId!),
     enabled: !!taskId,
   });
@@ -47,17 +64,23 @@ export function useScheduledTask(taskId: string | null | undefined) {
   };
 }
 
-export function useCreateScheduledTask() {
+export function useCreateScheduledTask(agentName?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (request: CreateScheduledTaskRequest) => createScheduledTask(request),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: SCHEDULER_DASHBOARD_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: SCHEDULER_TASKS_QUERY_KEY });
+      if (agentName) {
+        void queryClient.invalidateQueries({
+          queryKey: [...SCHEDULER_TASKS_QUERY_KEY, agentName],
+        });
+      }
     },
   });
 }
 
-export function useUpdateScheduledTask() {
+export function useUpdateScheduledTask(agentName?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -68,30 +91,48 @@ export function useUpdateScheduledTask() {
       request: UpdateScheduledTaskRequest;
     }) => updateScheduledTask(taskId, request),
     onSuccess: (_task, { taskId }) => {
+      void queryClient.invalidateQueries({ queryKey: SCHEDULER_DASHBOARD_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: SCHEDULER_TASKS_QUERY_KEY });
+      if (agentName) {
+        void queryClient.invalidateQueries({
+          queryKey: [...SCHEDULER_TASKS_QUERY_KEY, agentName],
+        });
+      }
       void queryClient.invalidateQueries({
-        queryKey: [...SCHEDULER_TASKS_QUERY_KEY, taskId],
+        queryKey: [...SCHEDULER_TASKS_QUERY_KEY, "detail", taskId],
       });
     },
   });
 }
 
-export function useDeleteScheduledTask() {
+export function useDeleteScheduledTask(agentName?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) => deleteScheduledTask(taskId),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: SCHEDULER_DASHBOARD_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: SCHEDULER_TASKS_QUERY_KEY });
+      if (agentName) {
+        void queryClient.invalidateQueries({
+          queryKey: [...SCHEDULER_TASKS_QUERY_KEY, agentName],
+        });
+      }
     },
   });
 }
 
-export function useRunScheduledTaskNow() {
+export function useRunScheduledTaskNow(agentName?: string | null) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (taskId: string) => runScheduledTaskNow(taskId),
     onSuccess: ({ task_id }) => {
+      void queryClient.invalidateQueries({ queryKey: SCHEDULER_DASHBOARD_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: SCHEDULER_TASKS_QUERY_KEY });
+      if (agentName) {
+        void queryClient.invalidateQueries({
+          queryKey: [...SCHEDULER_TASKS_QUERY_KEY, agentName],
+        });
+      }
       void queryClient.invalidateQueries({
         queryKey: [...SCHEDULER_HISTORY_QUERY_KEY, task_id],
       });

@@ -1,4 +1,4 @@
-export type TriggerType = "cron" | "interval" | "once" | "event" | "webhook";
+export type TriggerType = "cron" | "interval" | "once";
 
 export type TaskStatus =
   | "pending"
@@ -7,14 +7,13 @@ export type TaskStatus =
   | "failed"
   | "cancelled";
 
+export type TaskMode = "workflow" | "heartbeat" | "reminder";
+
 export interface TriggerConfig {
   type: TriggerType;
   cron_expression?: string;
   interval_seconds?: number;
   scheduled_time?: string;
-  event_type?: string;
-  event_filters?: Record<string, unknown>;
-  webhook_secret?: string;
   timezone?: string;
 }
 
@@ -52,9 +51,10 @@ export interface RetryPolicy {
 
 export interface ScheduledTask {
   id: string;
+  agent_name: string;
   name: string;
   description?: string | null;
-  mode: "workflow" | "reminder";
+  mode: TaskMode;
   trigger: TriggerConfig;
   steps: WorkflowStep[];
   reminder_title?: string | null;
@@ -76,9 +76,10 @@ export interface ScheduledTask {
 }
 
 export interface CreateScheduledTaskRequest {
+  agent_name: string;
   name: string;
   description?: string;
-  mode?: "workflow" | "reminder";
+  mode?: TaskMode;
   trigger: TriggerConfig;
   steps: WorkflowStep[];
   reminder_title?: string;
@@ -94,9 +95,10 @@ export interface CreateScheduledTaskRequest {
 }
 
 export interface UpdateScheduledTaskRequest {
+  agent_name: string;
   name: string;
   description?: string;
-  mode?: "workflow" | "reminder";
+  mode?: TaskMode;
   trigger: TriggerConfig;
   steps: WorkflowStep[];
   reminder_title?: string;
@@ -112,6 +114,8 @@ export interface UpdateScheduledTaskRequest {
 
 export interface TaskExecutionRecord {
   run_id: string;
+  trace_id?: string | null;
+  thread_id?: string | null;
   task_id: string;
   started_at: string;
   completed_at?: string | null;
@@ -119,4 +123,19 @@ export interface TaskExecutionRecord {
   success: boolean;
   result?: Record<string, unknown> | null;
   error?: string | null;
+}
+
+export interface SchedulerDashboardAgent {
+  agent_name: string;
+  task_count: number;
+  success_rate_24h: number;
+  failed_runs_24h: number;
+}
+
+export interface SchedulerDashboard {
+  agent_count_with_tasks: number;
+  task_count: number;
+  success_rate_24h: number;
+  failed_task_count_24h: number;
+  agents: SchedulerDashboardAgent[];
 }

@@ -7,7 +7,7 @@ import { Toaster } from "sonner";
 
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { RuntimeOnboardingOverlay } from "@/components/workspace/runtime-onboarding-overlay";
-import { SchedulerReminderWatcher } from "@/components/workspace/scheduler/scheduler-reminder-watcher";
+import { SchedulerTaskWatcher } from "@/components/workspace/scheduler/scheduler-task-watcher";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
 
@@ -56,8 +56,7 @@ export default function WorkspaceLayout({
     <JotaiProvider>
       <QueryClientProvider client={queryClient}>
         <RuntimeOnboardingOverlay />
-        <SchedulerReminderWatcher />
-        <RuntimeOnboardingOverlay />
+        <SchedulerTaskWatcher />
         <SidebarProvider
           className="h-screen"
           style={
@@ -74,6 +73,7 @@ export default function WorkspaceLayout({
             {children}
           </SidebarInset>
         </SidebarProvider>
+        <Toaster id="scheduler" position="top-right" />
         <Toaster position="top-center" />
       </QueryClientProvider>
     </JotaiProvider>

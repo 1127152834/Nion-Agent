@@ -2,21 +2,34 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from src.scheduler.models import RetryPolicy, ScheduledTask, TaskExecutionRecord, TaskMode, TriggerConfig, WorkflowStep
+from src.scheduler import store
+from src.scheduler.models import (
+    RetryPolicy,
+    ScheduledTask,
+    TaskExecutionRecord,
+    TaskMode,
+    TriggerConfig,
+    TriggerType,
+    WorkflowStep,
+)
+from src.scheduler.runner import TaskAlreadyRunningError
 from src.scheduler.service import get_scheduler
 
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
+
+TIME_TRIGGER_TYPES = {TriggerType.CRON, TriggerType.INTERVAL, TriggerType.ONCE}
 
 
 class CreateTaskRequest(BaseModel):
     """Create task request payload."""
 
+    agent_name: str
     name: str
     description: str | None = None
     mode: TaskMode = TaskMode.WORKFLOW
@@ -31,12 +44,13 @@ class CreateTaskRequest(BaseModel):
     timeout_seconds: int = Field(default=3600, ge=1, le=86_400)
     retry_policy: RetryPolicy | None = None
     enabled: bool = True
-    created_by: str = "system"
+    created_by: str = "user"
 
 
 class UpdateTaskRequest(BaseModel):
     """Update task request payload."""
 
+    agent_name: str
     name: str
     description: str | None = None
     mode: TaskMode = TaskMode.WORKFLOW
@@ -60,10 +74,19 @@ class DispatchEventRequest(BaseModel):
     payload: dict | None = None
 
 
-class WebhookInvokeRequest(BaseModel):
-    """Webhook invoke payload."""
+class SchedulerDashboardAgentRow(BaseModel):
+    agent_name: str
+    task_count: int
+    success_rate_24h: float
+    failed_runs_24h: int
 
-    payload: dict | None = None
+
+class SchedulerDashboardResponse(BaseModel):
+    agent_count_with_tasks: int
+    task_count: int
+    success_rate_24h: float
+    failed_task_count_24h: int
+    agents: list[SchedulerDashboardAgentRow]
 
 
 def _scheduler_started():
@@ -72,17 +95,110 @@ def _scheduler_started():
     return scheduler
 
 
+def _is_system_task(task: ScheduledTask) -> bool:
+    return task.created_by == "heartbeat" or task.name.startswith("heartbeat:")
+
+
+def _validate_user_task_contract(*, agent_name: str, mode: TaskMode, trigger: TriggerConfig) -> str:
+    resolved_agent_name = agent_name.strip()
+    if not resolved_agent_name:
+        raise HTTPException(status_code=422, detail="agent_name is required")
+    if mode not in {TaskMode.WORKFLOW, TaskMode.REMINDER}:
+        raise HTTPException(
+            status_code=422,
+            detail="Only workflow/reminder modes are supported for user tasks",
+        )
+    if trigger.type not in TIME_TRIGGER_TYPES:
+        raise HTTPException(status_code=422, detail="Only time triggers (cron/interval/once) are supported")
+    return resolved_agent_name
+
+
+def _validate_workflow_steps_agent_binding(agent_name: str, steps: list[WorkflowStep]) -> None:
+    for step in steps:
+        for agent in step.agents:
+            if agent.agent_name != agent_name:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"All workflow agents must match task agent_name ({agent_name})",
+                )
+
+
 @router.get("/tasks", response_model=list[ScheduledTask])
-async def list_tasks() -> list[ScheduledTask]:
+async def list_tasks(agent_name: str | None = None) -> list[ScheduledTask]:
     scheduler = _scheduler_started()
-    return scheduler.list_tasks()
+    tasks = [task for task in scheduler.list_tasks() if not _is_system_task(task)]
+    if agent_name is not None:
+        tasks = [task for task in tasks if task.agent_name == agent_name]
+    return tasks
+
+
+@router.get("/dashboard", response_model=SchedulerDashboardResponse)
+async def get_dashboard() -> SchedulerDashboardResponse:
+    scheduler = _scheduler_started()
+    tasks = [task for task in scheduler.list_tasks() if not _is_system_task(task)]
+    task_map = {task.id: task for task in tasks}
+
+    per_agent: dict[str, dict[str, int]] = {}
+    for task in tasks:
+        bucket = per_agent.setdefault(
+            task.agent_name,
+            {"task_count": 0, "runs_total": 0, "runs_success": 0, "runs_failed": 0},
+        )
+        bucket["task_count"] += 1
+
+    since = datetime.now(UTC) - timedelta(hours=24)
+    failed_task_ids: set[str] = set()
+    total_runs = 0
+    success_runs = 0
+
+    for task_id, records in store.load_history().items():
+        task = task_map.get(task_id)
+        if task is None:
+            continue
+        bucket = per_agent.setdefault(
+            task.agent_name,
+            {"task_count": 0, "runs_total": 0, "runs_success": 0, "runs_failed": 0},
+        )
+        for record in records:
+            if record.started_at < since:
+                continue
+            total_runs += 1
+            bucket["runs_total"] += 1
+            if record.success:
+                success_runs += 1
+                bucket["runs_success"] += 1
+            else:
+                bucket["runs_failed"] += 1
+                failed_task_ids.add(task_id)
+
+    agents = [
+        SchedulerDashboardAgentRow(
+            agent_name=agent_name,
+            task_count=bucket["task_count"],
+            success_rate_24h=(bucket["runs_success"] / bucket["runs_total"]) if bucket["runs_total"] else 0.0,
+            failed_runs_24h=bucket["runs_failed"],
+        )
+        for agent_name, bucket in sorted(per_agent.items(), key=lambda item: item[0])
+        if bucket["task_count"] > 0
+    ]
+
+    return SchedulerDashboardResponse(
+        agent_count_with_tasks=len(agents),
+        task_count=len(tasks),
+        success_rate_24h=(success_runs / total_runs) if total_runs else 0.0,
+        failed_task_count_24h=len(failed_task_ids),
+        agents=agents,
+    )
 
 
 @router.post("/tasks", response_model=ScheduledTask, status_code=201)
 async def create_task(req: CreateTaskRequest) -> ScheduledTask:
     scheduler = _scheduler_started()
+    agent_name = _validate_user_task_contract(agent_name=req.agent_name, mode=req.mode, trigger=req.trigger)
+    _validate_workflow_steps_agent_binding(agent_name, req.steps)
 
     task = ScheduledTask(
+        agent_name=agent_name,
         name=req.name,
         description=req.description,
         mode=req.mode,
@@ -123,8 +239,14 @@ async def update_task(task_id: str, req: UpdateTaskRequest) -> ScheduledTask:
     if current is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
 
+    agent_name = _validate_user_task_contract(agent_name=req.agent_name, mode=req.mode, trigger=req.trigger)
+    if current.agent_name != agent_name:
+        raise HTTPException(status_code=409, detail="agent_name cannot be changed")
+    _validate_workflow_steps_agent_binding(agent_name, req.steps)
+
     updated = ScheduledTask(
         id=current.id,
+        agent_name=current.agent_name,
         name=req.name,
         description=req.description,
         mode=req.mode,
@@ -175,8 +297,8 @@ async def run_task_now(task_id: str) -> dict:
         }
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
-    except TimeoutError as exc:
-        raise HTTPException(status_code=504, detail=str(exc))
+    except TaskAlreadyRunningError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
 
 
 @router.get("/tasks/{task_id}/history", response_model=list[TaskExecutionRecord])

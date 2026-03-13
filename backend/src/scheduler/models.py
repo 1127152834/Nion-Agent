@@ -37,6 +37,7 @@ class TaskMode(str, Enum):
 
     WORKFLOW = "workflow"
     REMINDER = "reminder"
+    HEARTBEAT = "heartbeat"
 
 
 class CompletionCriteriaType(str, Enum):
@@ -137,6 +138,7 @@ class ScheduledTask(BaseModel):
     """Scheduled task definition and runtime state."""
 
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
+    agent_name: str
     name: str
     description: str | None = None
 
@@ -174,6 +176,9 @@ class ScheduledTask(BaseModel):
                 raise ValueError("reminder_message is required for reminder mode")
             if self.steps:
                 raise ValueError("steps must be empty for reminder mode")
+        if self.mode == TaskMode.HEARTBEAT:
+            if self.steps:
+                raise ValueError("steps must be empty for heartbeat mode")
         return self
 
 
@@ -181,6 +186,10 @@ class TaskExecutionRecord(BaseModel):
     """A historical execution record for one task run."""
 
     run_id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
+    # Correlation id for processlog export (default: same as run_id).
+    trace_id: str | None = None
+    # Optional chat thread id for this run (workflow mode only by default).
+    thread_id: str | None = None
     task_id: str
     started_at: datetime
     completed_at: datetime | None = None

@@ -3,18 +3,30 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
+from urllib.parse import quote
 
-from langchain.tools import ToolRuntime, tool
+import httpx
+from src.tools.builtins.langchain_compat import ToolRuntime, tool
 from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
 from src.scheduler.models import AgentStep, ScheduledTask, TaskMode, TriggerConfig, WorkflowStep
-from src.scheduler.service import get_scheduler
 from src.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
 from src.tools.builtins.management_response import build_action_card, build_management_response
+
+
+def _runtime_agent_name(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
+    if runtime is None:
+        return "_default"
+    context = runtime.context or {}
+    value = context.get("agent_name") if isinstance(context, dict) else None
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return "_default"
 
 
 def _runtime_timezone(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
@@ -27,6 +39,64 @@ def _runtime_timezone(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str
     return "UTC"
 
 
+def _resolve_gateway_base_url() -> str:
+    """Resolve Gateway base URL for scheduler CRUD from LangGraph process.
+
+    NOTE: LangGraph Server and Gateway are separate processes in desktop mode.
+    Scheduler tasks must be created via Gateway API so the UI can see them.
+    """
+    env_value = (os.getenv("NION_GATEWAY_BASE_URL") or "").strip()
+    if env_value:
+        return env_value.rstrip("/")
+
+    # Desktop runtime writes ports into config.db; reuse it to avoid hard-coding 8001.
+    if (os.getenv("NION_DESKTOP_RUNTIME") or "").strip():
+        try:
+            from src.config.config_repository import ConfigRepository
+
+            config, _, _ = ConfigRepository().read()
+            desktop = config.get("desktop") if isinstance(config, dict) else None
+            runtime_ports = desktop.get("runtime_ports") if isinstance(desktop, dict) else None
+            gateway_port = runtime_ports.get("gateway_port") if isinstance(runtime_ports, dict) else None
+            if isinstance(gateway_port, int) and 1 <= gateway_port <= 65535:
+                return f"http://127.0.0.1:{gateway_port}"
+        except Exception:
+            pass
+
+    gateway_port = (os.getenv("GATEWAY_PORT") or "").strip()
+    if gateway_port.isdigit():
+        return f"http://127.0.0.1:{gateway_port}"
+
+    return "http://127.0.0.1:8001"
+
+
+def _gateway_request_json(
+    method: str,
+    path: str,
+    *,
+    payload: dict[str, Any] | None = None,
+    timeout_seconds: float = 10.0,
+) -> Any:
+    base_url = _resolve_gateway_base_url()
+    url = f"{base_url}{path}"
+    try:
+        response = httpx.request(method, url, json=payload, timeout=timeout_seconds)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"无法连接调度服务（{exc}）") from exc
+
+    data: Any = None
+    if response.content:
+        try:
+            data = response.json()
+        except Exception:
+            data = None
+
+    if response.status_code >= 400:
+        detail = data.get("detail") if isinstance(data, dict) else None
+        raise RuntimeError(detail or f"调度服务返回错误：HTTP {response.status_code}")
+    return data
+
+
 def _parse_scheduled_time(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -36,7 +106,12 @@ def _parse_scheduled_time(value: str | None) -> datetime | None:
     return datetime.fromisoformat(normalized)
 
 
-def _build_workflow_steps(workflow_prompt: str | None, workflow_steps_json: str | None) -> list[WorkflowStep]:
+def _build_workflow_steps(
+    workflow_prompt: str | None,
+    workflow_steps_json: str | None,
+    *,
+    task_agent_name: str,
+) -> list[WorkflowStep]:
     if workflow_steps_json:
         raw = json.loads(workflow_steps_json)
         if not isinstance(raw, list):
@@ -51,7 +126,7 @@ def _build_workflow_steps(workflow_prompt: str | None, workflow_steps_json: str 
             depends_on=[],
             agents=[
                 AgentStep(
-                    agent_name="general-purpose",
+                    agent_name=task_agent_name,
                     prompt=workflow_prompt.strip(),
                     timeout_seconds=300,
                     retry_on_failure=False,
@@ -114,9 +189,6 @@ def scheduler_create_task_tool(
     - Reminder mode (lightweight, no LLM workflow execution)
     - Workflow mode (single or multi-step execution)
     """
-    scheduler = get_scheduler()
-    scheduler.start()
-
     if not name.strip():
         return _build_clarification_response(
             message="创建失败：缺少任务名称。",
@@ -153,6 +225,7 @@ def scheduler_create_task_tool(
         )
 
     effective_timezone = (timezone or _runtime_timezone(runtime)).strip() or "UTC"
+    task_agent_name = _runtime_agent_name(runtime)
     created_by = "chat-user"
     if runtime is not None and isinstance(runtime.context, dict):
         created_by = str(runtime.context.get("thread_id") or "chat-user")
@@ -184,7 +257,15 @@ def scheduler_create_task_tool(
     task_mode = TaskMode.REMINDER if mode == "reminder" else TaskMode.WORKFLOW
 
     try:
-        steps = _build_workflow_steps(workflow_prompt, workflow_steps_json) if task_mode == TaskMode.WORKFLOW else []
+        steps = (
+            _build_workflow_steps(
+                workflow_prompt,
+                workflow_steps_json,
+                task_agent_name=task_agent_name,
+            )
+            if task_mode == TaskMode.WORKFLOW
+            else []
+        )
     except Exception as exc:  # noqa: BLE001
         return build_management_response(
             success=False,
@@ -203,36 +284,40 @@ def scheduler_create_task_tool(
     reminder_header = reminder_title or name
 
     try:
-        task = ScheduledTask(
-            name=name.strip(),
-            description=description,
-            mode=task_mode,
-            trigger=trigger,
-            steps=steps,
-            reminder_title=reminder_header if task_mode == TaskMode.REMINDER else None,
-            reminder_message=reminder_text if task_mode == TaskMode.REMINDER else None,
-            created_by=created_by,
-            created_at=datetime.now(UTC),
-            enabled=True,
+        created_payload = _gateway_request_json(
+            "POST",
+            "/api/scheduler/tasks",
+            payload={
+                "agent_name": task_agent_name,
+                "name": name.strip(),
+                "description": description,
+                "mode": task_mode.value,
+                "trigger": trigger.model_dump(mode="json"),
+                "steps": [step.model_dump(mode="json") for step in steps],
+                "reminder_title": reminder_header if task_mode == TaskMode.REMINDER else None,
+                "reminder_message": reminder_text if task_mode == TaskMode.REMINDER else None,
+                "enabled": True,
+                "created_by": created_by,
+            },
         )
-        created = scheduler.add_task(task)
+        created = ScheduledTask.model_validate(created_payload)
     except Exception as exc:  # noqa: BLE001
         return build_management_response(
             success=False,
             message=f"创建失败：{exc}",
-            data={"stage": "persistence"},
+            data={"stage": "gateway_request"},
         )
 
     next_run = created.next_run_at.isoformat() if created.next_run_at else "-"
     card = build_action_card(
         title="定时任务已创建",
-        description=f"{created.name}（{created.mode.value}）\n下次执行：{next_run}",
+        description=f"{created.name}（{created.mode.value}）\n智能体：{task_agent_name}\n下次执行：{next_run}",
         status="success",
         actions=[
             {
                 "kind": "link",
                 "label": "前往定时任务",
-                "href": "/workspace/scheduler",
+                "href": f"/workspace/agents/{quote(task_agent_name)}/settings?section=scheduler",
             }
         ],
     )
@@ -256,15 +341,17 @@ def scheduler_operate_task_tool(
     confirmation_token: str | None = None,
 ) -> str:
     """Run or manage existing scheduler task with confirmation for destructive actions."""
-    scheduler = get_scheduler()
-    scheduler.start()
-
-    task = scheduler.get_task(task_id)
-    if task is None:
+    try:
+        task_payload = _gateway_request_json(
+            "GET",
+            f"/api/scheduler/tasks/{task_id}",
+        )
+        task = ScheduledTask.model_validate(task_payload)
+    except Exception as exc:  # noqa: BLE001
         return build_management_response(
             success=False,
-            message=f"任务不存在：{task_id}",
-            data={"task_id": task_id},
+            message=f"任务不存在或调度服务不可用：{exc}",
+            data={"task_id": task_id, "stage": "gateway_request"},
         )
 
     destructive = operation in {"disable", "delete"}
@@ -299,23 +386,51 @@ def scheduler_operate_task_tool(
 
     try:
         if operation == "run":
-            record = scheduler.run_task_now(task_id)
+            record = _gateway_request_json(
+                "POST",
+                f"/api/scheduler/tasks/{task_id}/run",
+            )
             return build_management_response(
                 success=True,
-                message=f"任务 {task_id} 已执行。",
-                data={"task_id": task_id, "run_id": record.run_id, "status": record.status.value},
+                message=f"任务 {task_id} 已触发执行。",
+                data={"task_id": task_id, "run_id": record.get("run_id"), "status": record.get("status")},
                 ui_card=build_action_card(
-                    title="任务已执行",
-                    description=f"{task.name} 已触发执行。",
+                    title="任务已触发",
+                    description=f"{task.name} 已触发执行（run_id: {record.get('run_id') or '-'}）。",
                     status="success",
-                    actions=[{"kind": "link", "label": "前往定时任务", "href": "/workspace/scheduler"}],
+                    actions=[
+                        {
+                            "kind": "link",
+                            "label": "前往定时任务",
+                            "href": f"/workspace/agents/{quote(task.agent_name)}/settings?section=scheduler",
+                        }
+                    ],
                 ),
             )
 
         if operation in {"enable", "disable"}:
             enabled = operation == "enable"
-            updated = task.model_copy(update={"enabled": enabled})
-            scheduler.update_task(task_id, updated)
+            _gateway_request_json(
+                "PUT",
+                f"/api/scheduler/tasks/{task_id}",
+                payload={
+                    "agent_name": task.agent_name,
+                    "name": task.name,
+                    "description": task.description,
+                    "mode": task.mode.value,
+                    "trigger": task.trigger.model_dump(mode="json"),
+                    "steps": [step.model_dump(mode="json") for step in task.steps],
+                    "reminder_title": task.reminder_title,
+                    "reminder_message": task.reminder_message,
+                    "on_complete": task.on_complete,
+                    "on_failure": task.on_failure,
+                    "notification_webhook": task.notification_webhook,
+                    "max_concurrent_steps": task.max_concurrent_steps,
+                    "timeout_seconds": task.timeout_seconds,
+                    "retry_policy": task.retry_policy.model_dump(mode="json") if task.retry_policy else None,
+                    "enabled": enabled,
+                },
+            )
             return build_management_response(
                 success=True,
                 message=f"任务 {task_id} 已{'启用' if enabled else '禁用'}。",
@@ -323,13 +438,10 @@ def scheduler_operate_task_tool(
             )
 
         if operation == "delete":
-            deleted = scheduler.remove_task(task_id)
-            if not deleted:
-                return build_management_response(
-                    success=False,
-                    message=f"任务不存在：{task_id}",
-                    data={"task_id": task_id},
-                )
+            _gateway_request_json(
+                "DELETE",
+                f"/api/scheduler/tasks/{task_id}",
+            )
             return build_management_response(
                 success=True,
                 message=f"任务 {task_id} 已删除。",
@@ -339,7 +451,7 @@ def scheduler_operate_task_tool(
         return build_management_response(
             success=False,
             message=f"操作失败：{exc}",
-            data={"task_id": task_id, "operation": operation},
+            data={"task_id": task_id, "operation": operation, "stage": "gateway_request"},
         )
 
     return build_management_response(
