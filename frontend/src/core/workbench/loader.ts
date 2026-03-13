@@ -14,6 +14,7 @@ import type {
   WorkbenchPluginManifestV2,
   WorkbenchTargetRule,
 } from "./types";
+import { isSemver, normalizeSemver } from "./versioning";
 
 interface PluginTestBackendStepResult {
   id: string;
@@ -71,27 +72,68 @@ function shouldReadAsText(path: string): boolean {
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < bytes.length; i += 1) {
-    binary += String.fromCharCode(bytes[i] ?? 0);
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
   }
   return btoa(binary);
 }
 
-let cachedPluginTestThreadId: string | null = null;
-
-async function pluginTestThreadExists(threadId: string): Promise<boolean> {
-  try {
-    const response = await fetch(
-      `${getBackendBaseURL()}/api/langgraph/threads/${encodeURIComponent(threadId)}`,
-    );
-    if (response.status === 404 || response.status === 422) {
-      return false;
-    }
-    return response.ok;
-  } catch {
-    return false;
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
   }
+  return bytes;
 }
+
+function normalizeManifest(raw: Partial<WorkbenchPluginManifestV2>): WorkbenchPluginManifestV2 {
+  return {
+    ...raw,
+    id: String(raw.id ?? "").trim(),
+    name: String(raw.name ?? "").trim(),
+    version: normalizeSemver(raw.version, "0.1.0"),
+    entry: String(raw.entry ?? "").trim(),
+    runtime: "iframe",
+    description: typeof raw.description === "string" ? raw.description : undefined,
+    targets: Array.isArray(raw.targets) ? raw.targets : undefined,
+    capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : undefined,
+    fixtures: Array.isArray(raw.fixtures) ? raw.fixtures : undefined,
+    contributions: raw.contributions,
+    testSpec: raw.testSpec,
+    docs: raw.docs,
+    verification: raw.verification,
+    provenance: raw.provenance,
+    ui: raw.ui,
+  };
+}
+
+function normalizeInstalledPlugin(
+  pluginId: string,
+  raw: Partial<InstalledPlugin>,
+): InstalledPlugin {
+  const manifest = normalizeManifest(raw.manifest ?? {});
+  const resolvedVersion = normalizeSemver(raw.version ?? manifest.version, manifest.version);
+  manifest.version = resolvedVersion;
+  return {
+    manifest,
+    version: resolvedVersion,
+    path: typeof raw.path === "string" && raw.path.trim()
+      ? raw.path
+      : `~/.nion/workbench-plugins/${pluginId || manifest.id}`,
+    enabled: raw.enabled ?? true,
+    installedAt: typeof raw.installedAt === "string" && raw.installedAt.trim()
+      ? raw.installedAt
+      : new Date().toISOString(),
+    verified: raw.verified,
+    lastTestReport: raw.lastTestReport ?? null,
+    pluginStudioSessionId: raw.pluginStudioSessionId,
+    releaseNotes: raw.releaseNotes,
+    publishedAt: raw.publishedAt,
+  };
+}
+
+let cachedPluginTestThreadId: string | null = null;
 
 /**
  * Ensure a hidden sandbox thread exists for workbench plugin tests.
@@ -99,11 +141,7 @@ async function pluginTestThreadExists(threadId: string): Promise<boolean> {
  */
 export async function ensurePluginTestThreadId(): Promise<string> {
   if (cachedPluginTestThreadId) {
-    const exists = await pluginTestThreadExists(cachedPluginTestThreadId);
-    if (exists) {
-      return cachedPluginTestThreadId;
-    }
-    cachedPluginTestThreadId = null;
+    return cachedPluginTestThreadId;
   }
 
   // Create a hidden sandbox thread so commandSteps can run without a chat thread.
@@ -138,7 +176,7 @@ export async function loadPluginPackage(file: File): Promise<{
   }
 
   const manifestText = await manifestFile.async("text");
-  const manifest = JSON.parse(manifestText) as WorkbenchPluginManifestV2;
+  const manifest = normalizeManifest(JSON.parse(manifestText) as Partial<WorkbenchPluginManifestV2>);
   validateManifest(manifest);
 
   const files = new Map<string, WorkbenchPackageFile>();
@@ -192,6 +230,9 @@ function validateManifest(manifest: WorkbenchPluginManifestV2): void {
   if (!manifest.name || typeof manifest.name !== "string") {
     throw new Error("manifest.name is required and must be a string");
   }
+  if (!manifest.version || !isSemver(manifest.version)) {
+    throw new Error("manifest.version must be a semver string like 0.1.0");
+  }
   if (!manifest.entry || typeof manifest.entry !== "string") {
     throw new Error("manifest.entry is required and must be a string");
   }
@@ -203,6 +244,15 @@ function validateManifest(manifest: WorkbenchPluginManifestV2): void {
   }
   if (manifest.fixtures && !Array.isArray(manifest.fixtures)) {
     throw new Error("manifest.fixtures must be an array");
+  }
+  if (manifest.ui !== undefined && (manifest.ui === null || typeof manifest.ui !== "object")) {
+    throw new Error("manifest.ui must be an object");
+  }
+  if (typeof manifest.ui?.initialWidthPercent === "number") {
+    const width = manifest.ui.initialWidthPercent;
+    if (!Number.isFinite(width) || width < 10 || width > 90) {
+      throw new Error("manifest.ui.initialWidthPercent must be a number between 10 and 90");
+    }
   }
 }
 
@@ -310,6 +360,7 @@ export async function installPlugin(
 
   const installed: InstalledPlugin = {
     manifest,
+    version: manifest.version,
     path: pluginPath,
     enabled: true,
     installedAt: new Date().toISOString(),
@@ -350,6 +401,49 @@ export async function getInstalledPluginFiles(pluginId: string): Promise<Map<str
 
 export async function getInstalledPluginMetadataById(pluginId: string): Promise<InstalledPlugin | null> {
   return getInstalledPluginMetadata(pluginId);
+}
+
+export async function buildPluginPackageFile(params: {
+  manifest: WorkbenchPluginManifestV2;
+  files: Map<string, WorkbenchPackageFile>;
+  filename?: string;
+}): Promise<File> {
+  const zip = new JSZip();
+  zip.file("manifest.json", `${JSON.stringify(params.manifest, null, 2)}\n`);
+  for (const [path, file] of params.files.entries()) {
+    if (!path || path === "manifest.json") {
+      continue;
+    }
+    if (file.encoding === "text") {
+      zip.file(path, file.content);
+      continue;
+    }
+    zip.file(path, base64ToBytes(file.content));
+  }
+  const blob = await zip.generateAsync({
+    type: "blob",
+    compression: "DEFLATE",
+    compressionOptions: { level: 9 },
+  });
+  return new File([blob], params.filename ?? `${params.manifest.id}.nwp`, {
+    type: "application/zip",
+  });
+}
+
+export async function exportInstalledPluginPackage(pluginId: string): Promise<File> {
+  const [metadata, files] = await Promise.all([
+    getInstalledPluginMetadata(pluginId),
+    getPluginFiles(pluginId),
+  ]);
+  if (!metadata) {
+    throw new Error(`Plugin ${pluginId} not found`);
+  }
+  const filename = `${metadata.manifest.id}-v${metadata.version}.nwp`;
+  return buildPluginPackageFile({
+    manifest: metadata.manifest,
+    files,
+    filename,
+  });
 }
 
 function runAssertion(
@@ -499,11 +593,27 @@ const DB_VERSION = 3;
 const STORE_FILES = "plugin-files";
 const STORE_METADATA = "plugin-metadata";
 
+function toError(value: unknown, fallback: string): Error {
+  if (value instanceof Error) {
+    return value;
+  }
+  if (value && typeof value === "object" && "message" in value) {
+    const message = (value as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return new Error(message);
+    }
+  }
+  if (typeof value === "string" && value.trim()) {
+    return new Error(value);
+  }
+  return new Error(fallback);
+}
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error, "Failed to open workbench plugin database"));
     request.onsuccess = () => resolve(request.result);
 
     request.onupgradeneeded = (event) => {
@@ -532,7 +642,7 @@ async function savePluginFiles(
   await new Promise<void>((resolve, reject) => {
     const request = store.put(filesObj, pluginId);
     request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error, "Failed to save workbench plugin files"));
   });
 
   db.close();
@@ -575,8 +685,8 @@ async function getPluginFiles(pluginId: string): Promise<Map<string, WorkbenchPa
 
   const filesObj = await new Promise<Record<string, unknown>>((resolve, reject) => {
     const request = store.get(pluginId);
-    request.onsuccess = () => resolve(request.result || {});
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve((request.result ?? {}) as Record<string, unknown>);
+    request.onerror = () => reject(toError(request.error, "Failed to load workbench plugin files"));
   });
 
   db.close();
@@ -596,7 +706,7 @@ async function deletePluginFiles(pluginId: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = store.delete(pluginId);
     request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error, "Failed to delete workbench plugin files"));
   });
 
   db.close();
@@ -605,14 +715,15 @@ async function deletePluginFiles(pluginId: string): Promise<void> {
 async function saveInstalledPluginMetadata(
   installed: InstalledPlugin,
 ): Promise<void> {
+  const normalized = normalizeInstalledPlugin(installed.manifest.id, installed);
   const db = await openDB();
   const tx = db.transaction(STORE_METADATA, "readwrite");
   const store = tx.objectStore(STORE_METADATA);
 
   await new Promise<void>((resolve, reject) => {
-    const request = store.put(installed, installed.manifest.id);
+    const request = store.put(normalized, normalized.manifest.id);
     request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error, "Failed to save workbench plugin metadata"));
   });
 
   db.close();
@@ -625,15 +736,18 @@ async function getInstalledPluginMetadata(
   const tx = db.transaction(STORE_METADATA, "readonly");
   const store = tx.objectStore(STORE_METADATA);
 
-  const metadata = await new Promise<InstalledPlugin | null>((resolve, reject) => {
+  const metadata = await new Promise<Partial<InstalledPlugin> | null>((resolve, reject) => {
     const request = store.get(pluginId);
-    request.onsuccess = () => resolve(request.result || null);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve((request.result ?? null) as Partial<InstalledPlugin> | null);
+    request.onerror = () => reject(toError(request.error, "Failed to load workbench plugin metadata"));
   });
 
   db.close();
 
-  return metadata;
+  if (!metadata) {
+    return null;
+  }
+  return normalizeInstalledPlugin(pluginId, metadata);
 }
 
 async function deleteInstalledPluginMetadata(pluginId: string): Promise<void> {
@@ -644,7 +758,7 @@ async function deleteInstalledPluginMetadata(pluginId: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const request = store.delete(pluginId);
     request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(toError(request.error, "Failed to delete workbench plugin metadata"));
   });
 
   db.close();
@@ -672,7 +786,10 @@ export async function updateInstalledPluginMetadata(
         return;
       }
 
-      const updated = { ...existing, ...updates };
+      const updated = normalizeInstalledPlugin(pluginId, {
+        ...(existing as Partial<InstalledPlugin>),
+        ...updates,
+      });
       const putRequest = store.put(updated, pluginId);
 
       putRequest.onsuccess = () => {
@@ -680,13 +797,13 @@ export async function updateInstalledPluginMetadata(
         db.close();
       };
       putRequest.onerror = () => {
-        reject(putRequest.error);
+        reject(toError(putRequest.error, "Failed to update workbench plugin metadata"));
         db.close();
       };
     };
 
     getRequest.onerror = () => {
-      reject(getRequest.error);
+      reject(toError(getRequest.error, "Failed to load workbench plugin metadata for update"));
       db.close();
     };
   });
@@ -700,13 +817,15 @@ export async function listInstalledPlugins(): Promise<InstalledPlugin[]> {
   const tx = db.transaction(STORE_METADATA, "readonly");
   const store = tx.objectStore(STORE_METADATA);
 
-  const plugins = await new Promise<InstalledPlugin[]>((resolve, reject) => {
+  const plugins = await new Promise<Array<Partial<InstalledPlugin>>>((resolve, reject) => {
     const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve((request.result ?? []) as Array<Partial<InstalledPlugin>>);
+    request.onerror = () => reject(toError(request.error, "Failed to list workbench plugins"));
   });
 
   db.close();
 
-  return plugins;
+  return plugins
+    .map((plugin) => normalizeInstalledPlugin(String(plugin.manifest?.id ?? ""), plugin))
+    .filter((plugin) => Boolean(plugin.manifest.id));
 }

@@ -151,6 +151,9 @@ export function useThreadStream({
         onStart?.(meta.thread_id);
         startedRef.current = true;
       }
+      // Refresh sidebar/history as soon as a thread is actually created,
+      // instead of waiting for the whole run to finish.
+      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
     },
     onLangChainEvent(event) {
       if (event.event === "on_tool_end") {
@@ -216,6 +219,14 @@ export function useThreadStream({
           (item): item is NonNullable<PromptInputMessage["implicitMentions"]>[number] =>
             Boolean(item?.mention && item?.kind && item?.value),
         ) ?? [];
+      const requestedSkills = Array.from(
+        new Set(
+          implicitMentions
+            .filter((item) => item.kind === "skill")
+            .map((item) => item.value.trim())
+            .filter(Boolean),
+        ),
+      );
 
       // Capture current count before showing optimistic messages
       prevMsgCountRef.current = thread.messages.length;
@@ -384,6 +395,7 @@ export function useThreadStream({
           subagent_enabled: context.mode === "ultra",
           user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           thread_id: threadId,
+          ...(requestedSkills.length > 0 ? { requested_skills: requestedSkills } : {}),
         };
 
         const messageAdditionalKwargs: Record<string, unknown> = {};
@@ -466,7 +478,7 @@ export function useThreads(
     limit: 50,
     sortBy: "updated_at",
     sortOrder: "desc",
-    select: ["thread_id", "updated_at", "values"],
+    select: ["thread_id", "created_at", "updated_at", "status", "values"],
   },
 ) {
   const apiClient = getAPIClient();

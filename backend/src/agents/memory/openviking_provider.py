@@ -52,6 +52,27 @@ class OpenVikingMemoryProvider:
         self._runtime.queue_update(request)
         return True
 
+    def write_conversation_update(
+        self,
+        *,
+        thread_id: str,
+        messages: list[Any],
+        agent_name: str | None = None,
+        write_source: str = "auto",
+        explicit_write: bool = False,
+        trace_id: str | None = None,
+        chat_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._runtime.write_memory_graph(
+            thread_id=thread_id,
+            messages=messages,
+            agent_name=agent_name,
+            write_source=write_source,
+            explicit_write=explicit_write,
+            trace_id=trace_id,
+            chat_id=chat_id,
+        )
+
     # ------------------------------------------------------------------
     # OpenViking helper APIs used by middleware/router/tools
     # ------------------------------------------------------------------
@@ -91,6 +112,15 @@ class OpenVikingMemoryProvider:
 
     def get_retrieval_status(self, *, agent_name: str | None = None) -> dict[str, Any]:
         return self._runtime.get_retrieval_status(agent_name=agent_name)
+
+    def explain_query(self, *, query: str, limit: int = 8, agent_name: str | None = None) -> dict[str, Any]:
+        return self._runtime.explain_query(query=query, limit=limit, agent_name=agent_name)
+
+    def rebuild_from_manifest(self, *, agent_name: str | None = None) -> dict[str, Any]:
+        return self._runtime.rebuild_from_manifest(agent_name=agent_name)
+
+    def get_manifest_revision(self, *, agent_name: str | None = None) -> int:
+        return self._runtime.get_manifest_revision(agent_name=agent_name)
 
     def reindex_vectors(self, *, include_agents: bool = True) -> dict[str, Any]:
         return self._runtime.reindex_vectors(include_agents=include_agents)

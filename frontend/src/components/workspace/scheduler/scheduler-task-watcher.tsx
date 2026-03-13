@@ -4,11 +4,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
+<<<<<<< Updated upstream
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useNotification } from "@/core/notification/hooks";
 import type { ScheduledTask } from "@/core/scheduler";
 
+=======
+import { useI18n } from "@/core/i18n/hooks";
+import { useNotification } from "@/core/notification/hooks";
+import { listScheduledTasks } from "@/core/scheduler";
+import type { ScheduledTask } from "@/core/scheduler";
+
+const POLL_INTERVAL_MS = 3_000;
+>>>>>>> Stashed changes
 const TASKS_QUERY_KEY_PREFIX = ["scheduler", "tasks"] as const;
 const HISTORY_QUERY_KEY_PREFIX = ["scheduler", "history"] as const;
 const DASHBOARD_QUERY_KEY = ["scheduler", "dashboard"] as const;
@@ -87,6 +96,7 @@ function errorOf(task: ScheduledTask): string | null {
   return null;
 }
 
+<<<<<<< Updated upstream
 type SchedulerSnapshotEvent = {
   timestamp?: string;
   tasks?: ScheduledTask[];
@@ -140,6 +150,8 @@ function removeTask(list: ScheduledTask[] | undefined, taskId: string): Schedule
   return previous.filter((item) => item.id !== taskId);
 }
 
+=======
+>>>>>>> Stashed changes
 export function SchedulerTaskWatcher() {
   const { t } = useI18n();
   const initializedRef = useRef(false);
@@ -148,6 +160,7 @@ export function SchedulerTaskWatcher() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+<<<<<<< Updated upstream
     let disposed = false;
     let reconnectTimer: number | null = null;
     let source: EventSource | null = null;
@@ -429,6 +442,116 @@ export function SchedulerTaskWatcher() {
         window.clearTimeout(reconnectTimer);
       }
       source?.close();
+=======
+    let cancelled = false;
+
+    const poll = async () => {
+      try {
+        const tasks = await listScheduledTasks();
+        if (cancelled) {
+          return;
+        }
+
+        // Keep react-query caches in sync so scheduler pages update without manual refresh.
+        queryClient.setQueryData([...TASKS_QUERY_KEY_PREFIX, "all"], tasks);
+        const perAgent: Record<string, ScheduledTask[]> = {};
+        for (const task of tasks) {
+          const bucket = (perAgent[task.agent_name] ??= []);
+          bucket.push(task);
+        }
+        for (const [agentName, agentTasks] of Object.entries(perAgent)) {
+          queryClient.setQueryData([...TASKS_QUERY_KEY_PREFIX, agentName], agentTasks);
+        }
+
+        const nextSeen: Record<string, string> = {};
+        for (const task of tasks) {
+          nextSeen[task.id] = signatureOf(task);
+        }
+
+        if (!initializedRef.current) {
+          initializedRef.current = true;
+          lastSeenRef.current = nextSeen;
+          return;
+        }
+
+        for (const task of tasks) {
+          const nextSignature = nextSeen[task.id];
+          const previousSignature = lastSeenRef.current[task.id];
+          if (!nextSignature || !previousSignature || nextSignature === previousSignature) {
+            continue;
+          }
+          if (!task.last_run_at) {
+            continue;
+          }
+          if (task.status !== "completed" && task.status !== "failed") {
+            continue;
+          }
+
+          // Refresh history + dashboard metrics for this task.
+          void queryClient.invalidateQueries({
+            queryKey: [...HISTORY_QUERY_KEY_PREFIX, task.id],
+          });
+          void queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+
+          const isForeground = !document.hidden && document.hasFocus();
+          const isFailure = task.status === "failed";
+          const title =
+            task.mode === "reminder"
+              ? task.reminder_title ?? task.name ?? t.scheduler.taskManager.reminderFallbackTitle
+              : isFailure
+                ? `任务失败：${task.name}`
+                : `任务完成：${task.name}`;
+
+          const body = excerpt(
+            isFailure
+              ? errorOf(task) ?? "执行失败"
+              : task.mode === "reminder"
+                ? reminderBody(task)
+                : workflowOutput(task) ?? "执行完成",
+            240,
+          );
+
+          if (isForeground) {
+            const toastId = `scheduler-task-${task.id}-${task.last_run_at}`;
+            const toastFn = isFailure ? toast.error : toast.success;
+            toastFn(title, {
+              id: toastId,
+              toasterId: "scheduler",
+              description: <span className="whitespace-pre-line">{body}</span>,
+              duration: Infinity,
+              dismissible: false,
+              action: {
+                label: "确认",
+                onClick: () => {
+                  toast.dismiss(toastId);
+                },
+              },
+            });
+          } else {
+            showNotification(title, {
+              body,
+              tag: `scheduler-task-${task.id}-${task.last_run_at}`,
+              requireInteraction: true,
+            });
+          }
+
+        }
+
+        lastSeenRef.current = nextSeen;
+      } catch {
+        // Ignore polling errors to avoid interrupting user experience.
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => {
+      void poll();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+>>>>>>> Stashed changes
     };
   }, [queryClient, showNotification, t.scheduler.taskManager.reminderFallbackTitle]);
 

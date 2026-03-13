@@ -6,7 +6,6 @@ import {
   installPlugin,
   listInstalledPlugins,
   loadInstalledPlugin,
-  runInstalledPluginTest,
   uninstallPlugin,
   updateInstalledPluginMetadata,
 } from "./loader";
@@ -21,7 +20,7 @@ import {
   packagePluginStudioSession,
 } from "./marketplace";
 import { getWorkbenchRegistry } from "./registry";
-import type { PluginTestReport } from "./types";
+import { resolveInstalledPluginVersion } from "./versioning";
 
 /**
  * Query key factory
@@ -99,7 +98,7 @@ export function useInstallPlugin() {
       return installed;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
+      void queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
     },
   });
 }
@@ -119,7 +118,7 @@ export function useUninstallPlugin() {
       getWorkbenchRegistry().unregisterInstalled(pluginId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
+      void queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
     },
   });
 }
@@ -155,29 +154,7 @@ export function useTogglePlugin() {
       return updated;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
-    },
-  });
-}
-
-/**
- * Hook to run plugin compatibility test
- */
-export function useTestInstalledPlugin() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      pluginId,
-      threadId,
-    }: {
-      pluginId: string;
-      threadId?: string;
-    }): Promise<PluginTestReport> => {
-      return runInstalledPluginTest(pluginId, { threadId });
-    },
-    onSuccess: (_report, variables) => {
-      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
-      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugin(variables.pluginId) });
+      void queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
     },
   });
 }
@@ -200,18 +177,30 @@ export function useWorkbenchMarketplacePluginDetail(pluginId: string | null) {
 export function useInstallMarketplacePlugin() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (pluginId: string) => {
+    mutationFn: async ({
+      pluginId,
+      version,
+    }: {
+      pluginId: string;
+      version?: string | null;
+    }) => {
       const file = await downloadWorkbenchMarketplacePluginPackage(pluginId);
       const installed = await installPlugin(file);
-      const plugin = await loadInstalledPlugin(installed.manifest.id);
+
+      const nextVersion = resolveInstalledPluginVersion(installed.version, version);
+      const finalInstalled = nextVersion !== installed.version
+        ? await updateInstalledPluginMetadata(installed.manifest.id, { version: nextVersion })
+        : installed;
+
+      const plugin = await loadInstalledPlugin(finalInstalled.manifest.id);
       const registry = getWorkbenchRegistry();
       registry.register(plugin);
-      registry.registerInstalled(installed);
-      return installed;
+      registry.registerInstalled(finalInstalled);
+      return finalInstalled;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
-      queryClient.invalidateQueries({ queryKey: workbenchKeys.marketplace() });
+      void queryClient.invalidateQueries({ queryKey: workbenchKeys.plugins() });
+      void queryClient.invalidateQueries({ queryKey: workbenchKeys.marketplace() });
     },
   });
 }

@@ -1,5 +1,6 @@
 import "@/styles/globals.css";
 import "katex/dist/katex.min.css";
+import "nprogress/nprogress.css";
 
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
@@ -8,6 +9,7 @@ import { PluginInitializer } from "@/components/plugin-initializer";
 import { ThemeProvider } from "@/components/theme-provider";
 import { I18nProvider } from "@/core/i18n/context";
 import { detectLocaleServer } from "@/core/i18n/server";
+import { RouteProgressBar } from "@/core/navigation";
 
 export const metadata: Metadata = {
   title: "Nion",
@@ -33,7 +35,10 @@ export default async function RootLayout({
       <body suppressHydrationWarning>
         <PluginInitializer />
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
-          <I18nProvider initialLocale={locale}>{children}</I18nProvider>
+          <I18nProvider initialLocale={locale}>
+            <RouteProgressBar />
+            {children}
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

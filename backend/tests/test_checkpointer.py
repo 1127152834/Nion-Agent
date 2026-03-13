@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.checkpointer import get_checkpointer, reset_checkpointer
+from src.config.app_config import AppConfig
 from src.config.checkpointer_config import (
     CheckpointerConfig,
     get_checkpointer_config,
@@ -217,6 +218,27 @@ class TestAppConfigLoadsCheckpointer:
         cfg = get_checkpointer_config()
         assert cfg is not None
         assert cfg.type == "memory"
+
+    def test_missing_checkpointer_section_falls_back_to_sqlite(self):
+        """App config payload without checkpointer should not silently degrade to in-memory."""
+        set_checkpointer_config(None)
+        cfg = AppConfig._validate_payload(
+            {
+                "models": [],
+                "tools": [],
+                "tool_groups": [],
+                "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
+            },
+            strict_env=False,
+        )
+        assert cfg.checkpointer is not None
+        assert cfg.checkpointer.type == "sqlite"
+        assert cfg.checkpointer.connection_string == "checkpoints.db"
+
+        global_cfg = get_checkpointer_config()
+        assert global_cfg is not None
+        assert global_cfg.type == "sqlite"
+        assert global_cfg.connection_string == "checkpoints.db"
 
 
 # ---------------------------------------------------------------------------

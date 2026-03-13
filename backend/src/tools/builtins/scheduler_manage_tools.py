@@ -11,6 +11,7 @@ from urllib.parse import quote
 
 import httpx
 from src.tools.builtins.langchain_compat import ToolRuntime, tool
+from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
 from src.scheduler.models import AgentStep, ScheduledTask, TaskMode, TriggerConfig, WorkflowStep
@@ -18,7 +19,7 @@ from src.tools.builtins.confirmation_store import consume_confirmation_token, is
 from src.tools.builtins.management_response import build_action_card, build_management_response
 
 
-def _runtime_agent_name(runtime: ToolRuntime | None) -> str:
+def _runtime_agent_name(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
     if runtime is None:
         return "_default"
     context = runtime.context or {}
@@ -28,7 +29,7 @@ def _runtime_agent_name(runtime: ToolRuntime | None) -> str:
     return "_default"
 
 
-def _runtime_timezone(runtime: ToolRuntime | None) -> str:
+def _runtime_timezone(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
     if runtime is None:
         return "UTC"
     context = runtime.context or {}
@@ -165,7 +166,7 @@ def _build_clarification_response(
 
 @tool("scheduler_create_task")
 def scheduler_create_task_tool(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     name: str,
     mode: Literal["reminder", "workflow"] = "reminder",
     trigger_type: Literal["cron", "interval", "once", "event", "webhook"] = "cron",

@@ -11,7 +11,11 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
-from src.config.config_store import ConfigStoreNotInitializedError, create_config_store
+from src.config.config_store import (
+    DEFAULT_CHECKPOINTER_CONFIG,
+    ConfigStoreNotInitializedError,
+    create_config_store,
+)
 from src.config.extensions_config import ExtensionsConfig
 from src.config.memory_config import load_memory_config_from_dict
 from src.config.model_config import ModelConfig
@@ -80,8 +84,19 @@ class AppConfig(BaseModel):
         if "subagents" in config_data:
             load_subagents_config_from_dict(config_data["subagents"])
         load_suggestions_config_from_dict(config_data.get("suggestions") or {})
-        if "checkpointer" in config_data:
-            load_checkpointer_config_from_dict(config_data["checkpointer"])
+        raw_checkpointer = config_data.get("checkpointer")
+        if isinstance(raw_checkpointer, dict) and isinstance(raw_checkpointer.get("type"), str):
+            raw_type = raw_checkpointer.get("type")
+            if raw_type == "memory":
+                load_checkpointer_config_from_dict({"type": "memory"})
+                return
+            if raw_type == "sqlite" and bool(raw_checkpointer.get("connection_string")):
+                load_checkpointer_config_from_dict(raw_checkpointer)
+                return
+
+        fallback = dict(DEFAULT_CHECKPOINTER_CONFIG)
+        config_data["checkpointer"] = fallback
+        load_checkpointer_config_from_dict(fallback)
 
     @classmethod
     def _validate_payload(cls, payload: dict[str, Any], *, strict_env: bool) -> Self:

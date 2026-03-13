@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from unittest.mock import patch
@@ -34,6 +35,13 @@ def _write_agent(base_dir: Path, name: str, config: dict, soul: str = "You are h
         json.dump(config_copy, f, ensure_ascii=False)
 
     (agent_dir / "SOUL.md").write_text(soul, encoding="utf-8")
+
+
+def _tiny_png_bytes() -> bytes:
+    """Return a valid 1x1 PNG used by avatar upload tests."""
+    return base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/6mQAAAAASUVORK5CYII="
+    )
 
 
 # ===========================================================================
@@ -383,6 +391,31 @@ class TestAgentsAPI:
         assert data["name"] == "test-agent"
         assert data["soul"] == "Hello world"
 
+    def test_get_agent_identity_empty_by_default(self, agent_client):
+        agent_client.post("/api/agents", json={"name": "identity-agent", "soul": "Hello world"})
+
+        response = agent_client.get("/api/agents/identity-agent/identity")
+        assert response.status_code == 200
+        assert response.json()["content"] == ""
+
+    def test_put_and_get_agent_identity(self, agent_client):
+        agent_client.post("/api/agents", json={"name": "identity-update", "soul": "Hello world"})
+
+        update = agent_client.put(
+            "/api/agents/identity-update/identity",
+            json={"content": "Custom identity content"},
+        )
+        assert update.status_code == 200
+        assert update.json()["content"] == "Custom identity content"
+
+        response = agent_client.get("/api/agents/identity-update/identity")
+        assert response.status_code == 200
+        assert response.json()["content"] == "Custom identity content"
+
+    def test_get_missing_agent_identity_404(self, agent_client):
+        response = agent_client.get("/api/agents/nonexistent/identity")
+        assert response.status_code == 404
+
     def test_get_missing_agent_404(self, agent_client):
         response = agent_client.get("/api/agents/nonexistent")
         assert response.status_code == 404
@@ -454,6 +487,35 @@ class TestAgentsAPI:
         agent_client.delete("/api/agents/remove-me")
         assert not agent_dir.exists()
 
+    def test_upload_and_get_agent_avatar(self, agent_client):
+        agent_client.post("/api/agents", json={"name": "avatar-agent", "soul": "avatar"})
+        upload = agent_client.post(
+            "/api/agents/avatar-agent/avatar",
+            files={"file": ("avatar.png", _tiny_png_bytes(), "image/png")},
+        )
+        assert upload.status_code == 200
+        body = upload.json()
+        assert body["avatar_url"] == "/api/agents/avatar-agent/avatar"
+
+        fetched = agent_client.get(body["avatar_url"])
+        assert fetched.status_code == 200
+        assert fetched.headers["content-type"].startswith("image/png")
+        assert fetched.content.startswith(b"\x89PNG")
+
+    def test_delete_agent_avatar(self, agent_client):
+        agent_client.post("/api/agents", json={"name": "avatar-delete", "soul": "avatar"})
+        agent_client.post(
+            "/api/agents/avatar-delete/avatar",
+            files={"file": ("avatar.png", _tiny_png_bytes(), "image/png")},
+        )
+
+        deleted = agent_client.delete("/api/agents/avatar-delete/avatar")
+        assert deleted.status_code == 200
+        assert deleted.json()["avatar_url"] is None
+
+        fetched = agent_client.get("/api/agents/avatar-delete/avatar")
+        assert fetched.status_code == 404
+
 
 class TestDefaultAgentAPI:
     def test_get_default_agent_config(self, agent_client):
@@ -501,6 +563,19 @@ class TestDefaultAgentAPI:
         response = agent_client.get("/api/default-agent/identity")
         assert response.status_code == 200
         assert response.json()["content"] == identity_payload["content"]
+
+    def test_upload_and_get_default_agent_avatar(self, agent_client):
+        upload = agent_client.post(
+            "/api/default-agent/avatar",
+            files={"file": ("avatar.png", _tiny_png_bytes(), "image/png")},
+        )
+        assert upload.status_code == 200
+        body = upload.json()
+        assert body["avatar_url"] == "/api/default-agent/avatar"
+
+        fetched = agent_client.get(body["avatar_url"])
+        assert fetched.status_code == 200
+        assert fetched.headers["content-type"].startswith("image/png")
 
 
 # ===========================================================================

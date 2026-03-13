@@ -83,16 +83,17 @@ class HeartbeatService:
             trigger = TriggerConfig(
                 type=TriggerType.CRON,
                 cron_expression=config.cron,
-                timezone=tmpl.default_timezone,
+                timezone=settings.timezone or tmpl.default_timezone,
             )
 
             if existing:
                 # Update existing task
                 updated = ScheduledTask(
                     id=existing.id,
+                    agent_name=agent_name,
                     name=task_name,
                     description=tmpl.description,
-                    mode=TaskMode.WORKFLOW,
+                    mode=TaskMode.HEARTBEAT,
                     trigger=trigger,
                     enabled=config.enabled,
                     created_by="heartbeat",
@@ -103,9 +104,10 @@ class HeartbeatService:
             else:
                 # Create new task
                 task = ScheduledTask(
+                    agent_name=agent_name,
                     name=task_name,
                     description=tmpl.description,
-                    mode=TaskMode.WORKFLOW,
+                    mode=TaskMode.HEARTBEAT,
                     trigger=trigger,
                     enabled=config.enabled,
                     created_by="heartbeat",

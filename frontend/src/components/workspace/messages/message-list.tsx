@@ -30,6 +30,7 @@ import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
 import { ClarificationCard } from "./clarification-card";
+import { CLIInteractiveCard } from "./cli-interactive-card";
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -83,6 +84,7 @@ export function MessageList({
   paddingBottom = 160,
   onClarificationSelect,
   onRetryLastMessage,
+  onSubmitMessage,
 }: {
   className?: string;
   threadId: string;
@@ -90,6 +92,7 @@ export function MessageList({
   paddingBottom?: number;
   onClarificationSelect?: (option: string) => void;
   onRetryLastMessage?: () => void;
+  onSubmitMessage?: (text: string) => void;
 }) {
   const { t } = useI18n();
   const copy = t.workspace.messageList;
@@ -183,6 +186,7 @@ export function MessageList({
                     <ClarificationCard
                       key={group.id}
                       clarification={clarification}
+                      threadId={threadId}
                       isLoading={thread.isLoading}
                       onSelectOption={onClarificationSelect}
                     />
@@ -218,6 +222,19 @@ export function MessageList({
               );
             }
             return null;
+          } else if (group.type === "assistant:cli-interactive") {
+            const message = group.messages[0];
+            if (!message) return null;
+
+            return (
+              <CLIInteractiveCard
+                key={group.id}
+                message={message}
+                onSubmitInput={(input) => {
+                  onSubmitMessage?.(input);
+                }}
+              />
+            );
           } else if (group.type === "assistant:present-files") {
             const files: string[] = [];
             for (const message of group.messages) {

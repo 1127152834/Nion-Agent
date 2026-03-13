@@ -39,6 +39,7 @@ from src.config.app_config import get_app_config, reload_app_config
 from src.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
 from src.config.paths import get_paths
 from src.models import create_chat_model
+from src.processlog.service import get_processlog_service
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +254,7 @@ class NionClient:
         """Build a RunnableConfig for agent invocation."""
         configurable = {
             "thread_id": thread_id,
+            "agent_name": overrides.get("agent_name"),
             "model_name": overrides.get("model_name", self._model_name),
             "thinking_enabled": overrides.get("thinking_enabled", self._thinking_enabled),
             "is_plan_mode": overrides.get("plan_mode", self._plan_mode),
@@ -268,6 +270,7 @@ class NionClient:
         """Create (or recreate) the agent when config-dependent params change."""
         cfg = config.get("configurable", {})
         key = (
+            cfg.get("agent_name"),
             cfg.get("model_name"),
             cfg.get("thinking_enabled"),
             cfg.get("is_plan_mode"),
@@ -281,6 +284,7 @@ class NionClient:
             return
 
         thinking_enabled = cfg.get("thinking_enabled", True)
+        agent_name = cfg.get("agent_name")
         model_name = cfg.get("model_name")
         subagent_enabled = cfg.get("subagent_enabled", False)
         max_concurrent_subagents = cfg.get("max_concurrent_subagents", 3)
@@ -290,11 +294,12 @@ class NionClient:
 
         kwargs: dict[str, Any] = {
             "model": create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
-            "tools": self._get_tools(model_name=model_name, subagent_enabled=subagent_enabled),
-            "middleware": _build_middlewares(config, model_name=model_name),
+            "tools": self._get_tools(model_name=model_name, subagent_enabled=subagent_enabled, agent_name=agent_name),
+            "middleware": _build_middlewares(config, model_name=model_name, agent_name=agent_name),
             "system_prompt": apply_prompt_template(
                 subagent_enabled=subagent_enabled,
                 max_concurrent_subagents=max_concurrent_subagents,
+                agent_name=agent_name,
                 session_mode=session_mode,
                 memory_read=memory_read,
                 memory_write=memory_write,
@@ -310,11 +315,11 @@ class NionClient:
         logger.info("Agent created: model=%s, thinking=%s", model_name, thinking_enabled)
 
     @staticmethod
-    def _get_tools(*, model_name: str | None, subagent_enabled: bool):
+    def _get_tools(*, model_name: str | None, subagent_enabled: bool, agent_name: str | None):
         """Lazy import to avoid circular dependency at module level."""
         from src.tools import get_available_tools
 
-        return get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled)
+        return get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled, agent_name=agent_name)
 
     @staticmethod
     def _serialize_message(msg) -> dict:
@@ -398,70 +403,123 @@ class NionClient:
             **config,
             "configurable": {**config.get("configurable", {})},
         }
+        trace_id = str(kwargs.get("trace_id") or uuid.uuid4().hex[:12])
+        metadata = dict(run_config.get("metadata") or {})
+        metadata["trace_id"] = trace_id
+        run_config["metadata"] = metadata
 
         state: dict[str, Any] = {"messages": [HumanMessage(content=message)]}
         configurable = config.get("configurable", {})
         context = {
             "thread_id": thread_id,
+            "trace_id": trace_id,
             "session_mode": configurable.get("session_mode"),
             "memory_read": configurable.get("memory_read"),
             "memory_write": configurable.get("memory_write"),
         }
+        processlog = get_processlog_service()
+        processlog.record(
+            trace_id=trace_id,
+            chat_id=thread_id,
+            step="ChatTurnStart",
+            level="info",
+            data={"thread_id": thread_id},
+        )
 
         seen_ids: set[str] = set()
+        try:
+            for chunk in self._agent.stream(state, config=run_config, context=context, stream_mode="values"):
+                messages = chunk.get("messages", [])
 
-        for chunk in self._agent.stream(state, config=run_config, context=context, stream_mode="values"):
-            messages = chunk.get("messages", [])
+                for msg in messages:
+                    msg_id = getattr(msg, "id", None)
+                    if msg_id and msg_id in seen_ids:
+                        continue
+                    if msg_id:
+                        seen_ids.add(msg_id)
 
-            for msg in messages:
-                msg_id = getattr(msg, "id", None)
-                if msg_id and msg_id in seen_ids:
-                    continue
-                if msg_id:
-                    seen_ids.add(msg_id)
+                    if isinstance(msg, AIMessage):
+                        if msg.tool_calls:
+                            processlog.record(
+                                trace_id=trace_id,
+                                chat_id=thread_id,
+                                step="ToolCallPlanned",
+                                level="info",
+                                data={"tool_calls": msg.tool_calls},
+                            )
+                            yield StreamEvent(
+                                type="messages-tuple",
+                                data={
+                                    "type": "ai",
+                                    "content": "",
+                                    "id": msg_id,
+                                    "tool_calls": [{"name": tc["name"], "args": tc["args"], "id": tc.get("id")} for tc in msg.tool_calls],
+                                },
+                            )
 
-                if isinstance(msg, AIMessage):
-                    if msg.tool_calls:
+                        text = self._extract_text(msg.content)
+                        if text:
+                            processlog.record(
+                                trace_id=trace_id,
+                                chat_id=thread_id,
+                                step="AssistantMessage",
+                                level="info",
+                                data={"message_id": msg_id, "length": len(text)},
+                            )
+                            yield StreamEvent(
+                                type="messages-tuple",
+                                data={"type": "ai", "content": text, "id": msg_id},
+                            )
+
+                    elif isinstance(msg, ToolMessage):
+                        processlog.record(
+                            trace_id=trace_id,
+                            chat_id=thread_id,
+                            step="ToolMessage",
+                            level="info",
+                            data={
+                                "tool_name": getattr(msg, "name", None),
+                                "tool_call_id": getattr(msg, "tool_call_id", None),
+                            },
+                        )
                         yield StreamEvent(
                             type="messages-tuple",
                             data={
-                                "type": "ai",
-                                "content": "",
+                                "type": "tool",
+                                "content": msg.content if isinstance(msg.content, str) else str(msg.content),
+                                "name": getattr(msg, "name", None),
+                                "tool_call_id": getattr(msg, "tool_call_id", None),
                                 "id": msg_id,
-                                "tool_calls": [{"name": tc["name"], "args": tc["args"], "id": tc.get("id")} for tc in msg.tool_calls],
                             },
                         )
 
-                    text = self._extract_text(msg.content)
-                    if text:
-                        yield StreamEvent(
-                            type="messages-tuple",
-                            data={"type": "ai", "content": text, "id": msg_id},
-                        )
-
-                elif isinstance(msg, ToolMessage):
-                    yield StreamEvent(
-                        type="messages-tuple",
-                        data={
-                            "type": "tool",
-                            "content": msg.content if isinstance(msg.content, str) else str(msg.content),
-                            "name": getattr(msg, "name", None),
-                            "tool_call_id": getattr(msg, "tool_call_id", None),
-                            "id": msg_id,
-                        },
-                    )
-
-            # Emit a values event for each state snapshot
-            yield StreamEvent(
-                type="values",
-                data={
-                    "title": chunk.get("title"),
-                    "messages": [self._serialize_message(m) for m in messages],
-                    "artifacts": chunk.get("artifacts", []),
-                    "artifact_groups": chunk.get("artifact_groups", []),
-                },
+                # Emit a values event for each state snapshot
+                yield StreamEvent(
+                    type="values",
+                    data={
+                        "title": chunk.get("title"),
+                        "messages": [self._serialize_message(m) for m in messages],
+                        "artifacts": chunk.get("artifacts", []),
+                        "artifact_groups": chunk.get("artifact_groups", []),
+                    },
+                )
+        except Exception as exc:  # noqa: BLE001
+            processlog.record(
+                trace_id=trace_id,
+                chat_id=thread_id,
+                step="ChatTurnError",
+                level="error",
+                data={"error": str(exc)},
             )
+            raise
 
+        processlog.record(
+            trace_id=trace_id,
+            chat_id=thread_id,
+            step="ChatTurnEnd",
+            level="info",
+            data={"message_seen": len(seen_ids)},
+        )
         yield StreamEvent(type="end", data={})
 
     def chat(self, message: str, *, thread_id: str | None = None, **kwargs) -> str:
@@ -611,6 +669,7 @@ class NionClient:
         config_data = {
             "mcpServers": mcp_servers,
             "skills": {name: {"enabled": skill.enabled} for name, skill in current_config.skills.items()},
+            "clis": {name: cli.model_dump() for name, cli in current_config.clis.items()},
         }
 
         self._atomic_write_json(config_path, config_data)
@@ -679,6 +738,7 @@ class NionClient:
         config_data = {
             "mcpServers": {n: s.model_dump() for n, s in extensions_config.mcp_servers.items()},
             "skills": {n: {"enabled": sc.enabled} for n, sc in extensions_config.skills.items()},
+            "clis": {n: c.model_dump() for n, c in extensions_config.clis.items()},
         }
 
         self._atomic_write_json(config_path, config_data)

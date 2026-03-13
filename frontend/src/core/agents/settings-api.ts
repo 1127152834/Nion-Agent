@@ -63,3 +63,15 @@ export async function updateEvolutionSettings(
   }
   return res.json();
 }
+
+export async function runEvolution(agentName: string): Promise<{ status: string; report_id?: string }> {
+  const res = await fetch(
+    `${getBackendBaseURL()}/api/evolution/run?agent_name=${encodeURIComponent(agentName)}`,
+    { method: "POST" }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { detail?: string };
+    throw new Error(err.detail ?? `Failed to run evolution: ${res.statusText}`);
+  }
+  return res.json();
+}

@@ -1,9 +1,10 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition, type MouseEvent } from "react";
+import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { useSidebar } from "@/components/ui/sidebar";
+import { useAppRouter } from "@/core/navigation";
 import { pathOfChatsIndex, pathOfNewThread } from "@/core/threads/utils";
 
 export type WorkspaceSidebarSection =
@@ -16,6 +17,7 @@ const WORKSPACE_SIDEBAR_PREFETCH_ROUTES = [
   pathOfNewThread(),
   pathOfChatsIndex(),
   "/workspace/agents",
+  "/workspace/about",
   "/workspace/scheduler",
 ] as const;
 
@@ -77,7 +79,7 @@ export function useWorkspaceSidebarNavigation() {
 }
 
 export function usePrefetchWorkspaceSidebarRoutes() {
-  const router = useRouter();
+  const router = useAppRouter();
 
   useEffect(() => {
     for (const route of WORKSPACE_SIDEBAR_PREFETCH_ROUTES) {
@@ -107,10 +109,9 @@ export function useWorkspaceSidebarLink(
   options?: { match?: WorkspaceSidebarNavigationMatch },
 ) {
   const pathname = usePathname();
-  const router = useRouter();
+  const router = useAppRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const [isNavigating, setIsNavigating] = useState(false);
-  const [, startTransition] = useTransition();
   const previousPathnameRef = useRef(pathname);
 
   const match = options?.match ?? "exact";
@@ -140,9 +141,7 @@ export function useWorkspaceSidebarLink(
 
     event.preventDefault();
     setIsNavigating(true);
-    startTransition(() => {
-      router.push(href);
-    });
+    router.push(href);
   }, [href, isMobile, isNavigating, isTargetPath, router, setOpenMobile]);
 
   return {

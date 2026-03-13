@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronDownIcon, DownloadIcon, SparklesIcon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 
@@ -30,13 +29,14 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useI18n } from "@/core/i18n/hooks";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import {
   useDeleteSkill,
   useEnableSkill,
   useSkills,
   useUploadSkillArchive,
 } from "@/core/skills/hooks";
-import { getLocalizedSkillDescription } from "@/core/skills/i18n";
+import { getLocalizedSkillDescription, getLocalizedSkillName } from "@/core/skills/i18n";
 import type { Skill } from "@/core/skills/type";
 import { pathOfNewThread } from "@/core/threads/utils";
 import { env } from "@/env";
@@ -184,7 +184,7 @@ function SkillSettingsList({
         <div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" disabled={uploadingSkillArchive}>
+              <Button size="sm" loading={uploadingSkillArchive} disabled={uploadingSkillArchive}>
                 <SparklesIcon className="size-4" />
                 {t.settings.skills.createSkill}
                 <ChevronDownIcon className="size-4" />
@@ -227,7 +227,9 @@ function SkillSettingsList({
           <Item className="w-full" variant="outline" key={skill.name}>
             <ItemContent>
               <ItemTitle>
-                <div className="flex items-center gap-2">{skill.name}</div>
+                <div className="flex items-center gap-2">
+                  {getLocalizedSkillName(skill.name, locale)}
+                </div>
               </ItemTitle>
               <ItemDescription className="line-clamp-4">
                 {getLocalizedSkillDescription(skill, locale)}

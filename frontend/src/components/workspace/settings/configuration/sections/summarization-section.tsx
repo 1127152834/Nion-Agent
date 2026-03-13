@@ -69,10 +69,10 @@ export function SummarizationSection({
   const { t } = useI18n();
   const settingsLike = t.settings as {
     configSections?: {
-      summarization?: Record<string, any>;
+      summarization?: Record<string, string>;
     };
   };
-  const copy = (settingsLike.configSections?.summarization ?? {});
+  const copy = (settingsLike.configSections?.summarization ?? {}) as Record<string, string | undefined>;
   const summarization = asObject(config.summarization);
   const triggerList = normalizeTriggerList(summarization.trigger);
   const keep = asObject(summarization.keep);
@@ -93,9 +93,9 @@ export function SummarizationSection({
   );
 
   const triggerTypeLabel: Record<ContextSizeType, string> = {
-    tokens: copy.tokensLabel,
-    messages: copy.messagesLabel,
-    fraction: copy.fractionLabel,
+    tokens: copy.tokensLabel ?? "Tokens",
+    messages: copy.messagesLabel ?? "Messages",
+    fraction: copy.fractionLabel ?? "Fraction",
   };
 
   const updateSummarization = (key: string, value: unknown) => {
@@ -186,7 +186,7 @@ export function SummarizationSection({
             updateSummarization("model_name", value === DEFAULT_MODEL_VALUE ? "" : value)
           }
         >
-          <SelectTrigger disabled={disabled}>
+          <SelectTrigger disabled={disabled} className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -232,7 +232,7 @@ export function SummarizationSection({
                   value={triggerType}
                   onValueChange={(value) => updateTrigger(index, "type", value)}
                 >
-                  <SelectTrigger disabled={disabled}>
+                  <SelectTrigger disabled={disabled} className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -291,7 +291,7 @@ export function SummarizationSection({
             <div className="space-y-1.5">
               <div className="text-xs font-medium">{copy.keepType}</div>
               <Select value={keepType} onValueChange={(value) => updateKeep("type", value)}>
-                <SelectTrigger disabled={disabled}>
+                <SelectTrigger disabled={disabled} className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

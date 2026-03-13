@@ -1,6 +1,6 @@
 ---
 name: github-deep-research
-description: Conduct multi-round deep research on any GitHub Repo. Use when users request comprehensive analysis, timeline reconstruction, competitive analysis, or in-depth investigation of GitHub. Produces structured markdown reports with executive summaries, chronological timelines, metrics analysis, and Mermaid diagrams. Triggers on Github repository URL or open source projects.
+description: '{"en":"Multi-round deep research on GitHub repos. Use for comprehensive analysis, timeline reconstruction, competitive analysis, or investigations. Outputs structured markdown reports with metrics and diagrams.","zh-CN":"对 GitHub 仓库做多轮深度调研。适用于全面分析、时间线还原、竞品分析与深度调查，输出含指标与图表的结构化 Markdown 报告。"}'
 ---
 
 # GitHub Deep Research Skill

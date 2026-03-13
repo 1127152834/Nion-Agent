@@ -139,10 +139,10 @@ tools:
   #   # Used to limit the scope of search results, only returns content within the specified time range. Set to -1 to disable time filtering
   #   search_time_range: 10
 
-  # Web fetch tool (uses Jina AI reader)
+  # Web fetch tool (unified implementation; provider priority configured in search_settings)
   - name: web_fetch
     group: web
-    use: src.community.jina_ai.tools:web_fetch_tool
+    use: src.community.web_fetch.tools:web_fetch_tool
     timeout: 10
 
   # Web fetch tool (uses InfoQuest AI reader)
@@ -198,6 +198,34 @@ sandbox:
   # Optional: Path to Python executable (for LocalSandbox)
   # If not set, uses system Python from PATH
   # Desktop app automatically sets $NION_PYTHON_PATH to bundled Python
+  #
+  # Strict sandbox mode (default: false)
+  # - Disables host/desktop filesystem access (host mode, host file import, etc.)
+  # - Recommended to use container-based sandbox (AioSandboxProvider) when enabled
+  strict_mode: false
+
+# ============================================================================
+# Search Settings (Web Search / Web Fetch Providers)
+# ============================================================================
+# Configure provider priority and credentials used by the unified web_search/web_fetch tools.
+#
+# search_settings:
+#   provider_configs:
+#     brave:
+#       api_key: $BRAVE_API_KEY
+#     tavily:
+#       api_key: $TAVILY_API_KEY
+#     google_cse:
+#       api_key: $GOOGLE_API_KEY
+#       cx: $GOOGLE_CSE_CX
+#     firecrawl:
+#       api_key: $FIRECRAWL_API_KEY
+#   web_search:
+#     providers: ["brave", "searxng_public"]  # builtin fallback cannot be disabled
+#     max_results: 5
+#   web_fetch:
+#     providers: ["jina", "direct"]           # builtin fallback cannot be disabled
+#     timeout_seconds: 10
   # python_path: $NION_PYTHON_PATH
 
   # Or specify a custom Python path:
@@ -404,8 +432,6 @@ embedding:
 #   memory   - In-process only. State is lost when the process exits. (default)
 #   sqlite   - File-based SQLite persistence. Survives restarts.
 #              Requires: uv add langgraph-checkpoint-sqlite
-#   postgres - PostgreSQL persistence. Suitable for multi-process deployments.
-#              Requires: uv add langgraph-checkpoint-postgres psycopg[binary] psycopg-pool
 #
 # Examples:
 #
@@ -417,8 +443,3 @@ embedding:
 # checkpointer:
 #   type: sqlite
 #   connection_string: checkpoints.db
-#
-# PostgreSQL (multi-process, production):
-# checkpointer:
-#   type: postgres
-#   connection_string: postgresql://user:password@localhost:5432/nion

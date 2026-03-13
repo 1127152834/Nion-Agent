@@ -383,11 +383,6 @@
     text-fill-color: transparent;
   }
 
-  /* RSS Reading Assistant - 3D Character Container */
-  .ai-character-container {
-    background: oklch(var(--background));
-    border: 1px solid oklch(var(--border));
-  }
 }
 
 :root {
@@ -395,4 +390,29 @@
   --container-width-sm: calc(var(--spacing) * 144);
   --container-width-md: calc(var(--spacing) * 204);
   --container-width-lg: calc(var(--spacing) * 256);
+}
+
+#nprogress {
+  pointer-events: none;
+}
+
+#nprogress .bar {
+  background: var(--primary);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--primary) 35%, transparent);
+  height: 2px;
+  left: 0;
+  position: fixed;
+  top: var(--desktop-titlebar-safe-area, 0px);
+  width: 100%;
+  z-index: 1200;
+}
+
+#nprogress .peg {
+  box-shadow:
+    0 0 10px color-mix(in oklab, var(--primary) 45%, transparent),
+    0 0 5px color-mix(in oklab, var(--primary) 45%, transparent);
+}
+
+#nprogress .spinner {
+  display: none;
 }

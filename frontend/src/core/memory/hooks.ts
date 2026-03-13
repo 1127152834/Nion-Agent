@@ -2,11 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   compactOpenVikingMemory,
+  exportChatProcesslog,
+  exportTraceProcesslog,
   forgetOpenVikingMemory,
   loadGovernanceStatus,
   loadMemoryCatalog,
   loadMemoryItems,
   loadOpenVikingStatus,
+  queryMemoryExplain,
+  rebuildMemory,
   reindexOpenVikingVectors,
   runOpenVikingGovernance,
   type MemoryViewScope,
@@ -72,7 +76,11 @@ export function useOpenVikingStatus() {
 
 export const openVikingActions = {
   compact: compactOpenVikingMemory,
+  exportChatProcesslog,
+  exportTraceProcesslog,
   forget: forgetOpenVikingMemory,
+  queryMemoryExplain,
+  rebuildMemory,
   runGovernance: runOpenVikingGovernance,
   reindexVectors: reindexOpenVikingVectors,
 };

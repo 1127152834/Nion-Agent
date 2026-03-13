@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -49,6 +49,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useI18n } from "@/core/i18n/hooks";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import {
   useDeleteThread,
   useRenameThread,
@@ -126,6 +127,23 @@ export function RecentChatList() {
         : null,
     [currentThreadId, visibleThreads],
   );
+  const threadById = useMemo(
+    () => new Map(visibleThreads.map((thread) => [thread.thread_id, thread] as const)),
+    [visibleThreads],
+  );
+  const currentThreadDeleteThreads = useMemo(() => {
+    if (!currentThreadDeleteIntent) {
+      return [];
+    }
+    if (currentThreadDeleteIntent.kind === "single") {
+      const found = threadById.get(currentThreadDeleteIntent.threadId);
+      return found ? [found] : [];
+    }
+    const threads = currentThreadDeleteIntent.threadIds
+      .map((threadId) => threadById.get(threadId))
+      .filter((thread): thread is NonNullable<typeof thread> => Boolean(thread));
+    return threads;
+  }, [currentThreadDeleteIntent, threadById]);
   const selectedCount = selectedThreadIds.length;
 
   useEffect(() => {
@@ -748,16 +766,26 @@ export function RecentChatList() {
             </DialogDescription>
           </DialogHeader>
 
-          {currentThread ? (
+          {currentThreadDeleteThreads.length > 0 ? (
             <div className="py-1">
-              <Badge
-                variant="secondary"
-                className="max-w-full rounded-full px-2.5 py-1 text-xs"
-              >
-                <span className="max-w-[260px] truncate">
-                  {titleOfThread(currentThread)}
-                </span>
-              </Badge>
+              <div className="flex flex-wrap gap-2">
+                {currentThreadDeleteThreads.slice(0, 6).map((thread) => (
+                  <Badge
+                    key={thread.thread_id}
+                    variant="secondary"
+                    className="max-w-full rounded-full px-2.5 py-1 text-xs"
+                  >
+                    <span className="max-w-[260px] truncate">
+                      {titleOfThread(thread)}
+                    </span>
+                  </Badge>
+                ))}
+              </div>
+              {currentThreadDeleteThreads.length > 6 ? (
+                <p className="text-muted-foreground mt-2 text-xs">
+                  + {currentThreadDeleteThreads.length - 6} {t.sidebar.moreSelectedChats}
+                </p>
+              ) : null}
             </div>
           ) : null}
 

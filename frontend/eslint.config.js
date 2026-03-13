@@ -80,6 +80,25 @@ export default tseslint.config(
           },
         },
       ],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next/navigation",
+              importNames: ["useRouter"],
+              message:
+                "请改用 @/core/navigation 中的 useAppRouter，以统一导航 loading 行为。",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/core/navigation/use-app-router.ts"],
+    rules: {
+      "no-restricted-imports": "off",
     },
   },
   {

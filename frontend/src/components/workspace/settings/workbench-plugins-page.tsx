@@ -1,12 +1,21 @@
 "use client";
 
-import { CheckCircle2Icon, ChevronDownIcon, PackageIcon, SparklesIcon, TestTube2Icon, Trash2Icon, UploadIcon, XCircleIcon, XIcon } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import {
+  ChevronDownIcon,
+  DownloadIcon,
+  PackageIcon,
+  SparklesIcon,
+  Trash2Icon,
+  UploadIcon,
+  WrenchIcon,
+  XIcon,
+} from "lucide-react";
 import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,35 +34,52 @@ import {
 import {
   Item,
   ItemActions,
-  ItemTitle,
   ItemContent,
   ItemDescription,
+  ItemTitle,
 } from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
-import { pathOfPluginAssistant, pathOfThread } from "@/core/threads/utils";
+import { useAppRouter as useRouter } from "@/core/navigation";
+import { pathOfPluginAssistant } from "@/core/threads/utils";
 import {
-  buildWorkbenchSlotRouteURL,
-  ensurePluginTestThreadId,
-  getInstalledPluginFiles,
-  getInstalledPluginMetadataById,
-  useInstallMarketplacePlugin,
-  useInstalledPlugins,
-  useWorkbenchMarketplacePluginDetail,
-  useWorkbenchMarketplacePlugins,
+  createPluginStudioSession,
+  exportInstalledPluginPackage,
+  getPluginStudioSession,
+  importPluginStudioSessionSource,
+  loadPluginPackage,
+  updateInstalledPluginMetadata,
   useInstallPlugin,
-  useTestInstalledPlugin,
-  useUninstallPlugin,
+  useInstalledPluginPackage,
+  useInstalledPlugins,
   useTogglePlugin,
-  type WorkbenchPackageFile,
-  type WorkbenchPluginManifestV2,
-  type WorkbenchTargetRule,
+  useUninstallPlugin,
+  type InstalledPlugin,
+  type PluginStudioSession,
 } from "@/core/workbench";
+import { BUNDLED_WORKBENCH_PLUGINS } from "@/plugins";
 
 import { ConfirmActionDialog } from "./confirm-action-dialog";
 import { SettingsSection } from "./settings-section";
+import {
+  detectUploadConflict,
+  splitWorkbenchPlugins,
+  type UploadConflict,
+} from "./workbench-plugins-utils";
+
+const BUILT_IN_WORKBENCH_PLUGIN_IDS = new Set(
+  BUNDLED_WORKBENCH_PLUGINS.map((plugin) => plugin.id),
+);
+
+function triggerBrowserDownload(file: File) {
+  const url = URL.createObjectURL(file);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = file.name;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 export function WorkbenchPluginsPage({ onClose }: { onClose?: () => void } = {}) {
   const { t } = useI18n();
@@ -84,70 +110,95 @@ function WorkbenchPluginsList({
   plugins,
   onClose,
 }: {
-  plugins: Array<{
-    manifest: {
-      id: string;
-      name: string;
-      description?: string;
-    };
-    enabled: boolean;
-    verified?: boolean;
-    lastTestReport?: {
-      summary: string;
-      passed: boolean;
-    } | null;
-  }>;
+  plugins: InstalledPlugin[];
   onClose?: () => void;
 }) {
   const { t } = useI18n();
   const copy = t.settings.workbenchPlugins;
   const router = useRouter();
-  const pathname = usePathname();
-  const activeThreadId = useMemo(() => {
-    const match = /\/workspace\/(?:agents\/[^/]+\/)?chats\/([^/?#]+)/.exec(pathname);
-    if (!match?.[1]) {
-      return undefined;
-    }
-    const decoded = decodeURIComponent(match[1]);
-    return decoded === "new" ? undefined : decoded;
-  }, [pathname]);
-  const activeAgentRoute = useMemo(() => {
-    const match = /\/workspace\/agents\/([^/]+)\/chats\/[^/?#]+/.exec(pathname);
-    if (!match?.[1]) {
-      return null;
-    }
-    return decodeURIComponent(match[1]);
-  }, [pathname]);
   const [filter, setFilter] = useState<string>("installed");
   const [pendingDeletePluginId, setPendingDeletePluginId] = useState<string | null>(null);
-  const [manualTestLoading, setManualTestLoading] = useState(false);
-  const [selectedMarketplacePluginId, setSelectedMarketplacePluginId] = useState<string | null>(null);
+  const [debuggingPluginId, setDebuggingPluginId] = useState<string | null>(null);
+  const [selectedBuiltInPluginId, setSelectedBuiltInPluginId] = useState<string | null>(null);
+  const [pendingUploadConflict, setPendingUploadConflict] = useState<{
+    file: File;
+    manifest: { id: string; name: string };
+    conflict: UploadConflict;
+  } | null>(null);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
+
   const { mutate: togglePlugin } = useTogglePlugin();
   const { mutate: uninstallPlugin, isPending: uninstallingPlugin } = useUninstallPlugin();
   const { mutate: installPlugin, isPending: installingPlugin } = useInstallPlugin();
-  const { mutate: installMarketplacePlugin, isPending: installingMarketplacePlugin } = useInstallMarketplacePlugin();
-  const { mutate: testPlugin, isPending: testingPlugin } = useTestInstalledPlugin();
   const {
-    data: marketplacePlugins,
-    isLoading: marketplaceLoading,
-    error: marketplaceError,
-  } = useWorkbenchMarketplacePlugins();
-  const {
-    data: marketplaceDetail,
-    isLoading: marketplaceDetailLoading,
-  } = useWorkbenchMarketplacePluginDetail(selectedMarketplacePluginId);
+    data: builtInPackage,
+    isLoading: builtInPackageLoading,
+  } = useInstalledPluginPackage(selectedBuiltInPluginId ?? "");
+
+  const installedPluginMap = useMemo(
+    () => new Map(plugins.map((plugin) => [plugin.manifest.id, plugin] as const)),
+    [plugins],
+  );
+
+  const { myPlugins } = useMemo(
+    () => splitWorkbenchPlugins(plugins, BUILT_IN_WORKBENCH_PLUGIN_IDS),
+    [plugins],
+  );
+
+  const builtInPlugins = useMemo(
+    () =>
+      BUNDLED_WORKBENCH_PLUGINS
+        .map((bundled) => installedPluginMap.get(bundled.id))
+        .filter(Boolean) as InstalledPlugin[],
+    [installedPluginMap],
+  );
+
+  const selectedBuiltInPlugin = useMemo(() => {
+    if (!selectedBuiltInPluginId) {
+      return null;
+    }
+    return installedPluginMap.get(selectedBuiltInPluginId) ?? null;
+  }, [installedPluginMap, selectedBuiltInPluginId]);
+
+  const builtInDetailMarkdown = useMemo(() => {
+    const readme = builtInPackage?.files.get("README.md");
+    if (readme?.encoding === "text" && readme.content.trim()) {
+      return readme.content;
+    }
+    if (!selectedBuiltInPlugin) {
+      return "";
+    }
+    return `# ${selectedBuiltInPlugin.manifest.name}\n\n\`\`\`json\n${JSON.stringify(selectedBuiltInPlugin.manifest, null, 2)}\n\`\`\`\n`;
+  }, [builtInPackage, selectedBuiltInPlugin]);
+
+  const navigateFromSettings = (href: string) => {
+    router.push(href);
+    onClose?.();
+  };
 
   const handleCreatePlugin = () => {
-    onClose?.();
-    router.push(pathOfPluginAssistant());
+    navigateFromSettings(pathOfPluginAssistant());
   };
 
   const handleUploadMenuClick = () => {
     uploadInputRef.current?.click();
   };
 
-  const handleUploadPluginFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const installUploadedPlugin = (file: File) => {
+    installPlugin(
+      { file },
+      {
+        onSuccess: (result) => {
+          toast.success(copy.pluginInstalled.replaceAll("{name}", result.manifest.name));
+        },
+        onError: (error) => {
+          toast.error(error instanceof Error ? error.message : copy.uploadFailed);
+        },
+      },
+    );
+  };
+
+  const handleUploadPluginFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) {
@@ -160,26 +211,26 @@ function WorkbenchPluginsList({
       return;
     }
 
-    installPlugin(
-      { file },
-      {
-        onSuccess: (result) => {
-          toast.success(
-            copy.pluginInstalled.replaceAll(
-              "{name}",
-              result.manifest.name,
-            ),
-          );
-        },
-        onError: (error) => {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : copy.uploadFailed,
-          );
-        },
-      },
-    );
+    try {
+      const parsed = await loadPluginPackage(file);
+      const conflict = detectUploadConflict(plugins, {
+        id: parsed.manifest.id,
+        name: parsed.manifest.name,
+      });
+      if (conflict) {
+        setPendingUploadConflict({
+          file,
+          manifest: { id: parsed.manifest.id, name: parsed.manifest.name },
+          conflict,
+        });
+        return;
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : copy.uploadFailed);
+      return;
+    }
+
+    installUploadedPlugin(file);
   };
 
   const handleConfirmDeletePlugin = () => {
@@ -192,197 +243,65 @@ function WorkbenchPluginsList({
         setPendingDeletePluginId(null);
       },
       onError: (error) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : copy.deleteFailed,
-        );
+        toast.error(error instanceof Error ? error.message : copy.deleteFailed);
       },
     });
   };
 
-  const resolveThreadPath = (threadId: string) => {
-    if (activeAgentRoute) {
-      return `/workspace/agents/${encodeURIComponent(activeAgentRoute)}/chats/${encodeURIComponent(threadId)}`;
-    }
-    return pathOfThread(threadId);
-  };
-
-  const normalizePath = (path: string) => path.replace(/^\/+/, "");
-
-  const extName = (path: string) => {
-    const base = path.split("/").pop() ?? "";
-    const idx = base.lastIndexOf(".");
-    return idx > -1 ? base.slice(idx + 1).toLowerCase() : "";
-  };
-
-  const normalizeExtensions = (extensions?: string[]) =>
-    new Set((extensions ?? []).map((ext) => ext.replace(/^\./, "").toLowerCase()));
-
-  const pickTargetKind = (
-    targets?: WorkbenchTargetRule[],
-  ): "file" | "directory" | "project" => {
-    if (!targets || targets.length === 0) return "file";
-    if (targets.some((rule) => rule.kind === "file" || !rule.kind)) return "file";
-    if (targets.some((rule) => rule.kind === "directory")) return "directory";
-    if (targets.some((rule) => rule.kind === "project")) return "project";
-    return "file";
-  };
-
-  const pickFixtureForPlugin = (
-    manifest: WorkbenchPluginManifestV2,
-    fixturePaths: string[],
-  ) => {
-    const extensionSet = new Set<string>();
-    for (const rule of manifest.targets ?? []) {
-      for (const ext of normalizeExtensions(rule.extensions)) {
-        extensionSet.add(ext);
-      }
-    }
-    const preferred = fixturePaths.find((fixture) => extensionSet.has(extName(fixture)));
-    return preferred ?? fixturePaths[0] ?? null;
-  };
-
-  const decodePackageFile = (file: WorkbenchPackageFile): Blob => {
-    if (file.encoding === "text") {
-      return new Blob([file.content], { type: "text/plain;charset=utf-8" });
-    }
-    const binary = atob(file.content);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return new Blob([bytes], { type: "application/octet-stream" });
-  };
-
-  const writeFixtureToThread = async (
-    threadId: string,
-    virtualPath: string,
-    file: WorkbenchPackageFile,
-  ) => {
-    // Use artifacts API to materialize plugin fixture files into the sandbox workspace.
-    const normalized = normalizePath(virtualPath);
-    const response = await fetch(
-      `${getBackendBaseURL()}/api/threads/${threadId}/artifacts/${normalized}`,
-      {
-        method: "PUT",
-        body: decodePackageFile(file),
-      },
-    );
-    if (!response.ok) {
-      const detail = await response.text();
-      throw new Error(detail || `Failed to write fixture: ${virtualPath}`);
-    }
-  };
-
-  const ensureFallbackArtifact = async (
-    threadId: string,
-    manifest: WorkbenchPluginManifestV2,
-  ) => {
-    // If the plugin ships no fixtures, create a minimal file to open manually.
-    const firstRule = manifest.targets?.find((rule) => rule.extensions?.length);
-    const fallbackExt = firstRule?.extensions?.[0]?.replace(/^\./, "") || "txt";
-    const fallbackPath = `/mnt/user-data/workspace/workbench-test.${fallbackExt}`;
-    const content = `// Workbench plugin manual test\n// Plugin: ${manifest.name}\n`;
-    await writeFixtureToThread(threadId, fallbackPath, {
-      encoding: "text",
-      content,
-    });
-    return fallbackPath;
-  };
-
-  const prepareManualTest = async (pluginId: string) => {
-    const [metadata, files] = await Promise.all([
-      getInstalledPluginMetadataById(pluginId),
-      getInstalledPluginFiles(pluginId),
-    ]);
-    if (!metadata) {
-      throw new Error(`Plugin ${pluginId} not found`);
-    }
-
-    const manifest = metadata.manifest;
-    const threadId = await ensurePluginTestThreadId();
-    const fixturePaths = (manifest.fixtures ?? [])
-      .map(normalizePath)
-      .filter((fixture) => files.has(fixture));
-
-    // Materialize all fixtures into the sandbox workspace for manual inspection.
-    await Promise.all(
-      fixturePaths.map((fixture) => {
-        const file = files.get(fixture);
-        if (!file) return Promise.resolve();
-        const virtualPath = `/mnt/user-data/workspace/${fixture}`;
-        return writeFixtureToThread(threadId, virtualPath, file);
-      }),
-    );
-
-    const targetKind = pickTargetKind(manifest.targets);
-    const fixture = pickFixtureForPlugin(manifest, fixturePaths);
-    let artifactPath = fixture
-      ? `/mnt/user-data/workspace/${fixture}`
-      : await ensureFallbackArtifact(threadId, manifest);
-
-    // Directory/project targets should open the containing folder, not a file.
-    if (targetKind !== "file") {
-      const parts = artifactPath.split("/");
-      parts.pop();
-      artifactPath = parts.join("/") || "/mnt/user-data/workspace";
-    }
-
-    return {
-      threadId,
-      artifactPath,
-      pluginId: manifest.id,
-      targetKind,
-    };
-  };
-
-  const handleTestPlugin = async (pluginId: string, pluginName: string) => {
-    testPlugin(
-      { pluginId, threadId: activeThreadId },
-      {
-        onSuccess: (report) => {
-          if (report.passed) {
-            toast.success(copy.pluginTestPassed.replaceAll("{name}", pluginName));
-          } else {
-            toast.error(copy.pluginTestFailed.replaceAll("{name}", pluginName));
-          }
-        },
-        onError: (error) => {
-          toast.error(error instanceof Error ? error.message : copy.pluginTestRunFailed);
-        },
-      },
-    );
-
-    // Always open a manual test session in the right sidebar plugin slot.
+  const handleDownloadInstalledPlugin = async (pluginId: string, pluginName: string) => {
     try {
-      setManualTestLoading(true);
-      const manual = await prepareManualTest(pluginId);
-      const targetPath = resolveThreadPath(manual.threadId);
-      const targetURL = buildWorkbenchSlotRouteURL({
-        pathname: targetPath,
-        pluginId: manual.pluginId,
-        artifactPath: manual.artifactPath,
-        targetKind: manual.targetKind,
+      const artifact = await exportInstalledPluginPackage(pluginId);
+      triggerBrowserDownload(artifact);
+      toast.success(copy.pluginDownloadSuccess.replaceAll("{name}", pluginName));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : copy.pluginDownloadFailed);
+    }
+  };
+
+  const handleDebugPlugin = async (pluginId: string, pluginName: string) => {
+    const plugin = installedPluginMap.get(pluginId);
+    if (!plugin) {
+      toast.error(copy.pluginTestRunFailed);
+      return;
+    }
+
+    try {
+      setDebuggingPluginId(pluginId);
+      const packageFile = await exportInstalledPluginPackage(pluginId);
+      const reusedSessionId = plugin.pluginStudioSessionId?.trim();
+      let session: PluginStudioSession | null = null;
+      if (reusedSessionId) {
+        try {
+          session = await getPluginStudioSession(reusedSessionId);
+        } catch {
+          session = null;
+        }
+      }
+      session ??= await createPluginStudioSession({
+          pluginName: plugin.manifest.name,
+          pluginId: plugin.manifest.id,
+          description: plugin.manifest.description ?? "",
+        });
+      const imported = await importPluginStudioSessionSource(session.sessionId, {
+        file: packageFile,
+        pluginId: plugin.manifest.id,
+        pluginName: plugin.manifest.name,
+        description: plugin.manifest.description ?? "",
+        threadId: session.previewThreadId ?? undefined,
       });
-      onClose?.();
-      router.push(targetURL);
+
+      await updateInstalledPluginMetadata(pluginId, {
+        pluginStudioSessionId: imported.sessionId,
+      });
+      navigateFromSettings(
+        `${pathOfPluginAssistant()}?session_id=${encodeURIComponent(imported.sessionId)}&from=debug&plugin_id=${encodeURIComponent(pluginId)}`,
+      );
+      toast.success(copy.testPluginOpenAssistantSuccess.replaceAll("{name}", pluginName));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : copy.pluginTestRunFailed);
     } finally {
-      setManualTestLoading(false);
+      setDebuggingPluginId((current) => (current === pluginId ? null : current));
     }
-  };
-
-  const handleInstallMarketplacePlugin = (pluginId: string, pluginName: string) => {
-    installMarketplacePlugin(pluginId, {
-      onSuccess: () => {
-        toast.success(copy.marketplaceInstallSuccess.replaceAll("{name}", pluginName));
-      },
-      onError: (error) => {
-        toast.error(error instanceof Error ? error.message : copy.marketplaceInstallFailed);
-      },
-    });
   };
 
   return (
@@ -400,80 +319,86 @@ function WorkbenchPluginsList({
             </TabsList>
           </Tabs>
         </div>
-        <div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" disabled={installingPlugin}>
-                <PackageIcon className="size-4" />
-                {copy.addPlugin}
-                <ChevronDownIcon className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onSelect={handleCreatePlugin}>
-                <SparklesIcon className="size-4 text-muted-foreground" />
-                {copy.createViaSkill}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={handleUploadMenuClick}
-                disabled={installingPlugin}
-              >
-                <UploadIcon className="size-4 text-muted-foreground" />
-                {installingPlugin
-                  ? copy.uploading
-                  : copy.uploadPackage}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <input
-            ref={uploadInputRef}
-            type="file"
-            accept=".nwp"
-            className="hidden"
-            onChange={handleUploadPluginFile}
-          />
-        </div>
+        {filter === "installed" ? (
+          <div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" loading={installingPlugin} disabled={installingPlugin}>
+                  <PackageIcon className="size-4" />
+                  {copy.addPlugin}
+                  <ChevronDownIcon className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuItem onSelect={handleCreatePlugin}>
+                  <SparklesIcon className="size-4 text-muted-foreground" />
+                  {copy.createViaSkill}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={handleUploadMenuClick}
+                  disabled={installingPlugin}
+                >
+                  <UploadIcon className="size-4 text-muted-foreground" />
+                  {installingPlugin ? copy.uploading : copy.uploadPackage}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              accept=".nwp"
+              className="hidden"
+              onChange={(event) => {
+                void handleUploadPluginFile(event);
+              }}
+            />
+          </div>
+        ) : null}
       </header>
-      {plugins.length === 0 && filter === "installed" && (
+      {myPlugins.length === 0 && filter === "installed" && (
         <EmptyPlugin onCreatePlugin={handleCreatePlugin} />
       )}
-      {plugins.length > 0 &&
+      {myPlugins.length > 0 &&
         filter === "installed" &&
-        plugins.map((plugin) => (
+        myPlugins.map((plugin) => (
           <Item className="w-full" variant="outline" key={plugin.manifest.id}>
             <ItemContent>
               <ItemTitle>
                 <div className="flex items-center gap-2">
-                  {plugin.manifest.name}
-                  {plugin.verified ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
-                      <CheckCircle2Icon className="size-3.5" />
-                      {copy.verified}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
-                      <XCircleIcon className="size-3.5" />
-                      {copy.unverified}
-                    </span>
-                  )}
+                  <span>{plugin.manifest.name}</span>
+                  <span className="text-muted-foreground text-xs">v{plugin.version}</span>
+                  <Badge variant="secondary" className="text-[10px]">
+                    {copy.installedState}
+                  </Badge>
                 </div>
               </ItemTitle>
               <ItemDescription className="line-clamp-4">
                 {plugin.manifest.description ?? copy.noDescription}
-                {plugin.lastTestReport?.summary ? ` • ${plugin.lastTestReport.summary}` : ""}
               </ItemDescription>
             </ItemContent>
             <ItemActions>
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={testingPlugin || manualTestLoading}
+                disabled={debuggingPluginId !== null}
                 onClick={() => {
-                  void handleTestPlugin(plugin.manifest.id, plugin.manifest.name);
+                  void handleDebugPlugin(plugin.manifest.id, plugin.manifest.name);
                 }}
               >
-                <TestTube2Icon className="size-4" />
-                {copy.testPluginAction}
+                <WrenchIcon className="size-4" />
+                {debuggingPluginId === plugin.manifest.id
+                  ? t.common.loading
+                  : copy.debugPluginAction}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void handleDownloadInstalledPlugin(plugin.manifest.id, plugin.manifest.name);
+                }}
+              >
+                <DownloadIcon className="size-4" />
+                {copy.downloadAction}
               </Button>
               <Switch
                 checked={plugin.enabled}
@@ -500,89 +425,66 @@ function WorkbenchPluginsList({
         ))}
       {filter === "marketplace" && (
         <div className="flex flex-col gap-3">
-          {marketplaceLoading ? (
-            <div className="text-muted-foreground text-sm">{t.common.loading}</div>
-          ) : marketplaceError ? (
-            <div className="text-sm text-rose-600">{marketplaceError.message}</div>
-          ) : (marketplacePlugins?.length ?? 0) === 0 ? (
+          {builtInPlugins.length === 0 ? (
             <div className="text-muted-foreground text-sm">{copy.marketplaceEmpty}</div>
           ) : (
-            marketplacePlugins?.map((item) => (
-              <Item className="w-full" variant="outline" key={item.id}>
+            builtInPlugins.map((plugin) => (
+              <Item className="w-full" variant="outline" key={plugin.manifest.id}>
                 <ItemContent>
                   <ItemTitle>
                     <div className="flex items-center gap-2">
-                      <span>{item.name}</span>
-                      <span className="text-muted-foreground text-xs">v{item.version}</span>
+                      <span>{plugin.manifest.name}</span>
+                      <span className="text-muted-foreground text-xs">v{plugin.version}</span>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {copy.builtInState}
+                      </Badge>
                     </div>
                   </ItemTitle>
                   <ItemDescription className="line-clamp-4">
-                    {item.description}
+                    {plugin.manifest.description ?? copy.noDescription}
                   </ItemDescription>
-                  {item.tags.length > 0 ? (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {item.tags.map((tag) => (
-                        <span
-                          key={`${item.id}:${tag}`}
-                          className="bg-muted inline-flex rounded px-1.5 py-0.5 text-[10px]"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
                 </ItemContent>
                 <ItemActions>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => setSelectedMarketplacePluginId(item.id)}
+                    onClick={() => setSelectedBuiltInPluginId(plugin.manifest.id)}
                   >
                     {copy.marketplaceDetailAction}
                   </Button>
-                  <Button
-                    size="sm"
-                    disabled={installingMarketplacePlugin}
-                    onClick={() => handleInstallMarketplacePlugin(item.id, item.name)}
-                  >
-                    {installingMarketplacePlugin ? copy.marketplaceInstalling : copy.marketplaceInstallAction}
-                  </Button>
+                  <Switch
+                    checked={plugin.enabled}
+                    onCheckedChange={(checked) =>
+                      togglePlugin({
+                        pluginId: plugin.manifest.id,
+                        enabled: checked,
+                      })
+                    }
+                  />
                 </ItemActions>
               </Item>
             ))
           )}
 
-          {selectedMarketplacePluginId ? (
+          {selectedBuiltInPluginId ? (
             <section className="rounded-lg border p-3">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h4 className="text-sm font-semibold">{copy.marketplaceDetailTitle}</h4>
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  onClick={() => setSelectedMarketplacePluginId(null)}
+                  onClick={() => setSelectedBuiltInPluginId(null)}
                 >
                   <XIcon className="size-4" />
                 </Button>
               </div>
-              {marketplaceDetailLoading ? (
+              {builtInPackageLoading ? (
                 <div className="text-muted-foreground text-sm">{t.common.loading}</div>
-              ) : marketplaceDetail ? (
+              ) : builtInPackage ? (
                 <div className="space-y-3">
-                  {marketplaceDetail.demoImageUrls.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {marketplaceDetail.demoImageUrls.map((url) => (
-                        <img
-                          key={url}
-                          src={url}
-                          alt={marketplaceDetail.name}
-                          className="h-auto w-full rounded border"
-                        />
-                      ))}
-                    </div>
-                  ) : null}
                   <article className="prose prose-sm max-w-none dark:prose-invert">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {marketplaceDetail.readmeMarkdown}
+                      {builtInDetailMarkdown}
                     </ReactMarkdown>
                   </article>
                 </div>
@@ -593,6 +495,44 @@ function WorkbenchPluginsList({
           ) : null}
         </div>
       )}
+      <ConfirmActionDialog
+        open={pendingUploadConflict !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingUploadConflict(null);
+          }
+        }}
+        title={pendingUploadConflict?.conflict.kind === "name"
+          ? copy.uploadDuplicateNameTitle
+          : copy.uploadOverwriteTitle}
+        description={(() => {
+          if (!pendingUploadConflict) {
+            return "";
+          }
+          if (pendingUploadConflict.conflict.kind === "name") {
+            return copy.uploadDuplicateNameDescription
+              .replaceAll("{name}", pendingUploadConflict.conflict.existing.manifest.name)
+              .replaceAll("{existingId}", pendingUploadConflict.conflict.existing.manifest.id)
+              .replaceAll("{newId}", pendingUploadConflict.manifest.id);
+          }
+          return copy.uploadOverwriteDescription
+            .replaceAll("{name}", pendingUploadConflict.conflict.existing.manifest.name)
+            .replaceAll("{version}", pendingUploadConflict.conflict.existing.version);
+        })()}
+        cancelText={copy.cancelAction}
+        confirmText={pendingUploadConflict?.conflict.kind === "name"
+          ? copy.uploadDuplicateNameConfirm
+          : copy.uploadOverwriteConfirm}
+        confirmDisabled={installingPlugin}
+        onConfirm={() => {
+          if (!pendingUploadConflict) {
+            return;
+          }
+          const file = pendingUploadConflict.file;
+          setPendingUploadConflict(null);
+          installUploadedPlugin(file);
+        }}
+      />
       <ConfirmActionDialog
         open={pendingDeletePluginId !== null}
         onOpenChange={(open) => {

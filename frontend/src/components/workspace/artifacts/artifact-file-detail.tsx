@@ -93,6 +93,7 @@ export function ArtifactFileDetail({
     enabled: isCodeFile && !isWriteFile,
   });
 
+  const hasLoadedContent = content !== null && content !== undefined;
   const displayContent = content ?? "";
 
   const [viewMode, setViewMode] = useState<"code" | "preview">("code");
@@ -133,10 +134,20 @@ export function ArtifactFileDetail({
       {isSupportPreview &&
         viewMode === "preview" &&
         (language === "markdown" || language === "html") && (
-        <ArtifactFilePreview
-          content={displayContent}
-          language={language ?? "text"}
-        />
+        <>
+          {language === "html" && !hasLoadedContent ? (
+            <div className="text-muted-foreground flex size-full items-center justify-center text-sm">
+              {t.common.loading}
+            </div>
+          ) : (
+            <ArtifactFilePreview
+              // Ensure the iframe mounts with the final HTML instead of mounting with empty content first.
+              key={language === "html" ? `${threadId}:${filepath}:html:${hasLoadedContent ? "ready" : "loading"}` : undefined}
+              content={displayContent}
+              language={language ?? "text"}
+            />
+          )}
+        </>
       )}
       {isCodeFile && viewMode === "code" && (
         <CodeEditor

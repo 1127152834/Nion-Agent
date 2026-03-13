@@ -1,10 +1,10 @@
 import os
 from typing import Literal, NotRequired, override
 
-from langchain.agents import AgentState
-from langchain.agents.middleware import AgentMiddleware
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
 
+from src.config.app_config import ensure_latest_app_config
 from src.agents.memory.policy import resolve_memory_policy
 from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
 
@@ -85,8 +85,44 @@ class RuntimeProfileMiddleware(AgentMiddleware[RuntimeProfileMiddlewareState]):
         if not thread_id:
             return None
 
+        app_config = ensure_latest_app_config(process_name="langgraph")
+        strict_mode = bool(getattr(app_config.sandbox, "strict_mode", False))
+
         profile = self._repository.read(thread_id)
         requested_mode, requested_workdir = self._get_requested_profile(state, runtime)
+
+        # Strict sandbox mode: always run in sandbox mode, ignore requested host mode.
+        if strict_mode:
+            if not profile["locked"] and profile["execution_mode"] != "sandbox":
+                # Best-effort: ensure first-run profile is locked in sandbox mode
+                # to match the effective runtime behavior under strict mode.
+                try:
+                    profile = self._repository.update(
+                        thread_id,
+                        execution_mode="sandbox",
+                        host_workdir=None,
+                    )
+                except RuntimeProfileValidationError as exc:
+                    raise ValueError(str(exc)) from exc
+
+            if not profile["locked"]:
+                profile = self._repository.lock(thread_id)
+
+            result = {
+                "execution_mode": "sandbox",
+                "host_workdir": None,
+                "runtime_profile_locked": profile["locked"],
+            }
+            if self._has_memory_session_inputs(state, runtime):
+                policy = resolve_memory_policy(state=state, runtime_context=runtime.context)
+                result.update(
+                    {
+                        "session_mode": policy.session_mode,
+                        "memory_read": policy.allow_read,
+                        "memory_write": policy.allow_write,
+                    }
+                )
+            return result
 
         # Support first-run profile bootstrap for brand new threads.
         if not profile["locked"]:

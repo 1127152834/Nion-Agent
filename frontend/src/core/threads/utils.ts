@@ -1,5 +1,6 @@
 import type { Message } from "@langchain/langgraph-sdk";
 
+import { hasThreadRenderableState, isThreadLikelyInitializing } from "./thread-guard";
 import type { AgentThread } from "./types";
 
 const LEGACY_UNTITLED_ZH = "\u672a\u547d\u540d";
@@ -38,20 +39,28 @@ export function titleOfThread(thread: AgentThread) {
 }
 
 export function isGhostThread(thread: AgentThread) {
-  const messages = thread.values?.messages;
-  if (Array.isArray(messages) && messages.length > 0) {
-    return false;
-  }
-
   const rawTitle = typeof thread.values?.title === "string"
     ? thread.values.title.trim()
     : "";
-  if (!rawTitle) {
+  const normalizedTitle = rawTitle.toLowerCase();
+  const isPlaceholderTitle = !rawTitle
+    || normalizedTitle === "untitled"
+    || normalizedTitle === LEGACY_UNTITLED_ZH;
+  const hasMessages = Array.isArray(thread.values?.messages) && thread.values.messages.length > 0;
+
+  if (hasMessages) {
+    return false;
+  }
+
+  if (isThreadLikelyInitializing(thread)) {
+    return false;
+  }
+
+  if (isPlaceholderTitle) {
     return true;
   }
 
-  const normalizedTitle = rawTitle.toLowerCase();
-  return normalizedTitle === "untitled" || normalizedTitle === LEGACY_UNTITLED_ZH;
+  return !hasThreadRenderableState(thread.values);
 }
 
 export function isThreadAwaitingResponse(thread: AgentThread) {

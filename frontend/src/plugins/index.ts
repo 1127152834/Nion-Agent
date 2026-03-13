@@ -1,9 +1,12 @@
 import { getWorkbenchRegistry, type InstalledPlugin } from "@/core/workbench";
 import {
   installPlugin,
+  loadPluginPackage,
   listInstalledPlugins,
   loadInstalledPlugin,
+  updateInstalledPluginMetadata,
 } from "@/core/workbench/loader";
+import { compareSemver } from "@/core/workbench/versioning";
 
 import DocumentPreviewPlugin from "./document-preview";
 
@@ -15,12 +18,14 @@ import DocumentPreviewPlugin from "./document-preview";
  */
 type BundledWorkbenchPlugin = {
   id: string;
+  name: string;
   packageURL: string;
 };
 
-const BUNDLED_WORKBENCH_PLUGINS: BundledWorkbenchPlugin[] = [
+export const BUNDLED_WORKBENCH_PLUGINS: BundledWorkbenchPlugin[] = [
   {
     id: "frontend-workbench",
+    name: "Frontend Workbench",
     packageURL: "/workbench-plugins/frontend-workbench.nwp",
   },
 ];
@@ -29,9 +34,7 @@ async function installBundledPluginIfMissing(
   existingById: Map<string, InstalledPlugin>,
   bundled: BundledWorkbenchPlugin,
 ) {
-  if (existingById.has(bundled.id)) {
-    return;
-  }
+  const existing = existingById.get(bundled.id);
 
   const response = await fetch(bundled.packageURL, { cache: "no-cache" });
   if (!response.ok) {
@@ -40,8 +43,21 @@ async function installBundledPluginIfMissing(
   const blob = await response.blob();
   const filename = bundled.packageURL.split("/").pop() ?? `${bundled.id}.nwp`;
   const file = new File([blob], filename, { type: blob.type || "application/zip" });
+
+  // Skip re-install when local version is already up-to-date.
+  const bundledPackage = await loadPluginPackage(file);
+  if (existing && compareSemver(bundledPackage.manifest.version, existing.version) <= 0) {
+    return;
+  }
+
   const installed = await installPlugin(file);
-  existingById.set(installed.manifest.id, installed);
+  const preserved = existing
+    ? await updateInstalledPluginMetadata(installed.manifest.id, {
+        enabled: existing.enabled,
+        pluginStudioSessionId: existing.pluginStudioSessionId,
+      })
+    : installed;
+  existingById.set(preserved.manifest.id, preserved);
 }
 
 export async function initializeBuiltInPlugins() {

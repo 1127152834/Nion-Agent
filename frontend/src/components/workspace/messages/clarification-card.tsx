@@ -1,25 +1,67 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { MessageCircleQuestionMarkIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useOptionalPromptInputController } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/core/i18n/hooks";
 import type { ClarificationPayload } from "@/core/messages/utils";
+import type { AgentThread } from "@/core/threads/types";
 
 export function ClarificationCard({
   clarification,
+  threadId,
   isLoading,
   onSelectOption,
 }: {
   clarification: ClarificationPayload;
+  threadId: string;
   isLoading: boolean;
   onSelectOption?: (option: string) => void;
 }) {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const controller = useOptionalPromptInputController();
   const [submittingOption, setSubmittingOption] = useState<string | null>(null);
+
+  const resolveClarificationInCache = useCallback(() => {
+    if (clarification.status !== "awaiting_user") {
+      return;
+    }
+    queryClient.setQueriesData(
+      {
+        queryKey: ["threads", "search"],
+        exact: false,
+      },
+      (oldData: Array<AgentThread> | undefined) => {
+        if (!Array.isArray(oldData)) {
+          return oldData;
+        }
+        return oldData.map((threadItem) => {
+          if (
+            threadItem.thread_id !== threadId
+            || threadItem.values?.clarification?.status !== "awaiting_user"
+          ) {
+            return threadItem;
+          }
+          return {
+            ...threadItem,
+            values: {
+              ...threadItem.values,
+              clarification: {
+                ...threadItem.values.clarification,
+                status: "resolved",
+                resolved_at: new Date().toISOString(),
+                resolved_by_message_id: null,
+              },
+            },
+          };
+        });
+      },
+    );
+  }, [clarification.status, queryClient, threadId]);
 
   useEffect(() => {
     if (!submittingOption || isLoading) {
@@ -62,6 +104,7 @@ export function ClarificationCard({
                 disabled={isLoading || pending}
                 onClick={() => {
                   setSubmittingOption(option);
+                  resolveClarificationInCache();
                   if (controller?.submitText) {
                     controller.submitText(option);
                   } else {

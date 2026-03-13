@@ -1,8 +1,8 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -20,6 +20,7 @@ import { AgentPickerCards } from "@/components/workspace/agents/agent-picker-car
 import { WorkingDirectoryTrigger } from "@/components/workspace/artifacts";
 import {
   ChatBox,
+  getChatThreadVisibilityOverrides,
   useSpecificChatMode,
   useThreadChat,
 } from "@/components/workspace/chats";
@@ -35,17 +36,26 @@ import { getAPIClient } from "@/core/api";
 import { getLangGraphBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import { useNotification } from "@/core/notification/hooks";
 import { platform } from "@/core/platform";
 import { useDesktopRuntime } from "@/core/platform/hooks";
 import { type RuntimeProfile, fetchRuntimeProfile, updateRuntimeProfile } from "@/core/runtime-profile/api";
 import { useLocalSettings } from "@/core/settings";
+import { fetchSandboxPolicy } from "@/core/system/api";
+import type { AgentThreadState } from "@/core/threads";
 import {
   isThreadNotFoundError,
   pruneThreadFromCache,
   useDeleteThread,
   useThreadStream,
 } from "@/core/threads/hooks";
+import {
+  hasThreadRenderableState,
+  isThreadLikelyInitializing,
+  THREAD_EMPTY_STATE_MAX_POLLS,
+  THREAD_EMPTY_STATE_POLL_INTERVAL_MS,
+} from "@/core/threads/thread-guard";
 import { pathOfNewThread, pathOfThread, textOfMessage } from "@/core/threads/utils";
 import { isUUID } from "@/core/utils/uuid";
 import { env } from "@/env";
@@ -68,7 +78,12 @@ export default function ChatPage() {
 
   const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } = useThreadChat();
   const isTemporaryMode = searchParams.get("mode") === "temporary-chat";
+  const chatMode = searchParams.get("mode")?.trim() ?? "";
   const prefillPrompt = searchParams.get("prefill")?.trim() ?? "";
+  const chatThreadVisibilityOverrides = useMemo(
+    () => getChatThreadVisibilityOverrides(chatMode),
+    [chatMode],
+  );
   const prefillSentRef = useRef<string | null>(null);
   const temporaryCleanupTriggeredRef = useRef(false);
   useSpecificChatMode();
@@ -87,6 +102,18 @@ export default function ChatPage() {
   const [hostSetupCreateSaving, setHostSetupCreateSaving] = useState(false);
 
   const hostModeCopy = t.workspace.runtimeMode;
+  const ensureHostModeAllowed = useCallback(async (): Promise<boolean> => {
+    try {
+      const policy = await fetchSandboxPolicy();
+      if (policy.strict_mode) {
+        toast.error(hostModeCopy.strictDisabled);
+        return false;
+      }
+    } catch (error) {
+      console.warn("Failed to load sandbox policy:", error);
+    }
+    return true;
+  }, [hostModeCopy.strictDisabled]);
   const mapRuntimeProfileError = useCallback(
     (message: string): string => {
       if (message.includes("empty directory")) {
@@ -102,6 +129,19 @@ export default function ChatPage() {
       return message;
     },
     [hostModeCopy],
+  );
+  const applyChatThreadVisibility = useCallback(
+    (targetThreadId: string) => {
+      if (!chatThreadVisibilityOverrides) {
+        return;
+      }
+      void getAPIClient(isMock).threads.updateState(targetThreadId, {
+        values: chatThreadVisibilityOverrides,
+      }).catch((error) => {
+        console.warn("Failed to mark special chat thread visibility:", error);
+      });
+    },
+    [chatThreadVisibilityOverrides, isMock],
   );
 
   const [thread, sendMessage] = useThreadStream({
@@ -128,6 +168,7 @@ export default function ChatPage() {
             console.error("Failed to mark temporary chat mode:", updateError);
           });
       }
+      applyChatThreadVisibility(startedThreadId);
     },
     onFinish: (state) => {
       if (document.hidden || !document.hasFocus()) {
@@ -146,6 +187,16 @@ export default function ChatPage() {
       }
     },
   });
+
+  useEffect(() => {
+    if (!chatThreadVisibilityOverrides) {
+      return;
+    }
+    if (!threadId || threadId === "new") {
+      return;
+    }
+    applyChatThreadVisibility(threadId);
+  }, [applyChatThreadVisibility, chatThreadVisibilityOverrides, threadId]);
 
   const isTemporarySession = isTemporaryMode || thread.values.session_mode === "temporary_chat";
   const hostModeMissingDir = runtimeProfile.execution_mode === "host" && !runtimeProfile.host_workdir;
@@ -201,6 +252,9 @@ export default function ChatPage() {
       toast.error(hostModeCopy.desktopOnly);
       return null;
     }
+    if (!(await ensureHostModeAllowed())) {
+      return null;
+    }
     if (runtimeProfile.locked) {
       toast.error(hostModeCopy.locked);
       return null;
@@ -221,6 +275,7 @@ export default function ChatPage() {
       return null;
     }
   }, [
+    ensureHostModeAllowed,
     isDesktopRuntime,
     hostModeCopy.desktopOnly,
     hostModeCopy.locked,
@@ -263,6 +318,9 @@ export default function ChatPage() {
 
   const handleCreateWorkspaceFromSelectedDir = useCallback(async () => {
     if (!hostSetupCreateBaseDir) {
+      return;
+    }
+    if (!(await ensureHostModeAllowed())) {
       return;
     }
     const trimmedName = hostSetupCreateDirName.trim();
@@ -316,6 +374,7 @@ export default function ChatPage() {
     setHostSetupCreateDirName("workspace");
     setHostSetupDialogOpen(false);
   }, [
+    ensureHostModeAllowed,
     hostModeCopy.folderNameInvalid,
     hostModeCopy.folderNameRequired,
     hostModeCopy.modeSaveFailed,
@@ -337,17 +396,22 @@ export default function ChatPage() {
   }, [hostSetupPreviousProfile]);
 
   const handleOpenHostSetup = useCallback(() => {
-    setHostSetupPreviousProfile(runtimeProfile);
-    setHostSetupErrorMessage(null);
-    setHostSetupCreateBaseDir(null);
-    setHostSetupCreateInputVisible(false);
-    setHostSetupCreateDirName("workspace");
-    setRuntimeProfile((prev) => ({
-      ...prev,
-      execution_mode: "host",
-    }));
-    setHostSetupDialogOpen(true);
-  }, [runtimeProfile]);
+    void ensureHostModeAllowed().then((allowed) => {
+      if (!allowed) {
+        return;
+      }
+      setHostSetupPreviousProfile(runtimeProfile);
+      setHostSetupErrorMessage(null);
+      setHostSetupCreateBaseDir(null);
+      setHostSetupCreateInputVisible(false);
+      setHostSetupCreateDirName("workspace");
+      setRuntimeProfile((prev) => ({
+        ...prev,
+        execution_mode: "host",
+      }));
+      setHostSetupDialogOpen(true);
+    });
+  }, [ensureHostModeAllowed, runtimeProfile]);
 
   const handleSwitchMode = useCallback(
     async (mode: "sandbox" | "host") => {
@@ -365,6 +429,9 @@ export default function ChatPage() {
         await persistRuntimeProfile({ execution_mode: "sandbox", host_workdir: null });
         return;
       }
+      if (!(await ensureHostModeAllowed())) {
+        return;
+      }
       if (runtimeProfile.host_workdir) {
         await persistRuntimeProfile({
           execution_mode: "host",
@@ -375,6 +442,7 @@ export default function ChatPage() {
       handleOpenHostSetup();
     },
     [
+      ensureHostModeAllowed,
       handleOpenHostSetup,
       hostModeCopy.locked,
       persistRuntimeProfile,
@@ -433,17 +501,52 @@ export default function ChatPage() {
 
     let cancelled = false;
     const apiClient = getAPIClient(isMock);
+    const removeInvalidThreadAndRedirect = () => {
+      void apiClient.threads.delete(threadId).catch((deleteError) => {
+        if (!isThreadNotFoundError(deleteError)) {
+          console.warn("Failed to delete invalid thread:", deleteError);
+        }
+      });
+      pruneThreadFromCache(queryClient, threadId);
+      router.replace(pathOfNewThread());
+    };
 
     const confirmThreadExists = async () => {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      let notFoundRetries = 0;
+
+      for (let pollAttempt = 0; pollAttempt < THREAD_EMPTY_STATE_MAX_POLLS; pollAttempt += 1) {
         try {
-          await apiClient.threads.get(threadId);
+          const threadMeta = await apiClient.threads.get(threadId);
+          const threadState = await apiClient.threads.getState<AgentThreadState>(threadId);
+
+          if (hasThreadRenderableState(threadState?.values)) {
+            return;
+          }
+
+          const hasMorePolls = pollAttempt < THREAD_EMPTY_STATE_MAX_POLLS - 1;
+          const isInitializing = isThreadLikelyInitializing(threadMeta);
+          if (hasMorePolls) {
+            await new Promise<void>((resolve) => {
+              window.setTimeout(resolve, THREAD_EMPTY_STATE_POLL_INTERVAL_MS);
+            });
+            if (cancelled) {
+              return;
+            }
+            continue;
+          }
+
+          if (!isInitializing) {
+            removeInvalidThreadAndRedirect();
+            return;
+          }
+
           return;
         } catch (error) {
           if (!isThreadNotFoundError(error)) {
             return;
           }
-          if (attempt === 0) {
+          if (notFoundRetries < 1) {
+            notFoundRetries += 1;
             await new Promise<void>((resolve) => {
               window.setTimeout(resolve, 220);
             });
@@ -546,10 +649,40 @@ export default function ChatPage() {
             : {}),
           execution_mode: runtimeProfile.execution_mode,
           host_workdir: runtimeProfile.host_workdir ?? undefined,
+          ...(chatThreadVisibilityOverrides ?? {}),
         },
       );
     },
-    [hostModeCopy.hostDirMissing, hostModeMissingDir, isTemporarySession, runtimeProfile.execution_mode, runtimeProfile.host_workdir, sendMessage, threadId],
+    [chatThreadVisibilityOverrides, hostModeCopy.hostDirMissing, hostModeMissingDir, isTemporarySession, runtimeProfile.execution_mode, runtimeProfile.host_workdir, sendMessage, threadId],
+  );
+
+  const handleCLIInteractiveSubmit = useCallback(
+    (text: string) => {
+      if (hostModeMissingDir) {
+        toast.error(hostModeCopy.hostDirMissing);
+        return;
+      }
+      void sendMessage(
+        threadId,
+        { text, files: [] },
+        {
+          ...(isTemporarySession
+            ? {
+              memory_read: true,
+              memory_write: false,
+              session_mode: "temporary_chat",
+            }
+            : {}),
+          execution_mode: runtimeProfile.execution_mode,
+          host_workdir: runtimeProfile.host_workdir ?? undefined,
+          ...(chatThreadVisibilityOverrides ?? {}),
+        },
+      ).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to send CLI input: ${message}`);
+      });
+    },
+    [chatThreadVisibilityOverrides, hostModeCopy.hostDirMissing, hostModeMissingDir, isTemporarySession, runtimeProfile.execution_mode, runtimeProfile.host_workdir, sendMessage, threadId],
   );
 
   const handleClarificationSelect = useCallback(
@@ -587,12 +720,13 @@ export default function ChatPage() {
           : {}),
         execution_mode: runtimeProfile.execution_mode,
         host_workdir: runtimeProfile.host_workdir ?? undefined,
+        ...(chatThreadVisibilityOverrides ?? {}),
       },
     ).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(`${t.workspace.messageList.retryFailedPrefix}${message}`);
     });
-  }, [isTemporarySession, runtimeProfile.execution_mode, runtimeProfile.host_workdir, sendMessage, t.workspace.messageList.noRetryableUserMessage, t.workspace.messageList.retryFailedPrefix, thread.isLoading, thread.messages, threadId]);
+  }, [chatThreadVisibilityOverrides, isTemporarySession, runtimeProfile.execution_mode, runtimeProfile.host_workdir, sendMessage, t.workspace.messageList.noRetryableUserMessage, t.workspace.messageList.retryFailedPrefix, thread.isLoading, thread.messages, threadId]);
 
   const handleStop = useCallback(async () => {
     await thread.stop();
@@ -735,6 +869,7 @@ export default function ChatPage() {
                     paddingBottom={232}
                     onClarificationSelect={handleClarificationSelect}
                     onRetryLastMessage={handleRetryLastMessage}
+                    onSubmitMessage={handleCLIInteractiveSubmit}
                   />
                 </div>
                 <div className="pointer-events-none absolute right-0 bottom-4 left-0 z-30 flex justify-center px-4 sm:bottom-6 sm:px-6">

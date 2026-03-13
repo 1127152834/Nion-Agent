@@ -5,11 +5,13 @@ from langchain_core.runnables import RunnableConfig
 
 from src.agents.lead_agent.prompt import apply_prompt_template
 from src.agents.middlewares.clarification_middleware import ClarificationMiddleware
+from src.agents.middlewares.cli_interactive_middleware import CLIInteractiveMiddleware
 from src.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
 from src.agents.middlewares.memory_middleware import MemoryMiddleware
 from src.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
 from src.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
 from src.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
+from src.agents.middlewares.tool_policy_guard_middleware import ToolPolicyGuardMiddleware
 from src.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
 from src.agents.middlewares.title_middleware import TitleMiddleware
 from src.agents.middlewares.todo_middleware import TodoMiddleware
@@ -295,8 +297,14 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
         max_concurrent_subagents = config.get("configurable", {}).get("max_concurrent_subagents", 3)
         middlewares.append(SubagentLimitMiddleware(max_concurrent=max_concurrent_subagents))
 
+    # Governance guard must run before ToolNode execution.
+    middlewares.append(ToolPolicyGuardMiddleware(agent_name=agent_name))
+
     # Safety guard for host-mode operations
     middlewares.append(ToolSafetyGuardMiddleware())
+
+    # CLIInteractiveMiddleware must be before ClarificationMiddleware
+    middlewares.append(CLIInteractiveMiddleware())
 
     # ClarificationMiddleware should always be last
     middlewares.append(ClarificationMiddleware())
@@ -323,6 +331,19 @@ def make_lead_agent(config: RunnableConfig):
     memory_write = cfg.get("memory_write")
     workspace_mode = cfg.get("workspace_mode")
     plugin_studio_session_id = cfg.get("plugin_studio_session_id")
+    requested_skills_raw = cfg.get("requested_skills")
+
+    requested_skills: list[str] | None = None
+    if isinstance(requested_skills_raw, str):
+        candidate = requested_skills_raw.strip()
+        requested_skills = [candidate] if candidate else None
+    elif isinstance(requested_skills_raw, list):
+        cleaned = [
+            item.strip()
+            for item in requested_skills_raw
+            if isinstance(item, str) and item.strip()
+        ]
+        requested_skills = cleaned or None
 
     agent_config = load_agent_config(agent_name) if not is_bootstrap else None
     # Custom agent model or fallback to global/default model resolution
@@ -363,6 +384,7 @@ def make_lead_agent(config: RunnableConfig):
             "reasoning_effort": reasoning_effort,
             "is_plan_mode": is_plan_mode,
             "subagent_enabled": subagent_enabled,
+            "requested_skills": requested_skills or [],
         }
     )
 
@@ -377,12 +399,13 @@ def make_lead_agent(config: RunnableConfig):
             memory_write=memory_write,
             workspace_mode=workspace_mode,
             plugin_studio_session_id=plugin_studio_session_id,
+            requested_skills=requested_skills,
         )
 
         create_agent_fn = _load_create_agent()
         return create_agent_fn(
             model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
-            tools=get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled) + [setup_agent],
+            tools=get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled, agent_name=agent_name) + [setup_agent],
             middleware=_build_middlewares(config, model_name=model_name),
             system_prompt=system_prompt,
             state_schema=ThreadState,
@@ -392,7 +415,12 @@ def make_lead_agent(config: RunnableConfig):
     create_agent_fn = _load_create_agent()
     return create_agent_fn(
         model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort),
-        tools=get_available_tools(model_name=model_name, groups=agent_config.tool_groups if agent_config else None, subagent_enabled=subagent_enabled),
+        tools=get_available_tools(
+            model_name=model_name,
+            groups=agent_config.tool_groups if agent_config else None,
+            subagent_enabled=subagent_enabled,
+            agent_name=agent_name,
+        ),
         middleware=_build_middlewares(config, model_name=model_name, agent_name=agent_name),
         system_prompt=apply_prompt_template(
             subagent_enabled=subagent_enabled,
@@ -403,6 +431,7 @@ def make_lead_agent(config: RunnableConfig):
             memory_write=memory_write,
             workspace_mode=workspace_mode,
             plugin_studio_session_id=plugin_studio_session_id,
+            requested_skills=requested_skills,
         ),
         state_schema=ThreadState,
     )

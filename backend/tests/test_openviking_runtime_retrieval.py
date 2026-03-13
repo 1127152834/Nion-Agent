@@ -82,9 +82,15 @@ def test_BE_CORE_MEM_303_reindex_vectors_reads_structured_facts(monkeypatch):
         lambda **kwargs: graph_calls.append(kwargs["memory_id"]),
     )
     monkeypatch.setattr(
-        runtime._structured,
-        "get_memory_data",
-        lambda request: {"facts": [{"id": "fact-1", "content": "hello memory", "source": "thread-1"}]},
+        runtime._sqlite_index,
+        "list_resources",
+        lambda **kwargs: [
+            {
+                "memory_id": "fact-1",
+                "summary": "hello memory",
+                "status": "active",
+            }
+        ],
     )
 
     result = runtime.reindex_vectors(include_agents=False)
@@ -166,3 +172,128 @@ def test_BE_CORE_MEM_305_ensure_scope_repairs_invalid_vlm_config(tmp_path):
     if repaired["vlm"]:
         assert repaired["vlm"].get("model")
         assert repaired["vlm"].get("api_key")
+
+
+@pytest.mark.unit
+def test_BE_CORE_MEM_306_commit_session_degrades_to_local_only_when_openviking_unavailable(monkeypatch):
+    runtime = OpenVikingRuntime()
+    upsert_called: list[dict] = []
+
+    monkeypatch.setattr(
+        runtime,
+        "_build_openviking_client",
+        lambda agent_name: (_ for _ in ()).throw(RuntimeError("OpenViking import failed")),
+    )
+    monkeypatch.setattr(runtime, "_upsert_runtime_indexes", lambda **kwargs: upsert_called.append(kwargs))
+
+    result = runtime.commit_session(
+        thread_id="thread-fallback",
+        messages=[
+            {"role": "user", "content": "你好我叫张天成"},
+            {"role": "assistant", "content": "很高兴认识你"},
+        ],
+        agent_name=None,
+    )
+
+    assert result["status"] == "committed_local_only"
+    assert result["message_count"] == 2
+    assert "degraded_reason" in result
+    assert len(upsert_called) == 1
+    assert upsert_called[0]["thread_id"] == "thread-fallback"
+
+
+@pytest.mark.unit
+def test_BE_CORE_MEM_307_upsert_runtime_indexes_stores_resource_without_embedding(monkeypatch):
+    runtime = OpenVikingRuntime()
+
+    resources: list[dict] = []
+    vectors: list[dict] = []
+    monkeypatch.setattr(runtime, "_resolve_local_embedding_model", lambda: (False, None))
+    monkeypatch.setattr(runtime._sqlite_index, "upsert_resource", lambda **kwargs: resources.append(kwargs))
+    monkeypatch.setattr(runtime._sqlite_index, "upsert_vector", lambda **kwargs: vectors.append(kwargs))
+
+    runtime._upsert_runtime_indexes(
+        thread_id="thread-ledger",
+        messages=[{"role": "user", "content": "用户名字是张天成"}],
+        agent_name=None,
+    )
+
+    assert len(resources) == 1
+    assert resources[0]["summary"] == "用户名字是张天成"
+    assert vectors == []
+
+
+@pytest.mark.unit
+def test_BE_CORE_MEM_308_search_memory_falls_back_to_local_ledger(monkeypatch):
+    runtime = OpenVikingRuntime()
+    set_memory_config(MemoryConfig(retrieval_mode="find", rerank_mode="off"))
+
+    monkeypatch.setattr(
+        runtime,
+        "_openviking_find",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("openviking unavailable")),
+    )
+    monkeypatch.setattr(
+        runtime._sqlite_index,
+        "list_resources",
+        lambda **kwargs: [
+            {
+                "memory_id": "mem-zhang",
+                "uri": "viking://session/thread-x/mem-zhang",
+                "summary": "用户名字是张天成，喜欢编程。",
+                "updated_at": "2026-03-12T12:00:00Z",
+                "last_used_at": "",
+                "created_at": "2026-03-12T12:00:00Z",
+            }
+        ],
+    )
+
+    rows = runtime.search_memory(query="你知道我叫什么", limit=3, agent_name=None)
+
+    assert len(rows) == 1
+    assert rows[0]["id"] == "mem-zhang"
+    assert rows[0]["retrieval_route"] == "ledger"
+
+
+@pytest.mark.unit
+def test_BE_CORE_MEM_309_get_memory_items_exposes_layered_metadata(monkeypatch):
+    runtime = OpenVikingRuntime()
+    monkeypatch.setattr(
+        runtime._sqlite_index,
+        "list_resources",
+        lambda **kwargs: [
+            {
+                "memory_id": "mem-profile-1",
+                "uri": "viking://manifest/mem-profile-1",
+                "summary": "我叫张天成，来自杭州",
+                "score": 0.97,
+                "status": "active",
+                "use_count": 2,
+                "last_used_at": "2026-03-12T12:30:00Z",
+                "source_thread_id": "thread-1",
+                "created_at": "2026-03-12T12:00:00Z",
+                "updated_at": "2026-03-12T12:30:00Z",
+                "scope": "global",
+                "metadata": {
+                    "tier": "profile",
+                    "source": "auto",
+                    "quality_score": 0.97,
+                    "decision_reason": "high_value_memory",
+                    "retention_policy": "long_term_locked",
+                    "evidence": {"write_evidence_id": "act_abc"},
+                },
+            }
+        ],
+    )
+
+    items = runtime.get_memory_items(scope="global", agent_name=None)
+
+    assert len(items) == 1
+    item = items[0]
+    assert item["tier"] == "profile"
+    assert item["source"] == "auto"
+    assert item["quality"] == pytest.approx(0.97)
+    assert item["quality_score"] == pytest.approx(0.97)
+    assert item["decision_reason"] == "high_value_memory"
+    assert item["evidence"]["write_evidence_id"] == "act_abc"
+    assert item["retention_policy"] == "long_term_locked"

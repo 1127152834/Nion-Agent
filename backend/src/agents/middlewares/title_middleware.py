@@ -2,8 +2,7 @@
 
 from typing import NotRequired, override
 
-from langchain.agents import AgentState
-from langchain.agents.middleware import AgentMiddleware
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
 
 from src.config.title_config import get_title_config

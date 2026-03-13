@@ -147,12 +147,40 @@ class ConfigRepository:
         warnings: list[dict[str, Any]] = []
 
         try:
-            AppConfig.model_validate(payload)
+            validated = AppConfig.model_validate(payload)
         except ValidationError as exc:
             errors.extend(self._normalize_validation_error(item) for item in exc.errors())
             return errors, warnings
 
         errors.extend(self._validate_runtime_env(config_dict.get("runtime_env")))
+
+        # Strict sandbox mode: require container-based sandbox provider and
+        # forbid custom host mounts to prevent accessing arbitrary desktop files.
+        try:
+            strict_mode = bool(getattr(validated.sandbox, "strict_mode", False))
+        except Exception:
+            strict_mode = False
+
+        if strict_mode:
+            sandbox_use = str(getattr(validated.sandbox, "use", "") or "")
+            if "AioSandboxProvider" not in sandbox_use:
+                errors.append(
+                    self._normalize_item(
+                        ["sandbox", "use"],
+                        "Strict sandbox mode requires a container-based sandbox. Switch to src.community.aio_sandbox:AioSandboxProvider.",
+                        "strict_mode_requires_container",
+                    )
+                )
+
+            mounts = getattr(validated.sandbox, "mounts", None)
+            if isinstance(mounts, list) and len(mounts) > 0:
+                errors.append(
+                    self._normalize_item(
+                        ["sandbox", "mounts"],
+                        "Strict sandbox mode forbids sandbox.mounts (host directory mounts) to prevent desktop file access.",
+                        "strict_mode_forbids_mounts",
+                    )
+                )
 
         env_findings = self._find_unresolved_env_placeholders(config_dict)
         for path, env_name in env_findings:

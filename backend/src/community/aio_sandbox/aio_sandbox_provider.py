@@ -189,15 +189,15 @@ class AioSandboxProvider(SandboxProvider):
             mounts.extend(self._get_thread_mounts(thread_id))
             logger.info(f"Adding thread mounts for thread {thread_id}: {mounts}")
 
+        clis_mount = self._get_clis_mount()
+        if clis_mount:
+            mounts.append(clis_mount)
+            logger.info(f"Adding CLIs mount: {clis_mount}")
+
         skills_mount = self._get_skills_mount()
         if skills_mount:
             mounts.append(skills_mount)
             logger.info(f"Adding skills mount: {skills_mount}")
-
-        clis_mount = self._get_clis_mount()
-        if clis_mount:
-            mounts.append(clis_mount)
-            logger.info(f"Adding CLI mount: {clis_mount}")
 
         return mounts
 
@@ -236,13 +236,12 @@ class AioSandboxProvider(SandboxProvider):
     def _get_clis_mount() -> tuple[str, str, bool] | None:
         """Get the managed CLIs directory mount configuration."""
         try:
-            from src.config.paths import CLIS_VIRTUAL_ROOT, get_paths
-
-            clis_dir = get_paths().clis_root_dir
+            paths = get_paths()
+            clis_dir = paths.clis_root_dir
             clis_dir.mkdir(parents=True, exist_ok=True)
-            return (str(clis_dir), CLIS_VIRTUAL_ROOT, True)  # Read-only; installs happen outside sandbox.
+            return (str(clis_dir), "/mnt/clis", True)  # Read-only; installs happen outside sandbox.
         except Exception as e:
-            logger.warning(f"Could not setup CLI mount: {e}")
+            logger.warning(f"Could not setup CLIs mount: {e}")
         return None
 
     # ── Idle timeout management ──────────────────────────────────────────

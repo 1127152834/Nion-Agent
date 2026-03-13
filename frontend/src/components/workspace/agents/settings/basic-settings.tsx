@@ -1,13 +1,15 @@
 "use client";
 
+import { ChevronDownIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   useAgent,
   useDefaultAgentConfig,
@@ -15,10 +17,15 @@ import {
   useUpdateDefaultAgentConfig,
 } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
+import { useModels } from "@/core/models/hooks";
+import { cn } from "@/lib/utils";
 
 interface BasicSettingsProps {
   agentName: string;
 }
+
+const DEFAULT_MODEL_VALUE = "__agent_default_model__";
+const LEGACY_MODEL_VALUE_PREFIX = "__agent_legacy_model__:";
 
 function toolGroupsToText(groups: string[] | null | undefined): string {
   if (!groups || groups.length === 0) {
@@ -50,27 +57,51 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
   } = useDefaultAgentConfig();
   const updateCustomAgent = useUpdateAgent();
   const updateDefaultAgent = useUpdateDefaultAgentConfig();
+  const { models, isLoading: isModelsLoading, error: modelsError } = useModels();
 
   const source = isDefaultAgent ? defaultConfig : agent;
   const isLoading = isDefaultAgent ? defaultLoading : customLoading;
   const error = isDefaultAgent ? defaultError : customError;
 
   const [description, setDescription] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [model, setModel] = useState("");
   const [toolGroups, setToolGroups] = useState("");
-  const [heartbeatEnabled, setHeartbeatEnabled] = useState(true);
-  const [evolutionEnabled, setEvolutionEnabled] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const modelOptions = useMemo(
+    () =>
+      models
+        .map((item) => ({
+          name: item.name.trim(),
+          label: item.display_name?.trim() || item.name.trim(),
+        }))
+        .filter((item) => item.name.length > 0),
+    [models],
+  );
+
+  const knownModelNames = useMemo(
+    () => new Set(modelOptions.map((item) => item.name)),
+    [modelOptions],
+  );
 
   useEffect(() => {
     if (!source) {
       return;
     }
     setDescription(source.description ?? "");
+    setDisplayName(source.display_name ?? "");
     setModel(source.model ?? "");
     setToolGroups(toolGroupsToText(source.tool_groups));
-    setHeartbeatEnabled(source.heartbeat_enabled ?? true);
-    setEvolutionEnabled(source.evolution_enabled ?? true);
   }, [source]);
+
+  const normalizedCurrentModel = model.trim();
+  const legacyModelName = normalizedCurrentModel && !knownModelNames.has(normalizedCurrentModel)
+    ? normalizedCurrentModel
+    : null;
+  const modelSelectValue = legacyModelName
+    ? `${LEGACY_MODEL_VALUE_PREFIX}${legacyModelName}`
+    : normalizedCurrentModel || DEFAULT_MODEL_VALUE;
 
   const hasChanges = useMemo(() => {
     if (!source) {
@@ -78,18 +109,14 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
     }
     return (
       description !== (source.description ?? "")
-      || model !== (source.model ?? "")
+      || displayName !== (source.display_name ?? "")
+      || normalizedCurrentModel !== (source.model ?? "")
       || toolGroups !== toolGroupsToText(source.tool_groups)
-      || (isDefaultAgent
-        && (heartbeatEnabled !== (source.heartbeat_enabled ?? true)
-          || evolutionEnabled !== (source.evolution_enabled ?? true)))
     );
   }, [
     description,
-    evolutionEnabled,
-    heartbeatEnabled,
-    isDefaultAgent,
-    model,
+    displayName,
+    normalizedCurrentModel,
     source,
     toolGroups,
   ]);
@@ -99,21 +126,26 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
       return;
     }
 
+    if (legacyModelName) {
+      toast.error(basicCopy.modelLegacyUnavailableHint);
+      return;
+    }
+
     try {
+      const nextModel = normalizedCurrentModel || null;
       if (isDefaultAgent) {
         await updateDefaultAgent.mutateAsync({
           description,
-          model: model || null,
+          model: nextModel,
           tool_groups: textToToolGroups(toolGroups) ?? null,
-          heartbeat_enabled: heartbeatEnabled,
-          evolution_enabled: evolutionEnabled,
         });
       } else {
         await updateCustomAgent.mutateAsync({
           name: agentName,
           request: {
+            display_name: displayName.trim() ? displayName.trim() : null,
             description,
-            model: model || null,
+            model: nextModel,
             tool_groups: textToToolGroups(toolGroups) ?? null,
           },
         });
@@ -129,10 +161,9 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
       return;
     }
     setDescription(source.description ?? "");
+    setDisplayName(source.display_name ?? "");
     setModel(source.model ?? "");
     setToolGroups(toolGroupsToText(source.tool_groups));
-    setHeartbeatEnabled(source.heartbeat_enabled ?? true);
-    setEvolutionEnabled(source.evolution_enabled ?? true);
   }
 
   if (isLoading) {
@@ -174,11 +205,20 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
+          <Label htmlFor="agent-display-name">{basicCopy.displayNameLabel}</Label>
+          <Input
+            id="agent-display-name"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            placeholder={basicCopy.displayNamePlaceholder}
+            disabled={isDefaultAgent}
+          />
+          <p className="text-muted-foreground text-xs">{basicCopy.displayNameHint}</p>
+        </div>
+        <div className="space-y-2">
           <Label htmlFor="agent-name">{basicCopy.nameLabel}</Label>
           <Input id="agent-name" value={source.name} disabled readOnly />
-          {isDefaultAgent ? (
-            <p className="text-muted-foreground text-xs">{basicCopy.nameImmutableHint}</p>
-          ) : null}
+          <p className="text-muted-foreground text-xs">{basicCopy.nameImmutableHint}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="agent-description">{basicCopy.descriptionLabel}</Label>
@@ -190,41 +230,78 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="agent-model">{basicCopy.modelLabel}</Label>
-          <Input
-            id="agent-model"
-            value={model}
-            onChange={(event) => setModel(event.target.value)}
-            placeholder={basicCopy.modelPlaceholder}
-          />
+          <Label>{basicCopy.modelLabel}</Label>
+          <Select
+            value={modelSelectValue}
+            onValueChange={(value) => {
+              if (value === DEFAULT_MODEL_VALUE) {
+                setModel("");
+                return;
+              }
+              if (value.startsWith(LEGACY_MODEL_VALUE_PREFIX)) {
+                return;
+              }
+              setModel(value);
+            }}
+          >
+            <SelectTrigger id="agent-model">
+              <SelectValue placeholder={basicCopy.modelDefaultOption} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_MODEL_VALUE}>{basicCopy.modelDefaultOption}</SelectItem>
+              {modelOptions.map((item) => (
+                <SelectItem key={item.name} value={item.name}>
+                  {item.label}
+                </SelectItem>
+              ))}
+              {legacyModelName ? (
+                <SelectItem
+                  value={`${LEGACY_MODEL_VALUE_PREFIX}${legacyModelName}`}
+                  disabled
+                >
+                  {basicCopy.modelLegacyUnavailableOption.replace("{model}", legacyModelName)}
+                </SelectItem>
+              ) : null}
+            </SelectContent>
+          </Select>
+          {isModelsLoading ? (
+            <p className="text-muted-foreground text-xs">{copy.loading}</p>
+          ) : null}
+          {modelsError ? (
+            <p className="text-destructive text-xs">{basicCopy.modelLoadFailed}</p>
+          ) : null}
+          {!isModelsLoading && !modelsError && modelOptions.length === 0 ? (
+            <p className="text-muted-foreground text-xs">{basicCopy.modelEmptyHint}</p>
+          ) : null}
+          {legacyModelName ? (
+            <p className="text-destructive text-xs">{basicCopy.modelLegacyUnavailableHint}</p>
+          ) : null}
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="agent-tool-groups">{basicCopy.toolGroupsLabel}</Label>
-          <Input
-            id="agent-tool-groups"
-            value={toolGroups}
-            onChange={(event) => setToolGroups(event.target.value)}
-            placeholder={basicCopy.toolGroupsPlaceholder}
-          />
-        </div>
-        {isDefaultAgent ? (
-          <>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">{basicCopy.heartbeatTitle}</p>
-                <p className="text-muted-foreground text-xs">{basicCopy.heartbeatDescription}</p>
-              </div>
-              <Switch checked={heartbeatEnabled} onCheckedChange={setHeartbeatEnabled} />
+        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+            >
+              <ChevronDownIcon
+                className={cn("size-3.5 transition-transform", advancedOpen && "rotate-180")}
+              />
+              {basicCopy.advancedTitle}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <div className="space-y-2">
+              <Label htmlFor="agent-tool-groups">{basicCopy.toolGroupsLabel}</Label>
+              <Input
+                id="agent-tool-groups"
+                value={toolGroups}
+                onChange={(event) => setToolGroups(event.target.value)}
+                placeholder={basicCopy.toolGroupsPlaceholder}
+              />
+              <p className="text-muted-foreground text-xs">{basicCopy.toolGroupsHint}</p>
             </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">{basicCopy.evolutionTitle}</p>
-                <p className="text-muted-foreground text-xs">{basicCopy.evolutionDescription}</p>
-              </div>
-              <Switch checked={evolutionEnabled} onCheckedChange={setEvolutionEnabled} />
-            </div>
-          </>
-        ) : null}
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );

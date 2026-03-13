@@ -33,7 +33,7 @@ function normalizeTimeoutSeconds(timeoutSeconds?: number): number {
   if (!Number.isFinite(timeoutSeconds)) {
     return 600;
   }
-  const value = Math.trunc(timeoutSeconds as number);
+  const value = Math.trunc(timeoutSeconds!);
   if (value < 1) return 1;
   if (value > 1800) return 1800;
   return value;
@@ -110,7 +110,13 @@ export function createWorkbenchContext(
         throw new Error("Failed to decode binary payload from data URL");
       }
       const blob = await binaryResponse.blob();
-      const contentType = mimeType || blob.type || "application/octet-stream";
+      const normalizedMimeType = mimeType?.trim() ?? "";
+      const normalizedBlobType = blob.type?.trim() ?? "";
+      const contentType = normalizedMimeType
+        ? normalizedMimeType
+        : normalizedBlobType
+          ? normalizedBlobType
+          : "application/octet-stream";
       const response = await fetch(artifactApiURL(threadId, path), {
         method: "PUT",
         headers: { "Content-Type": contentType },

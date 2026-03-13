@@ -1724,7 +1724,7 @@ export function ModelsSection({
                 setCreateFeedback(null);
               }}
             >
-              <SelectTrigger disabled={disabled}>
+              <SelectTrigger disabled={disabled} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -2065,7 +2065,7 @@ export function ModelsSection({
               value={protocol}
               onValueChange={(value) => updateProviderProtocol(selectedProviderIndex, value as ProviderProtocol)}
             >
-              <SelectTrigger disabled={disabled}>
+              <SelectTrigger disabled={disabled} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -2288,7 +2288,10 @@ export function ModelsSection({
                 }
               }}
             >
-              <SelectTrigger disabled={Boolean(disabled) || providerOptions.length === 0}>
+              <SelectTrigger
+                disabled={Boolean(disabled) || providerOptions.length === 0}
+                className="w-full"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -2716,6 +2719,7 @@ export function ModelsSection({
             >
               <SelectTrigger
                 disabled={Boolean(disabled) || providerOptions.length === 0}
+                className="w-full"
               >
                 <SelectValue />
               </SelectTrigger>

@@ -254,18 +254,20 @@ function MessageContent_({
     ) : null;
 
   const implicitMentionTags =
-    isHuman && implicitMentions.length > 0 ? (
+    isHuman && implicitMentions.some((item) => item.kind !== "skill") ? (
       <div className="flex flex-wrap justify-end gap-1.5">
-        {implicitMentions.map((item, index) => (
-          <Badge
-            key={`${item.kind}:${item.value}:${index}`}
-            variant="secondary"
-            className="max-w-72 truncate text-[11px]"
-            title={item.mention}
-          >
-            {implicitMentionDisplayLabel(item)}
-          </Badge>
-        ))}
+        {implicitMentions
+          .filter((item) => item.kind !== "skill")
+          .map((item, index) => (
+            <Badge
+              key={`${item.kind}:${item.value}:${index}`}
+              variant="secondary"
+              className="max-w-72 truncate text-[11px]"
+              title={item.mention}
+            >
+              {implicitMentionDisplayLabel(item)}
+            </Badge>
+          ))}
       </div>
     ) : null;
 

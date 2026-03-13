@@ -108,8 +108,6 @@ let globalRegistry: WorkbenchRegistry | null = null;
  * Get the global workbench registry
  */
 export function getWorkbenchRegistry(): WorkbenchRegistry {
-  if (!globalRegistry) {
-    globalRegistry = new WorkbenchRegistry();
-  }
+  globalRegistry ??= new WorkbenchRegistry();
   return globalRegistry;
 }

@@ -8,84 +8,97 @@
   </head>
   <body>
     <div class="app" id="app">
-      <header class="toolbar">
-        <div class="toolbar-left">
-          <button id="buildBtn" class="btn primary">构建</button>
-          <button id="startBtn" class="btn" disabled>启动预览</button>
-          <button id="saveBtn" class="btn">保存</button>
-          <button id="formatBtn" class="btn">格式化</button>
-        </div>
-        <div class="toolbar-center">
-          <label>
-            构建命令
-            <input id="buildCmd" class="cmd-input" type="text" />
-          </label>
-          <label>
-            启动命令
-            <input id="devCmd" class="cmd-input" type="text" />
-          </label>
-        </div>
-        <div class="toolbar-right">
-          <span id="projectBadge" class="badge">项目识别中</span>
-          <span id="statusText" class="status">Ready</span>
+      <header class="topbar">
+        <div class="mode-switch" role="tablist" aria-label="视图模式切换">
+          <button id="previewModeBtn" class="mode-btn" type="button" role="tab" aria-selected="false">
+            <span class="mode-dot"></span>
+            预览
+          </button>
+          <button id="codeModeBtn" class="mode-btn active" type="button" role="tab" aria-selected="true">
+            <span class="mode-dot"></span>
+            代码
+          </button>
         </div>
       </header>
 
-      <div class="split-layout" id="splitLayout">
-        <aside class="panel panel-left" id="leftPanel">
-          <div class="panel-header">
-            <strong>项目文件</strong>
-            <div class="header-actions">
-              <input id="treeSearch" class="search-input" placeholder="搜索文件或路径" />
-              <button id="refreshTreeBtn" class="btn tiny">刷新</button>
-              <button id="collapseLeftBtn" class="btn tiny">收起</button>
+      <div class="workspace">
+        <section id="codeView" class="code-view">
+          <aside class="activity-bar" aria-label="工作区导航">
+            <button id="explorerToggleBtn" class="activity-btn active" type="button" title="资源管理器" aria-pressed="true">
+              <span class="activity-icon" aria-hidden="true">☰</span>
+            </button>
+          </aside>
+
+          <div id="codeMain" class="code-main">
+            <aside id="sidebar" class="sidebar" aria-label="文件资源管理器">
+              <div class="sidebar-head">
+                <div class="sidebar-title">资源管理器</div>
+                <div class="sidebar-head-actions">
+                  <button id="refreshTreeBtn" class="icon-btn" type="button" title="刷新目录">⟳</button>
+                </div>
+              </div>
+              <div class="sidebar-search-wrap">
+                <input id="treeSearchInput" class="search-input" type="text" placeholder="搜索文件" />
+              </div>
+              <div id="treeEmpty" class="sidebar-empty hidden">正在加载目录...</div>
+              <div id="treeContainer" class="tree-container"></div>
+            </aside>
+            <div id="sidebarDivider" class="sidebar-divider" role="separator" aria-orientation="vertical"></div>
+
+            <main class="editor-panel">
+              <div id="tabs" class="tabs"></div>
+              <div id="editorEmpty" class="editor-empty">选择文件开始编辑</div>
+              <div id="editorShell" class="editor-shell hidden">
+                <pre id="lineNumbers" class="line-numbers"></pre>
+                <textarea id="editor" class="editor" spellcheck="false"></textarea>
+              </div>
+            </main>
+          </div>
+        </section>
+
+        <section id="previewView" class="preview-view hidden">
+          <div class="preview-toolbar" id="previewToolbar">
+            <div class="device-picker-wrap" id="devicePickerWrap">
+              <button id="deviceMenuBtn" class="icon-btn" type="button" title="切换设备">🖥</button>
+              <div id="deviceMenu" class="device-menu hidden" role="menu">
+                <button class="device-item" data-mode="desktop" type="button" role="menuitem">当前屏幕尺寸</button>
+                <button class="device-item" data-mode="mobile" type="button" role="menuitem">手机</button>
+                <button class="device-item" data-mode="tablet" type="button" role="menuitem">平板</button>
+              </div>
+            </div>
+            <div class="address-display">/</div>
+            <div class="preview-toolbar-actions">
+              <button id="previewRefreshBtn" class="icon-btn" type="button" title="刷新预览">⟳</button>
+              <button id="previewOpenBtn" class="icon-btn" type="button" title="新窗口打开">⤢</button>
             </div>
           </div>
-          <div id="treeContainer" class="tree-container"></div>
-        </aside>
 
-        <div id="leftDivider" class="divider" data-side="left"></div>
-
-        <main class="panel panel-center">
-          <div id="tabs" class="tabs"></div>
-          <div class="editor-tools">
-            <input id="findInput" class="search-input" placeholder="查找" />
-            <input id="replaceInput" class="search-input" placeholder="替换" />
-            <button id="findNextBtn" class="btn tiny">下一个</button>
-            <button id="replaceOneBtn" class="btn tiny">替换</button>
-            <button id="replaceAllBtn" class="btn tiny">全部替换</button>
-            <span id="activeFileLabel" class="active-file-label">未打开文件</span>
-          </div>
-          <div class="editor-wrap" id="editorWrap">
-            <pre id="lineNumbers" class="line-numbers"></pre>
-            <textarea id="editor" class="editor" spellcheck="false"></textarea>
-          </div>
-        </main>
-
-        <div id="rightDivider" class="divider" data-side="right"></div>
-
-        <aside class="panel panel-right" id="rightPanel">
-          <div class="panel-header">
-            <div>
-              <button id="previewTabBtn" class="btn tiny active">预览</button>
-              <button id="logsTabBtn" class="btn tiny">日志</button>
+          <div class="preview-stage-wrap">
+            <div id="previewLoading" class="preview-loading">
+              <div class="preview-loading-spinner"></div>
+              <div class="preview-loading-text">正在加载预览...</div>
             </div>
-            <div class="header-actions">
-              <button id="collapseRightBtn" class="btn tiny">收起</button>
+            <div id="previewDeviceFrame" class="preview-device-frame desktop">
+              <iframe
+                id="previewFrame"
+                class="preview-frame"
+                title="Preview"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              ></iframe>
             </div>
           </div>
-          <div class="preview-bar" id="previewBar">
-            <input id="previewUrlInput" class="url-input" placeholder="http://localhost:3000" />
-            <button id="openPreviewBtn" class="btn tiny">打开</button>
+
+          <div class="console-drawer" id="consoleDrawer">
+            <button id="consoleToggleBtn" class="console-toggle" type="button" aria-expanded="false">
+              <span class="console-toggle-label">ⓘ</span>
+              <span id="consoleErrorCount" class="console-toggle-count">0</span>
+              <span id="consoleToggleArrow" class="console-toggle-arrow">▴</span>
+            </button>
+            <div id="consolePanel" class="console-panel hidden">
+              <div id="consoleLogs" class="console-logs"></div>
+            </div>
           </div>
-          <div id="previewPane" class="pane pane-preview">
-            <iframe id="previewFrame" class="preview-frame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
-            <div id="previewError" class="preview-error"></div>
-          </div>
-          <div id="logsPane" class="pane pane-logs hidden">
-            <pre id="logs" class="logs"></pre>
-          </div>
-        </aside>
+        </section>
       </div>
     </div>
 

@@ -112,7 +112,7 @@ export function TitleSection({
             updateTitle("model_name", value === DEFAULT_MODEL_VALUE ? "" : value)
           }
         >
-          <SelectTrigger disabled={disabled}>
+          <SelectTrigger disabled={disabled} className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -132,7 +132,7 @@ export function TitleSection({
           value={selectedMode}
           onValueChange={(value) => updateTitle("mode", value)}
         >
-          <SelectTrigger disabled={disabled}>
+          <SelectTrigger disabled={disabled} className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

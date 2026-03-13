@@ -19,7 +19,9 @@ import {
 } from "@/components/ui/resizable";
 import { useWorkspaceLiveSync, useWorkspaceTree } from "@/core/artifacts";
 import { useI18n } from "@/core/i18n/hooks";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import { useDesktopRuntime } from "@/core/platform/hooks";
+import { pathOfPluginAssistant } from "@/core/threads/utils";
 import {
   getWorkbenchRegistry,
   parseWorkbenchSlotRouteState,
@@ -41,6 +43,8 @@ const CLOSE_MODE = { chat: 100, artifacts: 0 };
 const OPEN_MODE = { chat: 60, artifacts: 40 };
 const FRONTEND_WORKBENCH_PLUGIN_ID = "frontend-workbench";
 const DEFAULT_WORKBENCH_PATH = "/mnt/user-data/workspace";
+const MIN_WORKBENCH_WIDTH_PERCENT = 10;
+const MAX_WORKBENCH_WIDTH_PERCENT = 90;
 type WorkingDirectoryMode = "directory" | "preview";
 type WorkbenchTargetKind = "file" | "directory" | "project";
 
@@ -60,6 +64,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const { t } = useI18n();
   const copy = t.workspace.artifactPanel;
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { thread } = useThread();
   const layoutRef = useRef<GroupImperativeHandle>(null);
   const {
@@ -169,12 +174,6 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     threadArtifacts,
   ]);
 
-  useEffect(() => {
-    if (layoutRef.current) {
-      layoutRef.current.setLayout(artifactPanelOpen ? OPEN_MODE : CLOSE_MODE);
-    }
-  }, [artifactPanelOpen]);
-
   const workspaceFiles = useMemo(
     () => workspaceTree?.files.map((entry) => entry.path) ?? [],
     [workspaceTree?.files],
@@ -190,6 +189,31 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     ? activePluginPackage.metadata.manifest.ui.surface === "sidebar-slot"
     : true;
   const activePluginName = activePluginPackage?.metadata?.manifest.name ?? pluginSlotState.pluginId;
+  const activeWorkbenchInitialWidthPercent = useMemo(() => {
+    const raw = activePluginPackage?.metadata?.manifest.ui?.initialWidthPercent;
+    if (typeof raw !== "number" || !Number.isFinite(raw)) {
+      return OPEN_MODE.artifacts;
+    }
+    return Math.min(MAX_WORKBENCH_WIDTH_PERCENT, Math.max(MIN_WORKBENCH_WIDTH_PERCENT, raw));
+  }, [activePluginPackage?.metadata?.manifest.ui?.initialWidthPercent]);
+
+  useEffect(() => {
+    if (!layoutRef.current) {
+      return;
+    }
+    if (!artifactPanelOpen) {
+      layoutRef.current.setLayout(CLOSE_MODE);
+      return;
+    }
+
+    const artifactsWidth = panelType === "workbench"
+      ? activeWorkbenchInitialWidthPercent
+      : OPEN_MODE.artifacts;
+    layoutRef.current.setLayout({
+      chat: 100 - artifactsWidth,
+      artifacts: artifactsWidth,
+    });
+  }, [activeWorkbenchInitialWidthPercent, artifactPanelOpen, panelType]);
 
   const directoryRootFileMap = useMemo(() => {
     const map = new Map<string, string[]>();
@@ -530,6 +554,12 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   variant="ghost"
                   onClick={() => {
                     setArtifactsOpen(false);
+                    if (
+                      panelType === "workbench"
+                      && pluginSlotState.pluginId === FRONTEND_WORKBENCH_PLUGIN_ID
+                    ) {
+                      router.push(pathOfPluginAssistant());
+                    }
                   }}
                 >
                   <XIcon className="size-4" />

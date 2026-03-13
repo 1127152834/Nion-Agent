@@ -1,17 +1,60 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Clock3Icon, HeartPulseIcon, InfoIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useI18n } from "@/core/i18n/hooks";
 import { useHeartbeatSettings, useUpdateHeartbeatSettings } from "@/core/agents/settings-hooks";
-import type { HeartbeatSettings } from "@/core/agents/settings-types";
+import type { HeartbeatSettings, TemplateConfig } from "@/core/agents/settings-types";
+import { useI18n } from "@/core/i18n/hooks";
 
 interface HeartbeatSettingsProps {
   agentName: string;
+}
+
+const GOVERNANCE_TEMPLATE_ID = "memory_governance";
+const BASE_INTERVAL_OPTIONS = [1, 2, 3, 6, 12, 24] as const;
+const TIMEZONE_OPTIONS = [
+  { value: "UTC", label: "UTC" },
+  { value: "Asia/Shanghai", label: "Asia/Shanghai" },
+  { value: "Asia/Tokyo", label: "Asia/Tokyo" },
+  { value: "America/New_York", label: "America/New_York" },
+  { value: "Europe/London", label: "Europe/London" },
+] as const;
+
+function parseGovernanceIntervalHours(templates: Record<string, TemplateConfig> | undefined): number {
+  const cron = templates?.[GOVERNANCE_TEMPLATE_ID]?.cron;
+  if (!cron) {
+    return 6;
+  }
+  const match = /^0 \*\/(\d+) \* \* \*$/.exec(cron.trim());
+  if (!match) {
+    return 6;
+  }
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 6;
+}
+
+function ensureGovernanceTemplate(
+  templates: Record<string, TemplateConfig>,
+  intervalHours: number,
+): Record<string, TemplateConfig> {
+  const next = { ...templates };
+  const existing = next[GOVERNANCE_TEMPLATE_ID];
+  next[GOVERNANCE_TEMPLATE_ID] = {
+    template_id: GOVERNANCE_TEMPLATE_ID,
+    enabled: existing?.enabled ?? true,
+    cron: `0 */${intervalHours} * * *`,
+    generate_reminder: existing?.generate_reminder ?? false,
+    generate_log: existing?.generate_log ?? true,
+    auto_execute: existing?.auto_execute ?? true,
+  };
+  return next;
 }
 
 export function HeartbeatSettingsComponent({ agentName }: HeartbeatSettingsProps) {
@@ -29,6 +72,16 @@ export function HeartbeatSettingsComponent({ agentName }: HeartbeatSettingsProps
     }
   }, [settings]);
 
+  const governanceIntervalHours = useMemo(
+    () => parseGovernanceIntervalHours(formData?.templates),
+    [formData?.templates],
+  );
+  const intervalOptions = useMemo(() => {
+    const values = new Set<number>(BASE_INTERVAL_OPTIONS);
+    values.add(governanceIntervalHours);
+    return Array.from(values).sort((a, b) => a - b);
+  }, [governanceIntervalHours]);
+
   const handleSave = () => {
     if (!formData) return;
     updateMutation.mutate(formData);
@@ -43,15 +96,26 @@ export function HeartbeatSettingsComponent({ agentName }: HeartbeatSettingsProps
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <Alert>
+        <InfoIcon className="size-4" />
+        <AlertTitle>{heartbeatCopy.conceptTitle}</AlertTitle>
+        <AlertDescription>
+          <p>{heartbeatCopy.conceptDescription}</p>
+          <p className="mt-1">{heartbeatCopy.conceptHint}</p>
+        </AlertDescription>
+      </Alert>
+
       <Card>
         <CardHeader>
           <CardTitle>{heartbeatCopy.title}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Enable Switch */}
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">{heartbeatCopy.enabledLabel}</label>
+        <CardContent className="space-y-5">
+          <div className="flex items-center justify-between rounded-xl border p-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">{heartbeatCopy.enabledLabel}</Label>
+              <p className="text-muted-foreground text-xs">{heartbeatCopy.enabledDescription}</p>
+            </div>
             <Switch
               checked={formData.enabled}
               onCheckedChange={(checked) =>
@@ -60,36 +124,64 @@ export function HeartbeatSettingsComponent({ agentName }: HeartbeatSettingsProps
             />
           </div>
 
-          {/* Timezone Select */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{heartbeatCopy.timezoneLabel}</label>
-            <Select
-              value={formData.timezone}
-              onValueChange={(value) =>
-                setFormData({ ...formData, timezone: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="UTC">UTC</SelectItem>
-                <SelectItem value="Asia/Shanghai">Asia/Shanghai</SelectItem>
-                <SelectItem value="America/New_York">America/New_York</SelectItem>
-                <SelectItem value="Europe/London">Europe/London</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">{heartbeatCopy.timezoneLabel}</Label>
+              <Select
+                value={formData.timezone}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, timezone: value })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONE_OPTIONS.map((timezone) => (
+                    <SelectItem key={timezone.value} value={timezone.value}>
+                      {timezone.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Templates Section */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{heartbeatCopy.templatesLabel}</label>
-            <div className="text-muted-foreground text-xs">
-              {heartbeatCopy.templatesComingSoon}
+            <div className="space-y-2">
+              <Label className="inline-flex items-center gap-1.5 text-sm font-medium">
+                <Clock3Icon className="size-3.5" />
+                {heartbeatCopy.governanceIntervalLabel}
+              </Label>
+              <Select
+                value={String(governanceIntervalHours)}
+                onValueChange={(value) => {
+                  const interval = Number(value);
+                  const templates = ensureGovernanceTemplate(formData.templates ?? {}, interval);
+                  setFormData({ ...formData, templates });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {intervalOptions.map((hours) => (
+                    <SelectItem key={hours} value={String(hours)}>
+                      {heartbeatCopy.intervalOption.replace("{value}", String(hours))}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">{heartbeatCopy.governanceIntervalHint}</p>
             </div>
           </div>
 
-          {/* Save Button */}
+          <div className="rounded-xl border border-dashed p-3">
+            <p className="inline-flex items-center gap-1.5 text-sm font-medium">
+              <HeartPulseIcon className="size-4" />
+              {heartbeatCopy.scopeTitle}
+            </p>
+            <p className="text-muted-foreground mt-1 text-xs leading-5">{heartbeatCopy.scopeDescription}</p>
+          </div>
+
           <Button
             onClick={handleSave}
             disabled={updateMutation.isPending}

@@ -1,6 +1,8 @@
 # Nion - Unified Development Environment
 
-.PHONY: help config check install dev stop clean desktop-dev desktop-stop docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
+.PHONY: help config check install dev dev-reload stop clean desktop-dev desktop-stop docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
+
+GATEWAY_RELOAD ?= 0
 
 help:
 	@echo "Nion Development Commands:"
@@ -9,6 +11,7 @@ help:
 	@echo "  make install         - Install all dependencies (frontend + backend)"
 	@echo "  make setup-sandbox   - Pre-pull sandbox container image (recommended)"
 	@echo "  make dev             - Start all services (frontend + backend + nginx on localhost:2026)"
+	@echo "  make dev-reload      - Start dev services with gateway hot reload enabled"
 	@echo "  make desktop-dev     - Start Electron desktop app (auto install dependencies)"
 	@echo "  make desktop-stop    - Stop desktop-related services/processes"
 	@echo "  make stop            - Stop all running services"
@@ -194,7 +197,12 @@ dev:
 	sleep 3; \
 	echo "✓ LangGraph server started on localhost:2024"; \
 	echo "Starting Gateway API..."; \
-	cd backend && uv run uvicorn src.gateway.app:app --host 0.0.0.0 --port 8001 > ../logs/gateway.log 2>&1 & \
+	GATEWAY_RELOAD_FLAG=""; \
+	if [ "$(GATEWAY_RELOAD)" = "1" ]; then \
+		GATEWAY_RELOAD_FLAG="--reload"; \
+		echo "  (Gateway reload enabled)"; \
+	fi; \
+	cd backend && uv run uvicorn src.gateway.app:app --host 0.0.0.0 --port 8001 $$GATEWAY_RELOAD_FLAG > ../logs/gateway.log 2>&1 & \
 	sleep 3; \
 	check_port_listening() { \
 		if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:8001 -sTCP:LISTEN -t >/dev/null 2>&1; then \
@@ -240,6 +248,9 @@ dev:
 	echo "Press Ctrl+C to stop all services"; \
 	echo ""; \
 	wait
+
+dev-reload:
+	@$(MAKE) dev GATEWAY_RELOAD=1
 
 # Stop all services
 stop:

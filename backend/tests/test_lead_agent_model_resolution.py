@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import pytest
 
+from src.agents import make_lead_agent as root_make_lead_agent
+from src.agents.lead_agent import make_lead_agent as package_make_lead_agent
 from src.agents.lead_agent import agent as lead_agent_module
 from src.config.app_config import AppConfig
 from src.config.model_config import ModelConfig
 from src.config.sandbox_config import SandboxConfig
+
+factory_utils = pytest.importorskip("langgraph_api._factory_utils")
 
 
 def _make_app_config(models: list[ModelConfig]) -> AppConfig:
@@ -27,6 +31,16 @@ def _make_model(name: str, *, supports_thinking: bool) -> ModelConfig:
         supports_thinking=supports_thinking,
         supports_vision=False,
     )
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [root_make_lead_agent, package_make_lead_agent],
+)
+def test_make_lead_agent_factory_is_langgraph_compatible(factory):
+    # Regression test: langgraph factory classifier must accept our exported factory.
+    hook = factory_utils._classify_factory(factory)
+    assert callable(hook)
 
 
 def test_resolve_model_name_falls_back_to_default(monkeypatch, caplog):

@@ -86,7 +86,7 @@ export function SuggestionsSection({
       <div className="space-y-1.5">
         <div className="text-xs font-medium">{copy.model}</div>
         <Select value={selectedValue} onValueChange={updateSuggestionsModel}>
-          <SelectTrigger disabled={disabled}>
+          <SelectTrigger disabled={disabled} className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

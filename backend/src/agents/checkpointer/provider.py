@@ -3,7 +3,7 @@
 Provides a **sync singleton** and a **sync context manager** for LangGraph
 graph compilation and CLI tools.
 
-Supported backends: memory, sqlite, postgres.
+Supported backends: memory, sqlite.
 
 Usage::
 
@@ -36,8 +36,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 SQLITE_INSTALL = "langgraph-checkpoint-sqlite is required for the SQLite checkpointer. Install it with: uv add langgraph-checkpoint-sqlite"
-POSTGRES_INSTALL = "langgraph-checkpoint-postgres is required for the PostgreSQL checkpointer. Install it with: uv add langgraph-checkpoint-postgres psycopg[binary] psycopg-pool"
-POSTGRES_CONN_REQUIRED = "checkpointer.connection_string is required for the postgres backend"
 
 # ---------------------------------------------------------------------------
 # Sync factory
@@ -90,21 +88,6 @@ def _sync_checkpointer_cm(config: CheckpointerConfig) -> Iterator[Checkpointer]:
         with SqliteSaver.from_conn_string(conn_str) as saver:
             saver.setup()
             logger.info("Checkpointer: using SqliteSaver (%s)", conn_str)
-            yield saver
-        return
-
-    if config.type == "postgres":
-        try:
-            from langgraph.checkpoint.postgres import PostgresSaver
-        except ImportError as exc:
-            raise ImportError(POSTGRES_INSTALL) from exc
-
-        if not config.connection_string:
-            raise ValueError(POSTGRES_CONN_REQUIRED)
-
-        with PostgresSaver.from_conn_string(config.connection_string) as saver:
-            saver.setup()
-            logger.info("Checkpointer: using PostgresSaver")
             yield saver
         return
 

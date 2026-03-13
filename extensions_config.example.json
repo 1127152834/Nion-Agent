@@ -18,14 +18,6 @@
       },
       "description": "GitHub MCP server for repository operations"
     },
-    "postgres": {
-      "enabled": false,
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"],
-      "env": {},
-      "description": "PostgreSQL database access"
-    },
     "my-sse-server": {                                                                                                                                       
         "type": "sse",                                                                                                                                         
         "url": "https://api.example.com/mcp",                                                                                                                  
@@ -69,19 +61,8 @@
     }
   },
   "clis": {
-    "ripgrep": {
-      "enabled": true,
-      "source": "managed"
-    },
-    "git": {
-      "enabled": false,
-      "source": "system",
-      "exec": "git"
-    },
-    "custom:mytool": {
-      "enabled": false,
-      "source": "custom",
-      "exec": "/abs/path/to/mytool"
-    }
+    "ffmpeg": { "enabled": true, "source": "managed" },
+    "git": { "enabled": false, "source": "system", "exec": "git" },
+    "custom:mytool": { "enabled": true, "source": "custom", "exec": "/abs/path/to/mytool" }
   }
 }

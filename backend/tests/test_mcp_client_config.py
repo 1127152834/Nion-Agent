@@ -42,7 +42,7 @@ def test_build_server_params_http_like_success(transport: str):
     params = build_server_params("remote-server", config)
 
     assert params == {
-        "transport": transport,
+        "transport": "streamable_http" if transport == "http" else transport,
         "url": "https://example.com/mcp",
         "headers": {"Authorization": "Bearer token"},
     }

@@ -277,6 +277,7 @@ export class DesktopProcessManager {
       ...process.env,
       NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
       NION_DESKTOP_RUNTIME: "1",
+      NION_APP_IS_PACKAGED: this.paths.frontendServerEntry ? "1" : "0",
       NO_COLOR: "1"
     };
 
@@ -327,6 +328,7 @@ export class DesktopProcessManager {
       ...process.env,
       NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
       NION_DESKTOP_RUNTIME: "1",
+      NION_APP_IS_PACKAGED: this.paths.frontendServerEntry ? "1" : "0",
       CORS_ORIGINS: `http://localhost:${this.ports!.frontendPort},http://127.0.0.1:${this.ports!.frontendPort}`,
       LANGGRAPH_SERVER_BASE_URL: `http://localhost:${this.ports!.langgraphPort}`,
     };

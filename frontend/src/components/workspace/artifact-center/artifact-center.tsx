@@ -11,7 +11,7 @@ import {
   SearchIcon,
   Trash2Icon,
 } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ConversationEmptyState } from "@/components/ai-elements/conversation";
@@ -41,6 +41,7 @@ import {
 } from "@/core/artifacts";
 import { useArtifactGroups } from "@/core/artifacts/hooks";
 import { useI18n } from "@/core/i18n/hooks";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import { getFileName } from "@/core/utils/files";
 import { buildWorkbenchSlotRouteURL, getWorkbenchRegistry } from "@/core/workbench";
 import { cn } from "@/lib/utils";

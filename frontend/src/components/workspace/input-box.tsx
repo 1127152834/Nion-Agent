@@ -12,11 +12,12 @@ import {
   PlusIcon,
   SparklesIcon,
   RocketIcon,
+  SquareTerminalIcon,
   WrenchIcon,
   XIcon,
   ZapIcon,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -49,13 +50,15 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useCLIConfig } from "@/core/cli/hooks";
 import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import { useLocalSettings } from "@/core/settings";
 import { useSkills } from "@/core/skills/hooks";
-import { getLocalizedSkillDescription } from "@/core/skills/i18n";
+import { getLocalizedSkillDescription, getLocalizedSkillName } from "@/core/skills/i18n";
 import type { AgentThreadContext } from "@/core/threads";
 import { useArtifactCenter } from "@/hooks/use-artifact-center";
 import { cn } from "@/lib/utils";
@@ -94,7 +97,7 @@ interface MentionOption {
   id: string;
   label: string;
   value: string;
-  kind: "file" | "directory" | "skill" | "mcp";
+  kind: "file" | "directory" | "skill" | "mcp" | "cli";
   description?: string;
 }
 
@@ -411,6 +414,7 @@ function buildSubmissionPayload(
   selectedSkills: string[],
   selectedContexts: SelectedContextTag[],
   selectedMcpTools: string[],
+  selectedCliTools: string[],
 ): {
   text: string;
   implicitMentions: NonNullable<PromptInputMessage["implicitMentions"]>;
@@ -424,7 +428,7 @@ function buildSubmissionPayload(
   const seenMentions = new Set<string>();
 
   const appendImplicitMention = (
-    kind: "context" | "skill" | "mcp",
+    kind: "context" | "skill" | "mcp" | "cli",
     value: string,
     mention: string,
   ) => {
@@ -448,6 +452,11 @@ function buildSubmissionPayload(
   for (const tool of selectedMcpTools) {
     const mention = `@${tool}`;
     appendImplicitMention("mcp", tool, mention);
+  }
+
+  for (const tool of selectedCliTools) {
+    const mention = `#${tool}`;
+    appendImplicitMention("cli", tool, mention);
   }
 
   if (implicitMentions.length === 0) {
@@ -628,12 +637,15 @@ export function InputBox({
   const [selectedContexts, setSelectedContexts] = useState<SelectedContextTag[]>([]);
   const [selectedMcpTools, setSelectedMcpTools] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [selectedCliTools, setSelectedCliTools] = useState<string[]>([]);
   const [recentMentions, setRecentMentions] = useState<RecentMentionsState>({
     "@": [],
     "/": [],
   });
   const [mcpSelectorOpen, setMcpSelectorOpen] = useState(false);
   const [mcpSelectorQuery, setMcpSelectorQuery] = useState("");
+  const [cliSelectorOpen, setCliSelectorOpen] = useState(false);
+  const [cliSelectorQuery, setCliSelectorQuery] = useState("");
   const [contextSelectorOpen, setContextSelectorOpen] = useState(false);
   const [contextSelectorQuery, setContextSelectorQuery] = useState("");
   const [skillSelectorOpen, setSkillSelectorOpen] = useState(false);
@@ -683,11 +695,15 @@ export function InputBox({
   // Fetch data for mention options
   const { skills } = useSkills();
   const { config: mcpConfig } = useMCPConfig();
+  const { config: cliConfig } = useCLIConfig();
   const defaultContextLabel = t.inputBox.contextLabel;
   const defaultSkillLabel = t.inputBox.skillLabel;
   const defaultMcpLabel = t.inputBox.mcpLabel;
   const defaultSearchMcpTools = t.inputBox.searchMcpTools;
   const defaultNoMcpTools = t.inputBox.noMcpTools;
+  const defaultCliLabel = t.inputBox.cliLabel ?? "CLI Tools";
+  const defaultSearchCliTools = t.inputBox.searchCliTools ?? "Search CLI tools...";
+  const defaultNoCliTools = t.inputBox.noCliTools ?? "No CLI tools available";
 
   // Build mention options
   const fileMentionOptions = useMemo<MentionOption[]>(
@@ -699,7 +715,7 @@ export function InputBox({
     () =>
       skills.map((skill) => ({
         id: `skill:${skill.name}`,
-        label: skill.name,
+        label: getLocalizedSkillName(skill.name, locale),
         value: skill.name,
         kind: "skill",
         description: getLocalizedSkillDescription(skill, locale),
@@ -717,9 +733,24 @@ export function InputBox({
           label: serverName,
           value: serverName,
           kind: "mcp",
-          description: server.description?.trim() || "MCP tool",
+          description: (server.description?.trim() ?? "") ? (server.description?.trim() ?? "") : "MCP tool",
         })),
     [mcpConfig?.mcp_servers],
+  );
+
+  const cliMentionOptions = useMemo<MentionOption[]>(
+    () =>
+      Object.entries(cliConfig?.clis ?? {})
+        .filter(([, tool]) => tool.enabled)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([toolId, tool]) => ({
+          id: `cli:${toolId}`,
+          label: toolId,
+          value: toolId,
+          kind: "cli",
+          description: `CLI tool (${tool.source})`,
+        })),
+    [cliConfig?.clis],
   );
 
   // Filter and rank mention options based on query
@@ -858,6 +889,23 @@ export function InputBox({
       .map((item) => item.option);
   }, [skillMentionOptions, skillSelectorQuery]);
 
+  const filteredCliSelectorOptions = useMemo(() => {
+    const normalizedQuery = cliSelectorQuery.trim().toLowerCase();
+    return cliMentionOptions
+      .map((option) => ({
+        option,
+        score: rankMentionOption(option, normalizedQuery),
+      }))
+      .filter((item) => item.score > 0 || !normalizedQuery)
+      .sort((a, b) => {
+        if (a.score !== b.score) {
+          return b.score - a.score;
+        }
+        return a.option.value.localeCompare(b.option.value);
+      })
+      .map((item) => item.option);
+  }, [cliMentionOptions, cliSelectorQuery]);
+
   const toggleMcpTool = useCallback((value: string) => {
     setSelectedMcpTools((prev) => {
       if (prev.includes(value)) {
@@ -888,6 +936,15 @@ export function InputBox({
         return prev.filter((item) => item !== skill);
       }
       return [...prev, skill];
+    });
+  }, []);
+
+  const toggleCliTool = useCallback((value: string) => {
+    setSelectedCliTools((prev) => {
+      if (prev.includes(value)) {
+        return prev.filter((item) => item !== value);
+      }
+      return [...prev, value];
     });
   }, []);
 
@@ -1044,6 +1101,10 @@ export function InputBox({
 
   const removeSelectedSkill = useCallback((value: string) => {
     setSelectedSkills((prev) => prev.filter((item) => item !== value));
+  }, []);
+
+  const removeSelectedCliTool = useCallback((value: string) => {
+    setSelectedCliTools((prev) => prev.filter((item) => item !== value));
   }, []);
 
   const focusMessageInput = useCallback(() => {
@@ -1357,6 +1418,7 @@ export function InputBox({
         selectedSkills,
         selectedContexts,
         selectedMcpTools,
+        selectedCliTools,
       );
       if (!submissionPayload.text) {
         return;
@@ -1370,7 +1432,7 @@ export function InputBox({
             : undefined,
       });
     },
-    [onSubmit, onStop, selectedContexts, selectedMcpTools, selectedSkills, status],
+    [onSubmit, onStop, selectedContexts, selectedMcpTools, selectedCliTools, selectedSkills, status],
   );
 
   if (!hydrated) {
@@ -1528,7 +1590,26 @@ export function InputBox({
                 onClick={() => removeSelectedSkill(skill)}
               >
                 <SparklesIcon className="size-3" />
-                <span>{skill}</span>
+                <span>{getLocalizedSkillName(skill, locale)}</span>
+                <XIcon className="text-muted-foreground size-3" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Selected CLI tools tags */}
+      {selectedCliTools.length > 0 && (
+        <div className="order-last w-full px-3 pb-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {selectedCliTools.map((tool) => (
+              <button
+                key={tool}
+                type="button"
+                className="bg-muted/70 text-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs"
+                onClick={() => removeSelectedCliTool(tool)}
+              >
+                <SquareTerminalIcon className="size-3" />
+                <span>{tool}</span>
                 <XIcon className="text-muted-foreground size-3" />
               </button>
             ))}
@@ -1558,8 +1639,8 @@ export function InputBox({
           </div>
         </div>
       )}
-      <PromptInputFooter className="flex">
-        <PromptInputTools>
+      <PromptInputFooter className="flex w-full flex-wrap items-center gap-x-2 gap-y-1">
+        <PromptInputTools className="min-w-0 flex-1 basis-full flex-wrap items-center gap-1 sm:basis-auto">
           {extraTools}
           {/* TODO: Add more connectors here
           <PromptInputActionMenu>
@@ -1744,6 +1825,69 @@ export function InputBox({
                         type="checkbox"
                         checked={selectedMcpTools.includes(option.value)}
                         onChange={() => toggleMcpTool(option.value)}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="text-xs font-medium">{option.label}</div>
+                        {option.description && (
+                          <div className="text-muted-foreground text-[11px]">
+                            {option.description}
+                          </div>
+                        )}
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu
+            open={cliSelectorOpen}
+            onOpenChange={(open) => {
+              setCliSelectorOpen(open);
+              if (!open) setCliSelectorQuery("");
+            }}
+          >
+            <DropdownMenuTrigger asChild>
+              <PromptInputButton className="gap-1! px-2! text-xs" disabled={disabled}>
+                <SquareTerminalIcon className="size-3" />
+                <span>{mentionLabels?.cliLabel ?? defaultCliLabel}</span>
+                {selectedCliTools.length > 0 && (
+                  <span className="bg-foreground text-background inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-semibold">
+                    {selectedCliTools.length}
+                  </span>
+                )}
+              </PromptInputButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-80">
+              <div className="p-2">
+                <input
+                  type="text"
+                  placeholder={mentionLabels?.searchCliTools ?? defaultSearchCliTools}
+                  className="bg-background border-border text-foreground placeholder:text-muted-foreground w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={cliSelectorQuery}
+                  onChange={(e) => setCliSelectorQuery(e.target.value)}
+                />
+              </div>
+              <div className="max-h-60 overflow-auto">
+                {filteredCliSelectorOptions.length === 0 ? (
+                  <div className="text-muted-foreground px-3 py-2 text-xs">
+                    {mentionLabels?.noCliTools ?? defaultNoCliTools}
+                  </div>
+                ) : (
+                  filteredCliSelectorOptions.map((option) => (
+                    <DropdownMenuItem
+                      key={option.id}
+                      className="flex items-start gap-2 px-3 py-2"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        toggleCliTool(option.value);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCliTools.includes(option.value)}
+                        onChange={() => toggleCliTool(option.value)}
                         className="mt-0.5"
                       />
                       <div className="flex-1">
@@ -2037,7 +2181,7 @@ export function InputBox({
             </PromptInputActionMenu>
           )}
         </PromptInputTools>
-        <PromptInputTools>
+        <PromptInputTools className="ml-auto min-w-0 flex w-full flex-wrap items-center justify-end gap-1 sm:w-auto">
           {artifactCenterEnabled && (
             <PromptInputButton
               className="gap-1! px-2! text-xs"
@@ -2058,8 +2202,8 @@ export function InputBox({
             onOpenChange={setModelDialogOpen}
           >
             <ModelSelectorTrigger asChild>
-              <PromptInputButton className="gap-2">
-                <ModelSelectorName className="text-xs font-normal">
+              <PromptInputButton className="max-w-[170px] gap-2 sm:max-w-[220px]">
+                <ModelSelectorName className="truncate text-xs font-normal">
                   {selectedModel?.display_name}
                 </ModelSelectorName>
               </PromptInputButton>

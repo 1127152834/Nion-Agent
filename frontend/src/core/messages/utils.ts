@@ -21,6 +21,8 @@ interface AssistantPresentFilesGroup extends GenericMessageGroup<"assistant:pres
 
 interface AssistantClarificationGroup extends GenericMessageGroup<"assistant:clarification"> {}
 
+interface AssistantCLIInteractiveGroup extends GenericMessageGroup<"assistant:cli-interactive"> {}
+
 interface AssistantSubagentGroup extends GenericMessageGroup<"assistant:subagent"> {}
 
 type MessageGroup =
@@ -29,11 +31,12 @@ type MessageGroup =
   | AssistantMessageGroup
   | AssistantPresentFilesGroup
   | AssistantClarificationGroup
+  | AssistantCLIInteractiveGroup
   | AssistantSubagentGroup;
 
 export interface ClarificationPayload {
   status?: "awaiting_user" | "resolved" | string;
-  question: string;
+  question?: string;
   clarification_type?: string;
   context?: string | null;
   options?: string[];
@@ -44,12 +47,57 @@ export interface ClarificationPayload {
   resolved_by_message_id?: string | null;
 }
 
+export interface CLIInteractivePayload {
+  status?: "awaiting_input" | "resolved" | "error" | string;
+  tool_id?: string;
+  command?: string[];
+  interactive_type?: "password" | "confirm" | "input";
+  prompt?: string;
+  input_method?: "stdin" | "env" | "arg";
+  tool_call_id?: string | null;
+  asked_at?: string | null;
+  resolved_at?: string | null;
+  resolved_by_message_id?: string | null;
+  result?: string | null;
+  error?: string | null;
+}
+
 function normalizeOptionalText(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
   const normalized = value.trim();
   return normalized ? normalized : null;
+}
+
+const INTERNAL_REASONING_PATTERNS: RegExp[] = [
+  /memory_policy/i,
+  /memory_read/i,
+  /memory_write/i,
+  /session_mode/i,
+  /根据\s*memory_policy/i,
+  /我不应该声称/i,
+  /\bI\s+(?:should|shouldn't|must|need to)\b/i,
+];
+
+function sanitizeReasoningText(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const lines = value
+    .split("\n")
+    .filter((line) => {
+      const text = line.trim();
+      if (!text) {
+        return true;
+      }
+      return !INTERNAL_REASONING_PATTERNS.some((pattern) => pattern.test(text));
+    })
+    .join("\n")
+    .trim();
+
+  return lines ? lines : null;
 }
 
 function normalizeTextBlockValue(value: unknown): string {
@@ -208,6 +256,13 @@ export function groupMessages<T>(
           type: "assistant:clarification",
           messages: [message],
         });
+      } else if (isCLIInteractiveToolMessage(message)) {
+        lastOpenGroup()?.messages.push(message);
+        groups.push({
+          id: message.id,
+          type: "assistant:cli-interactive",
+          messages: [message],
+        });
       } else {
         const open = lastOpenGroup();
         if (open) {
@@ -290,12 +345,13 @@ export function extractReasoningContentFromMessage(message: Message) {
   ).reasoningContent;
 
   if (metadataReasoning && thinkTagReasoning) {
-    return metadataReasoning === thinkTagReasoning
+    const merged = metadataReasoning === thinkTagReasoning
       ? metadataReasoning
       : `${metadataReasoning}\n\n${thinkTagReasoning}`;
+    return sanitizeReasoningText(merged);
   }
 
-  return metadataReasoning ?? thinkTagReasoning;
+  return sanitizeReasoningText(metadataReasoning ?? thinkTagReasoning);
 }
 
 export function removeReasoningContentFromMessage(message: Message) {
@@ -350,6 +406,14 @@ export function hasPresentFiles(message: Message) {
 
 export function isClarificationToolMessage(message: Message) {
   return message.type === "tool" && message.name === "ask_clarification";
+}
+
+export function isCLIInteractiveToolMessage(message: Message) {
+  return (
+    message.type === "tool" &&
+    message.name?.startsWith("cli_") &&
+    message.additional_kwargs?.cli_interactive != null
+  );
 }
 
 function normalizeClarificationOptions(raw: unknown): string[] {

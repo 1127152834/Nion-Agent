@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 # Make 'src' importable from any working directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -36,3 +38,9 @@ _thread_state_mock = MagicMock()
 _thread_state_mock.SandboxState = MagicMock
 _thread_state_mock.ThreadState = MagicMock
 sys.modules["src.agents.thread_state"] = _thread_state_mock
+
+
+@pytest.fixture
+def anyio_backend():
+    # Keep the test suite runnable without installing trio.
+    return "asyncio"

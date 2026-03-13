@@ -1,12 +1,8 @@
 "use client";
 
-import { EyeIcon, EyeOffIcon, Loader2Icon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { FieldTip } from "../field-tip";
@@ -34,33 +30,9 @@ type ToolPreset = {
   desc: string;
 };
 
-type KeyTestState = {
-  status: "idle" | "testing" | "ok" | "error";
-  message: string;
-};
-
-type WebProviderId = "web_search" | "web_fetch";
-
 type ToolSectionCopy = {
   title: string;
   subtitle: string;
-  webConfigTitle: string;
-  webConfigSubtitle: string;
-  tavilyApiKey: string;
-  jinaApiKey: string;
-  placeholderApiKey: string;
-  show: string;
-  hide: string;
-  testingKey: string;
-  keyTestSuccess: string;
-  keyTestFailed: string;
-  keyTestMissing: string;
-  keyTestNetwork: string;
-  keyTestUnsupported: string;
-  keyTestInvalid: string;
-  keyTestInvalidCleared: string;
-  timeout: string;
-  maxResults: string;
   hintEn: string;
   hintZh: string;
   customInfoTemplate: string;
@@ -81,7 +53,7 @@ const TOOL_PRESETS: ToolPreset[] = [
     id: "web_fetch",
     name: "web_fetch",
     group: "web",
-    use: "src.community.jina_ai.tools:web_fetch_tool",
+    use: "src.community.web_fetch.tools:web_fetch_tool",
     title: "Web Fetch",
     desc: "Fetch webpage content (with configurable Jina key).",
   },
@@ -162,16 +134,6 @@ function normalizeToolGroups(
   return groups;
 }
 
-function toInputNumber(value: unknown): string {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return String(value);
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  return "";
-}
-
 export function ToolsSection({
   config,
   onChange,
@@ -184,26 +146,9 @@ export function ToolsSection({
   const { t } = useI18n();
   const fallbackSection: ToolSectionCopy = {
     title: "Tools",
-    subtitle: "Configure built-in tools and web providers.",
-    webConfigTitle: "Web provider config",
-    webConfigSubtitle: "API keys are optional. Web tools still work without them.",
-    tavilyApiKey: "Tavily API key",
-    jinaApiKey: "Jina API key",
-    placeholderApiKey: "Enter API key",
-    show: "Show",
-    hide: "Hide",
-    testingKey: "Testing key...",
-    keyTestSuccess: "Key validation succeeded",
-    keyTestFailed: "Key validation failed",
-    keyTestMissing: "API key is required",
-    keyTestNetwork: "Network error while testing key",
-    keyTestUnsupported: "This provider does not support key probe",
-    keyTestInvalid: "Invalid API key",
-    keyTestInvalidCleared: "Current key is invalid and has been cleared",
-    timeout: "Timeout (seconds)",
-    maxResults: "Max results",
-    hintEn: "Tavily/Jina keys are optional; built-in fallback is used when keys are empty.",
-    hintZh: "Tavily/Jina keys are optional; built-in fallback is used when keys are empty.",
+    subtitle: "Configure built-in tools.",
+    hintEn: "Only enable tools you really need.",
+    hintZh: "仅启用你真正需要的工具。",
     customInfoTemplate: "{count} custom tools configured",
     presetTitles: {
       web_search: "Web Search",
@@ -246,17 +191,6 @@ export function ToolsSection({
   };
 
   const tools = asArray(config.tools);
-  const [secretVisible, setSecretVisible] = useState<{
-    web_search: boolean;
-    web_fetch: boolean;
-  }>({
-    web_search: false,
-    web_fetch: false,
-  });
-  const [keyTestState, setKeyTestState] = useState<Record<WebProviderId, KeyTestState>>({
-    web_search: { status: "idle", message: "" },
-    web_fetch: { status: "idle", message: "" },
-  });
 
   const presetTools = useMemo(() => {
     return Object.fromEntries(
@@ -351,103 +285,6 @@ export function ToolsSection({
     removePresetTool(preset);
   };
 
-  const runKeyTest = async (providerId: WebProviderId) => {
-    const isSearch = providerId === "web_search";
-    const preset = TOOL_PRESETS.find((item) => item.id === providerId);
-    if (!preset) {
-      return;
-    }
-    const toolConfig = isSearch ? presetTools.web_search : presetTools.web_fetch;
-
-    const rawKey = asString(toolConfig?.api_key).trim();
-    const effectiveSearchProvider = isSearch
-      ? (rawKey ? "tavily" : "searxng")
-      : "tavily";
-    const numericValue = isSearch
-      ? Number(toInputNumber(toolConfig?.max_results ?? 1))
-      : Number(toInputNumber(toolConfig?.timeout ?? 10));
-
-    setKeyTestState((prev) => ({
-      ...prev,
-      [providerId]: {
-        status: "testing",
-        message: copy.testingKey,
-      },
-    }));
-
-    try {
-      const response = await fetch(`${getBackendBaseURL()}/api/tools/test-web-provider`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          provider: isSearch
-            ? effectiveSearchProvider
-            : "jina",
-          api_key: rawKey || null,
-          ...(isSearch
-            ? { max_results: Number.isFinite(numericValue) && numericValue > 0 ? Math.floor(numericValue) : 1 }
-            : { timeout_seconds: Number.isFinite(numericValue) && numericValue > 0 ? Math.floor(numericValue) : 10 }),
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        status?: "ok" | "degraded";
-        error_code?: string | null;
-        result?: { message?: string } | null;
-        detail?: string;
-      };
-
-      if (!response.ok || payload.status !== "ok") {
-        let message =
-          payload?.result?.message ??
-          payload?.error_code ??
-          payload?.detail ??
-          copy.keyTestFailed;
-        if (payload?.error_code === "tool_api_key_invalid") {
-          if (rawKey) {
-            upsertPresetTool(preset, { api_key: undefined });
-            message = copy.keyTestInvalidCleared;
-          } else {
-            message = copy.keyTestInvalid;
-          }
-        } else if (payload?.error_code === "tool_api_key_missing") {
-          message = copy.keyTestMissing;
-        } else if (payload?.error_code === "tool_provider_unreachable") {
-          message = copy.keyTestNetwork;
-        } else if (response.status === 404) {
-          message = copy.keyTestUnsupported;
-        }
-        setKeyTestState((prev) => ({
-          ...prev,
-          [providerId]: {
-            status: "error",
-            message,
-          },
-        }));
-        return;
-      }
-
-      setKeyTestState((prev) => ({
-        ...prev,
-        [providerId]: {
-          status: "ok",
-          message: copy.keyTestSuccess,
-        },
-      }));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setKeyTestState((prev) => ({
-        ...prev,
-        [providerId]: {
-          status: "error",
-          message,
-        },
-      }));
-    }
-  };
-
   return (
     <div className="space-y-6">
       <section className="space-y-3 rounded-lg border p-4">
@@ -484,230 +321,7 @@ export function ToolsSection({
             );
           })}
         </div>
-      </section>
-
-      <section className="space-y-3 rounded-lg border p-4">
-        <div>
-          <div className="text-sm font-medium">{copy.webConfigTitle}</div>
-          <p className="text-muted-foreground text-xs">{copy.webConfigSubtitle}</p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-3 rounded-lg border p-4">
-            <div className="text-sm font-medium">{copy.tavilyApiKey}</div>
-            <div className="relative min-w-0">
-              <Input
-                className="h-10 pr-10"
-                disabled={disabled}
-                placeholder={copy.placeholderApiKey}
-                type={secretVisible.web_search ? "text" : "password"}
-                value={asString(presetTools.web_search?.api_key)}
-                onChange={(e) => {
-                  const preset = TOOL_PRESETS.find(
-                    (item) => item.id === "web_search",
-                  );
-                  if (!preset) return;
-                  upsertPresetTool(preset, { api_key: e.target.value });
-                  setKeyTestState((prev) => ({
-                    ...prev,
-                    web_search: { status: "idle", message: "" },
-                  }));
-                }}
-                onBlur={() => {
-                  if (asString(presetTools.web_search?.api_key).trim()) {
-                    void runKeyTest("web_search");
-                  }
-                }}
-              />
-              <Button
-                aria-label={
-                  secretVisible.web_search ? copy.hide : copy.show
-                }
-                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 p-0"
-                disabled={disabled}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                }}
-                onClick={() =>
-                  setSecretVisible((prev) => ({
-                    ...prev,
-                    web_search: !prev.web_search,
-                  }))
-                }
-              >
-                {secretVisible.web_search ? (
-                  <EyeOffIcon className="size-4" />
-                ) : (
-                  <EyeIcon className="size-4" />
-                )}
-              </Button>
-            </div>
-            <div className="space-y-1.5">
-              <div className="text-muted-foreground text-xs">{copy.maxResults}</div>
-              <Input
-                className="h-10 max-w-[180px]"
-                disabled={disabled}
-                min={1}
-                type="number"
-                value={toInputNumber(presetTools.web_search?.max_results)}
-                onChange={(e) => {
-                  const preset = TOOL_PRESETS.find(
-                    (item) => item.id === "web_search",
-                  );
-                  if (!preset) return;
-                  const raw = e.target.value.trim();
-                  if (!raw) {
-                    upsertPresetTool(preset, { max_results: undefined });
-                    return;
-                  }
-                  const parsed = Number(raw);
-                  if (Number.isFinite(parsed) && parsed > 0) {
-                    upsertPresetTool(preset, { max_results: Math.floor(parsed) });
-                  }
-                }}
-              />
-            </div>
-            {keyTestState.web_search.status !== "idle" ? (
-              <div className="flex items-center gap-2 text-xs">
-                {keyTestState.web_search.status === "testing" ? (
-                  <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-                ) : (
-                  <span
-                    className={`inline-block size-2 rounded-full ${
-                      keyTestState.web_search.status === "ok"
-                        ? "bg-emerald-500"
-                        : "bg-rose-500"
-                    }`}
-                  />
-                )}
-                <span
-                  className={
-                    keyTestState.web_search.status === "ok"
-                      ? "text-emerald-600"
-                      : keyTestState.web_search.status === "error"
-                        ? "text-destructive"
-                        : "text-muted-foreground"
-                  }
-                >
-                  {keyTestState.web_search.message || copy.testingKey}
-                </span>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="space-y-3 rounded-lg border p-4">
-            <div className="text-sm font-medium">{copy.jinaApiKey}</div>
-            <div className="relative min-w-0">
-              <Input
-                className="h-10 pr-10"
-                disabled={disabled}
-                placeholder={copy.placeholderApiKey}
-                type={secretVisible.web_fetch ? "text" : "password"}
-                value={asString(presetTools.web_fetch?.api_key)}
-                onChange={(e) => {
-                  const preset = TOOL_PRESETS.find(
-                    (item) => item.id === "web_fetch",
-                  );
-                  if (!preset) return;
-                  upsertPresetTool(preset, { api_key: e.target.value });
-                  setKeyTestState((prev) => ({
-                    ...prev,
-                    web_fetch: { status: "idle", message: "" },
-                  }));
-                }}
-                onBlur={() => {
-                  if (asString(presetTools.web_fetch?.api_key).trim()) {
-                    void runKeyTest("web_fetch");
-                  }
-                }}
-              />
-              <Button
-                aria-label={
-                  secretVisible.web_fetch ? copy.hide : copy.show
-                }
-                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 p-0"
-                disabled={disabled}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                }}
-                onClick={() =>
-                  setSecretVisible((prev) => ({
-                    ...prev,
-                    web_fetch: !prev.web_fetch,
-                  }))
-                }
-              >
-                {secretVisible.web_fetch ? (
-                  <EyeOffIcon className="size-4" />
-                ) : (
-                  <EyeIcon className="size-4" />
-                )}
-              </Button>
-            </div>
-            <div className="space-y-1.5">
-              <div className="text-muted-foreground text-xs">{copy.timeout}</div>
-              <Input
-                className="h-10 max-w-[180px]"
-                disabled={disabled}
-                min={1}
-                type="number"
-                value={toInputNumber(presetTools.web_fetch?.timeout)}
-                onChange={(e) => {
-                  const preset = TOOL_PRESETS.find(
-                    (item) => item.id === "web_fetch",
-                  );
-                  if (!preset) return;
-                  const raw = e.target.value.trim();
-                  if (!raw) {
-                    upsertPresetTool(preset, { timeout: undefined });
-                    return;
-                  }
-                  const parsed = Number(raw);
-                  if (Number.isFinite(parsed) && parsed > 0) {
-                    upsertPresetTool(preset, { timeout: Math.floor(parsed) });
-                  }
-                }}
-              />
-            </div>
-            {keyTestState.web_fetch.status !== "idle" ? (
-              <div className="flex items-center gap-2 text-xs">
-                {keyTestState.web_fetch.status === "testing" ? (
-                  <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
-                ) : (
-                  <span
-                    className={`inline-block size-2 rounded-full ${
-                      keyTestState.web_fetch.status === "ok"
-                        ? "bg-emerald-500"
-                        : "bg-rose-500"
-                    }`}
-                  />
-                )}
-                <span
-                  className={
-                    keyTestState.web_fetch.status === "ok"
-                      ? "text-emerald-600"
-                      : keyTestState.web_fetch.status === "error"
-                        ? "text-destructive"
-                        : "text-muted-foreground"
-                  }
-                >
-                  {keyTestState.web_fetch.message || copy.testingKey}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <FieldTip
-          en={copy.hintEn}
-          zh={copy.hintZh}
-        />
+        <FieldTip en={copy.hintEn} zh={copy.hintZh} />
 
         {copy.customInfo ? (
           <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">

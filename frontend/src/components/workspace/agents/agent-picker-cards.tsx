@@ -18,7 +18,6 @@ import {
   useMotionValue,
   useTransform,
 } from "motion/react";
-import { useRouter } from "next/navigation";
 import {
   useEffect,
   useMemo,
@@ -29,6 +28,7 @@ import {
 
 import { useAgents, useDefaultAgentConfig } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -244,6 +244,7 @@ export function AgentPickerCards({
         ? [
             {
               name: defaultAgent.name,
+              display_name: null,
               description: defaultAgent.description,
               model: defaultAgent.model,
             },
@@ -251,6 +252,7 @@ export function AgentPickerCards({
         : []),
       ...agents.map((agent) => ({
         name: agent.name,
+        display_name: agent.display_name ?? null,
         description: agent.description,
         model: agent.model,
       })),
@@ -259,10 +261,13 @@ export function AgentPickerCards({
     return input.map((agent) => {
       const gradientIndex = hashIndex(agent.name, CARD_GRADIENTS.length);
       const iconIndex = hashIndex(`${agent.name}:icon`, CARD_ICONS.length);
+      const trimmedDisplayName = agent.display_name?.trim();
       return {
         name: agent.name,
         displayName:
-          agent.name === "_default" ? pickerCopy.defaultAgentName : agent.name,
+          agent.name === "_default"
+            ? pickerCopy.defaultAgentName
+            : trimmedDisplayName && trimmedDisplayName.length > 0 ? trimmedDisplayName : agent.name,
         description:
           agent.description ||
           (agent.name === "_default"

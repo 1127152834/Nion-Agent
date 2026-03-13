@@ -16,6 +16,9 @@ OUT_DIR = BUILD_DIR / 'icons'
 ICONSET_DIR = OUT_DIR / 'app.iconset'
 BASE_SIZE = 1024
 CORNER_RADIUS = 220
+# Dock/Finder 里图标的“视觉大小”主要由透明边距决定；加一点透明 padding
+# 可以让我们的图标和多数第三方应用更接近同一套视觉基线。
+OUTER_PADDING_RATIO = 0.06
 
 
 def build_base_icon() -> Image.Image:
@@ -24,27 +27,34 @@ def build_base_icon() -> Image.Image:
     if alpha_bbox:
         source = source.crop(alpha_bbox)
 
-    mask = Image.new('L', (BASE_SIZE, BASE_SIZE), 0)
+    outer_padding = int(BASE_SIZE * OUTER_PADDING_RATIO)
+    tile_size = BASE_SIZE - outer_padding * 2
+    tile_corner_radius = int(CORNER_RADIUS * tile_size / BASE_SIZE)
+
+    mask = Image.new('L', (tile_size, tile_size), 0)
     mask_draw = ImageDraw.Draw(mask)
     mask_draw.rounded_rectangle(
-        (0, 0, BASE_SIZE - 1, BASE_SIZE - 1),
-        radius=CORNER_RADIUS,
+        (0, 0, tile_size - 1, tile_size - 1),
+        radius=tile_corner_radius,
         fill=255,
     )
 
-    background = Image.new('RGBA', (BASE_SIZE, BASE_SIZE), (255, 255, 255, 255))
-    icon_canvas = Image.new('RGBA', (BASE_SIZE, BASE_SIZE), (0, 0, 0, 0))
+    background = Image.new('RGBA', (tile_size, tile_size), (255, 255, 255, 255))
+    icon_canvas = Image.new('RGBA', (tile_size, tile_size), (0, 0, 0, 0))
     icon_canvas.paste(background, (0, 0), mask)
 
-    max_logo_size = int(BASE_SIZE * 0.72)
+    max_logo_size = int(tile_size * 0.72)
     source.thumbnail((max_logo_size, max_logo_size), resample=Image.Resampling.LANCZOS)
 
-    logo_x = (BASE_SIZE - source.width) // 2
-    logo_y = (BASE_SIZE - source.height) // 2 + int(BASE_SIZE * 0.03)
+    logo_x = (tile_size - source.width) // 2
+    logo_y = (tile_size - source.height) // 2 + int(tile_size * 0.03)
     icon_canvas.alpha_composite(source, (logo_x, logo_y))
 
+    tile_icon = Image.new('RGBA', (tile_size, tile_size), (0, 0, 0, 0))
+    tile_icon.paste(icon_canvas, (0, 0), mask)
+
     final_icon = Image.new('RGBA', (BASE_SIZE, BASE_SIZE), (0, 0, 0, 0))
-    final_icon.paste(icon_canvas, (0, 0), mask)
+    final_icon.alpha_composite(tile_icon, (outer_padding, outer_padding))
     return final_icon
 
 

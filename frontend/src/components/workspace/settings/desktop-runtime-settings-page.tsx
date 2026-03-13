@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -96,6 +97,31 @@ export function DesktopRuntimeSettingsPage() {
   }, [draft, t.settings.desktopRuntime.validationDistinct, t.settings.desktopRuntime.validationInteger, t.settings.desktopRuntime.validationRange]);
 
   const dirty = useMemo(() => !portsEqual(draft, initialDraft), [draft, initialDraft]);
+  const activePortItems = useMemo(
+    () =>
+      activePorts
+        ? [
+          {
+            label: t.settings.desktopRuntime.frontendPortLabel,
+            value: activePorts.frontendPort,
+          },
+          {
+            label: t.settings.desktopRuntime.gatewayPortLabel,
+            value: activePorts.gatewayPort,
+          },
+          {
+            label: t.settings.desktopRuntime.langgraphPortLabel,
+            value: activePorts.langgraphPort,
+          },
+        ]
+        : [],
+    [
+      activePorts,
+      t.settings.desktopRuntime.frontendPortLabel,
+      t.settings.desktopRuntime.gatewayPortLabel,
+      t.settings.desktopRuntime.langgraphPortLabel,
+    ],
+  );
 
   const loadRuntimePorts = useCallback(async () => {
     if (!window.electronAPI) {
@@ -164,33 +190,43 @@ export function DesktopRuntimeSettingsPage() {
       ) : (
         <div className="space-y-4">
           <Card className="border-border/70 py-0">
-            <CardContent className="space-y-3 p-4 text-sm">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div>
-                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
+            <CardContent className="space-y-4 p-4 text-sm">
+              <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <div className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
                     {t.settings.desktopRuntime.configVersion}
                   </div>
-                  <div className="font-mono text-xs">{version ?? "-"}</div>
+                  <div className="mt-1 font-mono text-2xl leading-none tracking-tight">
+                    {version ?? "-"}
+                  </div>
                 </div>
-                <div>
-                  <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <div className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
                     {t.settings.desktopRuntime.activePorts}
                   </div>
-                  <div className="font-mono text-xs">
-                    {activePorts
-                      ? `frontend:${activePorts.frontendPort} gateway:${activePorts.gatewayPort} langgraph:${activePorts.langgraphPort}`
-                      : "-"}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {activePortItems.length > 0 ? activePortItems.map((item) => (
+                      <Badge
+                        key={item.label}
+                        variant="outline"
+                        className="font-mono text-xs"
+                      >
+                        {item.label.replace(/\s*端口$|\s*Port$/i, "")}:{item.value}
+                      </Badge>
+                    )) : (
+                      <span className="font-mono text-xs">-</span>
+                    )}
                   </div>
                 </div>
               </div>
-              <div className="text-muted-foreground text-xs">
+              <div className="text-muted-foreground rounded-lg border border-dashed px-3 py-2 text-xs">
                 {t.settings.desktopRuntime.restartHint}
               </div>
             </CardContent>
           </Card>
 
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
+            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/10 p-3">
               <Label htmlFor="desktop-port-frontend">{t.settings.desktopRuntime.frontendPortLabel}</Label>
               <Input
                 id="desktop-port-frontend"
@@ -205,7 +241,7 @@ export function DesktopRuntimeSettingsPage() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/10 p-3">
               <Label htmlFor="desktop-port-gateway">{t.settings.desktopRuntime.gatewayPortLabel}</Label>
               <Input
                 id="desktop-port-gateway"
@@ -220,7 +256,7 @@ export function DesktopRuntimeSettingsPage() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 rounded-lg border border-border/60 bg-muted/10 p-3">
               <Label htmlFor="desktop-port-langgraph">{t.settings.desktopRuntime.langgraphPortLabel}</Label>
               <Input
                 id="desktop-port-langgraph"
@@ -234,6 +270,10 @@ export function DesktopRuntimeSettingsPage() {
                 disabled={loading || saving}
               />
             </div>
+          </div>
+
+          <div className="text-muted-foreground text-xs">
+            {`Port range: ${MIN_PORT}-${MAX_PORT}`}
           </div>
 
           {validationMessage ? (

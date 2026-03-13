@@ -1,8 +1,15 @@
+import json
+import re
 from datetime import datetime
+from typing import Any
 
 from src.agents.memory.core import MemoryReadRequest
 from src.agents.memory.registry import get_default_memory_provider
+from src.config.paths import get_paths
 from src.skills import load_skills
+from src.config.extensions_config import ExtensionsConfig
+
+_SAFE_PLUGIN_STUDIO_SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 
 
 def _build_subagent_section(max_concurrent: int) -> str:
@@ -255,6 +262,8 @@ You: "Deploying to staging..." [proceed]
 </clarification_system>
 
 {skills_section}
+{cli_tools_section}
+{requested_skills_section}
 {plugin_assistant_section}
 
 {subagent_section}
@@ -342,6 +351,57 @@ def _get_memory_context(
         return ""
 
 
+def get_cli_tools_prompt_section() -> str:
+    """Generate the CLI tools prompt section with available CLI tools list.
+
+    Returns the <cli_system>...</cli_system> block listing all enabled CLI tools,
+    suitable for injection into the agent's system prompt.
+    """
+    try:
+        config = ExtensionsConfig.from_file()
+        enabled_clis = {
+            tool_id: cfg
+            for tool_id, cfg in config.clis.items()
+            if cfg.enabled
+        }
+
+        if not enabled_clis:
+            return ""
+
+        cli_items = "\n".join(
+            f"    <cli_tool>\n        <name>{tool_id}</name>\n        <source>{cfg.source}</source>\n        <description>CLI tool available via cli_{tool_id} tool</description>\n    </cli_tool>"
+            for tool_id, cfg in enabled_clis.items()
+        )
+        cli_list = f"<available_cli_tools>\n{cli_items}\n</available_cli_tools>"
+
+        return f"""<cli_system>
+You have access to CLI (Command Line Interface) tools that have been installed and enabled in this environment. These tools are available as LangChain tools with the naming pattern `cli_{{tool_id}}`.
+
+**How to Use CLI Tools:**
+1. CLI tools are automatically loaded and available in your tool list
+2. Each enabled CLI tool appears as `cli_{{tool_id}}` (e.g., `cli_ripgrep` for ripgrep)
+3. Call the tool directly like any other tool - no special setup required
+4. The tool will execute the CLI command and return the output
+
+**Available CLI Tools:**
+{cli_list}
+
+**CLI Tool Sources:**
+- **managed**: Installed from the CLI marketplace (managed by the system)
+- **system**: Available in the system PATH
+- **custom**: Custom installation with specified executable path
+
+**Important Notes:**
+- CLI tools run in the same sandbox environment as other tools
+- Output is captured and returned to you
+- Use CLI tools when they provide better functionality than built-in tools
+- If a user mentions a CLI tool by name (e.g., "use ripgrep"), prefer the CLI tool over alternatives
+</cli_system>"""
+    except Exception as e:
+        print(f"Failed to load CLI tools prompt section: {e}")
+        return ""
+
+
 def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
     """Generate the skills prompt section with available skills list.
 
@@ -372,6 +432,9 @@ def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
     return f"""<skill_system>
 You have access to skills that provide optimized workflows for specific tasks. Each skill contains best practices, frameworks, and references to additional resources.
 
+**Explicit Skill Invocation:**
+- If the user message contains `/<skill-name>` and `<skill-name>` matches one of the `<available_skills>` `<name>` entries, you MUST treat it as an explicit instruction to use that skill for this turn. Do NOT treat it as a suggestion or guess.
+
 **Progressive Loading Pattern:**
 1. When a user query matches a skill's use case, immediately call `read_file` on the skill's main file using the path attribute provided in the skill tag below
 2. Read and understand the skill's workflow and instructions
@@ -384,6 +447,27 @@ You have access to skills that provide optimized workflows for specific tasks. E
 {skills_list}
 
 </skill_system>"""
+
+
+def _build_requested_skills_section(requested_skills: list[str] | None) -> str:
+    skills = [s.strip() for s in (requested_skills or []) if isinstance(s, str) and s.strip()]
+    if not skills:
+        return ""
+
+    joined = ", ".join(f"`{s}`" for s in skills)
+    visible_ack = f"已按用户指定使用技能：{', '.join(skills)}"
+
+    return f"""<requested_skills>
+The user explicitly specified the following skill(s) for this turn: {joined}
+
+**HARD RULES (do not ignore):**
+1. You MUST use the requested skill(s) to complete this request. Do NOT present this as a guess or suggestion.
+2. Before starting any work, you MUST load each requested skill by calling `read_file` on its SKILL.md path from the `<available_skills>` list (use the `<location>` of the matching `<name>`).
+3. Your FIRST visible line MUST be exactly:
+{visible_ack}
+4. If any requested skill is not present in `<available_skills>`, explicitly say it is unavailable in this environment and continue without silently ignoring it.
+</requested_skills>
+"""
 
 
 def get_agent_soul(agent_name: str | None) -> str:
@@ -449,21 +533,50 @@ def _build_plugin_assistant_section(
     if workspace_mode != "plugin_assistant":
         return ""
 
-    session_line = (
-        f"- Bound Plugin Studio Session: `{plugin_studio_session_id}`\n"
-        if plugin_studio_session_id
-        else ""
-    )
+    session_lines: list[str] = []
+    if plugin_studio_session_id:
+        session_lines.append(f"- Bound Plugin Studio Session: `{plugin_studio_session_id}`")
+    session_lines.append("- Source workspace root: `/mnt/user-data/workspace/plugin-src`")
+    session_lines.append("- Test materials root: `/mnt/user-data/workspace/fixtures`")
+
+    session_id = (plugin_studio_session_id or "").strip()
+    if _SAFE_PLUGIN_STUDIO_SESSION_ID_RE.match(session_id):
+        source_dir = get_paths().base_dir / "workbench-plugin-studio" / "sessions" / session_id / "plugin-src"
+        manifest_file = source_dir / "manifest.json"
+        if manifest_file.exists() and manifest_file.is_file():
+            try:
+                manifest_payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+            except Exception:
+                manifest_payload = None
+            if isinstance(manifest_payload, dict):
+                plugin_id = str(manifest_payload.get("id") or "").strip()
+                plugin_name = str(manifest_payload.get("name") or "").strip()
+                plugin_version = str(manifest_payload.get("version") or "").strip()
+                plugin_entry = str(manifest_payload.get("entry") or "").strip()
+                if plugin_id:
+                    session_lines.append(f"- Current plugin id: `{plugin_id}`")
+                if plugin_name:
+                    session_lines.append(f"- Current plugin name: `{plugin_name}`")
+                if plugin_version:
+                    session_lines.append(f"- Current plugin version: `{plugin_version}`")
+                if plugin_entry:
+                    session_lines.append(f"- Current plugin entry: `{plugin_entry}`")
+
+    session_block = "".join(f"{line}\n" for line in session_lines)
     return (
         "<plugin_assistant_mode>\n"
-        "You are running in Plugin Assistant mode. Keep responses implementation-oriented and structurally consistent.\n"
-        f"{session_line}"
-        "For every substantive reply, output exactly these four sections in order:\n"
-        "1) Requirement Clarification\n"
-        "2) Interaction Flow Design\n"
-        "3) Manifest & Capability Draft\n"
-        "4) Verification & Acceptance Checklist\n"
-        "Keep each section concrete and short. Avoid generic brainstorming-only replies.\n"
+        "You are running in Plugin Assistant mode. Keep responses implementation-oriented, concise, and conversational.\n"
+        f"{session_block}"
+        "Follow a hidden-stage chat guidance flow:\n"
+        "- Stage 1: requirement clarification\n"
+        "- Stage 2: interaction brainstorming\n"
+        "- Stage 3: UI design proposal\n"
+        "- Stage 4: generation/debug/publish checklist\n"
+        "Do not force rigid section templates in every reply.\n"
+        "Prefer natural dialogue, ask targeted follow-up questions, and drive the user toward implementation-ready decisions.\n"
+        "If this session is bound to an imported/debug plugin, first inspect the existing source in `/mnt/user-data/workspace/plugin-src`, starting from manifest.json and the entry file, before proposing changes.\n"
+        "Treat the workspace copy as the editable plugin source during debugging; prefer incremental edits over rebuilding from scratch.\n"
+        "When discussing plugins, actively use the plugin-assistant orchestration skill if available.\n"
         "</plugin_assistant_mode>\n"
     )
 
@@ -489,6 +602,8 @@ def _build_memory_policy_section(
         f"- memory_read: {'enabled' if policy.allow_read else 'disabled'}\n"
         f"- memory_write: {'enabled' if policy.allow_write else 'disabled'}\n"
         "- You MUST NOT claim \"I have no long-term memory\" as a generic statement.\n"
+        "- If you claim \"I remembered this\", you MUST make a verifiable memory write (memory_store) and report the result ID.\n"
+        "- If memory write is disabled or fails, explicitly tell the user the memory was not persisted.\n"
         "- If asked about memory, explain current session policy precisely using the flags above.\n"
         "</memory_policy>\n"
     )
@@ -505,6 +620,7 @@ def apply_prompt_template(
     memory_write: bool | None = None,
     workspace_mode: str | None = None,
     plugin_studio_session_id: str | None = None,
+    requested_skills: list[str] | None = None,
 ) -> str:
     # Get memory context
     memory_context = _get_memory_context(
@@ -543,6 +659,8 @@ def apply_prompt_template(
 
     # Get skills section
     skills_section = get_skills_prompt_section(available_skills)
+    cli_tools_section = get_cli_tools_prompt_section()
+    requested_skills_section = _build_requested_skills_section(requested_skills)
     plugin_assistant_section = _build_plugin_assistant_section(
         workspace_mode=workspace_mode,
         plugin_studio_session_id=plugin_studio_session_id,
@@ -557,6 +675,8 @@ def apply_prompt_template(
         soul=get_agent_soul(agent_name),
         user_profile=user_profile,
         skills_section=skills_section,
+        cli_tools_section=cli_tools_section,
+        requested_skills_section=requested_skills_section,
         plugin_assistant_section=plugin_assistant_section,
         memory_context=memory_context,
         memory_policy_section=memory_policy_section,

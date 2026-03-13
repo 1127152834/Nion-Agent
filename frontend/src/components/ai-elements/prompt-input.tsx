@@ -448,7 +448,7 @@ export type PromptInputMessage = {
   text: string;
   files: FileUIPart[];
   implicitMentions?: Array<{
-    kind: "context" | "skill" | "mcp";
+    kind: "context" | "skill" | "mcp" | "cli";
     value: string;
     mention: string;
   }>;

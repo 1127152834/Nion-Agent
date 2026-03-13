@@ -4,9 +4,11 @@ import json
 import logging
 import re
 import shutil
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from src.agents.memory.governor import get_memory_governor
@@ -18,17 +20,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])
 
 AGENT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
+MAX_AVATAR_SIZE_BYTES = 2 * 1024 * 1024
+ALLOWED_AVATAR_MIME_TO_EXT: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+}
+ALLOWED_AVATAR_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 
 
 class AgentResponse(BaseModel):
     """Response model for a custom agent."""
 
     name: str = Field(..., description="Agent name (hyphen-case)")
+    display_name: str | None = Field(default=None, description="Optional display name for UI (can be non-ASCII)")
     description: str = Field(default="", description="Agent description")
     model: str | None = Field(default=None, description="Optional model override")
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
     heartbeat_enabled: bool = Field(default=True, description="Whether heartbeat is enabled")
     evolution_enabled: bool = Field(default=True, description="Whether evolution is enabled")
+    avatar_url: str | None = Field(default=None, description="Avatar URL for UI display")
     soul: str | None = Field(default=None, description="SOUL.md content (included on GET /{name})")
 
 
@@ -42,6 +53,7 @@ class AgentCreateRequest(BaseModel):
     """Request body for creating a custom agent."""
 
     name: str = Field(..., description="Agent name (must match ^[A-Za-z0-9-]+$, stored as lowercase)")
+    display_name: str | None = Field(default=None, description="Optional display name (can be non-ASCII)")
     description: str = Field(default="", description="Agent description")
     model: str | None = Field(default=None, description="Optional model override")
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
@@ -51,6 +63,7 @@ class AgentCreateRequest(BaseModel):
 class AgentUpdateRequest(BaseModel):
     """Request body for updating a custom agent."""
 
+    display_name: str | None = Field(default=None, description="Updated display name (can be non-ASCII)")
     description: str | None = Field(default=None, description="Updated description")
     model: str | None = Field(default=None, description="Updated model override")
     tool_groups: list[str] | None = Field(default=None, description="Updated tool group whitelist")
@@ -66,6 +79,7 @@ class DefaultAgentConfigResponse(BaseModel):
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
     heartbeat_enabled: bool = Field(default=True, description="Whether heartbeat is enabled")
     evolution_enabled: bool = Field(default=True, description="Whether evolution is enabled")
+    avatar_url: str | None = Field(default=None, description="Avatar URL for UI display")
 
 
 class DefaultAgentConfigUpdateRequest(BaseModel):
@@ -104,6 +118,100 @@ def _is_default_agent_name(name: str) -> bool:
     return _normalize_agent_name(name) == DEFAULT_AGENT_NAME
 
 
+def _avatar_url_for_agent(agent_name: str, avatar_path: str | None) -> str | None:
+    """Return public avatar URL if avatar exists on disk."""
+    if not avatar_path:
+        return None
+    avatar_file = _resolve_avatar_file(agent_name, avatar_path)
+    if not avatar_file:
+        return None
+    if agent_name == DEFAULT_AGENT_NAME:
+        return "/api/default-agent/avatar"
+    return f"/api/agents/{agent_name}/avatar"
+
+
+def _resolve_avatar_file(agent_name: str, avatar_path: str | None) -> Path | None:
+    """Resolve avatar file path and ensure it stays inside agent dir."""
+    if not avatar_path:
+        return None
+
+    agent_dir = get_paths().agent_dir(agent_name)
+    candidate = (agent_dir / avatar_path).resolve()
+    try:
+        candidate.relative_to(agent_dir.resolve())
+    except ValueError:
+        logger.warning("Avatar path traversal blocked for %s: %s", agent_name, avatar_path)
+        return None
+
+    if not candidate.is_file():
+        return None
+    return candidate
+
+
+def _avatar_extension_from_upload(file: UploadFile) -> str:
+    """Infer and validate avatar extension from upload metadata."""
+    if file.content_type in ALLOWED_AVATAR_MIME_TO_EXT:
+        return ALLOWED_AVATAR_MIME_TO_EXT[file.content_type]
+
+    ext = Path(file.filename or "").suffix.lower()
+    if ext in ALLOWED_AVATAR_EXTENSIONS:
+        if ext == ".jpeg":
+            return ".jpg"
+        return ext
+
+    allowed = ", ".join(sorted(ALLOWED_AVATAR_MIME_TO_EXT))
+    raise HTTPException(status_code=415, detail=f"Unsupported avatar type. Allowed: {allowed}")
+
+
+async def _read_avatar_payload(file: UploadFile) -> bytes:
+    """Read and validate avatar upload payload."""
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="Avatar file is empty")
+    if len(payload) > MAX_AVATAR_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail=f"Avatar too large. Max size: {MAX_AVATAR_SIZE_BYTES} bytes")
+    return payload
+
+
+def _remove_existing_agent_avatars(agent_name: str) -> None:
+    """Delete existing avatar files for an agent."""
+    agent_dir = get_paths().agent_dir(agent_name)
+    for path in agent_dir.glob("avatar.*"):
+        if path.is_file():
+            path.unlink(missing_ok=True)
+
+
+def _set_agent_avatar_path(agent_name: str, avatar_path: str | None) -> None:
+    """Persist avatar path into agent.json."""
+    config_file = get_paths().agent_config_file(agent_name)
+    try:
+        with open(config_file, encoding="utf-8") as f:
+            config_data: dict[str, Any] = json.load(f)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found") from e
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to parse agent config: {e}") from e
+
+    if avatar_path:
+        config_data["avatar_path"] = avatar_path
+    else:
+        config_data.pop("avatar_path", None)
+
+    with open(config_file, "w", encoding="utf-8") as f:
+        json.dump(config_data, f, indent=2, ensure_ascii=False)
+
+
+def _avatar_media_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".png":
+        return "image/png"
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    if suffix == ".webp":
+        return "image/webp"
+    return "application/octet-stream"
+
+
 def _load_default_agent_config_dict() -> dict[str, Any]:
     """Load default agent config from disk."""
     ensure_default_agent()
@@ -119,6 +227,7 @@ def _load_default_agent_config_dict() -> dict[str, Any]:
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Failed to read default agent config: {e}") from e
 
+    avatar_path = data.get("avatar_path")
     return {
         "name": DEFAULT_AGENT_NAME,
         "description": data.get("description", ""),
@@ -126,6 +235,8 @@ def _load_default_agent_config_dict() -> dict[str, Any]:
         "tool_groups": data.get("tool_groups"),
         "heartbeat_enabled": bool(data.get("heartbeat_enabled", True)),
         "evolution_enabled": bool(data.get("evolution_enabled", True)),
+        "avatar_url": _avatar_url_for_agent(DEFAULT_AGENT_NAME, avatar_path),
+        "avatar_path": avatar_path,
     }
 
 
@@ -145,11 +256,13 @@ def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False
 
     return AgentResponse(
         name=agent_cfg.name,
+        display_name=agent_cfg.display_name,
         description=agent_cfg.description,
         model=agent_cfg.model,
         tool_groups=agent_cfg.tool_groups,
         heartbeat_enabled=agent_cfg.heartbeat_enabled,
         evolution_enabled=agent_cfg.evolution_enabled,
+        avatar_url=_avatar_url_for_agent(agent_cfg.name, agent_cfg.avatar_path),
         soul=soul,
     )
 
@@ -236,6 +349,81 @@ async def get_agent(name: str) -> AgentResponse:
         raise HTTPException(status_code=500, detail=f"Failed to get agent: {str(e)}")
 
 
+@router.get(
+    "/agents/{name}/avatar",
+    summary="Get Agent Avatar",
+    description="Read avatar image for a custom agent.",
+)
+async def get_agent_avatar(name: str) -> FileResponse:
+    """Get avatar image for a custom agent."""
+    _validate_agent_name(name)
+    normalized_name = _normalize_agent_name(name)
+    try:
+        agent_cfg = load_agent_config(normalized_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"Agent '{normalized_name}' not found") from e
+
+    avatar_file = _resolve_avatar_file(normalized_name, agent_cfg.avatar_path)
+    if avatar_file is None:
+        raise HTTPException(status_code=404, detail=f"Avatar not found for agent '{normalized_name}'")
+    return FileResponse(
+        path=avatar_file,
+        media_type=_avatar_media_type(avatar_file),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.post(
+    "/agents/{name}/avatar",
+    response_model=AgentResponse,
+    summary="Upload Agent Avatar",
+    description="Upload avatar image for a custom agent.",
+)
+async def upload_agent_avatar(name: str, file: UploadFile = File(...)) -> AgentResponse:
+    """Upload avatar image for a custom agent."""
+    _validate_agent_name(name)
+    normalized_name = _normalize_agent_name(name)
+    try:
+        load_agent_config(normalized_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"Agent '{normalized_name}' not found") from e
+
+    ext = _avatar_extension_from_upload(file)
+    payload = await _read_avatar_payload(file)
+    _remove_existing_agent_avatars(normalized_name)
+
+    avatar_file = get_paths().agent_dir(normalized_name) / f"avatar{ext}"
+    avatar_file.write_bytes(payload)
+    _set_agent_avatar_path(normalized_name, avatar_file.name)
+    _refresh_memory_catalog_safe()
+
+    refreshed_cfg = load_agent_config(normalized_name)
+    return _agent_config_to_response(refreshed_cfg, include_soul=False)
+
+
+@router.delete(
+    "/agents/{name}/avatar",
+    response_model=AgentResponse,
+    summary="Delete Agent Avatar",
+    description="Delete avatar image for a custom agent.",
+)
+async def delete_agent_avatar(name: str) -> AgentResponse:
+    """Delete avatar image for a custom agent."""
+    _validate_agent_name(name)
+    normalized_name = _normalize_agent_name(name)
+    try:
+        load_agent_config(normalized_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=f"Agent '{normalized_name}' not found") from e
+
+    _remove_existing_agent_avatars(normalized_name)
+    _set_agent_avatar_path(normalized_name, None)
+    _refresh_memory_catalog_safe()
+
+    refreshed_cfg = load_agent_config(normalized_name)
+    return _agent_config_to_response(refreshed_cfg, include_soul=False)
+
+
 @router.post(
     "/agents",
     response_model=AgentResponse,
@@ -269,10 +457,13 @@ async def create_agent_endpoint(request: AgentCreateRequest) -> AgentResponse:
         # Write agent.json
         config_data: dict = {
             "name": normalized_name,
+            "display_name": request.display_name.strip() if request.display_name and request.display_name.strip() else None,
             "description": request.description,
             "heartbeat_enabled": True,
             "evolution_enabled": True,
         }
+        if config_data.get("display_name") is None:
+            config_data.pop("display_name", None)
         if request.model is not None:
             config_data["model"] = request.model
         if request.tool_groups is not None:
@@ -333,15 +524,21 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
 
     try:
         # Update config if any config fields changed
-        config_changed = any(v is not None for v in [request.description, request.model, request.tool_groups])
+        config_changed = any(v is not None for v in [request.display_name, request.description, request.model, request.tool_groups])
 
         if config_changed:
             updated: dict = {
                 "name": agent_cfg.name,
+                "display_name": agent_cfg.display_name,
                 "description": request.description if request.description is not None else agent_cfg.description,
                 "heartbeat_enabled": agent_cfg.heartbeat_enabled,
                 "evolution_enabled": agent_cfg.evolution_enabled,
             }
+            next_display_name = request.display_name if request.display_name is not None else agent_cfg.display_name
+            if next_display_name and str(next_display_name).strip():
+                updated["display_name"] = str(next_display_name).strip()
+            else:
+                updated.pop("display_name", None)
             new_model = request.model if request.model is not None else agent_cfg.model
             if new_model is not None:
                 updated["model"] = new_model
@@ -349,6 +546,8 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             new_tool_groups = request.tool_groups if request.tool_groups is not None else agent_cfg.tool_groups
             if new_tool_groups is not None:
                 updated["tool_groups"] = new_tool_groups
+            if agent_cfg.avatar_path is not None:
+                updated["avatar_path"] = agent_cfg.avatar_path
 
             config_file = get_paths().agent_config_file(name)
             with open(config_file, "w", encoding="utf-8") as f:
@@ -467,6 +666,88 @@ async def update_default_agent_config(request: DefaultAgentConfigUpdateRequest) 
     tool_groups_value = request.tool_groups if request.tool_groups is not None else current["tool_groups"]
     if tool_groups_value is not None:
         updated["tool_groups"] = tool_groups_value
+    if current.get("avatar_path") is not None:
+        updated["avatar_path"] = current["avatar_path"]
+
+    _save_default_agent_config(updated)
+    _refresh_memory_catalog_safe()
+    return DefaultAgentConfigResponse(**_load_default_agent_config_dict())
+
+
+@router.get(
+    "/default-agent/avatar",
+    summary="Get Default Agent Avatar",
+    description="Read avatar image for the default agent.",
+)
+async def get_default_agent_avatar() -> FileResponse:
+    """Get avatar image for the default agent."""
+    current = _load_default_agent_config_dict()
+    avatar_file = _resolve_avatar_file(DEFAULT_AGENT_NAME, current.get("avatar_path"))
+    if avatar_file is None:
+        raise HTTPException(status_code=404, detail="Default agent avatar not found")
+    return FileResponse(
+        path=avatar_file,
+        media_type=_avatar_media_type(avatar_file),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@router.post(
+    "/default-agent/avatar",
+    response_model=DefaultAgentConfigResponse,
+    summary="Upload Default Agent Avatar",
+    description="Upload avatar image for the default agent.",
+)
+async def upload_default_agent_avatar(file: UploadFile = File(...)) -> DefaultAgentConfigResponse:
+    """Upload avatar image for the default agent."""
+    ensure_default_agent()
+    ext = _avatar_extension_from_upload(file)
+    payload = await _read_avatar_payload(file)
+    _remove_existing_agent_avatars(DEFAULT_AGENT_NAME)
+
+    avatar_file = get_paths().agent_dir(DEFAULT_AGENT_NAME) / f"avatar{ext}"
+    avatar_file.write_bytes(payload)
+
+    current = _load_default_agent_config_dict()
+    updated = {
+        "name": DEFAULT_AGENT_NAME,
+        "description": current["description"],
+        "heartbeat_enabled": current["heartbeat_enabled"],
+        "evolution_enabled": current["evolution_enabled"],
+        "avatar_path": avatar_file.name,
+    }
+    if current["model"] is not None:
+        updated["model"] = current["model"]
+    if current["tool_groups"] is not None:
+        updated["tool_groups"] = current["tool_groups"]
+
+    _save_default_agent_config(updated)
+    _refresh_memory_catalog_safe()
+    return DefaultAgentConfigResponse(**_load_default_agent_config_dict())
+
+
+@router.delete(
+    "/default-agent/avatar",
+    response_model=DefaultAgentConfigResponse,
+    summary="Delete Default Agent Avatar",
+    description="Delete avatar image for the default agent.",
+)
+async def delete_default_agent_avatar() -> DefaultAgentConfigResponse:
+    """Delete avatar image for the default agent."""
+    ensure_default_agent()
+    _remove_existing_agent_avatars(DEFAULT_AGENT_NAME)
+
+    current = _load_default_agent_config_dict()
+    updated = {
+        "name": DEFAULT_AGENT_NAME,
+        "description": current["description"],
+        "heartbeat_enabled": current["heartbeat_enabled"],
+        "evolution_enabled": current["evolution_enabled"],
+    }
+    if current["model"] is not None:
+        updated["model"] = current["model"]
+    if current["tool_groups"] is not None:
+        updated["tool_groups"] = current["tool_groups"]
 
     _save_default_agent_config(updated)
     _refresh_memory_catalog_safe()
@@ -562,6 +843,7 @@ async def update_default_agent_soul(request: DefaultAgentAssetUpdateRequest) -> 
         DefaultAgentAssetResponse with the saved content.
     """
     try:
+        ensure_default_agent()
         paths = get_paths()
         soul_path = paths.agent_soul_file("_default")
         soul_path.parent.mkdir(parents=True, exist_ok=True)
@@ -613,6 +895,7 @@ async def update_default_agent_identity(request: DefaultAgentAssetUpdateRequest)
         DefaultAgentAssetResponse with the saved content.
     """
     try:
+        ensure_default_agent()
         paths = get_paths()
         identity_path = paths.agent_identity_file("_default")
         identity_path.parent.mkdir(parents=True, exist_ok=True)

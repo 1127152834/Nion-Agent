@@ -3,8 +3,23 @@
 import re
 from typing import Any, NotRequired, override
 
-from langchain.agents import AgentState
-from langchain.agents.middleware import AgentMiddleware
+try:
+    from langchain.agents import AgentState
+except Exception:  # noqa: BLE001
+    class AgentState(dict):  # type: ignore[no-redef]
+        pass
+
+try:
+    from langchain.agents.middleware import AgentMiddleware
+except Exception:  # noqa: BLE001
+    class AgentMiddleware:  # type: ignore[no-redef]
+        @classmethod
+        def __class_getitem__(cls, item):
+            return cls
+
+        def __init__(self, *args, **kwargs):
+            _ = args, kwargs
+
 from langgraph.runtime import Runtime
 
 from src.agents.memory.core import MemoryWriteRequest
@@ -158,7 +173,8 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
         if not user_messages or not assistant_messages:
             return None
 
-        # Queue the filtered conversation for memory update
+        # Always enqueue memory writes asynchronously so memory-side failures
+        # never break the user-visible chat run.
         provider.queue_conversation_update(
             MemoryWriteRequest(
                 thread_id=thread_id,

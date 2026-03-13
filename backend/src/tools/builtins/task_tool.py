@@ -1,30 +1,29 @@
 """Task tool for delegating work to subagents."""
 
+from __future__ import annotations
+
 import logging
 import time
 import uuid
 from dataclasses import replace
 from typing import Annotated, Literal
 
-from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 from langgraph.config import get_stream_writer
+from langgraph.typing import ContextT
 
 from src.agents.lead_agent.prompt import get_skills_prompt_section
 from src.agents.thread_state import ThreadState
+from src.processlog.service import get_processlog_service
 from src.subagents import SubagentExecutor, get_subagent_config
-from src.subagents.executor import (
-    SubagentStatus,
-    cleanup_background_task,
-    get_background_task_result,
-    wait_for_background_task_update,
-)
+from src.subagents.executor import SubagentStatus, cleanup_background_task, get_background_task_result
+from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 
 logger = logging.getLogger(__name__)
 
 
 @tool("task", parse_docstring=True)
 def task_tool(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     description: str,
     prompt: str,
     subagent_type: Literal["general-purpose", "bash", "researcher", "writer", "organizer"],
@@ -103,13 +102,27 @@ def task_tool(
 
         # Get or generate trace_id for distributed tracing
         trace_id = metadata.get("trace_id") or str(uuid.uuid4())[:8]
+    processlog = get_processlog_service()
+    if trace_id:
+        processlog.record(
+            trace_id=trace_id,
+            chat_id=thread_id,
+            step="SubagentDispatch",
+            level="info",
+            data={"task_id": tool_call_id, "subagent_type": subagent_type, "description": description},
+        )
 
     # Get available tools (excluding task tool to prevent nesting)
     # Lazy import to avoid circular dependency
     from src.tools import get_available_tools
+    runtime_agent_name = None
+    if runtime is not None:
+        value = runtime.context.get("agent_name")
+        if isinstance(value, str) and value.strip():
+            runtime_agent_name = value.strip()
 
     # Subagents should not have subagent tools enabled (prevent recursive nesting)
-    tools = get_available_tools(model_name=parent_model, subagent_enabled=False)
+    tools = get_available_tools(model_name=parent_model, subagent_enabled=False, agent_name=runtime_agent_name)
 
     # Create executor
     executor = SubagentExecutor(
@@ -126,13 +139,14 @@ def task_tool(
     # Use tool_call_id as task_id for better traceability
     task_id = executor.execute_async(prompt, task_id=tool_call_id)
 
+    # Poll for task completion in backend (removes need for LLM to poll)
+    poll_count = 0
     last_status = None
     last_message_count = 0  # Track how many AI messages we've already sent
-    # Safety deadline: in normal flows the executor sets TIMED_OUT and notifies.
-    # If the background task never updates (bug or lost entry), we still return.
-    deadline = time.monotonic() + config.timeout_seconds + 1
+    # Polling timeout: execution timeout + 60s buffer, checked every 5s
+    max_poll_count = (config.timeout_seconds + 60) // 5
 
-    logger.info(f"[trace={trace_id}] Started background task {task_id} (subagent={subagent_type}, timeout={config.timeout_seconds}s)")
+    logger.info(f"[trace={trace_id}] Started background task {task_id} (subagent={subagent_type}, timeout={config.timeout_seconds}s, polling_limit={max_poll_count} polls)")
 
     writer = get_stream_writer()
     # Send Task Started message'
@@ -172,27 +186,57 @@ def task_tool(
 
         # Check if task completed, failed, or timed out
         if result.status == SubagentStatus.COMPLETED:
+            if trace_id:
+                processlog.record(
+                    trace_id=trace_id,
+                    chat_id=thread_id,
+                    step="SubagentCompleted",
+                    level="info",
+                    data={"task_id": task_id},
+                )
             writer({"type": "task_completed", "task_id": task_id, "result": result.result})
-            logger.info(f"[trace={trace_id}] Task {task_id} completed")
+            logger.info(f"[trace={trace_id}] Task {task_id} completed after {poll_count} polls")
             cleanup_background_task(task_id)
             return f"Task Succeeded. Result: {result.result}"
         elif result.status == SubagentStatus.FAILED:
+            if trace_id:
+                processlog.record(
+                    trace_id=trace_id,
+                    chat_id=thread_id,
+                    step="SubagentFailed",
+                    level="error",
+                    data={"task_id": task_id, "error": result.error},
+                )
             writer({"type": "task_failed", "task_id": task_id, "error": result.error})
             logger.error(f"[trace={trace_id}] Task {task_id} failed: {result.error}")
             cleanup_background_task(task_id)
             return f"Task failed. Error: {result.error}"
         elif result.status == SubagentStatus.TIMED_OUT:
+            if trace_id:
+                processlog.record(
+                    trace_id=trace_id,
+                    chat_id=thread_id,
+                    step="SubagentTimedOut",
+                    level="error",
+                    data={"task_id": task_id, "error": result.error},
+                )
             writer({"type": "task_timed_out", "task_id": task_id, "error": result.error})
             logger.warning(f"[trace={trace_id}] Task {task_id} timed out: {result.error}")
             cleanup_background_task(task_id)
             return f"Task timed out. Error: {result.error}"
 
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            timeout_minutes = config.timeout_seconds // 60
-            logger.error(f"[trace={trace_id}] Task {task_id} wait timed out after {timeout_minutes} minutes (should have been caught by thread pool timeout)")
-            writer({"type": "task_timed_out", "task_id": task_id})
-            return f"Task timed out after {timeout_minutes} minutes. This may indicate the background task is stuck. Status: {result.status.value}"
+        # Still running, wait before next poll
+        time.sleep(5)  # Poll every 5 seconds
+        poll_count += 1
 
-        # Block until the background task updates (new messages or terminal status).
-        wait_for_background_task_update(timeout_seconds=remaining)
+        # Polling timeout as a safety net (in case thread pool timeout doesn't work)
+        # Set to execution timeout + 60s buffer, in 5s poll intervals
+        # This catches edge cases where the background task gets stuck
+        # Note: We don't call cleanup_background_task here because the task may
+        # still be running in the background. The cleanup will happen when the
+        # executor completes and sets a terminal status.
+        if poll_count > max_poll_count:
+            timeout_minutes = config.timeout_seconds // 60
+            logger.error(f"[trace={trace_id}] Task {task_id} polling timed out after {poll_count} polls (should have been caught by thread pool timeout)")
+            writer({"type": "task_timed_out", "task_id": task_id})
+            return f"Task polling timed out after {timeout_minutes} minutes. This may indicate the background task is stuck. Status: {result.status.value}"

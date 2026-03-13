@@ -8,6 +8,7 @@ import {
   updateHeartbeatSettings,
   getEvolutionSettings,
   updateEvolutionSettings,
+  runEvolution,
 } from "./settings-api";
 import type { HeartbeatSettings, EvolutionSettings } from "./settings-types";
 
@@ -58,6 +59,26 @@ export function useUpdateEvolutionSettings(agentName: string) {
         queryKey: ["evolution", "settings", agentName],
       });
       toast.success(t.agents.settings.toasts.evolutionSaved);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useRunEvolution(agentName: string) {
+  const { t } = useI18n();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => runEvolution(agentName),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["evolution", "reports", agentName],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["evolution", "suggestions", agentName],
+      });
+      toast.success(t.agents.settings.toasts.evolutionRunTriggered);
     },
     onError: (error: Error) => {
       toast.error(error.message);

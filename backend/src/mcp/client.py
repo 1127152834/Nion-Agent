@@ -1,6 +1,7 @@
 """MCP client using langchain-mcp-adapters."""
 
 import logging
+import shutil
 from typing import Any
 
 from src.config.extensions_config import ExtensionsConfig, McpServerConfig
@@ -18,26 +19,43 @@ def build_server_params(server_name: str, config: McpServerConfig) -> dict[str, 
     Returns:
         Dictionary of server parameters for langchain-mcp-adapters.
     """
-    transport_type = config.type or "stdio"
+    raw_transport_type = (config.type or "stdio").strip() if isinstance(config.type, str) else "stdio"
+    # langchain-mcp-adapters uses `streamable_http` for HTTP servers.
+    # We keep our user-facing config as `http`, but map it here for runtime compatibility.
+    transport_type = "streamable_http" if raw_transport_type == "http" else raw_transport_type
+
     params: dict[str, Any] = {"transport": transport_type}
 
     if transport_type == "stdio":
         if not config.command:
             raise ValueError(f"MCP server '{server_name}' with stdio transport requires 'command' field")
-        params["command"] = config.command
+        command = config.command
+        # If user doesn't have a global `npx/node` etc, fall back to Nion-managed toolchains.
+        if shutil.which(command) is None:
+            try:
+                from src.mcp.toolchains import resolve_managed_command
+
+                managed = resolve_managed_command(command)
+                if managed is not None and managed.exists():
+                    command = str(managed)
+            except Exception:  # noqa: BLE001
+                # Best-effort fallback only; keep original command if toolchain resolution fails.
+                pass
+
+        params["command"] = command
         params["args"] = config.args
         # Add environment variables if present
         if config.env:
             params["env"] = config.env
-    elif transport_type in ("sse", "http"):
+    elif transport_type in ("sse", "streamable_http"):
         if not config.url:
-            raise ValueError(f"MCP server '{server_name}' with {transport_type} transport requires 'url' field")
+            raise ValueError(f"MCP server '{server_name}' with {raw_transport_type} transport requires 'url' field")
         params["url"] = config.url
         # Add headers if present
         if config.headers:
             params["headers"] = config.headers
     else:
-        raise ValueError(f"MCP server '{server_name}' has unsupported transport type: {transport_type}")
+        raise ValueError(f"MCP server '{server_name}' has unsupported transport type: {raw_transport_type}")
 
     return params
 

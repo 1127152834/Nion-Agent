@@ -2,9 +2,11 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type {
   AgentDirectoryCard,
+  MemoryQueryExplain,
   OpenVikingGovernanceStatus,
   OpenVikingMemoryItem,
   OpenVikingStatus,
+  ProcesslogExport,
 } from "./types";
 
 export type MemoryViewScope = "global" | "agent" | "auto";
@@ -155,4 +157,70 @@ export async function reindexOpenVikingVectors(includeAgents = true): Promise<Re
     );
   }
   return payload;
+}
+
+export async function queryMemoryExplain(params: {
+  query: string;
+  limit?: number;
+  scope?: MemoryViewScope;
+  agentName?: string | null;
+}): Promise<MemoryQueryExplain> {
+  const search = new URLSearchParams();
+  search.set("query", params.query);
+  search.set("limit", String(params.limit ?? 8));
+  search.set("scope", params.scope ?? "auto");
+  if ((params.scope === "agent" || params.scope === "auto") && params.agentName) {
+    search.set("agent_name", params.agentName);
+  }
+  const res = await fetch(`${getBackendBaseURL()}/api/memory/query/explain?${search.toString()}`);
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to explain memory query: ${res.statusText}`),
+    );
+  }
+  return payload as unknown as MemoryQueryExplain;
+}
+
+export async function rebuildMemory(params?: {
+  scope?: MemoryViewScope;
+  agentName?: string | null;
+}): Promise<Record<string, unknown>> {
+  const res = await fetch(`${getBackendBaseURL()}/api/memory/rebuild`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      scope: params?.scope ?? "auto",
+      agent_name: params?.agentName ?? undefined,
+    }),
+  });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to rebuild memory indexes: ${res.statusText}`),
+    );
+  }
+  return payload;
+}
+
+export async function exportTraceProcesslog(traceId: string): Promise<ProcesslogExport> {
+  const res = await fetch(`${getBackendBaseURL()}/api/processlog/trace/${encodeURIComponent(traceId)}/export`);
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to export processlog by trace: ${res.statusText}`),
+    );
+  }
+  return payload as unknown as ProcesslogExport;
+}
+
+export async function exportChatProcesslog(chatId: string): Promise<ProcesslogExport> {
+  const res = await fetch(`${getBackendBaseURL()}/api/processlog/chat/${encodeURIComponent(chatId)}/export`);
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      toErrorMessage(payload, `Failed to export processlog by chat: ${res.statusText}`),
+    );
+  }
+  return payload as unknown as ProcesslogExport;
 }

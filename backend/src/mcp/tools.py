@@ -43,7 +43,7 @@ async def get_mcp_tools() -> list[BaseTool]:
         for server_name, auth_header in initial_oauth_headers.items():
             if server_name not in servers_config:
                 continue
-            if servers_config[server_name].get("transport") in ("sse", "http"):
+            if servers_config[server_name].get("transport") in ("sse", "streamable_http"):
                 existing_headers = dict(servers_config[server_name].get("headers", {}))
                 existing_headers["Authorization"] = auth_header
                 servers_config[server_name]["headers"] = existing_headers

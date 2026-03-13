@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-import shlex
 from typing import Annotated
 
-from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
+from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
 from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
 from src.sandbox.sandbox_provider import get_sandbox_provider
+from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 
 OUTPUTS_VIRTUAL_PREFIX = f"{VIRTUAL_PATH_PREFIX}/outputs"
 
@@ -21,19 +21,16 @@ def resolve_thread_virtual_path(thread_id: str, virtual_path: str) -> Path:
 
 
 def _sandbox_file_exists(thread_id: str, virtual_path: str) -> bool:
-    """Return whether a virtual path exists inside the sandbox runtime.
-
-    Provisioner-backed AIO sandboxes keep /mnt/user-data inside the sandbox pod,
-    so the host mirror may be empty even when the file exists.
-    """
     try:
         provider = get_sandbox_provider()
         sandbox_id = provider.acquire(thread_id)
         sandbox = provider.get(sandbox_id)
         if sandbox is None:
             return False
+        # Always return 0 so provider implementations that decorate stderr/exit-code
+        # do not confuse parsing.
         probe = sandbox.execute_command(
-            f"test -f {shlex.quote(virtual_path)} && echo OK || echo MISSING",
+            f"test -f {virtual_path!r} && echo OK || echo MISSING",
         )
         first_line = (probe or "").strip().splitlines()[:1]
         return bool(first_line) and first_line[0].strip() == "OK"
@@ -42,7 +39,7 @@ def _sandbox_file_exists(thread_id: str, virtual_path: str) -> bool:
 
 
 def _normalize_presented_filepath(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     filepath: str,
 ) -> str:
     """Normalize a presented file path to the `/mnt/user-data/outputs/*` contract."""
@@ -61,27 +58,23 @@ def _normalize_presented_filepath(
     outputs_dir = Path(outputs_path).resolve()
     stripped = filepath.lstrip("/")
     virtual_prefix = VIRTUAL_PATH_PREFIX.lstrip("/")
-    normalized_virtual: str | None = None
 
     if stripped == virtual_prefix or stripped.startswith(virtual_prefix + "/"):
         normalized_virtual = filepath if filepath.startswith("/") else f"/{filepath}"
         # Enforce outputs-only contract using virtual paths first (works for remote sandboxes).
-        if not (
-            normalized_virtual == OUTPUTS_VIRTUAL_PREFIX
-            or normalized_virtual.startswith(OUTPUTS_VIRTUAL_PREFIX + "/")
-        ):
-            raise ValueError(
-                f"Only files in {OUTPUTS_VIRTUAL_PREFIX} can be presented: {filepath}"
-            )
+        if not (normalized_virtual == OUTPUTS_VIRTUAL_PREFIX or normalized_virtual.startswith(OUTPUTS_VIRTUAL_PREFIX + "/")):
+            raise ValueError(f"Only files in {OUTPUTS_VIRTUAL_PREFIX} can be presented: {filepath}")
 
         actual_path = resolve_thread_virtual_path(thread_id, normalized_virtual)
     else:
         actual_path = Path(filepath).expanduser().resolve()
 
     if not actual_path.exists():
-        # If the host mirror is missing, validate existence in the sandbox runtime.
-        if normalized_virtual is not None and _sandbox_file_exists(thread_id, normalized_virtual):
-            pass
+        # Provisioner-backed AIO sandboxes keep /mnt/user-data inside the sandbox pod
+        # and the host filesystem mirror is empty. Fall back to sandbox existence.
+        if stripped == virtual_prefix or stripped.startswith(virtual_prefix + "/"):
+            if not _sandbox_file_exists(thread_id, normalized_virtual):
+                raise ValueError(f"File not found: {filepath}")
         else:
             raise ValueError(f"File not found: {filepath}")
     if actual_path.exists() and not actual_path.is_file():
@@ -90,8 +83,8 @@ def _normalize_presented_filepath(
     try:
         relative_path = actual_path.relative_to(outputs_dir)
     except ValueError as exc:
-        # When host-mode outputs_dir differs (or host mirror is missing), rely on virtual path.
-        if normalized_virtual is not None:
+        # When the host filesystem mirror is missing, rely on virtual path instead.
+        if stripped == virtual_prefix or stripped.startswith(virtual_prefix + "/"):
             relative_path = Path(normalized_virtual[len(OUTPUTS_VIRTUAL_PREFIX) :].lstrip("/"))
         else:
             raise ValueError(
@@ -115,7 +108,7 @@ def _normalize_presentable_path(path: str) -> str | None:
 
 @tool("present_files", parse_docstring=True)
 def present_file_tool(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     filepaths: list[str],
     tool_call_id: Annotated[str, InjectedToolCallId],
 ) -> Command:

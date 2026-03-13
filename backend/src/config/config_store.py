@@ -151,8 +151,12 @@ class SQLiteConfigStore:
         checkpointer = config.get("checkpointer")
         if not isinstance(checkpointer, dict) or not isinstance(checkpointer.get("type"), str):
             config["checkpointer"] = deepcopy(DEFAULT_CHECKPOINTER_CONFIG)
-        elif checkpointer.get("type") == "sqlite" and not checkpointer.get("connection_string"):
-            config["checkpointer"] = deepcopy(DEFAULT_CHECKPOINTER_CONFIG)
+        else:
+            raw_type = checkpointer.get("type")
+            if raw_type not in ("memory", "sqlite"):
+                config["checkpointer"] = deepcopy(DEFAULT_CHECKPOINTER_CONFIG)
+            elif raw_type == "sqlite" and not checkpointer.get("connection_string"):
+                config["checkpointer"] = deepcopy(DEFAULT_CHECKPOINTER_CONFIG)
 
         return config
 

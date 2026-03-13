@@ -211,11 +211,8 @@ async def get_workspace_tree(
 
     if _workspace_tree_is_sandbox_backed(thread_id):
         sandbox = _get_sandbox_for_thread(thread_id)
-
         if not _sandbox_dir_exists(sandbox, virtual_root):
-            sandbox.execute_command(f"mkdir -p {shlex.quote(virtual_root)}")
-            if not _sandbox_dir_exists(sandbox, virtual_root):
-                raise HTTPException(status_code=404, detail=f"Workspace path not found: {virtual_root}")
+            raise HTTPException(status_code=404, detail=f"Workspace path not found: {virtual_root}")
 
         directories: list[WorkspaceDirectoryEntry] = []
         files: list[WorkspaceFileEntry] = []

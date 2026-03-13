@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowRightIcon, BrainIcon, SearchIcon, Trash2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ArrowRightIcon, SearchIcon, Trash2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useI18n } from "@/core/i18n/hooks";
 import { openVikingActions, useMemoryItems } from "@/core/memory/hooks";
 import type { OpenVikingMemoryItem } from "@/core/memory/types";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import { formatTimeAgo } from "@/core/utils/datetime";
 
 interface AgentMemorySectionProps {
@@ -26,7 +26,6 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
   const { t } = useI18n();
   const router = useRouter();
   const copy = t.agents.settings.memory;
-  const isDefaultAgent = agentName === "_default";
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -36,7 +35,7 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
     items,
     isLoading: isItemsLoading,
     error: itemsError,
-  } = useMemoryItems("agent", isDefaultAgent ? null : agentName);
+  } = useMemoryItems("agent", agentName);
 
   const statusOptions = useMemo(
     () =>
@@ -82,29 +81,6 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
       setIsForgetting(false);
     }
   };
-
-  if (isDefaultAgent) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">{copy.title}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="rounded-xl border bg-muted/30 p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <BrainIcon className="text-primary size-4" />
-              <p className="text-sm font-medium">{copy.defaultUsesGlobalTitle}</p>
-            </div>
-            <p className="text-muted-foreground text-sm leading-6">{copy.defaultUsesGlobalDescription}</p>
-          </div>
-          <Button className="gap-1" onClick={() => router.push("/workspace/chats/new?settings=memory")}>
-            {copy.goToGlobalMemory}
-            <ArrowRightIcon className="size-3.5" />
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
 
   if (itemsError) {
     return <div className="text-sm text-red-500">Error: {itemsError.message}</div>;
@@ -169,12 +145,30 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
           {isItemsLoading ? (
             <div className="text-muted-foreground text-sm">{t.common.loading}</div>
           ) : filteredItems.length === 0 ? (
-            <div className="text-muted-foreground text-sm">{copy.emptyHint}</div>
+            <div className="space-y-3 rounded-xl border border-dashed p-4">
+              <p className="text-muted-foreground text-sm">{copy.emptyHint}</p>
+              <Button
+                variant="outline"
+                className="gap-1"
+                onClick={() => {
+                  if (agentName === "_default") {
+                    router.push("/workspace/chats/new");
+                    return;
+                  }
+                  router.push(`/workspace/agents/${encodeURIComponent(agentName)}/chats/new`);
+                }}
+              >
+                {copy.startChatToBuild}
+                <ArrowRightIcon className="size-3.5" />
+              </Button>
+            </div>
           ) : (
             filteredItems.slice(0, 40).map((item) => (
               <div key={item.memory_id} className="rounded-xl border p-3">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <Badge variant="outline">{item.status}</Badge>
+                  {item.tier ? <Badge variant="secondary">{item.tier}</Badge> : null}
+                  {item.source ? <Badge variant="secondary">{item.source}</Badge> : null}
                   <span className="text-muted-foreground text-xs">{formatTimeAgo(item.updated_at)}</span>
                   <Button
                     size="icon"
@@ -188,6 +182,9 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
                   </Button>
                 </div>
                 <p className="text-sm leading-6">{item.summary || "-"}</p>
+                {item.decision_reason ? (
+                  <p className="text-muted-foreground mt-1 text-xs">{`reason: ${item.decision_reason}`}</p>
+                ) : null}
                 <p className="text-muted-foreground mt-1 truncate text-xs">{item.uri}</p>
               </div>
             ))

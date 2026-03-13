@@ -313,20 +313,14 @@ async def query_openviking_graph(payload: OpenVikingGraphQueryRequest) -> dict[s
 
 @router.post("/session/commit", summary="Commit one session batch to OpenViking")
 async def commit_openviking_session(payload: OpenVikingSessionCommitRequest) -> dict[str, Any]:
-    provider = _get_openviking_provider()
-    if not hasattr(provider, "commit_session"):
-        raise HTTPException(status_code=501, detail="Provider does not support session commit")
-    resolved_agent = _resolve_agent_by_scope(payload.scope, payload.agent_name)
-    try:
-        return provider.commit_session(  # type: ignore[attr-defined]
-            thread_id=payload.thread_id,
-            messages=payload.messages,
-            agent_name=resolved_agent,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=f"OpenViking session commit failed: {exc}") from exc
+    _ = payload
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "session_commit has been removed. "
+            "Use POST /api/memory/write (Extract -> Decide -> Action hard-cut pipeline)."
+        ),
+    )
 
 
 @router.get("/config", response_model=OpenVikingConfigResponse, summary="Get OpenViking memory config")

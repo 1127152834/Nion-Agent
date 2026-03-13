@@ -1,3 +1,10 @@
+> [!WARNING]
+> 历史基线说明（2026-03-12）  
+> 本文基线为 `memohai/Memoh@09cdb8c`（memoh v1），仅用于历史回溯。  
+> 当前对标与实施请优先阅读：
+> - `/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/docs/plan/memory/memoh-v2-learning-checklist.md`
+> - `/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/docs/plan/memory/memoh-v2-code-evidence-index.md`
+
 # Memoh 记忆系统源码级研究（基线 `memohai/Memoh@09cdb8c`）
 
 ## 1. 研究基线

@@ -28,6 +28,9 @@ def _make_client(monkeypatch, tmp_path: Path, *, desktop: bool) -> TestClient:
     from src.config import paths as paths_module
 
     paths_module._paths = None
+    from src.config import app_config as app_config_module
+
+    app_config_module.reset_app_config()
 
     app = FastAPI()
     app.include_router(router)

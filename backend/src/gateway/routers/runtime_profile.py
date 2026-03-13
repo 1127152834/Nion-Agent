@@ -8,6 +8,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.config.app_config import ensure_latest_app_config
 from src.runtime_profile import (
     RuntimeProfileLockedError,
     RuntimeProfileRepository,
@@ -32,6 +33,9 @@ class RuntimeProfileUpdateRequest(BaseModel):
 def _ensure_desktop_for_host_mode(execution_mode: str) -> None:
     if execution_mode != "host":
         return
+    app_config = ensure_latest_app_config(process_name="gateway")
+    if bool(getattr(app_config.sandbox, "strict_mode", False)):
+        raise HTTPException(status_code=403, detail="Host mode is disabled when strict sandbox mode is enabled")
     if os.getenv("NION_DESKTOP_RUNTIME", "0") != "1":
         raise HTTPException(status_code=503, detail="Host mode is only available in desktop runtime")
 
@@ -39,6 +43,13 @@ def _ensure_desktop_for_host_mode(execution_mode: str) -> None:
 @router.get("", response_model=RuntimeProfileResponse)
 async def get_runtime_profile(thread_id: str) -> RuntimeProfileResponse:
     profile = RuntimeProfileRepository().read(thread_id)
+    app_config = ensure_latest_app_config(process_name="gateway")
+    if bool(getattr(app_config.sandbox, "strict_mode", False)):
+        profile = {
+            **profile,
+            "execution_mode": "sandbox",
+            "host_workdir": None,
+        }
     return RuntimeProfileResponse(**profile)
 
 
@@ -61,4 +72,3 @@ async def update_runtime_profile(thread_id: str, payload: RuntimeProfileUpdateRe
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return RuntimeProfileResponse(**updated)
-

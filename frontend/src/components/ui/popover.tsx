@@ -23,7 +23,7 @@ const PopoverContent = React.forwardRef<
       collisionPadding={collisionPadding}
       className={cn(
         // Minimal style
-        "z-[120] w-full max-w-[360px]",
+        "z-[210] w-full max-w-[360px]",
         // Minimal background
         "bg-white dark:bg-zinc-900",
         // Thin border

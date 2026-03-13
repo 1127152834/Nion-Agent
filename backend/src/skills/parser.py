@@ -4,6 +4,13 @@ from pathlib import Path
 from .types import Skill
 
 
+def _strip_wrapping_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1].strip()
+    return value
+
+
 def parse_skill_file(skill_file: Path, category: str, relative_path: Path | None = None) -> Skill | None:
     """
     Parse a SKILL.md file and extract metadata.
@@ -38,7 +45,7 @@ def parse_skill_file(skill_file: Path, category: str, relative_path: Path | None
                 continue
             if ":" in line:
                 key, value = line.split(":", 1)
-                metadata[key.strip()] = value.strip()
+                metadata[key.strip()] = _strip_wrapping_quotes(value)
 
         # Extract required fields
         name = metadata.get("name")

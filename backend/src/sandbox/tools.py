@@ -1,8 +1,9 @@
+import os
 import re
 import shlex
 from pathlib import Path
 
-from src.tools.builtins.langchain_compat import ToolRuntime, tool
+from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadDataState, ThreadState
 from src.config.paths import VIRTUAL_PATH_PREFIX
@@ -13,6 +14,11 @@ from src.sandbox.exceptions import (
 )
 from src.sandbox.sandbox import Sandbox
 from src.sandbox.sandbox_provider import get_sandbox_provider
+from src.tools.builtins.langchain_compat import ToolRuntime, tool
+
+
+def _is_mnt_path(path: str) -> bool:
+    return path == "/mnt" or path.startswith("/mnt/")
 
 
 def _is_path_in_allowed_thread_dirs(path: str, thread_data: ThreadDataState | None) -> bool:
@@ -49,6 +55,10 @@ def _is_path_in_allowed_thread_dirs(path: str, thread_data: ThreadDataState | No
 def _ensure_local_path_boundary(path: str, thread_data: ThreadDataState | None) -> None:
     if not _is_path_in_allowed_thread_dirs(path, thread_data):
         raise PermissionError(f"Access denied: local sandbox path is outside thread boundary: {path}")
+
+
+def _should_apply_local_thread_boundary(path: str) -> bool:
+    return path.startswith(VIRTUAL_PATH_PREFIX)
 
 
 def replace_virtual_path(path: str, thread_data: ThreadDataState | None) -> str:
@@ -124,7 +134,7 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
     return pattern.sub(replace_match, command)
 
 
-def get_thread_data(runtime: ToolRuntime | None) -> ThreadDataState | None:
+def get_thread_data(runtime: ToolRuntime[ContextT, ThreadState] | None) -> ThreadDataState | None:
     """Extract thread_data from runtime state."""
     if runtime is None:
         return None
@@ -133,7 +143,7 @@ def get_thread_data(runtime: ToolRuntime | None) -> ThreadDataState | None:
     return runtime.state.get("thread_data")
 
 
-def get_execution_mode(runtime: ToolRuntime | None) -> str:
+def get_execution_mode(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
     """Return thread execution mode: sandbox|host."""
     if runtime is None or runtime.state is None:
         return "sandbox"
@@ -143,7 +153,7 @@ def get_execution_mode(runtime: ToolRuntime | None) -> str:
     return "sandbox"
 
 
-def get_command_workdir(runtime: ToolRuntime | None) -> str | None:
+def get_command_workdir(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str | None:
     """Resolve the effective command working directory for the current thread."""
     thread_data = get_thread_data(runtime)
     workspace_path = thread_data.get("workspace_path") if thread_data else None
@@ -155,15 +165,17 @@ def get_command_workdir(runtime: ToolRuntime | None) -> str | None:
     return f"{VIRTUAL_PATH_PREFIX}/workspace"
 
 
-def prefix_command_with_workdir(command: str, runtime: ToolRuntime | None) -> str:
+def prefix_command_with_workdir(command: str, runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
     """Ensure bash commands start in the thread workspace/host workdir."""
     cwd = get_command_workdir(runtime)
     if not cwd:
         return command
-    return f"cd {shlex.quote(cwd)} && {command}"
+    # PowerShell 5 does not support `&&`; prefer `;` on Windows.
+    separator = "&&" if os.name != "nt" else ";"
+    return f"cd {shlex.quote(cwd)} {separator} {command}"
 
 
-def is_local_sandbox(runtime: ToolRuntime | None) -> bool:
+def is_local_sandbox(runtime: ToolRuntime[ContextT, ThreadState] | None) -> bool:
     """Check if the current sandbox is a local sandbox.
 
     Path replacement is only needed for local sandbox since aio sandbox
@@ -179,7 +191,7 @@ def is_local_sandbox(runtime: ToolRuntime | None) -> bool:
     return sandbox_state.get("sandbox_id") == "local"
 
 
-def sandbox_from_runtime(runtime: ToolRuntime | None = None) -> Sandbox:
+def sandbox_from_runtime(runtime: ToolRuntime[ContextT, ThreadState] | None = None) -> Sandbox:
     """Extract sandbox instance from tool runtime.
 
     DEPRECATED: Use ensure_sandbox_initialized() for lazy initialization support.
@@ -205,7 +217,7 @@ def sandbox_from_runtime(runtime: ToolRuntime | None = None) -> Sandbox:
     return sandbox
 
 
-def ensure_sandbox_initialized(runtime: ToolRuntime | None = None) -> Sandbox:
+def ensure_sandbox_initialized(runtime: ToolRuntime[ContextT, ThreadState] | None = None) -> Sandbox:
     """Ensure sandbox is initialized, acquiring lazily if needed.
 
     On first call, acquires a sandbox from the provider and stores it in runtime state.
@@ -258,7 +270,7 @@ def ensure_sandbox_initialized(runtime: ToolRuntime | None = None) -> Sandbox:
     return sandbox
 
 
-def ensure_thread_directories_exist(runtime: ToolRuntime | None) -> None:
+def ensure_thread_directories_exist(runtime: ToolRuntime[ContextT, ThreadState] | None) -> None:
     """Ensure thread data directories (workspace, uploads, outputs) exist.
 
     This function is called lazily when any sandbox tool is first used.
@@ -296,7 +308,7 @@ def ensure_thread_directories_exist(runtime: ToolRuntime | None) -> None:
 
 
 @tool("bash", parse_docstring=True)
-def bash_tool(runtime: ToolRuntime, description: str, command: str) -> str:
+def bash_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, command: str) -> str:
     """Execute a bash command in a Linux environment.
 
 
@@ -328,7 +340,7 @@ def bash_tool(runtime: ToolRuntime, description: str, command: str) -> str:
 
 
 @tool("ls", parse_docstring=True)
-def ls_tool(runtime: ToolRuntime, description: str, path: str) -> str:
+def ls_tool(runtime: ToolRuntime[ContextT, ThreadState], description: str, path: str) -> str:
     """List the contents of a directory up to 2 levels deep in tree format.
 
     Args:
@@ -339,12 +351,13 @@ def ls_tool(runtime: ToolRuntime, description: str, path: str) -> str:
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
         execution_mode = get_execution_mode(runtime)
-        if execution_mode == "sandbox" and not path.startswith(VIRTUAL_PATH_PREFIX):
-            return "Error: Sandbox mode only allows listing under /mnt/user-data."
+        if execution_mode == "sandbox" and not _is_mnt_path(path):
+            return "Error: Sandbox mode only allows listing under /mnt."
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
-            path = replace_virtual_path(path, thread_data)
-            _ensure_local_path_boundary(path, thread_data)
+            if _should_apply_local_thread_boundary(path):
+                path = replace_virtual_path(path, thread_data)
+                _ensure_local_path_boundary(path, thread_data)
         children = sandbox.list_dir(path)
         if not children:
             return "(empty)"
@@ -361,7 +374,7 @@ def ls_tool(runtime: ToolRuntime, description: str, path: str) -> str:
 
 @tool("read_file", parse_docstring=True)
 def read_file_tool(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     description: str,
     path: str,
     start_line: int | None = None,
@@ -379,12 +392,13 @@ def read_file_tool(
         sandbox = ensure_sandbox_initialized(runtime)
         ensure_thread_directories_exist(runtime)
         execution_mode = get_execution_mode(runtime)
-        if execution_mode == "sandbox" and not path.startswith(VIRTUAL_PATH_PREFIX):
-            return "Error: Sandbox mode only allows reading files under /mnt/user-data."
+        if execution_mode == "sandbox" and not _is_mnt_path(path):
+            return "Error: Sandbox mode only allows reading files under /mnt."
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
-            path = replace_virtual_path(path, thread_data)
-            _ensure_local_path_boundary(path, thread_data)
+            if _should_apply_local_thread_boundary(path):
+                path = replace_virtual_path(path, thread_data)
+                _ensure_local_path_boundary(path, thread_data)
         content = sandbox.read_file(path)
         if not content:
             return "(empty)"
@@ -405,7 +419,7 @@ def read_file_tool(
 
 @tool("write_file", parse_docstring=True)
 def write_file_tool(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     description: str,
     path: str,
     content: str,
@@ -444,7 +458,7 @@ def write_file_tool(
 
 @tool("str_replace", parse_docstring=True)
 def str_replace_tool(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     description: str,
     path: str,
     old_str: str,

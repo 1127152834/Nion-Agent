@@ -60,7 +60,7 @@ class TestFilterMessagesForMemory:
         assert ai_msgs[0].content == "Here are the results."
 
 
-def test_memory_middleware_queues_filtered_messages_via_provider():
+def test_memory_middleware_writes_filtered_messages_via_graph_provider():
     mem_cfg = SimpleNamespace(enabled=True)
     provider = MagicMock()
     provider.resolve_policy.return_value = SimpleNamespace(allow_write=True, session_mode="normal")
@@ -81,7 +81,7 @@ def test_memory_middleware_queues_filtered_messages_via_provider():
         result = middleware.after_agent(state, runtime)
 
     assert result is None
-    provider.queue_conversation_update.assert_called_once()
-    queued_request = provider.queue_conversation_update.call_args.args[0]
-    assert queued_request.thread_id == "thread-1"
-    assert any(getattr(msg, "type", None) == "human" for msg in queued_request.messages)
+    provider.write_conversation_update.assert_called_once()
+    kwargs = provider.write_conversation_update.call_args.kwargs
+    assert kwargs["thread_id"] == "thread-1"
+    assert any(getattr(msg, "type", None) == "human" for msg in kwargs["messages"])

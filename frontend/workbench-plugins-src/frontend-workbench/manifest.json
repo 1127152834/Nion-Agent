@@ -1,29 +1,16 @@
 {
   "id": "frontend-workbench",
   "name": "Frontend Workbench",
-  "description": "Responsive frontend workbench for the console slot with adaptive layout, file tree/editor workflow, build/start controls, preview and logs, and host-theme aligned colors.",
+  "description": "IDE console style frontend workbench plugin with 1:1 layout restoration, real file system editing, responsive sidebar behavior, and real URL preview.",
   "entry": "index.html",
   "runtime": "iframe",
   "targets": [
     {
       "kind": "project",
-      "projectMarkers": ["package.json"],
-      "priority": 100
-    },
-    {
-      "kind": "directory",
-      "projectMarkers": ["package.json"],
-      "priority": 95
-    },
-    {
-      "kind": "file",
-      "extensions": ["ts", "tsx", "js", "jsx", "json", "css", "scss", "html", "md", "vue", "svelte"],
-      "priority": 90
-    },
-    {
-      "kind": "file",
-      "extensions": ["yml", "yaml", "toml", "lock"],
-      "priority": 70
+      "priority": 85,
+      "projectMarkers": [
+        "package.json"
+      ]
     }
   ],
   "capabilities": [
@@ -34,14 +21,15 @@
     "command.stop",
     "log.stream",
     "toast",
+    "preview.open",
     "state.persist"
   ],
   "fixtures": [
     "fixtures/sample-project/package.json",
     "fixtures/sample-project/package-lock.json",
-    "fixtures/sample-project/src/main.tsx",
     "fixtures/sample-project/scripts/build-ok.js",
-    "fixtures/sample-project/scripts/dev-server.js"
+    "fixtures/sample-project/scripts/dev-server.js",
+    "fixtures/sample-project/src/main.tsx"
   ],
   "testSpec": {
     "assertions": [
@@ -57,15 +45,6 @@
         "type": "fixture_exists",
         "target": "fixtures/sample-project/scripts/dev-server.js"
       }
-    ],
-    "commandSteps": [
-      {
-        "id": "workspace-pwd",
-        "command": "pwd",
-        "cwd": "/mnt/user-data/workspace",
-        "timeout_seconds": 30,
-        "expect_contains": ["/mnt/user-data/workspace"]
-      }
     ]
   },
   "docs": {
@@ -78,9 +57,11 @@
     "level": "auto_manual"
   },
   "provenance": {
-    "source": "bundled"
+    "source": "assistant"
   },
   "ui": {
-    "surface": "sidebar-slot"
-  }
+    "surface": "sidebar-slot",
+    "initialWidthPercent": 60
+  },
+  "version": "0.1.1"
 }

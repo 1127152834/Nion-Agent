@@ -375,13 +375,14 @@ export function WorkbenchPluginIframe({
       streamDisposersRef.current.clear();
     };
 
-    const onMessage = async (event: MessageEvent<PluginBridgeMessage>) => {
+    const onMessage = (event: MessageEvent<PluginBridgeMessage>) => {
+      void (async () => {
       const iframeWindow = iframeRef.current?.contentWindow;
       if (!iframeWindow || event.source !== iframeWindow) {
         return;
       }
       const data = event.data;
-      if (!data || data.__nionWorkbenchBridge !== true) {
+      if (data?.__nionWorkbenchBridge !== true) {
         return;
       }
 
@@ -396,6 +397,7 @@ export function WorkbenchPluginIframe({
       }
 
       const { requestId, method, params = {} } = data;
+      const readString = (key: string) => (typeof params[key] === "string" ? params[key] : "");
       const postResponse = (ok: boolean, result?: unknown, error?: string) => {
         iframeWindow.postMessage(
           {
@@ -412,43 +414,43 @@ export function WorkbenchPluginIframe({
 
       try {
         if (method === "readFile") {
-          postResponse(true, await context.readFile(String(params.path ?? "")));
+          postResponse(true, await context.readFile(readString("path")));
           return;
         }
         if (method === "writeFile") {
-          await context.writeFile(String(params.path ?? ""), String(params.content ?? ""));
+          await context.writeFile(readString("path"), readString("content"));
           postResponse(true, { success: true });
           return;
         }
         if (method === "readBinaryFile") {
-          postResponse(true, await context.readBinaryFile(String(params.path ?? "")));
+          postResponse(true, await context.readBinaryFile(readString("path")));
           return;
         }
         if (method === "writeBinaryFile") {
           await context.writeBinaryFile(
-            String(params.path ?? ""),
-            String(params.dataUrl ?? ""),
+            readString("path"),
+            readString("dataUrl"),
             typeof params.mimeType === "string" ? params.mimeType : undefined,
           );
           postResponse(true, { success: true });
           return;
         }
         if (method === "deleteFile") {
-          await context.deleteFile(String(params.path ?? ""));
+          await context.deleteFile(readString("path"));
           postResponse(true, { success: true });
           return;
         }
         if (method === "listFiles") {
-          postResponse(true, await context.listFiles(String(params.dir ?? "")));
+          postResponse(true, await context.listFiles(readString("dir")));
           return;
         }
         if (method === "readDir") {
-          postResponse(true, await context.readDir(String(params.path ?? "")));
+          postResponse(true, await context.readDir(readString("path")));
           return;
         }
         if (method === "runCommand") {
           const result = await context.runCommand({
-            command: String(params.command ?? ""),
+            command: readString("command"),
             cwd: typeof params.cwd === "string" ? params.cwd : undefined,
             timeoutSeconds:
               typeof params.timeoutSeconds === "number"
@@ -462,15 +464,15 @@ export function WorkbenchPluginIframe({
           return;
         }
         if (method === "stopCommand") {
-          const sessionId = String(params.sessionId ?? "");
+          const sessionId = readString("sessionId");
           await context.stopCommand(sessionId);
           ownedSessionsRef.current.delete(sessionId);
           postResponse(true, { success: true });
           return;
         }
         if (method === "streamLogs.start") {
-          const sessionId = String(params.sessionId ?? "");
-          const streamId = String(params.streamId ?? "");
+          const sessionId = readString("sessionId");
+          const streamId = readString("streamId");
           const dispose = context.streamLogs(sessionId, ({ event: eventName, payload }) => {
             iframeWindow.postMessage(
               {
@@ -488,7 +490,7 @@ export function WorkbenchPluginIframe({
           return;
         }
         if (method === "streamLogs.stop") {
-          const streamId = String(params.streamId ?? "");
+          const streamId = readString("streamId");
           const dispose = streamDisposersRef.current.get(streamId);
           if (dispose) {
             dispose();
@@ -498,27 +500,31 @@ export function WorkbenchPluginIframe({
           return;
         }
         if (method === "toast") {
-          context.toast(String(params.message ?? ""), (params.type as "success" | "error" | "info") ?? "info");
+          const message = readString("message");
+          const toastType = params.type === "success" || params.type === "error" || params.type === "info"
+            ? params.type
+            : "info";
+          context.toast(message, toastType);
           postResponse(true, { success: true });
           return;
         }
         if (method === "openPreview") {
-          const target = String(params.url ?? "");
+          const target = readString("url");
           window.open(target, "_blank", "noopener,noreferrer");
           postResponse(true, { success: true });
           return;
         }
         if (method === "persistState.get") {
-          postResponse(true, await context.storage.get(String(params.key ?? "")));
+          postResponse(true, await context.storage.get(readString("key")));
           return;
         }
         if (method === "persistState.set") {
-          await context.storage.set(String(params.key ?? ""), params.value);
+          await context.storage.set(readString("key"), params.value);
           postResponse(true, { success: true });
           return;
         }
         if (method === "persistState.remove") {
-          await context.storage.remove(String(params.key ?? ""));
+          await context.storage.remove(readString("key"));
           postResponse(true, { success: true });
           return;
         }
@@ -531,6 +537,7 @@ export function WorkbenchPluginIframe({
           error instanceof Error ? error.message : "Bridge request failed",
         );
       }
+      })();
     };
 
     window.addEventListener("message", onMessage);

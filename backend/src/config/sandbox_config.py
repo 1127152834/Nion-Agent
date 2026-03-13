@@ -67,5 +67,9 @@ class SandboxConfig(BaseModel):
         default_factory=dict,
         description="Environment variables to inject into the sandbox container. Values starting with $ will be resolved from host environment variables.",
     )
+    strict_mode: bool = Field(
+        default=False,
+        description="Enable strict sandbox mode. When enabled, host filesystem access features are disabled and only container-based sandboxes should be used.",
+    )
 
     model_config = ConfigDict(extra="allow")

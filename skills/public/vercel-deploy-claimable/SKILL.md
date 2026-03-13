@@ -1,6 +1,6 @@
 ---
 name: vercel-deploy
-description: Deploy applications and websites to Vercel. Use this skill when the user requests deployment actions such as "Deploy my app", "Deploy this to production", "Create a preview deployment", "Deploy and give me the link", or "Push this live". No authentication required - returns preview URL and claimable deployment link.
+description: '{"en":"Deploy apps/websites to Vercel. Use for \"deploy my app\", preview/prod deploy, and returning a preview URL plus a claimable deployment link. No auth required.","zh-CN":"将应用/网站部署到 Vercel。适用于“部署我的应用/部署到生产/创建预览部署/给我链接”等需求；无需登录，返回预览 URL 与可认领的部署链接。"}'
 metadata:
   author: vercel
   version: "1.0.0"

@@ -10,6 +10,14 @@ export interface OpenVikingMemoryItem {
   created_at: string;
   updated_at: string;
   scope: string;
+  tier?: "profile" | "preference" | "episode" | "trace" | string;
+  source?: "auto" | "tool" | string;
+  quality?: number;
+  quality_score?: number;
+  decision_reason?: string;
+  evidence?: Record<string, unknown>;
+  retention_policy?: string;
+  ttl?: number | null;
   metadata?: Record<string, unknown>;
   // Backward-compatible fields still used in some UI cards.
   entry_type?: string;
@@ -95,4 +103,42 @@ export interface OpenVikingStatus {
   config: OpenVikingConfig;
   retrieval: OpenVikingRetrievalStatus;
   governance: OpenVikingGovernanceStatus;
+}
+
+export interface MemoryActionLogItem {
+  scope: string;
+  action_id: string;
+  trace_id: string;
+  chat_id: string;
+  memory_id: string;
+  action: string;
+  reason: string;
+  before_content: string;
+  after_content: string;
+  evidence: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface MemoryFusionHit {
+  memory_id: string;
+  content: string;
+  sources: string[];
+  score: number;
+}
+
+export interface MemoryQueryExplain {
+  query: string;
+  route_taken: string;
+  dense_hits: Array<Record<string, unknown>>;
+  sparse_hits: Array<Record<string, unknown>>;
+  fusion_hits: MemoryFusionHit[];
+  fallback_reason: string;
+  recent_actions: MemoryActionLogItem[];
+}
+
+export interface ProcesslogExport {
+  trace_id?: string;
+  chat_id?: string;
+  count: number;
+  events: Array<Record<string, unknown>>;
 }

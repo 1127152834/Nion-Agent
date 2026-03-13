@@ -4,10 +4,10 @@
       "id": "frontend-workbench",
       "name": "Frontend Workbench",
       "description": "旧版前端工作台体验的插件化版本，统一在右侧插槽运行。",
-      "version": "0.2.0",
+      "version": "0.1.1",
       "maintainer": "Nion Core Team",
       "tags": ["frontend", "workbench", "sidebar-slot"],
-      "updated_at": "2026-03-10T12:00:00+08:00",
+      "updated_at": "2026-03-13T14:35:00+08:00",
       "package_path": "frontend/public/workbench-plugins/frontend-workbench.nwp",
       "readme_path": "backend/data/workbench_marketplace/docs/frontend-workbench/README.md",
       "demo_images": [

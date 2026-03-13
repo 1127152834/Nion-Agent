@@ -2,7 +2,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { BotIcon, PlusSquare } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -32,16 +32,25 @@ import { useAgent } from "@/core/agents";
 import { getAPIClient } from "@/core/api";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
+import { useAppRouter as useRouter } from "@/core/navigation";
 import { useNotification } from "@/core/notification/hooks";
 import { platform } from "@/core/platform";
 import { useDesktopRuntime } from "@/core/platform/hooks";
 import { type RuntimeProfile, fetchRuntimeProfile, updateRuntimeProfile } from "@/core/runtime-profile/api";
 import { useLocalSettings } from "@/core/settings";
+import { fetchSandboxPolicy } from "@/core/system/api";
+import type { AgentThreadState } from "@/core/threads";
 import {
   isThreadNotFoundError,
   pruneThreadFromCache,
   useThreadStream,
 } from "@/core/threads/hooks";
+import {
+  hasThreadRenderableState,
+  isThreadLikelyInitializing,
+  THREAD_EMPTY_STATE_MAX_POLLS,
+  THREAD_EMPTY_STATE_POLL_INTERVAL_MS,
+} from "@/core/threads/thread-guard";
 import { textOfMessage } from "@/core/threads/utils";
 import { isUUID } from "@/core/utils/uuid";
 import { env } from "@/env";
@@ -82,6 +91,18 @@ export default function AgentChatPage() {
   const [hostSetupCreateSaving, setHostSetupCreateSaving] = useState(false);
 
   const hostModeCopy = t.workspace.runtimeMode;
+  const ensureHostModeAllowed = useCallback(async (): Promise<boolean> => {
+    try {
+      const policy = await fetchSandboxPolicy();
+      if (policy.strict_mode) {
+        toast.error(hostModeCopy.strictDisabled);
+        return false;
+      }
+    } catch (error) {
+      console.warn("Failed to load sandbox policy:", error);
+    }
+    return true;
+  }, [hostModeCopy.strictDisabled]);
   const mapRuntimeProfileError = useCallback(
     (message: string): string => {
       if (message.includes("empty directory")) {
@@ -177,6 +198,9 @@ export default function AgentChatPage() {
       toast.error(hostModeCopy.desktopOnly);
       return null;
     }
+    if (!(await ensureHostModeAllowed())) {
+      return null;
+    }
     if (runtimeProfile.locked) {
       toast.error(hostModeCopy.locked);
       return null;
@@ -197,6 +221,7 @@ export default function AgentChatPage() {
       return null;
     }
   }, [
+    ensureHostModeAllowed,
     isDesktopRuntime,
     hostModeCopy.desktopOnly,
     hostModeCopy.locked,
@@ -239,6 +264,9 @@ export default function AgentChatPage() {
 
   const handleCreateWorkspaceFromSelectedDir = useCallback(async () => {
     if (!hostSetupCreateBaseDir) {
+      return;
+    }
+    if (!(await ensureHostModeAllowed())) {
       return;
     }
     const trimmedName = hostSetupCreateDirName.trim();
@@ -292,6 +320,7 @@ export default function AgentChatPage() {
     setHostSetupCreateDirName("workspace");
     setHostSetupDialogOpen(false);
   }, [
+    ensureHostModeAllowed,
     hostModeCopy.folderNameInvalid,
     hostModeCopy.folderNameRequired,
     hostModeCopy.modeSaveFailed,
@@ -313,17 +342,22 @@ export default function AgentChatPage() {
   }, [hostSetupPreviousProfile]);
 
   const handleOpenHostSetup = useCallback(() => {
-    setHostSetupPreviousProfile(runtimeProfile);
-    setHostSetupErrorMessage(null);
-    setHostSetupCreateBaseDir(null);
-    setHostSetupCreateInputVisible(false);
-    setHostSetupCreateDirName("workspace");
-    setRuntimeProfile((prev) => ({
-      ...prev,
-      execution_mode: "host",
-    }));
-    setHostSetupDialogOpen(true);
-  }, [runtimeProfile]);
+    void ensureHostModeAllowed().then((allowed) => {
+      if (!allowed) {
+        return;
+      }
+      setHostSetupPreviousProfile(runtimeProfile);
+      setHostSetupErrorMessage(null);
+      setHostSetupCreateBaseDir(null);
+      setHostSetupCreateInputVisible(false);
+      setHostSetupCreateDirName("workspace");
+      setRuntimeProfile((prev) => ({
+        ...prev,
+        execution_mode: "host",
+      }));
+      setHostSetupDialogOpen(true);
+    });
+  }, [ensureHostModeAllowed, runtimeProfile]);
 
   const handleSwitchMode = useCallback(
     async (mode: "sandbox" | "host") => {
@@ -341,6 +375,9 @@ export default function AgentChatPage() {
         await persistRuntimeProfile({ execution_mode: "sandbox", host_workdir: null });
         return;
       }
+      if (!(await ensureHostModeAllowed())) {
+        return;
+      }
       if (runtimeProfile.host_workdir) {
         await persistRuntimeProfile({
           execution_mode: "host",
@@ -351,6 +388,7 @@ export default function AgentChatPage() {
       handleOpenHostSetup();
     },
     [
+      ensureHostModeAllowed,
       handleOpenHostSetup,
       hostModeCopy.locked,
       persistRuntimeProfile,
@@ -404,6 +442,15 @@ export default function AgentChatPage() {
     let cancelled = false;
     const apiClient = getAPIClient();
     const fallbackPath = `/workspace/agents/${agent_name}/chats/new`;
+    const removeInvalidThreadAndRedirect = () => {
+      void apiClient.threads.delete(threadId).catch((deleteError) => {
+        if (!isThreadNotFoundError(deleteError)) {
+          console.warn("Failed to delete invalid thread:", deleteError);
+        }
+      });
+      pruneThreadFromCache(queryClient, threadId);
+      router.replace(fallbackPath);
+    };
 
     if (!isUUID(threadId)) {
       pruneThreadFromCache(queryClient, threadId);
@@ -412,15 +459,41 @@ export default function AgentChatPage() {
     }
 
     const confirmThreadExists = async () => {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      let notFoundRetries = 0;
+
+      for (let pollAttempt = 0; pollAttempt < THREAD_EMPTY_STATE_MAX_POLLS; pollAttempt += 1) {
         try {
-          await apiClient.threads.get(threadId);
+          const threadMeta = await apiClient.threads.get(threadId);
+          const threadState = await apiClient.threads.getState<AgentThreadState>(threadId);
+
+          if (hasThreadRenderableState(threadState?.values)) {
+            return;
+          }
+
+          const hasMorePolls = pollAttempt < THREAD_EMPTY_STATE_MAX_POLLS - 1;
+          const isInitializing = isThreadLikelyInitializing(threadMeta);
+          if (hasMorePolls) {
+            await new Promise<void>((resolve) => {
+              window.setTimeout(resolve, THREAD_EMPTY_STATE_POLL_INTERVAL_MS);
+            });
+            if (cancelled) {
+              return;
+            }
+            continue;
+          }
+
+          if (!isInitializing) {
+            removeInvalidThreadAndRedirect();
+            return;
+          }
+
           return;
         } catch (error) {
           if (!isThreadNotFoundError(error)) {
             return;
           }
-          if (attempt === 0) {
+          if (notFoundRetries < 1) {
+            notFoundRetries += 1;
             await new Promise<void>((resolve) => {
               window.setTimeout(resolve, 220);
             });

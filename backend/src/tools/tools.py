@@ -4,6 +4,7 @@ from langchain.tools import BaseTool
 
 from src.config.app_config import ensure_latest_app_config
 from src.reflection import resolve_variable
+from src.tools.policy import filter_tools_by_policy
 from src.tools.builtins import (
     ask_clarification_tool,
     mcp_manage_tool,
@@ -28,6 +29,7 @@ from src.tools.builtins import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_WEB_SEARCH_TOOL_USE = "src.community.web_search.tools:web_search_tool"
+DEFAULT_WEB_FETCH_TOOL_USE = "src.community.web_fetch.tools:web_fetch_tool"
 
 BUILTIN_TOOLS = [
     present_file_tool,
@@ -59,6 +61,7 @@ def get_available_tools(
     include_mcp: bool = True,
     model_name: str | None = None,
     subagent_enabled: bool = False,
+    agent_name: str | None = None,
 ) -> list[BaseTool]:
     """Get all available tools from config.
 
@@ -82,6 +85,9 @@ def get_available_tools(
         if tool.name == "web_search" and tool.use != DEFAULT_WEB_SEARCH_TOOL_USE:
             resolved_use = DEFAULT_WEB_SEARCH_TOOL_USE
             logger.info("web_search provider remapped to unified fallback implementation")
+        if tool.name == "web_fetch" and tool.use != DEFAULT_WEB_FETCH_TOOL_USE:
+            resolved_use = DEFAULT_WEB_FETCH_TOOL_USE
+            logger.info("web_fetch provider remapped to unified fallback implementation")
         loaded_tools.append(resolve_variable(resolved_use, BaseTool))
 
     web_group_enabled = groups is None or "web" in groups
@@ -136,7 +142,7 @@ def get_available_tools(
     try:
         from src.cli.runtime_tools import get_cli_tools
 
-        all_tools.extend(get_cli_tools())
+        all_tools.extend(get_cli_tools(agent_name=agent_name))
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to load CLI tools: %s", exc)
-    return all_tools
+    return [tool for tool in filter_tools_by_policy(agent_name, all_tools) if isinstance(tool, BaseTool)]

@@ -19,6 +19,8 @@ from langchain_core.runnables import RunnableConfig
 from src.agents.thread_state import SandboxState, ThreadDataState, ThreadState
 from src.models import create_chat_model
 from src.subagents.config import SubagentConfig
+from src.subagents.run_models import SubagentRunRecord
+from src.subagents.run_store import get_run, list_runs, patch_run, upsert_run
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +68,6 @@ class SubagentResult:
 # Global storage for background task results
 _background_tasks: dict[str, SubagentResult] = {}
 _background_tasks_lock = threading.Lock()
-_background_tasks_cv = threading.Condition(_background_tasks_lock)
 
 # Thread pool for background task scheduling and orchestration
 _scheduler_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="subagent-scheduler-")
@@ -74,6 +75,35 @@ _scheduler_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="subagent
 # Thread pool for actual subagent execution (with timeout support)
 # Larger pool to avoid blocking when scheduler submits execution tasks
 _execution_pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="subagent-exec-")
+
+
+def _persist_background_task(
+    *,
+    task_id: str,
+    trace_id: str,
+    subagent_name: str,
+    thread_id: str | None,
+    status: SubagentStatus,
+    result: str | None = None,
+    error: str | None = None,
+    started_at: datetime | None = None,
+    completed_at: datetime | None = None,
+    ai_messages: list[dict[str, Any]] | None = None,
+) -> None:
+    upsert_run(
+        SubagentRunRecord(
+            id=task_id,
+            trace_id=trace_id,
+            subagent=subagent_name,
+            status=status.value,
+            thread_id=thread_id,
+            result=result,
+            error=error,
+            started_at=started_at,
+            completed_at=completed_at,
+            ai_messages=ai_messages or [],
+        )
+    )
 
 
 def _filter_tools(
@@ -266,21 +296,18 @@ class SubagentExecutor:
                     if isinstance(last_message, AIMessage):
                         # Convert message to dict for serialization
                         message_dict = last_message.model_dump()
-                        # Only add if it's not already in the list (avoid duplicates).
-                        # Also notify waiters so they can stream progress without polling.
-                        with _background_tasks_cv:
-                            # Check by comparing message IDs if available, otherwise compare full dict
-                            message_id = message_dict.get("id")
-                            is_duplicate = False
-                            if message_id:
-                                is_duplicate = any(msg.get("id") == message_id for msg in result.ai_messages)
-                            else:
-                                is_duplicate = message_dict in result.ai_messages
+                        # Only add if it's not already in the list (avoid duplicates)
+                        # Check by comparing message IDs if available, otherwise compare full dict
+                        message_id = message_dict.get("id")
+                        is_duplicate = False
+                        if message_id:
+                            is_duplicate = any(msg.get("id") == message_id for msg in result.ai_messages)
+                        else:
+                            is_duplicate = message_dict in result.ai_messages
 
-                            if not is_duplicate:
-                                result.ai_messages.append(message_dict)
-                                _background_tasks_cv.notify_all()
-                                logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} captured AI message #{len(result.ai_messages)}")
+                        if not is_duplicate:
+                            result.ai_messages.append(message_dict)
+                            logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} captured AI message #{len(result.ai_messages)}")
 
             logger.info(f"[trace={self.trace_id}] Subagent {self.config.name} completed async execution")
 
@@ -400,16 +427,29 @@ class SubagentExecutor:
 
         with _background_tasks_lock:
             _background_tasks[task_id] = result
-        with _background_tasks_cv:
-            _background_tasks_cv.notify_all()
+        _persist_background_task(
+            task_id=task_id,
+            trace_id=self.trace_id,
+            subagent_name=self.config.name,
+            thread_id=self.thread_id,
+            status=SubagentStatus.PENDING,
+        )
 
         # Submit to scheduler pool
         def run_task():
-            with _background_tasks_cv:
+            with _background_tasks_lock:
                 _background_tasks[task_id].status = SubagentStatus.RUNNING
                 _background_tasks[task_id].started_at = datetime.now()
                 result_holder = _background_tasks[task_id]
-                _background_tasks_cv.notify_all()
+                started_at = _background_tasks[task_id].started_at
+            _persist_background_task(
+                task_id=task_id,
+                trace_id=self.trace_id,
+                subagent_name=self.config.name,
+                thread_id=self.thread_id,
+                status=SubagentStatus.RUNNING,
+                started_at=started_at,
+            )
 
             try:
                 # Submit execution to execution pool with timeout
@@ -418,29 +458,62 @@ class SubagentExecutor:
                 try:
                     # Wait for execution with timeout
                     exec_result = execution_future.result(timeout=self.config.timeout_seconds)
-                    with _background_tasks_cv:
+                    with _background_tasks_lock:
                         _background_tasks[task_id].status = exec_result.status
                         _background_tasks[task_id].result = exec_result.result
                         _background_tasks[task_id].error = exec_result.error
                         _background_tasks[task_id].completed_at = datetime.now()
                         _background_tasks[task_id].ai_messages = exec_result.ai_messages
-                        _background_tasks_cv.notify_all()
+                        completed_at = _background_tasks[task_id].completed_at
+                        ai_messages = _background_tasks[task_id].ai_messages
+                    _persist_background_task(
+                        task_id=task_id,
+                        trace_id=self.trace_id,
+                        subagent_name=self.config.name,
+                        thread_id=self.thread_id,
+                        status=exec_result.status,
+                        result=exec_result.result,
+                        error=exec_result.error,
+                        started_at=started_at,
+                        completed_at=completed_at,
+                        ai_messages=ai_messages,
+                    )
                 except FuturesTimeoutError:
                     logger.error(f"[trace={self.trace_id}] Subagent {self.config.name} execution timed out after {self.config.timeout_seconds}s")
-                    with _background_tasks_cv:
+                    with _background_tasks_lock:
                         _background_tasks[task_id].status = SubagentStatus.TIMED_OUT
                         _background_tasks[task_id].error = f"Execution timed out after {self.config.timeout_seconds} seconds"
                         _background_tasks[task_id].completed_at = datetime.now()
-                        _background_tasks_cv.notify_all()
+                        completed_at = _background_tasks[task_id].completed_at
+                    _persist_background_task(
+                        task_id=task_id,
+                        trace_id=self.trace_id,
+                        subagent_name=self.config.name,
+                        thread_id=self.thread_id,
+                        status=SubagentStatus.TIMED_OUT,
+                        error=f"Execution timed out after {self.config.timeout_seconds} seconds",
+                        started_at=started_at,
+                        completed_at=completed_at,
+                    )
                     # Cancel the future (best effort - may not stop the actual execution)
                     execution_future.cancel()
             except Exception as e:
                 logger.exception(f"[trace={self.trace_id}] Subagent {self.config.name} async execution failed")
-                with _background_tasks_cv:
+                with _background_tasks_lock:
                     _background_tasks[task_id].status = SubagentStatus.FAILED
                     _background_tasks[task_id].error = str(e)
                     _background_tasks[task_id].completed_at = datetime.now()
-                    _background_tasks_cv.notify_all()
+                    completed_at = _background_tasks[task_id].completed_at
+                _persist_background_task(
+                    task_id=task_id,
+                    trace_id=self.trace_id,
+                    subagent_name=self.config.name,
+                    thread_id=self.thread_id,
+                    status=SubagentStatus.FAILED,
+                    error=str(e),
+                    started_at=started_at,
+                    completed_at=completed_at,
+                )
 
         _scheduler_pool.submit(run_task)
         return task_id
@@ -460,16 +533,6 @@ def get_background_task_result(task_id: str) -> SubagentResult | None:
     """
     with _background_tasks_lock:
         return _background_tasks.get(task_id)
-
-
-def wait_for_background_task_update(timeout_seconds: float | None = None) -> None:
-    """Block until any background task updates (best-effort).
-
-    This avoids fixed-interval polling in callers. Callers should re-check task state
-    after this function returns (spurious wake-ups are possible).
-    """
-    with _background_tasks_cv:
-        _background_tasks_cv.wait(timeout=timeout_seconds)
 
 
 def list_background_tasks() -> list[SubagentResult]:
@@ -517,3 +580,18 @@ def cleanup_background_task(task_id: str) -> None:
                 task_id,
                 result.status.value if hasattr(result.status, "value") else result.status,
             )
+
+
+def get_persisted_task_result(task_id: str) -> SubagentRunRecord | None:
+    """Load one persisted run record."""
+    return get_run(task_id)
+
+
+def list_persisted_tasks(limit: int = 200, status: str | None = None, trace_id: str | None = None) -> list[SubagentRunRecord]:
+    """List persisted run records."""
+    return list_runs(limit=limit, status=status, trace_id=trace_id)
+
+
+def patch_persisted_task(task_id: str, fields: dict[str, Any]) -> SubagentRunRecord | None:
+    """Patch one persisted run record."""
+    return patch_run(task_id, fields)

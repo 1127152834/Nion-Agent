@@ -1,20 +1,20 @@
 "use client";
 
-import { BotIcon, BrainIcon, MessageSquareIcon, SettingsIcon, Trash2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import {
+  ActivityIcon,
+  BrainIcon,
+  MessageSquareIcon,
+  OrbitIcon,
+  SettingsIcon,
+  Trash2Icon,
+  WrenchIcon,
+} from "lucide-react";
 import { useState } from "react";
+import type { ComponentType } from "react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -23,15 +23,48 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDeleteAgent } from "@/core/agents";
 import type { Agent } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
 import type { AgentDirectoryCard } from "@/core/memory/types";
+import { useAppRouter as useRouter } from "@/core/navigation";
+import { cn } from "@/lib/utils";
+
+import { AgentAvatarEditor } from "./agent-avatar-editor";
 
 interface AgentCardProps {
   agent: Agent;
   isDefault?: boolean;
   catalogCard?: AgentDirectoryCard | null;
+}
+
+interface SignalIndicatorProps {
+  title: string;
+  active: boolean;
+  tone?: "ok" | "warn";
+  icon: ComponentType<{ className?: string }>;
+}
+
+function SignalIndicator({ title, active, tone = "ok", icon: Icon }: SignalIndicatorProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="text-muted-foreground inline-flex h-7 items-center gap-1.5 rounded-full border border-border/80 bg-background/90 px-2.5">
+          <Icon className="size-3.5" />
+          <span
+            className={cn(
+              "size-2 rounded-full",
+              active && tone === "ok" ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.18)]" : "",
+              active && tone === "warn" ? "bg-amber-500 shadow-[0_0_0_4px_rgba(245,158,11,0.18)]" : "",
+              !active ? "bg-muted-foreground/45" : "",
+            )}
+          />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{title}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function AgentCard({ agent, isDefault = false, catalogCard = null }: AgentCardProps) {
@@ -40,20 +73,29 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
   const deleteAgent = useDeleteAgent();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const heartbeatEnabled = agent.heartbeat_enabled;
-  const evolutionEnabled = agent.evolution_enabled;
-  const agentDisplayName = agent.name === "_default" ? t.agents.picker.defaultAgentName : agent.name;
+  const heartbeatEnabled = agent.heartbeat_enabled ?? false;
+  const evolutionEnabled = agent.evolution_enabled ?? false;
+  const toolGroupCount = agent.tool_groups?.length ?? 0;
+  const trimmedDisplayName = agent.display_name?.trim();
+  const agentDisplayName = agent.name === "_default"
+    ? t.agents.picker.defaultAgentName
+    : trimmedDisplayName && trimmedDisplayName.length > 0 ? trimmedDisplayName : agent.name;
+  const memoryOverview = catalogCard?.capability_summary ?? catalogCard?.persona_summary ?? t.agents.noMemoryOverview;
 
   function handleChat() {
     if (isDefault) {
       router.push("/workspace/chats/new");
       return;
     }
-    router.push(`/workspace/agents/${agent.name}/chats/new`);
+    router.push(`/workspace/agents/${encodeURIComponent(agent.name)}/chats/new`);
   }
 
   function handleMemory() {
     router.push(`/workspace/agents/${encodeURIComponent(agent.name)}/settings?section=memory`);
+  }
+
+  function handleSettings() {
+    router.push(`/workspace/agents/${encodeURIComponent(agent.name)}/settings`);
   }
 
   async function handleDelete() {
@@ -66,113 +108,117 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
     }
   }
 
-  const cardClassName = isDefault
-    ? "group flex h-full flex-col rounded-2xl border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-background transition-all hover:-translate-y-0.5 hover:shadow-md"
-    : "group flex h-full flex-col rounded-2xl border transition-all hover:-translate-y-0.5 hover:shadow-md";
-
   return (
     <>
-      <Card className={cardClassName}>
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="bg-primary/12 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
-                <BotIcon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 space-y-1">
-                <CardTitle className="truncate text-base">{agentDisplayName}</CardTitle>
-                <div className="flex flex-wrap gap-1">
+      <Card className="group relative flex h-full flex-col overflow-hidden rounded-3xl border-border/80 bg-card/95 shadow-[0_14px_30px_-26px_rgba(35,30,24,0.5)] transition-all hover:-translate-y-0.5 hover:border-border hover:shadow-[0_20px_40px_-28px_rgba(35,30,24,0.62)]">
+        <svg
+          viewBox="0 0 160 160"
+          fill="none"
+          className="text-muted-foreground/60 pointer-events-none absolute -top-8 -right-8 h-44 w-44"
+          aria-hidden="true"
+        >
+          <path d="M22 73c26-32 87-39 112-8" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M18 91c31-22 85-18 124 6" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="118" cy="44" r="20" stroke="currentColor" strokeWidth="1" />
+        </svg>
+
+        <CardHeader className="relative p-6 pb-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3.5">
+              <AgentAvatarEditor
+                agentName={agent.name}
+                isDefault={isDefault}
+                avatarUrl={agent.avatar_url}
+                fallbackLabel={agentDisplayName}
+              />
+              <div className="min-w-0">
+                <CardTitle className="truncate text-[17px] leading-tight">{agentDisplayName}</CardTitle>
+                <div className="mt-1.5 flex min-h-5 items-center gap-2">
                   {isDefault ? (
-                    <Badge variant="outline" className="text-[11px]">
+                    <span className="rounded-full border border-border/80 bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
                       {t.agents.defaultBadge}
-                    </Badge>
+                    </span>
                   ) : null}
                   {agent.model ? (
-                    <Badge variant="secondary" className="text-[11px]">
-                      {agent.model}
-                    </Badge>
+                    <span className="text-muted-foreground truncate text-xs">{agent.model}</span>
                   ) : null}
                 </div>
               </div>
             </div>
+
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <SignalIndicator
+                icon={ActivityIcon}
+                active={heartbeatEnabled}
+                title={t.agents.status.heartbeat}
+              />
+              <SignalIndicator
+                icon={OrbitIcon}
+                active={evolutionEnabled}
+                title={t.agents.status.evolution}
+              />
+              <SignalIndicator
+                icon={WrenchIcon}
+                active={toolGroupCount > 0}
+                tone="warn"
+                title={toolGroupCount > 0
+                  ? t.agents.status.toolGroupsConfigured.replace("{count}", String(toolGroupCount))
+                  : t.agents.status.toolGroupsEmpty}
+              />
+            </div>
           </div>
-          <CardDescription className="line-clamp-2 min-h-10 text-sm leading-5">
+
+          <CardDescription className="mt-4 line-clamp-3 min-h-[4.1rem] text-[13.5px] leading-6">
             {agent.description || t.agents.picker.noDescription}
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-3 pt-0 pb-3">
-          <div className="flex flex-wrap gap-1">
-            {agent.tool_groups && agent.tool_groups.length > 0 ? (
-              <>
-                {agent.tool_groups.slice(0, 3).map((group) => (
-                  <Badge key={group} variant="outline" className="text-[11px]">
-                    {group}
-                  </Badge>
-                ))}
-                {agent.tool_groups.length > 3 ? (
-                  <Badge variant="outline" className="text-[11px]">+{agent.tool_groups.length - 3}</Badge>
-                ) : null}
-              </>
-            ) : (
-              <span className="text-muted-foreground text-xs">{t.agents.noToolGroups}</span>
-            )}
-          </div>
-
-          {catalogCard ? (
-            <div className="rounded-lg border bg-muted/30 p-2">
-              <p className="text-xs font-medium">{t.agents.catalogSummary}</p>
-              <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">
-                {catalogCard.capability_summary || catalogCard.persona_summary || t.agents.picker.noDescription}
-              </p>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-1">
-            {typeof heartbeatEnabled === "boolean" ? (
-              <Badge variant={heartbeatEnabled ? "secondary" : "outline"} className="text-[11px]">
-                {heartbeatEnabled ? t.agents.heartbeatOn : t.agents.heartbeatOff}
-              </Badge>
-            ) : null}
-            {typeof evolutionEnabled === "boolean" ? (
-              <Badge variant={evolutionEnabled ? "secondary" : "outline"} className="text-[11px]">
-                {evolutionEnabled ? t.agents.evolutionOn : t.agents.evolutionOff}
-              </Badge>
-            ) : null}
+        <CardContent className="px-6 pt-0 pb-4">
+          <div className="rounded-xl border border-dashed border-border/90 bg-muted/25 px-3.5 py-2.5">
+            <p className="text-foreground text-xs font-medium">{t.agents.memoryOverview}</p>
+            <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">{memoryOverview}</p>
           </div>
         </CardContent>
 
-        <CardFooter className="mt-auto grid grid-cols-2 gap-2 pt-1">
-          <Button size="sm" className="col-span-2" onClick={handleChat}>
-            <MessageSquareIcon className="mr-1.5 h-3.5 w-3.5" />
+        <CardFooter className="mt-auto flex items-center gap-2.5 px-6 pb-6 pt-2">
+          <Button size="sm" className="h-9 flex-1 rounded-xl" onClick={handleChat}>
+            <MessageSquareIcon className="mr-1.5 size-3.5" />
             {t.agents.chat}
           </Button>
-          <Button size="sm" variant="outline" onClick={handleMemory}>
-            <BrainIcon className="mr-1.5 h-3.5 w-3.5" />
-            {t.agents.viewMemory}
-          </Button>
-          <div className="flex items-center justify-end gap-1">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 shrink-0"
-              onClick={() => router.push(`/workspace/agents/${agent.name}/settings`)}
-              title={t.agents.picker.settingsTooltip}
-            >
-              <SettingsIcon className="h-3.5 w-3.5" />
-            </Button>
-            {isDefault ? null : (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="text-destructive hover:text-destructive h-8 w-8 shrink-0"
-                onClick={() => setDeleteOpen(true)}
-                title={t.agents.delete}
-              >
-                <Trash2Icon className="h-3.5 w-3.5" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon" variant="outline" className="size-9 rounded-xl" onClick={handleMemory}>
+                <BrainIcon className="size-4" />
               </Button>
-            )}
-          </div>
+            </TooltipTrigger>
+            <TooltipContent>{t.agents.viewMemory}</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon" variant="outline" className="size-9 rounded-xl" onClick={handleSettings}>
+                <SettingsIcon className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t.agents.picker.settingsTooltip}</TooltipContent>
+          </Tooltip>
+
+          {isDefault ? null : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="text-destructive size-9 rounded-xl"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t.agents.delete}</TooltipContent>
+            </Tooltip>
+          )}
         </CardFooter>
       </Card>
 
@@ -183,18 +229,10 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
             <DialogDescription>{t.agents.deleteConfirm}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteOpen(false)}
-              disabled={deleteAgent.isPending}
-            >
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleteAgent.isPending}>
               {t.common.cancel}
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              disabled={deleteAgent.isPending}
-            >
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteAgent.isPending}>
               {deleteAgent.isPending ? t.common.loading : t.common.delete}
             </Button>
           </DialogFooter>

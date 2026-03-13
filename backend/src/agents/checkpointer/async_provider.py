@@ -3,7 +3,7 @@
 Provides an **async context manager** for long-running async servers that need
 proper resource cleanup.
 
-Supported backends: memory, sqlite, postgres.
+Supported backends: memory, sqlite.
 
 Usage (e.g. FastAPI lifespan)::
 
@@ -24,8 +24,6 @@ from collections.abc import AsyncIterator
 from langgraph.types import Checkpointer
 
 from src.agents.checkpointer.provider import (
-    POSTGRES_CONN_REQUIRED,
-    POSTGRES_INSTALL,
     SQLITE_INSTALL,
     _get_effective_checkpointer_config,
     _resolve_sqlite_conn_str,
@@ -61,20 +59,6 @@ async def _async_checkpointer(config) -> AsyncIterator[Checkpointer]:
         if conn_str != ":memory:" and not conn_str.startswith("file:"):
             pathlib.Path(conn_str).parent.mkdir(parents=True, exist_ok=True)
         async with AsyncSqliteSaver.from_conn_string(conn_str) as saver:
-            await saver.setup()
-            yield saver
-        return
-
-    if config.type == "postgres":
-        try:
-            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-        except ImportError as exc:
-            raise ImportError(POSTGRES_INSTALL) from exc
-
-        if not config.connection_string:
-            raise ValueError(POSTGRES_CONN_REQUIRED)
-
-        async with AsyncPostgresSaver.from_conn_string(config.connection_string) as saver:
             await saver.setup()
             yield saver
         return

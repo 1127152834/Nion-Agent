@@ -130,6 +130,29 @@ def _history_from_state(runtime: ToolRuntime) -> list[dict[str, Any]]:
     return rows
 
 
+def _memory_query_impl(
+    runtime: ToolRuntime,
+    *,
+    query: str,
+    limit: int,
+    scope: Literal["global", "agent", "auto"],
+    agent_name: str | None,
+) -> str:
+    try:
+        result = query_memory_action(
+            query=query,
+            limit=limit,
+            scope=scope,
+            agent_name=agent_name,
+            runtime_agent_name=_runtime_agent_name(runtime),
+            policy_state=_policy_state(runtime),
+            policy_runtime_context=_policy_runtime_context(runtime),
+        )
+        return _json({"ok": True, **result})
+    except Exception as exc:  # noqa: BLE001
+        return _json({"ok": False, "error": str(exc)})
+
+
 @tool("memory_query", parse_docstring=True)
 def memory_query_tool(
     runtime: ToolRuntime,
@@ -146,19 +169,13 @@ def memory_query_tool(
         scope: Scope selector (`global`, `agent`, `auto`).
         agent_name: Optional agent name for agent-scoped lookup.
     """
-    try:
-        result = query_memory_action(
-            query=query,
-            limit=limit,
-            scope=scope,
-            agent_name=agent_name,
-            runtime_agent_name=_runtime_agent_name(runtime),
-            policy_state=_policy_state(runtime),
-            policy_runtime_context=_policy_runtime_context(runtime),
-        )
-        return _json({"ok": True, **result})
-    except Exception as exc:  # noqa: BLE001
-        return _json({"ok": False, "error": str(exc)})
+    return _memory_query_impl(
+        runtime,
+        query=query,
+        limit=limit,
+        scope=scope,
+        agent_name=agent_name,
+    )
 
 
 @tool("search_memory", parse_docstring=True)
@@ -177,7 +194,13 @@ def search_memory_tool(
         scope: Scope selector (`global`, `agent`, `auto`).
         agent_name: Optional agent name for agent-scoped lookup.
     """
-    return memory_query_tool(runtime, query=query, limit=limit, scope=scope, agent_name=agent_name)
+    return _memory_query_impl(
+        runtime,
+        query=query,
+        limit=limit,
+        scope=scope,
+        agent_name=agent_name,
+    )
 
 
 @tool("query_history", parse_docstring=True)
@@ -325,7 +348,13 @@ def ov_find_tool(
         scope: Scope selector (`global`, `agent`, `auto`).
         agent_name: Optional agent name for agent scope.
     """
-    return memory_query_tool(runtime, query=query, limit=limit, scope=scope, agent_name=agent_name)
+    return _memory_query_impl(
+        runtime,
+        query=query,
+        limit=limit,
+        scope=scope,
+        agent_name=agent_name,
+    )
 
 
 @tool("ov_search", parse_docstring=True)
@@ -344,7 +373,13 @@ def ov_search_tool(
         scope: Scope selector (`global`, `agent`, `auto`).
         agent_name: Optional agent name for agent scope.
     """
-    return memory_query_tool(runtime, query=query, limit=limit, scope=scope, agent_name=agent_name)
+    return _memory_query_impl(
+        runtime,
+        query=query,
+        limit=limit,
+        scope=scope,
+        agent_name=agent_name,
+    )
 
 
 @tool("ov_session_commit", parse_docstring=True)
@@ -354,11 +389,11 @@ def ov_session_commit_tool(
     session_id: str | None = None,
     agent_name: str | None = None,
 ) -> str:
-    """Commit messages to OpenViking session extraction.
+    """Legacy alias for structured memory write graph.
 
     Args:
         messages_json: JSON array of `{role, content}` items.
-        session_id: Optional OpenViking session id. Defaults to thread_id/UUID.
+        session_id: Optional session id. Defaults to thread_id/UUID.
         agent_name: Optional agent scope override.
     """
     try:
@@ -385,14 +420,17 @@ def ov_session_commit_tool(
             raise ValueError("messages_json has no valid messages")
 
         provider = get_default_memory_provider()
-        if not hasattr(provider, "commit_session"):
-            raise RuntimeError("Current memory provider does not support ov_session_commit")
+        if not hasattr(provider, "write_conversation_update"):
+            raise RuntimeError("Current memory provider does not support structured memory write")
 
         resolved_session_id = (session_id or _runtime_thread_id(runtime) or str(uuid.uuid4())).strip()
-        result = provider.commit_session(  # type: ignore[attr-defined]
+        result = provider.write_conversation_update(  # type: ignore[attr-defined]
             thread_id=resolved_session_id,
             messages=normalized_messages,
             agent_name=agent_name or _runtime_agent_name(runtime),
+            write_source="tool",
+            explicit_write=True,
+            chat_id=resolved_session_id,
         )
         return _json({"ok": True, "session_id": resolved_session_id, "result": result})
     except Exception as exc:  # noqa: BLE001

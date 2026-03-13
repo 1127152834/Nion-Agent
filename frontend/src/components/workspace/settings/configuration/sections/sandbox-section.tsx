@@ -56,17 +56,20 @@ export function SandboxSection({
   onChange: (next: ConfigDraft) => void;
   disabled?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const settingsLike = t.settings as {
     configSections?: {
-      sandbox?: Record<string, any>;
+      sandbox?: Record<string, string>;
     };
   };
-  const copy = (settingsLike.configSections?.sandbox ?? {});
+  const copy = (settingsLike.configSections?.sandbox ?? {}) as Record<string, string | undefined>;
   const sandbox = asObject(config.sandbox);
   const sandboxUse = asString(sandbox.use);
   const sandboxMode = getSandboxMode(sandboxUse);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const strictModeEnabled = asBoolean(sandbox.strict_mode, false);
+  const strictModeTip =
+    locale === "zh-CN" ? (copy.strictModeTipZh ?? "") : (copy.strictModeTipEn ?? "");
 
   const updateSandbox = (key: string, value: unknown) => {
     const next = cloneConfig(config);
@@ -80,20 +83,42 @@ export function SandboxSection({
     onChange(next);
   };
 
+  const updateSandboxBatch = (updates: Record<string, unknown>) => {
+    const next = cloneConfig(config);
+    const target = asObject(next.sandbox);
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === undefined || value === null || value === "") {
+        delete target[key];
+      } else {
+        target[key] = value;
+      }
+    }
+
+    next.sandbox = target;
+    onChange(next);
+  };
+
   const updateSandboxNumber = (key: string, raw: string) => {
     updateSandbox(key, parseOptionalNumber(raw));
   };
 
   const switchSandboxMode = (mode: "local" | "aio" | "custom") => {
     if (mode === "local") {
-      updateSandbox("use", "src.sandbox.local:LocalSandboxProvider");
+      updateSandboxBatch({
+        use: "src.sandbox.local:LocalSandboxProvider",
+        strict_mode: strictModeEnabled ? false : undefined,
+      });
       return;
     }
     if (mode === "aio") {
       updateSandbox("use", "src.community.aio_sandbox:AioSandboxProvider");
       return;
     }
-    updateSandbox("use", "");
+    updateSandboxBatch({
+      use: "",
+      strict_mode: strictModeEnabled ? false : undefined,
+    });
   };
 
   return (
@@ -106,22 +131,49 @@ export function SandboxSection({
         <div className="space-y-1">
           <div className="text-xs font-medium">{copy.mode}</div>
           <Select value={sandboxMode} onValueChange={switchSandboxMode}>
-            <SelectTrigger disabled={disabled}>
+            <SelectTrigger disabled={disabled} className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="local">{copy.local}</SelectItem>
+              <SelectItem value="local" disabled={strictModeEnabled}>{copy.local}</SelectItem>
               <SelectItem value="aio">{copy.aio}</SelectItem>
-              <SelectItem value="custom">{copy.custom}</SelectItem>
+              <SelectItem value="custom" disabled={strictModeEnabled}>{copy.custom}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
       <FieldTip
-        zh={copy.modeTipZh}
-        en={copy.modeTipEn}
+        zh={copy.modeTipZh ?? ""}
+        en={copy.modeTipEn ?? ""}
       />
+
+      <div className="rounded-md border bg-muted/30 p-3">
+        <div className="grid gap-3 md:grid-cols-[1fr_220px] md:items-start">
+          <div className="space-y-1">
+            <div className="text-sm font-medium">{copy.strictMode}</div>
+            {strictModeTip ? (
+              <div className="text-muted-foreground text-xs leading-relaxed">{strictModeTip}</div>
+            ) : null}
+          </div>
+          <div className="flex justify-end">
+            <Switch
+              checked={strictModeEnabled}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  updateSandboxBatch({
+                    strict_mode: true,
+                    use: "src.community.aio_sandbox:AioSandboxProvider",
+                  });
+                  return;
+                }
+                updateSandbox("strict_mode", false);
+              }}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      </div>
 
       {sandboxMode === "custom" && (
         <div className="space-y-1.5">

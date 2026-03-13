@@ -108,6 +108,45 @@ class OpenVikingSQLiteIndex:
                 CREATE INDEX IF NOT EXISTS idx_memory_resources_scope_updated
                     ON memory_resources(scope, updated_at DESC);
 
+                CREATE TABLE IF NOT EXISTS memory_manifest (
+                    scope TEXT NOT NULL,
+                    memory_id TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'active',
+                    source_thread_id TEXT,
+                    metadata_json TEXT,
+                    last_action TEXT NOT NULL DEFAULT 'ADD',
+                    revision INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (scope, memory_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_memory_manifest_scope_status
+                    ON memory_manifest(scope, status);
+                CREATE INDEX IF NOT EXISTS idx_memory_manifest_scope_updated
+                    ON memory_manifest(scope, updated_at DESC);
+
+                CREATE TABLE IF NOT EXISTS memory_action_log (
+                    scope TEXT NOT NULL,
+                    action_id TEXT NOT NULL,
+                    trace_id TEXT,
+                    chat_id TEXT,
+                    memory_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    reason TEXT,
+                    before_content TEXT,
+                    after_content TEXT,
+                    evidence_json TEXT,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (scope, action_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_memory_action_log_scope_created
+                    ON memory_action_log(scope, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_memory_action_log_scope_trace
+                    ON memory_action_log(scope, trace_id, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_memory_action_log_scope_chat
+                    ON memory_action_log(scope, chat_id, created_at DESC);
+
                 CREATE TABLE IF NOT EXISTS governance_queue (
                     scope TEXT NOT NULL,
                     decision_id TEXT NOT NULL,
@@ -319,6 +358,11 @@ class OpenVikingSQLiteIndex:
             ).fetchone()
         if row is None:
             return None
+        metadata_json = str(row["metadata_json"] or "{}")
+        try:
+            metadata = json.loads(metadata_json)
+        except Exception:  # noqa: BLE001
+            metadata = {}
         return {
             "scope": str(row["scope"]),
             "memory_id": str(row["memory_id"]),
@@ -331,6 +375,7 @@ class OpenVikingSQLiteIndex:
             "last_used_at": str(row["last_used_at"] or ""),
             "created_at": str(row["created_at"] or ""),
             "updated_at": str(row["updated_at"] or ""),
+            "metadata": metadata if isinstance(metadata, dict) else {},
         }
 
     def delete_resource(
@@ -407,6 +452,268 @@ class OpenVikingSQLiteIndex:
                     (scope,),
                 ).fetchone()
         return int(row["cnt"] if row else 0)
+
+    # ------------------------------------------------------------------
+    # Manifest + action log (source of truth)
+    # ------------------------------------------------------------------
+    def upsert_manifest_entry(
+        self,
+        *,
+        agent_name: str | None,
+        memory_id: str,
+        content: str,
+        status: str = "active",
+        source_thread_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        last_action: str = "ADD",
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
+        scope = _scope_key(agent_name)
+        now = _utc_iso()
+        normalized_status = (status or "active").strip().lower() or "active"
+        metadata_json = json.dumps(metadata or {}, ensure_ascii=False)
+
+        def _execute(target_conn: sqlite3.Connection) -> None:
+            target_conn.execute(
+                """
+                INSERT INTO memory_manifest(
+                    scope, memory_id, content, status, source_thread_id, metadata_json,
+                    last_action, revision, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(scope, memory_id) DO UPDATE SET
+                    content=excluded.content,
+                    status=excluded.status,
+                    source_thread_id=COALESCE(excluded.source_thread_id, memory_manifest.source_thread_id),
+                    metadata_json=excluded.metadata_json,
+                    last_action=excluded.last_action,
+                    revision=(memory_manifest.revision + 1),
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    scope,
+                    memory_id,
+                    content,
+                    normalized_status,
+                    source_thread_id,
+                    metadata_json,
+                    last_action.strip().upper() or "ADD",
+                    1,
+                    now,
+                    now,
+                ),
+            )
+
+        if conn is not None:
+            _execute(conn)
+            return
+        with self._guard, self._connect() as inner:
+            _execute(inner)
+            inner.commit()
+
+    def get_manifest_entry(self, *, agent_name: str | None, memory_id: str) -> dict[str, Any] | None:
+        scope = _scope_key(agent_name)
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT scope, memory_id, content, status, source_thread_id, metadata_json,
+                       last_action, revision, created_at, updated_at
+                FROM memory_manifest
+                WHERE scope = ? AND memory_id = ?
+                """,
+                (scope, memory_id),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            metadata = json.loads(str(row["metadata_json"] or "{}"))
+        except Exception:  # noqa: BLE001
+            metadata = {}
+        return {
+            "scope": str(row["scope"]),
+            "memory_id": str(row["memory_id"]),
+            "content": str(row["content"] or ""),
+            "status": str(row["status"] or "active"),
+            "source_thread_id": str(row["source_thread_id"] or ""),
+            "metadata": metadata if isinstance(metadata, dict) else {},
+            "last_action": str(row["last_action"] or "ADD"),
+            "revision": int(row["revision"] or 1),
+            "created_at": str(row["created_at"] or ""),
+            "updated_at": str(row["updated_at"] or ""),
+        }
+
+    def list_manifest_entries(
+        self,
+        *,
+        agent_name: str | None = None,
+        status: str | None = "active",
+    ) -> list[dict[str, Any]]:
+        scope = _scope_key(agent_name)
+        with self._connect() as conn:
+            if status is None:
+                rows = conn.execute(
+                    """
+                    SELECT scope, memory_id, content, status, source_thread_id, metadata_json,
+                           last_action, revision, created_at, updated_at
+                    FROM memory_manifest
+                    WHERE scope = ?
+                    ORDER BY updated_at DESC
+                    """,
+                    (scope,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT scope, memory_id, content, status, source_thread_id, metadata_json,
+                           last_action, revision, created_at, updated_at
+                    FROM memory_manifest
+                    WHERE scope = ? AND status = ?
+                    ORDER BY updated_at DESC
+                    """,
+                    (scope, status.strip().lower()),
+                ).fetchall()
+
+        output: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                metadata = json.loads(str(row["metadata_json"] or "{}"))
+            except Exception:  # noqa: BLE001
+                metadata = {}
+            output.append(
+                {
+                    "scope": str(row["scope"]),
+                    "memory_id": str(row["memory_id"]),
+                    "content": str(row["content"] or ""),
+                    "status": str(row["status"] or "active"),
+                    "source_thread_id": str(row["source_thread_id"] or ""),
+                    "metadata": metadata if isinstance(metadata, dict) else {},
+                    "last_action": str(row["last_action"] or "ADD"),
+                    "revision": int(row["revision"] or 1),
+                    "created_at": str(row["created_at"] or ""),
+                    "updated_at": str(row["updated_at"] or ""),
+                }
+            )
+        return output
+
+    def append_action_log(
+        self,
+        *,
+        agent_name: str | None,
+        action_id: str,
+        memory_id: str,
+        action: str,
+        trace_id: str | None = None,
+        chat_id: str | None = None,
+        reason: str | None = None,
+        before_content: str | None = None,
+        after_content: str | None = None,
+        evidence: dict[str, Any] | None = None,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
+        scope = _scope_key(agent_name)
+        now = _utc_iso()
+        evidence_json = json.dumps(evidence or {}, ensure_ascii=False)
+
+        def _execute(target_conn: sqlite3.Connection) -> None:
+            target_conn.execute(
+                """
+                INSERT OR REPLACE INTO memory_action_log(
+                    scope, action_id, trace_id, chat_id, memory_id, action, reason,
+                    before_content, after_content, evidence_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    scope,
+                    action_id,
+                    trace_id,
+                    chat_id,
+                    memory_id,
+                    action.strip().upper(),
+                    reason,
+                    before_content,
+                    after_content,
+                    evidence_json,
+                    now,
+                ),
+            )
+
+        if conn is not None:
+            _execute(conn)
+            return
+        with self._guard, self._connect() as inner:
+            _execute(inner)
+            inner.commit()
+
+    def list_action_logs(
+        self,
+        *,
+        agent_name: str | None = None,
+        trace_id: str | None = None,
+        chat_id: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        scope = _scope_key(agent_name)
+        query = """
+            SELECT scope, action_id, trace_id, chat_id, memory_id, action, reason,
+                   before_content, after_content, evidence_json, created_at
+            FROM memory_action_log
+            WHERE scope = ?
+        """
+        params: list[Any] = [scope]
+        if trace_id:
+            query += " AND trace_id = ?"
+            params.append(trace_id)
+        if chat_id:
+            query += " AND chat_id = ?"
+            params.append(chat_id)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(max(1, int(limit)))
+
+        with self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+
+        output: list[dict[str, Any]] = []
+        for row in rows:
+            try:
+                evidence = json.loads(str(row["evidence_json"] or "{}"))
+            except Exception:  # noqa: BLE001
+                evidence = {}
+            output.append(
+                {
+                    "scope": str(row["scope"]),
+                    "action_id": str(row["action_id"]),
+                    "trace_id": str(row["trace_id"] or ""),
+                    "chat_id": str(row["chat_id"] or ""),
+                    "memory_id": str(row["memory_id"]),
+                    "action": str(row["action"] or ""),
+                    "reason": str(row["reason"] or ""),
+                    "before_content": str(row["before_content"] or ""),
+                    "after_content": str(row["after_content"] or ""),
+                    "evidence": evidence if isinstance(evidence, dict) else {},
+                    "created_at": str(row["created_at"] or ""),
+                }
+            )
+        return output
+
+    def get_manifest_revision(self, *, agent_name: str | None = None) -> int:
+        scope = _scope_key(agent_name)
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(revision) AS rev FROM memory_manifest WHERE scope = ?",
+                (scope,),
+            ).fetchone()
+        if row is None or row["rev"] is None:
+            return 0
+        return int(row["rev"])
+
+    def clear_scope_derived_indexes(self, *, agent_name: str | None = None) -> None:
+        scope = _scope_key(agent_name)
+        with self._guard, self._connect() as conn:
+            conn.execute("DELETE FROM memory_resources WHERE scope = ?", (scope,))
+            conn.execute("DELETE FROM vector_memory WHERE scope = ?", (scope,))
+            conn.execute("DELETE FROM nodes WHERE scope = ?", (scope,))
+            conn.execute("DELETE FROM edges WHERE scope = ?", (scope,))
+            conn.execute("DELETE FROM memory_links WHERE scope = ?", (scope,))
+            conn.commit()
 
     # ------------------------------------------------------------------
     # Governance ledger
@@ -618,6 +925,14 @@ class OpenVikingSQLiteIndex:
             deleted = int(cur.rowcount or 0)
             conn.commit()
             return deleted
+
+    def clear_graph(self, *, agent_name: str | None = None) -> None:
+        scope = _scope_key(agent_name)
+        with self._guard, self._connect() as conn:
+            conn.execute("DELETE FROM nodes WHERE scope = ?", (scope,))
+            conn.execute("DELETE FROM edges WHERE scope = ?", (scope,))
+            conn.execute("DELETE FROM memory_links WHERE scope = ?", (scope,))
+            conn.commit()
 
     def vector_count(self, *, agent_name: str | None = None) -> int:
         scope = _scope_key(agent_name)

@@ -1,19 +1,22 @@
+from __future__ import annotations
+
 import base64
 import mimetypes
 from pathlib import Path
 from typing import Annotated
 
-from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
+from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
 from src.sandbox.tools import get_thread_data, replace_virtual_path
+from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 
 
 @tool("view_image", parse_docstring=True)
 def view_image_tool(
-    runtime: ToolRuntime,
+    runtime: ToolRuntime[ContextT, ThreadState],
     image_path: str,
     tool_call_id: Annotated[str, InjectedToolCallId],
 ) -> Command:

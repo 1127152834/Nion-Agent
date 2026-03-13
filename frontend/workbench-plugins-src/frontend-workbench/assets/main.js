@@ -6,35 +6,49 @@
   }
 
   const ROOT = "/mnt/user-data/workspace";
+  const PREVIEW_TIMEOUT_MS = 120000;
+  const PREVIEW_PORT_START = 14900;
+  const PREVIEW_PORT_MAX = 15999;
+  const MOBILE_BREAKPOINT = 900;
+  const SIDEBAR_MIN_PERCENT = 16;
+  const SIDEBAR_MAX_PERCENT = 72;
+  const SIDEBAR_MIN_PX = 180;
+  const EDITOR_MIN_PX = 300;
   const ALLOWED_PREVIEW_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "[::1]"]);
+
   const state = {
+    viewMode: "code",
     projectRoot: ROOT,
     packageManager: "pnpm",
     scripts: {},
+    buildCommand: "",
+    deployCommand: "",
+    deployScriptName: "",
+    detectedScriptPort: null,
+    previewPort: PREVIEW_PORT_START,
+
+    treeRoot: null,
+    treeQuery: "",
+    loadingTree: false,
+    sidebarOpen: true,
+    sidebarOpenPersisted: null,
+    sidebarWidthPercent: 26,
+
     tabs: [],
     activeTabId: null,
-    tree: null,
-    treeQuery: "",
-    build: {
-      running: false,
-      succeeded: false,
-      sessionId: null,
-      command: "",
-    },
-    dev: {
-      running: false,
-      sessionId: null,
-      command: "",
-    },
-    previewMode: "preview",
+
+    deviceMode: "desktop",
     previewUrl: "",
+    previewSessionId: null,
+    previewStreamStop: null,
+
+    consoleOpen: false,
     logs: [],
-    streamStopBySession: new Map(),
-    leftWidth: 280,
-    rightWidth: 360,
-    leftCollapsed: false,
-    rightCollapsed: false,
+    logSeq: 0,
   };
+
+  let previewEnsurePromise = null;
+  let wasMobileViewport = window.innerWidth <= MOBILE_BREAKPOINT;
 
   const refs = {};
 
@@ -47,79 +61,240 @@
   }
 
   function toast(message, type) {
-    return apiCall("toast", { message, type: type || "info" }).catch(function () {
+    return apiCall("toast", { message: message, type: type || "info" }).catch(function () {
       return undefined;
     });
   }
 
-  function applyHostTheme() {
-    const theme = bridge && typeof bridge.theme === "object" ? bridge.theme : null;
-    if (!theme) {
-      return;
-    }
-    const mode = theme.mode === "dark" ? "dark" : "light";
-    document.documentElement.dataset.theme = mode;
-    document.documentElement.style.colorScheme = mode;
-
-    const tokens = theme.tokens && typeof theme.tokens === "object" ? theme.tokens : {};
-    const tokenMap = {
-      "--bg": tokens.background,
-      "--panel": tokens.card,
-      "--panel-alt": tokens.muted,
-      "--line": tokens.border,
-      "--text": tokens.foreground,
-      "--muted": tokens["muted-foreground"],
-      "--primary": tokens.primary,
-      "--primary-contrast": tokens["primary-foreground"],
-    };
-    Object.keys(tokenMap).forEach(function (cssVar) {
-      const value = tokenMap[cssVar];
-      if (typeof value === "string" && value.trim()) {
-        document.documentElement.style.setProperty(cssVar, value.trim());
-      }
-    });
+  function escapeHtml(raw) {
+    return String(raw || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 
-  function setStatus(text) {
-    refs.statusText.textContent = text;
+  function nowTime() {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2, "0");
+    const m = String(d.getMinutes()).padStart(2, "0");
+    const s = String(d.getSeconds()).padStart(2, "0");
+    return h + ":" + m + ":" + s;
   }
 
-  function appendLog(line) {
-    state.logs.push(line);
-    if (state.logs.length > 600) {
-      state.logs.splice(0, state.logs.length - 600);
-    }
-    refs.logs.textContent = state.logs.join("\n");
-    refs.logs.scrollTop = refs.logs.scrollHeight;
+  function normalizePath(path) {
+    return String(path || "").replace(/\\/g, "/");
   }
 
   function pathName(path) {
-    const parts = String(path || "").replace(/\\/g, "/").split("/").filter(Boolean);
+    const parts = normalizePath(path).split("/").filter(Boolean);
     return parts.length ? parts[parts.length - 1] : path;
   }
 
-  function extName(path) {
-    const name = pathName(path);
-    const idx = name.lastIndexOf(".");
-    return idx > -1 ? name.slice(idx + 1).toLowerCase() : "";
-  }
-
   function dirName(path) {
-    const normalized = String(path || "").replace(/\\/g, "/");
+    const normalized = normalizePath(path);
     const idx = normalized.lastIndexOf("/");
     if (idx <= 0) return ROOT;
     return normalized.slice(0, idx);
   }
 
-  function relativeFromRoot(path) {
-    if (path.startsWith(ROOT + "/")) {
-      return path.slice(ROOT.length + 1);
-    }
-    return path;
+  function extName(path) {
+    const name = pathName(path);
+    const idx = name.lastIndexOf(".");
+    if (idx < 0) return "";
+    return name.slice(idx + 1).toLowerCase();
   }
 
-  function shellQuote(input) {
-    return "'" + String(input).replace(/'/g, "'\\''") + "'";
+  function activeTab() {
+    if (!state.activeTabId) {
+      return null;
+    }
+    for (let i = 0; i < state.tabs.length; i += 1) {
+      if (state.tabs[i].id === state.activeTabId) {
+        return state.tabs[i];
+      }
+    }
+    return null;
+  }
+
+  function addLog(type, message) {
+    const normalizedType = type === "error" || type === "success" ? type : "info";
+    state.logSeq += 1;
+    state.logs.push({
+      id: "log-" + state.logSeq,
+      type: normalizedType,
+      message: String(message || ""),
+      time: nowTime(),
+    });
+    if (state.logs.length > 500) {
+      state.logs.splice(0, state.logs.length - 500);
+    }
+    renderLogs();
+  }
+
+  function renderLogs() {
+    const errorCount = state.logs.filter(function (item) {
+      return item.type === "error";
+    }).length;
+    refs.consoleErrorCount.textContent = String(errorCount);
+
+    if (!state.logs.length) {
+      refs.consoleLogs.innerHTML = "<div class='console-empty'>暂无日志...</div>";
+      return;
+    }
+
+    refs.consoleLogs.innerHTML = state.logs
+      .map(function (item) {
+        const copyBtn =
+          item.type === "error"
+            ? "<button class='log-copy' data-copy='" + escapeHtml(item.id) + "' type='button'>复制</button>"
+            : "";
+        return (
+          "<div class='log-row " +
+          escapeHtml(item.type) +
+          "'>" +
+          "<span class='log-time'>" +
+          escapeHtml(item.time) +
+          "</span>" +
+          "<span class='log-msg'>" +
+          escapeHtml(item.message) +
+          "</span>" +
+          copyBtn +
+          "</div>"
+        );
+      })
+      .join("");
+
+    refs.consoleLogs.scrollTop = refs.consoleLogs.scrollHeight;
+
+    const copyButtons = refs.consoleLogs.querySelectorAll("[data-copy]");
+    for (let i = 0; i < copyButtons.length; i += 1) {
+      copyButtons[i].addEventListener("click", function (event) {
+        const id = event.currentTarget && event.currentTarget.getAttribute("data-copy");
+        if (!id) return;
+        const logItem = state.logs.find(function (item) {
+          return item.id === id;
+        });
+        if (!logItem) return;
+        navigator.clipboard
+          .writeText(logItem.message)
+          .then(function () {
+            toast("错误日志已复制", "success");
+          })
+          .catch(function () {
+            toast("复制失败", "error");
+          });
+      });
+    }
+  }
+
+  function updateConsoleState() {
+    refs.consolePanel.classList.toggle("hidden", !state.consoleOpen);
+    refs.consoleToggleBtn.setAttribute("aria-expanded", state.consoleOpen ? "true" : "false");
+    refs.consoleToggleArrow.textContent = state.consoleOpen ? "▾" : "▴";
+  }
+
+  function showPreviewLoading() {
+    refs.previewLoading.classList.remove("hidden");
+  }
+
+  function hidePreviewLoading() {
+    refs.previewLoading.classList.add("hidden");
+  }
+
+  function updateViewMode() {
+    const isCode = state.viewMode === "code";
+    refs.codeModeBtn.classList.toggle("active", isCode);
+    refs.previewModeBtn.classList.toggle("active", !isCode);
+    refs.codeModeBtn.setAttribute("aria-selected", isCode ? "true" : "false");
+    refs.previewModeBtn.setAttribute("aria-selected", isCode ? "false" : "true");
+    refs.codeView.classList.toggle("hidden", !isCode);
+    refs.previewView.classList.toggle("hidden", isCode);
+  }
+
+  function updateDeviceMode() {
+    refs.previewDeviceFrame.classList.remove("desktop", "tablet", "mobile");
+    refs.previewDeviceFrame.classList.add(state.deviceMode);
+
+    if (state.deviceMode === "desktop") {
+      refs.deviceMenuBtn.textContent = "🖥";
+    } else if (state.deviceMode === "tablet") {
+      refs.deviceMenuBtn.textContent = "📱";
+    } else {
+      refs.deviceMenuBtn.textContent = "📲";
+    }
+
+    apiCall("persistState.set", {
+      key: "frontend-workbench.preview.deviceMode",
+      value: state.deviceMode,
+    }).catch(function () {
+      return undefined;
+    });
+  }
+
+  function clampSidebarPercent(rawPercent) {
+    const normalizedRaw = Number.isFinite(Number(rawPercent)) ? Number(rawPercent) : 26;
+    const rect = refs.codeMain.getBoundingClientRect();
+    const width = rect && rect.width > 0 ? rect.width : 0;
+
+    let minPercent = SIDEBAR_MIN_PERCENT;
+    let maxPercent = SIDEBAR_MAX_PERCENT;
+    if (width > 0) {
+      minPercent = Math.max(minPercent, (SIDEBAR_MIN_PX / width) * 100);
+      maxPercent = Math.min(maxPercent, ((width - EDITOR_MIN_PX) / width) * 100);
+      if (!Number.isFinite(maxPercent)) {
+        maxPercent = SIDEBAR_MAX_PERCENT;
+      }
+    }
+
+    if (maxPercent < minPercent) {
+      maxPercent = minPercent;
+    }
+
+    return Math.max(minPercent, Math.min(maxPercent, normalizedRaw));
+  }
+
+  function applySidebarWidthPercent(rawPercent) {
+    const clamped = clampSidebarPercent(rawPercent);
+    state.sidebarWidthPercent = clamped;
+    refs.codeMain.style.setProperty("--sidebar-width-percent", clamped.toFixed(2) + "%");
+  }
+
+  function persistSidebarState() {
+    apiCall("persistState.set", {
+      key: "frontend-workbench.sidebar.widthPercent",
+      value: state.sidebarWidthPercent,
+    }).catch(function () {
+      return undefined;
+    });
+
+    apiCall("persistState.set", {
+      key: "frontend-workbench.sidebar.open",
+      value: state.sidebarOpen,
+    }).catch(function () {
+      return undefined;
+    });
+  }
+
+  function updateSidebarState() {
+    refs.explorerToggleBtn.classList.toggle("active", state.sidebarOpen);
+    refs.explorerToggleBtn.setAttribute("aria-pressed", state.sidebarOpen ? "true" : "false");
+    refs.codeView.classList.toggle("sidebar-collapsed", !state.sidebarOpen);
+    if (state.sidebarOpen) {
+      applySidebarWidthPercent(state.sidebarWidthPercent);
+    }
+  }
+
+  function applyInitialSidebarState() {
+    wasMobileViewport = window.innerWidth <= MOBILE_BREAKPOINT;
+    if (typeof state.sidebarOpenPersisted === "boolean") {
+      state.sidebarOpen = state.sidebarOpenPersisted;
+    } else {
+      state.sidebarOpen = !wasMobileViewport;
+    }
+    applySidebarWidthPercent(state.sidebarWidthPercent);
+    updateSidebarState();
   }
 
   function fileExists(path) {
@@ -148,11 +323,11 @@
 
   function resolveProjectRoot() {
     const candidates = [];
-    const artifactPath = typeof bridge.artifactPath === "string" ? bridge.artifactPath : "";
+    const artifactPath = typeof bridge.artifactPath === "string" ? normalizePath(bridge.artifactPath) : "";
     if (artifactPath && artifactPath.startsWith(ROOT)) {
       let cursor = artifactPath;
-      if (!artifactPath.endsWith("/") && pathName(artifactPath).includes(".")) {
-        cursor = dirName(artifactPath);
+      if (/\.[^/]+$/.test(cursor)) {
+        cursor = dirName(cursor);
       }
       while (cursor && cursor.startsWith(ROOT)) {
         candidates.push(cursor);
@@ -162,44 +337,108 @@
         cursor = parent;
       }
     }
+
     if (!candidates.includes(ROOT)) {
       candidates.push(ROOT);
     }
 
-    let sequence = Promise.resolve(null);
+    let chain = Promise.resolve(null);
     for (let i = 0; i < candidates.length; i += 1) {
       const candidate = candidates[i];
-      sequence = sequence.then(function (found) {
+      chain = chain.then(function (found) {
         if (found) return found;
         return fileExists(candidate + "/package.json").then(function (exists) {
           return exists ? candidate : null;
         });
       });
     }
-    return sequence.then(function (found) {
+
+    return chain.then(function (found) {
       return found || ROOT;
     });
   }
 
-  function safePreviewUrl(raw) {
+  function parsePortFromScript(script) {
+    const source = String(script || "").trim();
+    if (!source) return null;
+
+    const patterns = [
+      /(?:^|\s)--port(?:\s|=)(\d{2,5})(?=\D|$)/i,
+      /(?:^|\s)-p(?:\s|=)(\d{2,5})(?=\D|$)/i,
+      /(?:^|\s)PORT=(\d{2,5})(?=\D|$)/i,
+    ];
+
+    for (let i = 0; i < patterns.length; i += 1) {
+      const match = source.match(patterns[i]);
+      if (!match || !match[1]) continue;
+      const port = Number(match[1]);
+      if (Number.isInteger(port) && port >= 1 && port <= 65535) {
+        return port;
+      }
+    }
+    return null;
+  }
+
+  function resolvePortAndCommands(scripts, packageManager) {
+    const buildCommand = scripts.build ? packageManager + " run build" : "";
+
+    let deployScriptName = "";
+    if (scripts.start) {
+      deployScriptName = "start";
+    } else if (scripts.preview) {
+      deployScriptName = "preview";
+    } else if (scripts.dev) {
+      deployScriptName = "dev";
+    }
+
+    const deployCommand = deployScriptName ? packageManager + " run " + deployScriptName : "";
+
+    let port = null;
+    if (deployScriptName) {
+      port = parsePortFromScript(scripts[deployScriptName]);
+    }
+
+    if (!port) {
+      const keys = ["dev", "start", "preview"];
+      for (let i = 0; i < keys.length; i += 1) {
+        const val = scripts[keys[i]];
+        port = parsePortFromScript(val);
+        if (port) break;
+      }
+    }
+
+    return {
+      buildCommand: buildCommand,
+      deployCommand: deployCommand,
+      deployScriptName: deployScriptName,
+      detectedScriptPort: port || null,
+    };
+  }
+
+  function sanitizePreviewUrl(raw) {
     const input = String(raw || "").trim();
     if (!input) return null;
+
     let value = input;
     if (!/^https?:\/\//i.test(value)) {
       value = "http://" + value;
     }
+
     let parsed;
     try {
       parsed = new URL(value);
-    } catch (_err) {
+    } catch (_error) {
       return null;
     }
+
     if (!ALLOWED_PREVIEW_HOSTS.has(parsed.hostname)) {
       return null;
     }
+
     if (parsed.hostname === "0.0.0.0") {
       parsed.hostname = "localhost";
     }
+
     return parsed.toString();
   }
 
@@ -207,94 +446,390 @@
     const line = String(text || "");
     const regex = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?(?:\/[^\s]*)?/ig;
     const matches = line.match(regex);
-    if (!matches || !matches.length) return null;
+    if (!matches || !matches.length) {
+      return null;
+    }
     for (let i = 0; i < matches.length; i += 1) {
-      const safe = safePreviewUrl(matches[i]);
+      const safe = sanitizePreviewUrl(matches[i]);
       if (safe) return safe;
     }
     return null;
   }
 
-  function updatePreviewFrame(url) {
-    if (!url) {
-      refs.previewFrame.removeAttribute("src");
-      return;
-    }
-    const safe = safePreviewUrl(url);
+  function setPreviewFrameUrl(url, reason) {
+    const safe = sanitizePreviewUrl(url);
     if (!safe) {
-      refs.previewError.style.display = "block";
-      refs.previewError.textContent = "仅允许 localhost / 127.0.0.1 预览地址。";
+      addLog("error", "预览地址非法：" + String(url || ""));
       return;
     }
-    refs.previewError.style.display = "none";
-    refs.previewFrame.setAttribute("src", safe);
-    refs.previewUrlInput.value = safe;
+
     state.previewUrl = safe;
-  }
+    refs.previewFrame.setAttribute("src", safe);
 
-  function activeTab() {
-    if (!state.activeTabId) return null;
-    for (let i = 0; i < state.tabs.length; i += 1) {
-      if (state.tabs[i].id === state.activeTabId) return state.tabs[i];
+    if (reason) {
+      addLog("info", "预览地址：" + safe + "（" + reason + "）");
     }
-    return null;
+
+    apiCall("persistState.set", {
+      key: "frontend-workbench.preview.url",
+      value: safe,
+    }).catch(function () {
+      return undefined;
+    });
   }
 
-  function updateButtons() {
-    refs.buildBtn.textContent = state.build.succeeded ? "重新构建" : "构建";
-    refs.buildBtn.disabled = state.build.running || !refs.buildCmd.value.trim();
+  function delay(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
 
-    const startEnabled = state.build.succeeded && !!refs.devCmd.value.trim();
-    refs.startBtn.disabled = state.dev.running ? false : !startEnabled;
-    refs.startBtn.textContent = state.dev.running ? "停止预览" : "启动预览";
-    refs.startBtn.className = state.dev.running ? "btn danger" : "btn";
+  function isPortOccupied(port) {
+    const probeUrl = "http://127.0.0.1:" + String(port) + "/__nion_port_probe__?t=" + String(Date.now());
+    return fetch(probeUrl, {
+      method: "GET",
+      mode: "no-cors",
+      cache: "no-store",
+    })
+      .then(function () {
+        return true;
+      })
+      .catch(function () {
+        return false;
+      });
+  }
+
+  function findAvailablePreviewPort(startPort) {
+    let port = Math.max(1, Number(startPort) || PREVIEW_PORT_START);
+
+    function scan() {
+      if (port > PREVIEW_PORT_MAX) {
+        throw new Error("未找到可用预览端口（扫描范围 " + PREVIEW_PORT_START + "-" + PREVIEW_PORT_MAX + "）");
+      }
+      return isPortOccupied(port).then(function (occupied) {
+        if (!occupied) {
+          return port;
+        }
+        port += 1;
+        return scan();
+      });
+    }
+
+    return scan();
+  }
+
+  function resolvePreviewPort() {
+    return findAvailablePreviewPort(PREVIEW_PORT_START).then(function (port) {
+      state.previewPort = port;
+      addLog("info", "预览端口已分配：" + String(port));
+      return port;
+    });
+  }
+
+  function buildDeployCommandWithPort(port) {
+    if (!state.deployScriptName) {
+      return "";
+    }
+    const base = state.packageManager + " run " + state.deployScriptName;
+    return "PORT=" + String(port) + " " + base + " -- --port " + String(port);
+  }
+
+  function waitUntilPreviewReachable(getUrl, timeoutMs) {
+    const startedAt = Date.now();
+
+    function loop() {
+      const currentUrl = sanitizePreviewUrl(getUrl());
+      if (!currentUrl) {
+        if (Date.now() - startedAt >= timeoutMs) {
+          return Promise.reject(new Error("预览地址不可用"));
+        }
+        return delay(600).then(loop);
+      }
+
+      return fetch(currentUrl, {
+        method: "GET",
+        mode: "no-cors",
+        cache: "no-store",
+      })
+        .then(function () {
+          return currentUrl;
+        })
+        .catch(function () {
+          if (Date.now() - startedAt >= timeoutMs) {
+            throw new Error("预览服务启动超时");
+          }
+          return delay(800).then(loop);
+        });
+    }
+
+    return loop();
+  }
+
+  function addCommandOutput(logPrefix, eventName, text) {
+    if (!text) return;
+    const lines = String(text)
+      .split(/\r?\n/)
+      .map(function (line) {
+        return line.trim();
+      })
+      .filter(Boolean);
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      const maybeUrl = extractPreviewUrl(line);
+      if (maybeUrl) {
+        setPreviewFrameUrl(maybeUrl, "日志发现地址");
+      }
+
+      if (eventName === "stderr") {
+        addLog("error", logPrefix + line);
+      } else {
+        addLog("info", logPrefix + line);
+      }
+    }
+  }
+
+  function streamCommandUntilExit(sessionId, logPrefix) {
+    return new Promise(function (resolve, reject) {
+      let stopFn = null;
+      let settled = false;
+
+      function done(result) {
+        if (settled) return;
+        settled = true;
+        if (typeof stopFn === "function") {
+          try {
+            stopFn();
+          } catch (_error) {
+            // ignore
+          }
+        }
+        resolve(result);
+      }
+
+      bridge
+        .startLogStream(sessionId, function (eventName, payload) {
+          const text = payload && typeof payload.text === "string" ? payload.text : "";
+          if ((eventName === "stdout" || eventName === "stderr") && text) {
+            addCommandOutput(logPrefix, eventName, text);
+          }
+          if (eventName === "exit") {
+            const status = payload && typeof payload.status === "string" ? payload.status : "unknown";
+            done({ status: status });
+          }
+        })
+        .then(function (stop) {
+          stopFn = stop;
+        })
+        .catch(function (err) {
+          reject(err);
+        });
+    });
+  }
+
+  function runBuildIfNeeded() {
+    if (!state.buildCommand) {
+      addLog("info", "未定义 build 脚本，跳过编译步骤");
+      return Promise.resolve();
+    }
+
+    addLog("info", "开始编译：" + state.buildCommand);
+    return apiCall("runCommand", {
+      command: state.buildCommand,
+      cwd: state.projectRoot,
+      timeoutSeconds: 1200,
+    })
+      .then(function (result) {
+        return streamCommandUntilExit(result.sessionId, "[build] ").then(function (exit) {
+          if (exit.status !== "finished") {
+            throw new Error("编译失败，退出状态：" + exit.status);
+          }
+          addLog("success", "编译完成");
+        });
+      });
+  }
+
+  function clearPreviewSessionState() {
+    state.previewSessionId = null;
+    if (typeof state.previewStreamStop === "function") {
+      try {
+        state.previewStreamStop();
+      } catch (_error) {
+        // ignore
+      }
+    }
+    state.previewStreamStop = null;
+  }
+
+  function stopPreviewSession() {
+    if (!state.previewSessionId) {
+      clearPreviewSessionState();
+      return Promise.resolve();
+    }
+
+    const sid = state.previewSessionId;
+    return apiCall("stopCommand", { sessionId: sid })
+      .catch(function () {
+        return undefined;
+      })
+      .finally(function () {
+        clearPreviewSessionState();
+        addLog("info", "预览服务已停止");
+      });
+  }
+
+  function startPreviewSession() {
+    if (!state.deployScriptName) {
+      return Promise.reject(new Error("未找到可执行的部署脚本（start/preview/dev）"));
+    }
+
+    return stopPreviewSession()
+      .then(function () {
+        return resolvePreviewPort();
+      })
+      .then(function (port) {
+        const deployCommand = buildDeployCommandWithPort(port);
+        if (!deployCommand) {
+          throw new Error("构建部署命令失败");
+        }
+        state.deployCommand = deployCommand;
+        addLog("info", "开始部署：" + deployCommand);
+        return apiCall("runCommand", {
+          command: deployCommand,
+          cwd: state.projectRoot,
+          timeoutSeconds: 7200,
+        });
+      })
+      .then(function (result) {
+        state.previewSessionId = result.sessionId;
+        return bridge.startLogStream(result.sessionId, function (eventName, payload) {
+          const text = payload && typeof payload.text === "string" ? payload.text : "";
+          if ((eventName === "stdout" || eventName === "stderr") && text) {
+            addCommandOutput("[serve] ", eventName, text);
+          }
+          if (eventName === "exit") {
+            const status = payload && typeof payload.status === "string" ? payload.status : "unknown";
+            if (status === "finished") {
+              addLog("info", "预览服务已退出");
+            } else {
+              addLog("error", "预览服务异常退出：" + status);
+            }
+            clearPreviewSessionState();
+          }
+        });
+      })
+      .then(function (stop) {
+        state.previewStreamStop = stop;
+        addLog("success", "部署进程已启动");
+      });
+  }
+
+  function ensurePreviewReady(trigger) {
+    if (previewEnsurePromise) {
+      return previewEnsurePromise;
+    }
+
+    const alreadyRunning = Boolean(state.previewSessionId);
+    if (alreadyRunning && state.previewUrl) {
+      setPreviewFrameUrl(state.previewUrl, "复用已启动服务");
+      return Promise.resolve();
+    }
+
+    addLog("info", "开始准备预览（触发：" + trigger + "）");
+
+    previewEnsurePromise = runBuildIfNeeded()
+      .then(function () {
+        return startPreviewSession();
+      })
+      .then(function () {
+        const inferred = "http://localhost:" + state.previewPort;
+        return waitUntilPreviewReachable(function () {
+          return state.previewUrl || inferred;
+        }, PREVIEW_TIMEOUT_MS)
+          .then(function (reachableUrl) {
+            setPreviewFrameUrl(reachableUrl, "服务已就绪");
+            addLog("success", "预览服务已就绪，正在打开页面");
+          })
+          .catch(function () {
+            setPreviewFrameUrl(state.previewUrl || inferred, "等待超时，继续尝试加载");
+            addLog("error", "预览服务启动超时，请检查构建日志");
+          });
+      })
+      .catch(function (err) {
+        const detail = err && err.message ? err.message : String(err || "未知错误");
+        addLog("error", "预览准备失败：" + detail);
+        toast("预览准备失败：" + detail, "error");
+        throw err;
+      })
+      .finally(function () {
+        previewEnsurePromise = null;
+      });
+
+    return previewEnsurePromise;
   }
 
   function renderTabs() {
-    refs.tabs.innerHTML = "";
-    for (let i = 0; i < state.tabs.length; i += 1) {
-      const tab = state.tabs[i];
-      const tabEl = document.createElement("div");
-      tabEl.className = "tab" + (tab.id === state.activeTabId ? " active" : "");
-      tabEl.innerHTML =
-        "<span>" +
-        tab.name.replace(/</g, "&lt;") +
-        (tab.dirty ? " *" : "") +
-        "</span><button class='tab-close' title='关闭'>×</button>";
-      tabEl.addEventListener("click", function () {
-        state.activeTabId = tab.id;
+    if (!state.tabs.length) {
+      refs.tabs.innerHTML = "";
+      refs.editorEmpty.classList.remove("hidden");
+      refs.editorShell.classList.add("hidden");
+      refs.editor.value = "";
+      refs.lineNumbers.textContent = "";
+      return;
+    }
+
+    refs.editorEmpty.classList.add("hidden");
+    refs.editorShell.classList.remove("hidden");
+
+    refs.tabs.innerHTML = state.tabs
+      .map(function (tab) {
+        return (
+          "<button class='tab " +
+          (tab.id === state.activeTabId ? "active" : "") +
+          "' data-tab='" +
+          escapeHtml(tab.id) +
+          "' type='button'>" +
+          "<span class='tab-name'>" +
+          escapeHtml(tab.name + (tab.dirty ? " *" : "")) +
+          "</span>" +
+          "<span class='tab-close' data-close='" +
+          escapeHtml(tab.id) +
+          "'>×</span>" +
+          "</button>"
+        );
+      })
+      .join("");
+
+    const tabButtons = refs.tabs.querySelectorAll("[data-tab]");
+    for (let i = 0; i < tabButtons.length; i += 1) {
+      tabButtons[i].addEventListener("click", function (event) {
+        const id = event.currentTarget && event.currentTarget.getAttribute("data-tab");
+        if (!id) return;
+        state.activeTabId = id;
         renderTabs();
         renderEditor();
       });
-      tabEl.querySelector(".tab-close").addEventListener("click", function (event) {
-        event.stopPropagation();
-        closeTab(tab.id);
-      });
-      refs.tabs.appendChild(tabEl);
     }
-  }
 
-  function closeTab(tabId) {
-    const next = [];
-    for (let i = 0; i < state.tabs.length; i += 1) {
-      if (state.tabs[i].id !== tabId) next.push(state.tabs[i]);
+    const closeButtons = refs.tabs.querySelectorAll("[data-close]");
+    for (let i = 0; i < closeButtons.length; i += 1) {
+      closeButtons[i].addEventListener("click", function (event) {
+        event.stopPropagation();
+        const id = event.currentTarget && event.currentTarget.getAttribute("data-close");
+        if (!id) return;
+        closeTab(id);
+      });
     }
-    state.tabs = next;
-    if (state.activeTabId === tabId) {
-      state.activeTabId = next.length ? next[Math.max(0, next.length - 1)].id : null;
-    }
-    renderTabs();
-    renderEditor();
   }
 
   function updateLineNumbers() {
     const value = refs.editor.value || "";
-    const lines = value.split("\n").length;
-    let output = "";
-    for (let i = 1; i <= lines; i += 1) {
-      output += i + "\n";
+    const count = Math.max(1, value.split("\n").length);
+    const rows = [];
+    for (let i = 1; i <= count; i += 1) {
+      rows.push(String(i));
     }
-    refs.lineNumbers.textContent = output;
+    refs.lineNumbers.textContent = rows.join("\n") + "\n";
     refs.lineNumbers.scrollTop = refs.editor.scrollTop;
   }
 
@@ -303,17 +838,26 @@
     if (!tab) {
       refs.editor.value = "";
       refs.editor.disabled = true;
-      refs.activeFileLabel.textContent = "未打开文件";
       updateLineNumbers();
       return;
     }
     refs.editor.disabled = false;
     refs.editor.value = tab.content;
-    refs.activeFileLabel.textContent = tab.path;
     updateLineNumbers();
   }
 
-  function updateActiveFromEditor() {
+  function closeTab(tabId) {
+    state.tabs = state.tabs.filter(function (item) {
+      return item.id !== tabId;
+    });
+    if (state.activeTabId === tabId) {
+      state.activeTabId = state.tabs.length ? state.tabs[state.tabs.length - 1].id : null;
+    }
+    renderTabs();
+    renderEditor();
+  }
+
+  function markActiveTabDirty() {
     const tab = activeTab();
     if (!tab) return;
     tab.content = refs.editor.value;
@@ -322,302 +866,91 @@
     updateLineNumbers();
   }
 
-  function saveActiveTab() {
-    const tab = activeTab();
-    if (!tab) {
-      toast("没有可保存的文件", "info");
-      return;
+  function saveTab(tab, reason) {
+    if (!tab || !tab.dirty) {
+      return Promise.resolve(false);
     }
-    setStatus("保存中...");
-    apiCall("writeFile", { path: tab.path, content: tab.content })
+    return apiCall("writeFile", {
+      path: tab.path,
+      content: tab.content,
+    })
       .then(function () {
         tab.saved = tab.content;
         tab.dirty = false;
         renderTabs();
-        setStatus("保存成功");
-        toast("已保存 " + tab.name, "success");
+        const msg = "已保存 " + tab.name + (reason ? "（" + reason + "）" : "");
+        toast(msg, "success");
+        addLog("success", msg);
+        return true;
       })
       .catch(function (err) {
-        setStatus("保存失败");
-        toast("保存失败: " + (err && err.message ? err.message : err), "error");
+        const detail = err && err.message ? err.message : String(err || "未知错误");
+        const msg = "保存失败 " + tab.name + "：" + detail;
+        toast(msg, "error");
+        addLog("error", msg);
+        return false;
       });
   }
 
-  function builtInFormat(content, ext) {
-    if (ext === "json") {
-      try {
-        return JSON.stringify(JSON.parse(content), null, 2) + "\n";
-      } catch (_err) {
-        return content;
-      }
-    }
-    return String(content || "").replace(/\r\n/g, "\n");
+  function saveActiveTab(reason) {
+    return saveTab(activeTab(), reason);
   }
 
-  function streamCommandSession(sessionId, onExit) {
-    return bridge
-      .startLogStream(sessionId, function (eventName, payload) {
-        const text = payload && typeof payload.text === "string" ? payload.text : "";
-        if (eventName === "stdout" || eventName === "stderr") {
-          appendLog(text);
-          const maybeUrl = extractPreviewUrl(text);
-          if (maybeUrl) {
-            updatePreviewFrame(maybeUrl);
-          }
-          return;
-        }
-        if (eventName === "exit") {
-          if (typeof onExit === "function") {
-            onExit(payload || {});
-          }
-        }
-      })
-      .then(function (stop) {
-        state.streamStopBySession.set(sessionId, stop);
-        return stop;
-      });
-  }
-
-  function runBuild() {
-    const command = refs.buildCmd.value.trim();
-    if (!command || state.build.running) return;
-
-    state.build.running = true;
-    state.build.sessionId = null;
-    setStatus("构建中...");
-    appendLog("\n=== Build: " + command + " ===");
-    updateButtons();
-
-    apiCall("runCommand", {
-      command: command,
-      cwd: state.projectRoot,
-      timeoutSeconds: 900,
-    })
-      .then(function (result) {
-        state.build.sessionId = result.sessionId;
-        return streamCommandSession(result.sessionId, function (payload) {
-          const status = payload && payload.status ? payload.status : "failed";
-          state.build.running = false;
-          state.build.succeeded = status === "finished";
-          state.build.sessionId = null;
-          state.streamStopBySession.delete(result.sessionId);
-          setStatus(state.build.succeeded ? "构建成功" : "构建失败");
-          updateButtons();
-        });
-      })
-      .catch(function (err) {
-        state.build.running = false;
-        state.build.succeeded = false;
-        setStatus("构建失败");
-        updateButtons();
-        toast("构建命令执行失败: " + (err && err.message ? err.message : err), "error");
-      });
-  }
-
-  function stopDev() {
-    if (!state.dev.sessionId) return Promise.resolve();
-    const sid = state.dev.sessionId;
-    return apiCall("stopCommand", { sessionId: sid })
-      .catch(function () {
-        return undefined;
-      })
-      .finally(function () {
-        const stop = state.streamStopBySession.get(sid);
-        state.streamStopBySession.delete(sid);
-        if (typeof stop === "function") {
-          stop();
-        }
-        state.dev.running = false;
-        state.dev.sessionId = null;
-        setStatus("预览服务已停止");
-        updateButtons();
-      });
-  }
-
-  function startDev() {
-    const command = refs.devCmd.value.trim();
-    if (!command) return;
-    if (!state.build.succeeded) {
-      toast("请先完成构建", "error");
-      return;
-    }
-    setStatus("启动预览服务...");
-    appendLog("\n=== Dev: " + command + " ===");
-
-    apiCall("runCommand", {
-      command: command,
-      cwd: state.projectRoot,
-      timeoutSeconds: 3600,
-    })
-      .then(function (result) {
-        state.dev.running = true;
-        state.dev.sessionId = result.sessionId;
-        updateButtons();
-        return streamCommandSession(result.sessionId, function () {
-          state.dev.running = false;
-          state.dev.sessionId = null;
-          state.streamStopBySession.delete(result.sessionId);
-          updateButtons();
-          setStatus("预览服务已退出");
-        });
-      })
-      .catch(function (err) {
-        state.dev.running = false;
-        state.dev.sessionId = null;
-        setStatus("启动失败");
-        updateButtons();
-        toast("启动失败: " + (err && err.message ? err.message : err), "error");
-      });
-  }
-
-  function runFormat() {
-    const tab = activeTab();
-    if (!tab) return;
-
-    const hasFormatScript = !!state.scripts.format;
-    if (hasFormatScript) {
-      const relPath = relativeFromRoot(tab.path);
-      const command = state.packageManager + " run format -- " + shellQuote(relPath);
-      setStatus("执行项目格式化...");
-      appendLog("\n=== Format: " + command + " ===");
-      apiCall("runCommand", {
-        command: command,
-        cwd: state.projectRoot,
-        timeoutSeconds: 300,
-      })
-        .then(function (result) {
-          return streamCommandSession(result.sessionId, function (payload) {
-            const status = payload && payload.status ? payload.status : "failed";
-            state.streamStopBySession.delete(result.sessionId);
-            if (status === "finished") {
-              apiCall("readFile", { path: tab.path })
-                .then(function (latest) {
-                  tab.content = latest;
-                  tab.saved = latest;
-                  tab.dirty = false;
-                  renderTabs();
-                  renderEditor();
-                  setStatus("格式化完成");
-                  toast("项目格式化成功", "success");
-                })
-                .catch(function () {
-                  setStatus("格式化完成（读取失败）");
-                });
-            } else {
-              const formatted = builtInFormat(tab.content, extName(tab.path));
-              tab.content = formatted;
-              refs.editor.value = formatted;
-              updateActiveFromEditor();
-              setStatus("项目格式化失败，已使用内置格式化");
-              toast("项目格式化失败，已降级内置格式化", "error");
-            }
-          });
-        })
-        .catch(function () {
-          const formatted = builtInFormat(tab.content, extName(tab.path));
-          tab.content = formatted;
-          refs.editor.value = formatted;
-          updateActiveFromEditor();
-          setStatus("内置格式化完成");
-        });
-      return;
-    }
-
-    tab.content = builtInFormat(tab.content, extName(tab.path));
-    refs.editor.value = tab.content;
-    updateActiveFromEditor();
-    setStatus("内置格式化完成");
-  }
-
-  function findNext() {
-    const term = refs.findInput.value;
-    if (!term) return;
-    const content = refs.editor.value;
-    const from = refs.editor.selectionEnd || 0;
-    let index = content.indexOf(term, from);
-    if (index < 0) {
-      index = content.indexOf(term, 0);
-    }
-    if (index >= 0) {
-      refs.editor.focus();
-      refs.editor.setSelectionRange(index, index + term.length);
-      setStatus("找到匹配");
-    } else {
-      setStatus("未找到匹配");
-    }
-  }
-
-  function replaceOne() {
-    const findValue = refs.findInput.value;
-    const replaceValue = refs.replaceInput.value;
-    if (!findValue) return;
-    const tab = activeTab();
-    if (!tab) return;
-
-    const start = refs.editor.selectionStart;
-    const end = refs.editor.selectionEnd;
-    if (refs.editor.value.slice(start, end) === findValue) {
-      const before = refs.editor.value.slice(0, start);
-      const after = refs.editor.value.slice(end);
-      refs.editor.value = before + replaceValue + after;
-      refs.editor.setSelectionRange(start, start + replaceValue.length);
-      updateActiveFromEditor();
-      setStatus("已替换当前匹配");
-      return;
-    }
-    findNext();
-  }
-
-  function replaceAll() {
-    const findValue = refs.findInput.value;
-    const replaceValue = refs.replaceInput.value;
-    if (!findValue) return;
-    const tab = activeTab();
-    if (!tab) return;
-    refs.editor.value = refs.editor.value.split(findValue).join(replaceValue);
-    updateActiveFromEditor();
-    setStatus("已完成全部替换");
-  }
-
-  function createTreeNode(path, type) {
+  function createTreeNode(path, kind) {
     return {
+      id: normalizePath(path),
+      path: normalizePath(path),
       name: pathName(path),
-      path: path,
-      type: type,
-      expanded: true,
+      type: kind,
+      open: true,
       children: [],
     };
   }
 
-  function buildDirectoryTree(path, depth) {
-    if (depth > 5) {
-      return Promise.resolve(createTreeNode(path, "directory"));
+  function sortTreeNodes(nodes) {
+    nodes.sort(function (a, b) {
+      if (a.type !== b.type) {
+        return a.type === "folder" ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  function readDirectoryTree(path, depth) {
+    const node = createTreeNode(path, "folder");
+    if (depth > 7) {
+      node.open = false;
+      return Promise.resolve(node);
     }
-    const node = createTreeNode(path, "directory");
+
     return apiCall("readDir", { path: path })
       .then(function (entries) {
-        const dirs = [];
-        const files = [];
+        const children = [];
+        const nested = [];
+
         for (let i = 0; i < entries.length; i += 1) {
-          const item = entries[i];
-          if (item.endsWith("/")) {
-            dirs.push(item.slice(0, -1));
+          const entry = normalizePath(entries[i]);
+          if (entry.endsWith("/")) {
+            const dirPath = entry.slice(0, -1);
+            if (dirPath.endsWith("/node_modules") || dirPath.includes("/.git")) {
+              continue;
+            }
+            nested.push(
+              readDirectoryTree(dirPath, depth + 1).then(function (child) {
+                children.push(child);
+              })
+            );
           } else {
-            files.push(item);
+            if (entry.includes("/.git/")) {
+              continue;
+            }
+            children.push(createTreeNode(entry, "file"));
           }
         }
-        dirs.sort();
-        files.sort();
 
-        return Promise.all(
-          dirs.map(function (dirPath) {
-            return buildDirectoryTree(dirPath, depth + 1);
-          })
-        ).then(function (childrenDirs) {
-          node.children = childrenDirs;
-          for (let j = 0; j < files.length; j += 1) {
-            node.children.push(createTreeNode(files[j], "file"));
-          }
+        return Promise.all(nested).then(function () {
+          sortTreeNodes(children);
+          node.children = children;
           return node;
         });
       })
@@ -626,71 +959,141 @@
       });
   }
 
-  function hasVisibleChild(node, query) {
+  function toggleFolderById(node, id) {
+    if (!node) return false;
+    if (node.id === id && node.type === "folder") {
+      node.open = !node.open;
+      return true;
+    }
+    if (!node.children || !node.children.length) {
+      return false;
+    }
+    for (let i = 0; i < node.children.length; i += 1) {
+      if (toggleFolderById(node.children[i], id)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function shouldRenderNode(node, query) {
     if (!query) return true;
-    const lowered = query.toLowerCase();
-    if (node.name.toLowerCase().includes(lowered)) return true;
+    const lower = query.toLowerCase();
+    if (node.name.toLowerCase().includes(lower)) return true;
     if (!node.children || !node.children.length) return false;
     for (let i = 0; i < node.children.length; i += 1) {
-      if (hasVisibleChild(node.children[i], query)) return true;
+      if (shouldRenderNode(node.children[i], query)) {
+        return true;
+      }
     }
     return false;
   }
 
   function renderTreeNode(node, depth) {
-    if (!hasVisibleChild(node, state.treeQuery)) {
-      return null;
+    if (!shouldRenderNode(node, state.treeQuery)) {
+      return "";
     }
-    const li = document.createElement("li");
-    li.className = "tree-item";
 
-    const row = document.createElement("div");
-    row.className = "tree-row";
-    row.style.paddingLeft = 6 + depth * 12 + "px";
+    const indent = "<span class='tree-indent' style='width:" + Math.min(depth * 12, 120) + "px'></span>";
 
-    if (node.type === "directory") {
-      row.innerHTML = "<span>" + (node.expanded ? "▾" : "▸") + "</span><span>📁</span><span>" + node.name + "</span>";
-      row.addEventListener("click", function () {
-        node.expanded = !node.expanded;
+    if (node.type === "folder") {
+      let html =
+        "<li class='tree-item'>" +
+        "<button class='tree-row " +
+        (node.open ? "folder-open" : "") +
+        "' type='button' data-folder='" +
+        escapeHtml(node.id) +
+        "'>" +
+        indent +
+        "<span class='tree-symbol'>" +
+        (node.open ? "▾" : "▸") +
+        "</span>" +
+        "<span class='tree-symbol tree-folder'>📁</span>" +
+        "<span class='tree-name'>" +
+        escapeHtml(node.name) +
+        "</span>" +
+        "</button>";
+
+      if (node.open && node.children && node.children.length) {
+        html += "<ul class='tree-list'>";
+        for (let i = 0; i < node.children.length; i += 1) {
+          html += renderTreeNode(node.children[i], depth + 1);
+        }
+        html += "</ul>";
+      }
+
+      html += "</li>";
+      return html;
+    }
+
+    return (
+      "<li class='tree-item'>" +
+      "<button class='tree-row " +
+      (state.activeTabId === node.id ? "active" : "") +
+      "' type='button' data-file='" +
+      escapeHtml(node.id) +
+      "'>" +
+      indent +
+      "<span class='tree-symbol'> </span>" +
+      "<span class='tree-symbol'>📄</span>" +
+      "<span class='tree-name'>" +
+      escapeHtml(node.name) +
+      "</span>" +
+      "</button>" +
+      "</li>"
+    );
+  }
+
+  function bindTreeEvents() {
+    const folderButtons = refs.treeContainer.querySelectorAll("[data-folder]");
+    for (let i = 0; i < folderButtons.length; i += 1) {
+      folderButtons[i].addEventListener("click", function (event) {
+        const id = event.currentTarget && event.currentTarget.getAttribute("data-folder");
+        if (!id) return;
+        toggleFolderById(state.treeRoot, id);
         renderTree();
       });
-      li.appendChild(row);
-      if (node.expanded) {
-        const ul = document.createElement("ul");
-        ul.className = "tree-list tree-children";
-        for (let i = 0; i < node.children.length; i += 1) {
-          const child = renderTreeNode(node.children[i], depth + 1);
-          if (child) ul.appendChild(child);
-        }
-        li.appendChild(ul);
-      }
-      return li;
     }
 
-    if (node.path === state.activeTabId) {
-      row.className += " active";
+    const fileButtons = refs.treeContainer.querySelectorAll("[data-file]");
+    for (let i = 0; i < fileButtons.length; i += 1) {
+      fileButtons[i].addEventListener("click", function (event) {
+        const path = event.currentTarget && event.currentTarget.getAttribute("data-file");
+        if (!path) return;
+        openFile(path);
+      });
     }
-    row.innerHTML = "<span>📄</span><span>" + node.name + "</span>";
-    row.addEventListener("click", function () {
-      openFile(node.path);
-    });
-    li.appendChild(row);
-    return li;
   }
 
   function renderTree() {
-    refs.treeContainer.innerHTML = "";
-    if (!state.tree) {
-      refs.treeContainer.innerHTML = "<div style='padding:8px;color:#6a6761;font-size:12px'>暂无文件</div>";
+    if (!state.treeRoot) {
+      refs.treeContainer.innerHTML = "";
+      refs.treeEmpty.textContent = state.loadingTree ? "正在加载目录..." : "暂无可展示文件";
+      refs.treeEmpty.classList.remove("hidden");
       return;
     }
-    const ul = document.createElement("ul");
-    ul.className = "tree-list";
-    const rootNode = renderTreeNode(state.tree, 0);
-    if (rootNode) {
-      ul.appendChild(rootNode);
-    }
-    refs.treeContainer.appendChild(ul);
+
+    refs.treeEmpty.classList.add("hidden");
+    refs.treeContainer.innerHTML = "<ul class='tree-list'>" + renderTreeNode(state.treeRoot, 0) + "</ul>";
+    bindTreeEvents();
+  }
+
+  function loadTree() {
+    state.loadingTree = true;
+    renderTree();
+
+    return readDirectoryTree(ROOT, 0)
+      .then(function (tree) {
+        state.treeRoot = tree;
+      })
+      .catch(function (err) {
+        const detail = err && err.message ? err.message : String(err || "未知错误");
+        addLog("error", "目录加载失败：" + detail);
+      })
+      .finally(function () {
+        state.loadingTree = false;
+        renderTree();
+      });
   }
 
   function openFile(path) {
@@ -702,13 +1105,14 @@
         return;
       }
     }
-    setStatus("打开文件...");
+
     apiCall("readFile", { path: path })
       .then(function (content) {
         state.tabs.push({
           id: path,
           path: path,
           name: pathName(path),
+          ext: extName(path),
           content: content,
           saved: content,
           dirty: false,
@@ -716,281 +1120,354 @@
         state.activeTabId = path;
         renderTabs();
         renderEditor();
-        setStatus("已打开 " + pathName(path));
+        renderTree();
       })
       .catch(function (err) {
-        toast("无法打开文件: " + (err && err.message ? err.message : err), "error");
+        const detail = err && err.message ? err.message : String(err || "未知错误");
+        addLog("error", "打开文件失败：" + detail);
       });
   }
 
-  function loadProject() {
-    return resolveProjectRoot().then(function (projectRoot) {
-      state.projectRoot = projectRoot;
-      return detectPackageManager(projectRoot).then(function (pm) {
-        state.packageManager = pm;
-        return apiCall("readFile", { path: projectRoot + "/package.json" })
-        .then(function (raw) {
-          let pkg = {};
-          try {
-            pkg = JSON.parse(raw);
-          } catch (_err) {
-            pkg = {};
-          }
-          state.scripts = pkg.scripts || {};
-          const rootLabel =
-            projectRoot === ROOT ? "前端工作台" : "前端项目 · " + projectRoot.slice(ROOT.length + 1);
-          refs.projectBadge.textContent = rootLabel;
-
-          const defaultBuild = state.scripts.build ? state.packageManager + " run build" : "";
-          const devName = state.scripts.dev ? "dev" : state.scripts.start ? "start" : "";
-          const defaultDev = devName ? state.packageManager + " run " + devName : "";
-
-          return apiCall("persistState.get", { key: "frontend-workbench.commands" })
-            .then(function (persisted) {
-              refs.buildCmd.value = persisted && persisted.build ? persisted.build : defaultBuild;
-              refs.devCmd.value = persisted && persisted.dev ? persisted.dev : defaultDev;
-              state.build.command = refs.buildCmd.value;
-              state.dev.command = refs.devCmd.value;
+  function loadProjectInfo() {
+    return resolveProjectRoot()
+      .then(function (projectRoot) {
+        state.projectRoot = projectRoot;
+        return detectPackageManager(projectRoot).then(function (pm) {
+          state.packageManager = pm;
+          return apiCall("readFile", { path: projectRoot + "/package.json" })
+            .then(function (raw) {
+              let pkg = {};
+              try {
+                pkg = JSON.parse(raw);
+              } catch (_error) {
+                pkg = {};
+              }
+              state.scripts = pkg && pkg.scripts ? pkg.scripts : {};
             })
             .catch(function () {
-              refs.buildCmd.value = defaultBuild;
-              refs.devCmd.value = defaultDev;
-              state.build.command = refs.buildCmd.value;
-              state.dev.command = refs.devCmd.value;
+              state.scripts = {};
+            })
+            .then(function () {
+              const resolved = resolvePortAndCommands(state.scripts, state.packageManager);
+              state.buildCommand = resolved.buildCommand;
+              state.deployCommand = resolved.deployCommand;
+              state.deployScriptName = resolved.deployScriptName;
+              state.detectedScriptPort = resolved.detectedScriptPort;
+
+              addLog("info", "项目目录：" + state.projectRoot);
+              if (state.detectedScriptPort) {
+                addLog("info", "脚本声明端口：" + String(state.detectedScriptPort));
+              }
+              addLog("info", "预览端口策略：从 " + String(PREVIEW_PORT_START) + " 开始探测可用端口");
             });
-        })
-        .catch(function () {
-          state.scripts = {};
-          refs.projectBadge.textContent = "工作目录";
-          refs.buildCmd.value = "";
-          refs.devCmd.value = "";
-          toast("未检测到 package.json，仍可用于代码浏览", "info");
         });
       });
-    });
   }
 
-  function saveCommandPreferences() {
-    const payload = {
-      build: refs.buildCmd.value.trim(),
-      dev: refs.devCmd.value.trim(),
-    };
-    apiCall("persistState.set", { key: "frontend-workbench.commands", value: payload }).catch(function () {
-      return undefined;
-    });
-  }
-
-  function loadTree() {
-    setStatus("加载目录树...");
-    return buildDirectoryTree(ROOT, 0).then(function (tree) {
-      state.tree = tree;
-      renderTree();
-      setStatus("目录树已加载");
-    });
-  }
-
-  function setupResizer() {
-    const splitLayout = refs.splitLayout;
-
-    function apply() {
-      splitLayout.style.setProperty("--left-width", state.leftCollapsed ? "0px" : state.leftWidth + "px");
-      splitLayout.style.setProperty("--right-width", state.rightCollapsed ? "0px" : state.rightWidth + "px");
+  function bootstrapOpenFile() {
+    const artifactPath = typeof bridge.artifactPath === "string" ? normalizePath(bridge.artifactPath) : "";
+    if (!artifactPath || !artifactPath.startsWith(ROOT) || !/\.[^/]+$/.test(artifactPath)) {
+      return;
     }
-
-    function beginDrag(side, event) {
-      event.preventDefault();
-      const startX = event.clientX;
-      const startLeft = state.leftWidth;
-      const startRight = state.rightWidth;
-
-      function onMove(moveEvent) {
-        const delta = moveEvent.clientX - startX;
-        if (side === "left") {
-          state.leftWidth = Math.min(520, Math.max(180, startLeft + delta));
-          state.leftCollapsed = false;
-        } else {
-          state.rightWidth = Math.min(560, Math.max(260, startRight - delta));
-          state.rightCollapsed = false;
-        }
-        apply();
-      }
-
-      function onUp() {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-      }
-
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-    }
-
-    refs.leftDivider.addEventListener("mousedown", function (event) {
-      beginDrag("left", event);
-    });
-    refs.rightDivider.addEventListener("mousedown", function (event) {
-      beginDrag("right", event);
-    });
-
-    refs.collapseLeftBtn.addEventListener("click", function () {
-      state.leftCollapsed = !state.leftCollapsed;
-      refs.collapseLeftBtn.textContent = state.leftCollapsed ? "展开" : "收起";
-      apply();
-    });
-
-    refs.collapseRightBtn.addEventListener("click", function () {
-      state.rightCollapsed = !state.rightCollapsed;
-      refs.collapseRightBtn.textContent = state.rightCollapsed ? "展开" : "收起";
-      apply();
-    });
-
-    apply();
+    openFile(artifactPath);
   }
 
   function bindEvents() {
-    refs.editor.addEventListener("input", updateActiveFromEditor);
-    refs.editor.addEventListener("scroll", updateLineNumbers);
-
-    refs.saveBtn.addEventListener("click", saveActiveTab);
-    refs.formatBtn.addEventListener("click", runFormat);
-    refs.findNextBtn.addEventListener("click", findNext);
-    refs.replaceOneBtn.addEventListener("click", replaceOne);
-    refs.replaceAllBtn.addEventListener("click", replaceAll);
-    refs.refreshTreeBtn.addEventListener("click", loadTree);
-
-    refs.buildBtn.addEventListener("click", runBuild);
-    refs.startBtn.addEventListener("click", function () {
-      if (state.dev.running) {
-        stopDev();
-      } else {
-        startDev();
-      }
+    refs.codeModeBtn.addEventListener("click", function () {
+      state.viewMode = "code";
+      updateViewMode();
     });
 
-    refs.previewTabBtn.addEventListener("click", function () {
-      state.previewMode = "preview";
-      refs.previewPane.classList.remove("hidden");
-      refs.logsPane.classList.add("hidden");
-      refs.previewTabBtn.classList.add("active");
-      refs.logsTabBtn.classList.remove("active");
+    refs.previewModeBtn.addEventListener("click", function () {
+      state.viewMode = "preview";
+      updateViewMode();
+      showPreviewLoading();
+      ensurePreviewReady("点击预览").catch(function () {
+        return undefined;
+      });
     });
 
-    refs.logsTabBtn.addEventListener("click", function () {
-      state.previewMode = "logs";
-      refs.previewPane.classList.add("hidden");
-      refs.logsPane.classList.remove("hidden");
-      refs.previewTabBtn.classList.remove("active");
-      refs.logsTabBtn.classList.add("active");
+    refs.explorerToggleBtn.addEventListener("click", function () {
+      state.sidebarOpen = !state.sidebarOpen;
+      updateSidebarState();
+      persistSidebarState();
     });
 
-    refs.openPreviewBtn.addEventListener("click", function () {
-      const safe = safePreviewUrl(refs.previewUrlInput.value);
-      if (!safe) {
-        refs.previewError.style.display = "block";
-        refs.previewError.textContent = "仅允许本地 localhost/127.0.0.1 地址";
+    refs.sidebarDivider.addEventListener("pointerdown", function (event) {
+      if (!state.sidebarOpen || event.button !== 0) {
         return;
       }
-      updatePreviewFrame(safe);
-    });
-
-    refs.previewUrlInput.addEventListener("keydown", function (event) {
-      if (event.key === "Enter") {
-        refs.openPreviewBtn.click();
+      const rect = refs.codeMain.getBoundingClientRect();
+      if (!rect || rect.width <= 0) {
+        return;
       }
+
+      const startPercent = state.sidebarWidthPercent;
+      const startX = event.clientX;
+      refs.sidebarDivider.classList.add("dragging");
+      document.body.classList.add("resizing-sidebar");
+
+      const onMove = function (moveEvent) {
+        const deltaPx = moveEvent.clientX - startX;
+        const nextPercent = startPercent + (deltaPx / rect.width) * 100;
+        applySidebarWidthPercent(nextPercent);
+      };
+
+      const onUp = function () {
+        refs.sidebarDivider.classList.remove("dragging");
+        document.body.classList.remove("resizing-sidebar");
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        persistSidebarState();
+      };
+
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
     });
 
-    refs.buildCmd.addEventListener("change", function () {
-      saveCommandPreferences();
-      updateButtons();
-    });
-    refs.devCmd.addEventListener("change", function () {
-      saveCommandPreferences();
-      updateButtons();
+    refs.refreshTreeBtn.addEventListener("click", function () {
+      addLog("info", "触发目录刷新");
+      loadTree();
     });
 
-    refs.treeSearch.addEventListener("input", function () {
-      state.treeQuery = refs.treeSearch.value.trim();
+    refs.treeSearchInput.addEventListener("input", function () {
+      state.treeQuery = refs.treeSearchInput.value.trim();
       renderTree();
     });
 
-    document.addEventListener("keydown", function (event) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        saveActiveTab();
+    refs.editor.addEventListener("input", markActiveTabDirty);
+    refs.editor.addEventListener("scroll", updateLineNumbers);
+    refs.editor.addEventListener("blur", function () {
+      saveActiveTab("失焦自动保存");
+    });
+
+    refs.deviceMenuBtn.addEventListener("click", function () {
+      refs.deviceMenu.classList.toggle("hidden");
+    });
+
+    const deviceItems = refs.deviceMenu.querySelectorAll("[data-mode]");
+    for (let i = 0; i < deviceItems.length; i += 1) {
+      deviceItems[i].addEventListener("click", function (event) {
+        const mode = event.currentTarget && event.currentTarget.getAttribute("data-mode");
+        if (mode !== "desktop" && mode !== "tablet" && mode !== "mobile") {
+          return;
+        }
+        state.deviceMode = mode;
+        updateDeviceMode();
+        refs.deviceMenu.classList.add("hidden");
+      });
+    }
+
+    document.addEventListener("click", function (event) {
+      const target = event.target;
+      if (!target || !(target instanceof Element)) {
+        return;
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+      if (!refs.devicePickerWrap.contains(target)) {
+        refs.deviceMenu.classList.add("hidden");
+      }
+    });
+
+    refs.previewRefreshBtn.addEventListener("click", function () {
+      showPreviewLoading();
+      if (!state.previewUrl) {
+        ensurePreviewReady("点击刷新").catch(function () {
+          return undefined;
+        });
+        return;
+      }
+      refs.previewFrame.removeAttribute("src");
+      setTimeout(function () {
+        refs.previewFrame.setAttribute("src", state.previewUrl);
+        addLog("info", "预览已刷新");
+      }, 30);
+    });
+
+    refs.previewOpenBtn.addEventListener("click", function () {
+      if (!state.previewUrl) {
+        return;
+      }
+      apiCall("openPreview", { url: state.previewUrl }).catch(function () {
+        window.open(state.previewUrl, "_blank", "noopener,noreferrer");
+      });
+      addLog("info", "已在新窗口打开预览");
+    });
+
+    refs.previewFrame.addEventListener("load", function () {
+      hidePreviewLoading();
+      if (state.previewUrl) {
+        addLog("success", "预览页面加载完成");
+      }
+    });
+
+    refs.previewFrame.addEventListener("error", function () {
+      if (state.previewUrl) {
+        addLog("error", "预览页面加载失败：" + state.previewUrl);
+      }
+    });
+
+    refs.consoleToggleBtn.addEventListener("click", function () {
+      state.consoleOpen = !state.consoleOpen;
+      updateConsoleState();
+      apiCall("persistState.set", {
+        key: "frontend-workbench.console.open",
+        value: state.consoleOpen,
+      }).catch(function () {
+        return undefined;
+      });
+    });
+
+    window.addEventListener("resize", function () {
+      const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      if (mobile !== wasMobileViewport) {
+        wasMobileViewport = mobile;
+        state.sidebarOpen = !mobile;
+        persistSidebarState();
+      }
+      applySidebarWidthPercent(state.sidebarWidthPercent);
+      updateSidebarState();
+    });
+
+    document.addEventListener("keydown", function (event) {
+      const key = String(event.key || "").toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && key === "s") {
         event.preventDefault();
-        refs.findInput.focus();
+        saveActiveTab("快捷键保存");
+      }
+    });
+
+    window.addEventListener("beforeunload", function () {
+      if (state.previewSessionId) {
+        apiCall("stopCommand", { sessionId: state.previewSessionId }).catch(function () {
+          return undefined;
+        });
+      }
+      if (typeof state.previewStreamStop === "function") {
+        try {
+          state.previewStreamStop();
+        } catch (_error) {
+          // ignore
+        }
       }
     });
   }
 
   function bindRefs() {
-    refs.splitLayout = $("splitLayout");
-    refs.treeContainer = $("treeContainer");
-    refs.treeSearch = $("treeSearch");
+    refs.codeModeBtn = $("codeModeBtn");
+    refs.previewModeBtn = $("previewModeBtn");
+
+    refs.codeView = $("codeView");
+    refs.previewView = $("previewView");
+
+    refs.explorerToggleBtn = $("explorerToggleBtn");
+    refs.codeMain = $("codeMain");
+    refs.sidebar = $("sidebar");
+    refs.sidebarDivider = $("sidebarDivider");
+
     refs.refreshTreeBtn = $("refreshTreeBtn");
+    refs.treeSearchInput = $("treeSearchInput");
+    refs.treeContainer = $("treeContainer");
+    refs.treeEmpty = $("treeEmpty");
+
     refs.tabs = $("tabs");
-    refs.editor = $("editor");
+    refs.editorEmpty = $("editorEmpty");
+    refs.editorShell = $("editorShell");
     refs.lineNumbers = $("lineNumbers");
-    refs.findInput = $("findInput");
-    refs.replaceInput = $("replaceInput");
-    refs.findNextBtn = $("findNextBtn");
-    refs.replaceOneBtn = $("replaceOneBtn");
-    refs.replaceAllBtn = $("replaceAllBtn");
-    refs.activeFileLabel = $("activeFileLabel");
-    refs.saveBtn = $("saveBtn");
-    refs.formatBtn = $("formatBtn");
-    refs.buildBtn = $("buildBtn");
-    refs.startBtn = $("startBtn");
-    refs.buildCmd = $("buildCmd");
-    refs.devCmd = $("devCmd");
-    refs.previewTabBtn = $("previewTabBtn");
-    refs.logsTabBtn = $("logsTabBtn");
-    refs.previewPane = $("previewPane");
-    refs.logsPane = $("logsPane");
-    refs.logs = $("logs");
-    refs.previewUrlInput = $("previewUrlInput");
-    refs.openPreviewBtn = $("openPreviewBtn");
+    refs.editor = $("editor");
+
+    refs.previewToolbar = $("previewToolbar");
+    refs.devicePickerWrap = $("devicePickerWrap");
+    refs.deviceMenuBtn = $("deviceMenuBtn");
+    refs.deviceMenu = $("deviceMenu");
+
+    refs.previewDeviceFrame = $("previewDeviceFrame");
     refs.previewFrame = $("previewFrame");
-    refs.previewError = $("previewError");
-    refs.projectBadge = $("projectBadge");
-    refs.statusText = $("statusText");
-    refs.leftDivider = $("leftDivider");
-    refs.rightDivider = $("rightDivider");
-    refs.collapseLeftBtn = $("collapseLeftBtn");
-    refs.collapseRightBtn = $("collapseRightBtn");
+    refs.previewLoading = $("previewLoading");
+    refs.previewRefreshBtn = $("previewRefreshBtn");
+    refs.previewOpenBtn = $("previewOpenBtn");
+
+    refs.consoleToggleBtn = $("consoleToggleBtn");
+    refs.consoleErrorCount = $("consoleErrorCount");
+    refs.consoleToggleArrow = $("consoleToggleArrow");
+    refs.consolePanel = $("consolePanel");
+    refs.consoleLogs = $("consoleLogs");
   }
 
-  function bootstrapOpenFile() {
-    const path = bridge.artifactPath;
-    if (!path || typeof path !== "string") {
-      return;
-    }
-    if (path.endsWith("/") || !path.includes(".")) {
-      return;
-    }
-    openFile(path);
+  function loadPersistedState() {
+    return Promise.all([
+      apiCall("persistState.get", {
+        key: "frontend-workbench.preview.deviceMode",
+      }).catch(function () {
+        return null;
+      }),
+      apiCall("persistState.get", {
+        key: "frontend-workbench.console.open",
+      }).catch(function () {
+        return null;
+      }),
+      apiCall("persistState.get", {
+        key: "frontend-workbench.preview.url",
+      }).catch(function () {
+        return null;
+      }),
+      apiCall("persistState.get", {
+        key: "frontend-workbench.sidebar.widthPercent",
+      }).catch(function () {
+        return null;
+      }),
+      apiCall("persistState.get", {
+        key: "frontend-workbench.sidebar.open",
+      }).catch(function () {
+        return null;
+      }),
+    ]).then(function (result) {
+      const persistedDeviceMode = result[0];
+      const persistedConsoleOpen = result[1];
+      const persistedPreviewUrl = result[2];
+      const persistedSidebarWidthPercent = result[3];
+      const persistedSidebarOpen = result[4];
+
+      if (persistedDeviceMode === "desktop" || persistedDeviceMode === "tablet" || persistedDeviceMode === "mobile") {
+        state.deviceMode = persistedDeviceMode;
+      }
+      if (typeof persistedConsoleOpen === "boolean") {
+        state.consoleOpen = persistedConsoleOpen;
+      }
+      if (typeof persistedPreviewUrl === "string" && sanitizePreviewUrl(persistedPreviewUrl)) {
+        state.previewUrl = sanitizePreviewUrl(persistedPreviewUrl);
+      }
+      const parsedSidebarWidthPercent = Number(persistedSidebarWidthPercent);
+      if (Number.isFinite(parsedSidebarWidthPercent)) {
+        state.sidebarWidthPercent = parsedSidebarWidthPercent;
+      }
+      if (typeof persistedSidebarOpen === "boolean") {
+        state.sidebarOpenPersisted = persistedSidebarOpen;
+      }
+    });
   }
 
   function init() {
-    applyHostTheme();
     bindRefs();
     bindEvents();
-    setupResizer();
 
-    setStatus("初始化中...");
-    loadProject()
+    loadPersistedState()
       .then(function () {
-        updateButtons();
-        return loadTree();
+        applyInitialSidebarState();
+        updateViewMode();
+        updateDeviceMode();
+        updateConsoleState();
+        renderLogs();
+
+        addLog("info", "Frontend Workbench 初始化完成");
+
+        return Promise.all([loadProjectInfo(), loadTree()]);
       })
       .then(function () {
         bootstrapOpenFile();
-        setStatus("准备就绪");
       })
       .catch(function (err) {
-        setStatus("初始化失败");
-        toast("初始化失败: " + (err && err.message ? err.message : err), "error");
+        const detail = err && err.message ? err.message : String(err || "未知错误");
+        addLog("error", "初始化失败：" + detail);
       });
   }
 

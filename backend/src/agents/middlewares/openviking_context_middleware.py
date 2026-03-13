@@ -10,6 +10,7 @@ from langgraph.runtime import Runtime
 
 from src.agents.memory.core import MemoryReadRequest
 from src.agents.memory.registry import get_default_memory_provider
+from src.config.app_config import get_app_config
 from src.config.memory_config import get_memory_config
 
 try:
@@ -98,10 +99,39 @@ class OpenVikingContextMiddleware(AgentMiddleware[OpenVikingContextState]):
         super().__init__()
         self._agent_name = agent_name
 
+    @staticmethod
+    def _is_anthropic_compatible_model(runtime: Runtime) -> bool:
+        app_config = get_app_config()
+        model_name = str(runtime.context.get("model_name") or runtime.context.get("model") or "").strip()
+        if not model_name:
+            # Match create_chat_model default: if no explicit model_name is provided,
+            # the runtime will fall back to the first model in config.
+            if getattr(app_config, "models", None):
+                model_name = str(app_config.models[0].name or "").strip()
+        if not model_name:
+            return False
+
+        model_cfg = app_config.get_model_config(model_name)
+        if model_cfg is None:
+            return False
+
+        provider_protocol = str(getattr(model_cfg, "provider_protocol", "") or "").strip().lower()
+        if provider_protocol in {"anthropic", "anthropic-compatible"}:
+            return True
+
+        model_use = str(getattr(model_cfg, "use", "") or "").strip().lower()
+        return "langchain_anthropic" in model_use
+
     @override
     def before_model(self, state: OpenVikingContextState, runtime: Runtime) -> dict[str, Any] | None:
         config = get_memory_config()
         if not config.enabled or not config.openviking_context_enabled:
+            return None
+
+        # Anthropic-compatible chat models reject non-consecutive system messages.
+        # The base prompt already injects one system message, so skip this middleware
+        # to avoid request failures like "Received multiple non-consecutive system messages."
+        if self._is_anthropic_compatible_model(runtime):
             return None
 
         provider = get_default_memory_provider()

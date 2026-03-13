@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from src.config import get_app_config
+from src.config.app_config import ensure_latest_app_config
 from src.reflection import resolve_class
 from src.sandbox.sandbox import Sandbox
 
@@ -37,6 +37,7 @@ class SandboxProvider(ABC):
 
 
 _default_sandbox_provider: SandboxProvider | None = None
+_default_sandbox_provider_use: str | None = None
 
 
 def get_sandbox_provider(**kwargs) -> SandboxProvider:
@@ -49,10 +50,24 @@ def get_sandbox_provider(**kwargs) -> SandboxProvider:
         A sandbox provider instance.
     """
     global _default_sandbox_provider
-    if _default_sandbox_provider is None:
-        config = get_app_config()
-        cls = resolve_class(config.sandbox.use, SandboxProvider)
+    global _default_sandbox_provider_use
+
+    config = ensure_latest_app_config()
+    sandbox_use = str(getattr(config.sandbox, "use", "") or "")
+
+    if bool(getattr(config.sandbox, "strict_mode", False)) and "LocalSandboxProvider" in sandbox_use:
+        raise RuntimeError(
+            "Strict sandbox mode requires a container-based sandbox provider. "
+            "Switch sandbox.use to src.community.aio_sandbox:AioSandboxProvider."
+        )
+
+    # Reload provider when the `sandbox.use` config changes.
+    if _default_sandbox_provider is None or _default_sandbox_provider_use != sandbox_use:
+        if _default_sandbox_provider is not None and hasattr(_default_sandbox_provider, "shutdown"):
+            _default_sandbox_provider.shutdown()
+        cls = resolve_class(sandbox_use, SandboxProvider)
         _default_sandbox_provider = cls(**kwargs)
+        _default_sandbox_provider_use = sandbox_use
     return _default_sandbox_provider
 
 
@@ -68,6 +83,8 @@ def reset_sandbox_provider() -> None:
     """
     global _default_sandbox_provider
     _default_sandbox_provider = None
+    global _default_sandbox_provider_use
+    _default_sandbox_provider_use = None
 
 
 def shutdown_sandbox_provider() -> None:
@@ -82,6 +99,8 @@ def shutdown_sandbox_provider() -> None:
         if hasattr(_default_sandbox_provider, "shutdown"):
             _default_sandbox_provider.shutdown()
         _default_sandbox_provider = None
+    global _default_sandbox_provider_use
+    _default_sandbox_provider_use = None
 
 
 def set_sandbox_provider(provider: SandboxProvider) -> None:
@@ -94,3 +113,5 @@ def set_sandbox_provider(provider: SandboxProvider) -> None:
     """
     global _default_sandbox_provider
     _default_sandbox_provider = provider
+    global _default_sandbox_provider_use
+    _default_sandbox_provider_use = None

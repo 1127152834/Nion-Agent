@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -13,14 +15,14 @@ import { useI18n } from "@/core/i18n/hooks";
 import { FieldTip } from "../field-tip";
 import { asObject, asString, cloneConfig, type ConfigDraft } from "../shared";
 
-type CheckpointerType = "memory" | "sqlite" | "postgres";
+type CheckpointerType = "memory" | "sqlite";
 
 function normalizeType(value: unknown): CheckpointerType {
   if (typeof value !== "string") {
     return "sqlite";
   }
   const raw = value.trim().toLowerCase();
-  if (raw === "memory" || raw === "postgres") {
+  if (raw === "memory") {
     return raw;
   }
   return "sqlite";
@@ -43,8 +45,11 @@ export function CheckpointerSection({
   };
   const copy = settingsLike.configSections?.checkpointer ?? {};
   const checkpointer = asObject(config.checkpointer);
-  const type = normalizeType(checkpointer.type);
-  const connectionString = asString(checkpointer.connection_string);
+  const rawType = asString(checkpointer.type).trim().toLowerCase();
+  const type = normalizeType(rawType);
+  const hasUnsupportedType = Boolean(rawType) && rawType !== "memory" && rawType !== "sqlite";
+  const rawConnectionString = asString(checkpointer.connection_string);
+  const connectionString = type === "sqlite" && !hasUnsupportedType ? rawConnectionString : "";
 
   const updateCheckpointer = (updates: Partial<Record<"type" | "connection_string", unknown>>) => {
     const next = cloneConfig(config);
@@ -64,27 +69,25 @@ export function CheckpointerSection({
     onChange(next);
   };
 
+  useEffect(() => {
+    if (!hasUnsupportedType) return;
+    updateCheckpointer({ type: "sqlite", connection_string: "checkpoints.db" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasUnsupportedType]);
+
   const handleTypeChange = (nextType: string) => {
     const normalized = normalizeType(nextType);
     if (normalized === "memory") {
       updateCheckpointer({ type: normalized, connection_string: undefined });
       return;
     }
-    if (normalized === "sqlite") {
-      updateCheckpointer({
-        type: normalized,
-        connection_string: connectionString || "checkpoints.db",
-      });
-      return;
-    }
-    updateCheckpointer({ type: normalized });
+    updateCheckpointer({
+      type: "sqlite",
+      connection_string: connectionString || "checkpoints.db",
+    });
   };
 
-  const connectionHint = type === "sqlite"
-    ? copy.sqliteHint
-    : type === "postgres"
-      ? copy.postgresHint
-      : copy.memoryHint;
+  const connectionHint = type === "sqlite" ? copy.sqliteHint : copy.memoryHint;
 
   return (
     <div className="space-y-4 rounded-lg border p-4">
@@ -96,13 +99,12 @@ export function CheckpointerSection({
         <div className="space-y-1">
           <div className="text-xs font-medium">{copy.backend}</div>
           <Select value={type} onValueChange={handleTypeChange}>
-            <SelectTrigger disabled={disabled}>
+            <SelectTrigger disabled={disabled} className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="sqlite">{copy.typeSqlite}</SelectItem>
               <SelectItem value="memory">{copy.typeMemory}</SelectItem>
-              <SelectItem value="postgres">{copy.typePostgres}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -120,7 +122,7 @@ export function CheckpointerSection({
           <div className="text-xs font-medium">{copy.connectionString}</div>
           <Input
             value={connectionString}
-            placeholder={type === "sqlite" ? copy.sqlitePlaceholder : copy.postgresPlaceholder}
+            placeholder={copy.sqlitePlaceholder}
             onChange={(event) => updateCheckpointer({ connection_string: event.target.value })}
             disabled={disabled}
           />

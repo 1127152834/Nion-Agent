@@ -16,7 +16,7 @@ import { useMemo } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
-import { useThread } from "./messages/context";
+import { useOptionalThread } from "./messages/context";
 const customDarkTheme = monokaiInit({
   settings: {
     background: "transparent",
@@ -53,9 +53,8 @@ export function CodeEditor({
   settings?: unknown;
   onChange?: (value: string) => void;
 }) {
-  const {
-    thread: { isLoading },
-  } = useThread();
+  const threadContext = useOptionalThread();
+  const isLoading = threadContext?.thread.isLoading ?? false;
   const { resolvedTheme } = useTheme();
 
   const extensions = useMemo(() => {

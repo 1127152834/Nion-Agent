@@ -1,7 +1,6 @@
 "use client";
 
 import { ArrowLeftIcon, BotIcon, CheckCircleIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,31 +12,37 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
 import type { Agent } from "@/core/agents";
 import { checkAgentName, getAgent } from "@/core/agents/api";
+import { AGENT_SLUG_RE, toAgentSlug } from "@/core/agents/slug";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
+import { useAppRouter as useRouter } from "@/core/navigation";
+import { useLocalSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
 import { uuid } from "@/core/utils/uuid";
 import { cn } from "@/lib/utils";
 
 type Step = "name" | "chat";
 
-const NAME_RE = /^[A-Za-z0-9-]+$/;
-
 export default function NewAgentPage() {
   const { t } = useI18n();
   const router = useRouter();
+  const [settings] = useLocalSettings();
 
   // ── Step 1: name form ──────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>("name");
-  const [nameInput, setNameInput] = useState("");
+  const [displayNameInput, setDisplayNameInput] = useState("");
+  const [slugInput, setSlugInput] = useState("");
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [nameError, setNameError] = useState("");
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [agentName, setAgentName] = useState("");
+  const [agentDisplayName, setAgentDisplayName] = useState("");
   const [agent, setAgent] = useState<Agent | null>(null);
   // ── Step 2: chat ───────────────────────────────────────────────────────────
 
@@ -47,6 +52,7 @@ export default function NewAgentPage() {
   const [thread, sendMessage] = useThreadStream({
     threadId: step === "chat" ? threadId : undefined,
     context: {
+      ...settings.context,
       mode: "flash",
       is_bootstrap: true,
     },
@@ -63,19 +69,47 @@ export default function NewAgentPage() {
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleConfirmName = useCallback(async () => {
-    const trimmed = nameInput.trim();
-    if (!trimmed) return;
-    if (!NAME_RE.test(trimmed)) {
+    const displayName = displayNameInput.trim();
+    if (!displayName) return;
+
+    const candidateSlug = (slugInput.trim() || toAgentSlug(displayName)).trim();
+    if (!candidateSlug) {
       setNameError(t.agents.nameStepInvalidError);
       return;
     }
+    if (!AGENT_SLUG_RE.test(candidateSlug)) {
+      setNameError(t.agents.nameStepInvalidError);
+      return;
+    }
+
     setNameError("");
     setIsCheckingName(true);
+    let normalizedSlug = "";
     try {
-      const result = await checkAgentName(trimmed);
-      if (!result.available) {
-        setNameError(t.agents.nameStepAlreadyExistsError);
-        return;
+      const initial = await checkAgentName(candidateSlug);
+      normalizedSlug = initial.name;
+
+      if (!initial.available) {
+        if (slugManuallyEdited) {
+          setNameError(t.agents.nameStepAlreadyExistsError);
+          return;
+        }
+
+        let cursor = 2;
+        while (cursor <= 50) {
+          const alt = await checkAgentName(`${normalizedSlug}-${cursor}`);
+          if (alt.available) {
+            normalizedSlug = alt.name;
+            break;
+          }
+          cursor += 1;
+        }
+
+        // Still taken after trying suffixes.
+        if (cursor > 50) {
+          setNameError(t.agents.nameStepAlreadyExistsError);
+          return;
+        }
       }
     } catch {
       setNameError(t.agents.nameStepCheckError);
@@ -83,15 +117,22 @@ export default function NewAgentPage() {
     } finally {
       setIsCheckingName(false);
     }
-    setAgentName(trimmed);
+
+    setSlugInput(normalizedSlug);
+    setAgentName(normalizedSlug);
+    setAgentDisplayName(displayName);
     setStep("chat");
     await sendMessage(threadId, {
-      text: t.agents.nameStepBootstrapMessage.replace("{name}", trimmed),
+      text: t.agents.nameStepBootstrapMessage
+        .replace("{displayName}", displayName)
+        .replace("{name}", normalizedSlug),
       files: [],
-    }, { agent_name: trimmed });
+    }, { agent_name: normalizedSlug, agent_display_name: displayName });
   }, [
-    nameInput,
+    displayNameInput,
     sendMessage,
+    slugInput,
+    slugManuallyEdited,
     threadId,
     t.agents.nameStepBootstrapMessage,
     t.agents.nameStepInvalidError,
@@ -113,10 +154,10 @@ export default function NewAgentPage() {
       await sendMessage(
         threadId,
         { text: trimmed, files: [] },
-        { agent_name: agentName },
+        { agent_name: agentName, agent_display_name: agentDisplayName },
       );
     },
-    [thread.isLoading, sendMessage, threadId, agentName],
+    [thread.isLoading, sendMessage, threadId, agentName, agentDisplayName],
   );
 
   const handleRetryLastMessage = useCallback(() => {
@@ -134,12 +175,12 @@ export default function NewAgentPage() {
         text: retryText,
         files: [],
       },
-      { agent_name: agentName },
+      { agent_name: agentName, agent_display_name: agentDisplayName },
     ).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       toast.error(`${t.workspace.messageList.retryFailedPrefix}${message}`);
     });
-  }, [agentName, sendMessage, t.workspace.messageList.noRetryableUserMessage, t.workspace.messageList.retryFailedPrefix, thread.isLoading, thread.messages, threadId]);
+  }, [agentName, agentDisplayName, sendMessage, t.workspace.messageList.noRetryableUserMessage, t.workspace.messageList.retryFailedPrefix, thread.isLoading, thread.messages, threadId]);
 
   // ── Shared header ──────────────────────────────────────────────────────────
 
@@ -179,24 +220,49 @@ export default function NewAgentPage() {
             </div>
 
             <div className="space-y-3">
-              <Input
-                autoFocus
-                placeholder={t.agents.nameStepPlaceholder}
-                value={nameInput}
-                onChange={(e) => {
-                  setNameInput(e.target.value);
-                  setNameError("");
-                }}
-                onKeyDown={handleNameKeyDown}
-                className={cn(nameError && "border-destructive")}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="agent-display-name">{t.agents.nameStepDisplayNameLabel}</Label>
+                <Input
+                  id="agent-display-name"
+                  autoFocus
+                  placeholder={t.agents.nameStepDisplayNamePlaceholder}
+                  value={displayNameInput}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setDisplayNameInput(next);
+                    setNameError("");
+                    if (!slugManuallyEdited) {
+                      setSlugInput(toAgentSlug(next));
+                    }
+                  }}
+                  onKeyDown={handleNameKeyDown}
+                  className={cn(nameError && "border-destructive")}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="agent-slug">{t.agents.nameStepSlugLabel}</Label>
+                <Input
+                  id="agent-slug"
+                  placeholder={t.agents.nameStepPlaceholder}
+                  value={slugInput}
+                  onChange={(e) => {
+                    setSlugInput(e.target.value);
+                    setSlugManuallyEdited(true);
+                    setNameError("");
+                  }}
+                  onKeyDown={handleNameKeyDown}
+                  className={cn(nameError && "border-destructive")}
+                />
+              </div>
+
               {nameError && (
                 <p className="text-destructive text-sm">{nameError}</p>
               )}
               <Button
                 className="w-full"
                 onClick={() => void handleConfirmName()}
-                disabled={!nameInput.trim() || isCheckingName}
+                disabled={!displayNameInput.trim() || !slugInput.trim() || isCheckingName}
               >
                 {t.agents.nameStepContinue}
               </Button>

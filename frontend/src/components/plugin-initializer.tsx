@@ -12,7 +12,7 @@ export function PluginInitializer() {
   useEffect(() => {
     // Expose React to global scope for plugins
     if (typeof window !== "undefined") {
-      (window as any).React = React;
+      (window as Window & { React?: typeof React }).React = React;
     }
 
     void initializeBuiltInPlugins();

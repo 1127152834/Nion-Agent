@@ -169,6 +169,7 @@ export interface WorkbenchPluginProvenanceManifest {
 
 export interface WorkbenchPluginUIManifest {
   surface?: "sidebar-slot";
+  initialWidthPercent?: number;
 }
 
 /**
@@ -177,6 +178,7 @@ export interface WorkbenchPluginUIManifest {
 export interface WorkbenchPluginManifestV2 {
   id: string;
   name: string;
+  version: string;
   entry: string;
   description?: string;
   runtime: "iframe";
@@ -208,11 +210,15 @@ export interface WorkbenchPluginManifestV2 {
  */
 export interface InstalledPlugin {
   manifest: WorkbenchPluginManifestV2;
+  version: string;
   path: string;
   enabled: boolean;
   installedAt: string;
   verified?: boolean;
   lastTestReport?: PluginTestReport | null;
+  pluginStudioSessionId?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
 }
 
 export interface PluginTestStepReport {
@@ -257,20 +263,87 @@ export interface WorkbenchMarketplacePluginDetail {
   demoImageUrls: string[];
 }
 
+export type PluginStudioWorkflowStage =
+  | "requirements"
+  | "interaction"
+  | "ui_design"
+  | "generate";
+
+export interface PluginStudioWorkflowState {
+  goal: string;
+  targetUser: string;
+  pluginScope: string;
+  entryPoints: string[];
+  coreActions: string[];
+  fileMatchMode: string;
+  layoutTemplate: string;
+  visualStyle: string;
+  responsiveRules: string;
+}
+
+export interface PluginStudioMatchRules {
+  allowAll: boolean;
+  kind: "file" | "directory" | "project";
+  extensions: string[];
+  pathPattern: string;
+  projectMarkers: string[];
+}
+
+export interface PluginStudioTestMaterial {
+  path: string;
+  kind: "file" | "directory";
+  source: "upload" | "zip";
+}
+
 export interface PluginStudioSession {
   sessionId: string;
   pluginId: string;
   pluginName: string;
   chatThreadId?: string | null;
+  previewThreadId?: string | null;
   description: string;
   state: "draft" | "generated" | "auto_verified" | "manual_verified" | "packaged";
   autoVerified: boolean;
   manualVerified: boolean;
+  currentVersion: string;
+  releaseNotes?: string;
+  sourceMode: "scratch" | "imported";
+  linkedPluginId?: string;
+  publishedAt?: string;
   createdAt: string;
   updatedAt: string;
   readmeUrl?: string | null;
   demoImageUrls: string[];
   packageDownloadUrl?: string | null;
+  workflowStage: PluginStudioWorkflowStage;
+  workflowState: PluginStudioWorkflowState;
+  draftVersion?: string;
+  matchRules: PluginStudioMatchRules;
+  testMaterials: PluginStudioTestMaterial[];
+  selectedTestMaterialPath?: string | null;
+}
+
+export interface PluginStudioWorkspaceSeedResult {
+  sessionId: string;
+  threadId: string;
+  sourceRoot: string;
+  testMaterialsRoot?: string | null;
+}
+
+export interface PluginStudioSourcePackage {
+  sessionId: string;
+  manifest: WorkbenchPluginManifestV2;
+  files: Map<string, WorkbenchPackageFile>;
+}
+
+export interface PluginStudioPublishResult {
+  session: PluginStudioSession;
+  pluginId: string;
+  version: string;
+  filename: string;
+  packageDownloadUrl: string;
+  packagedAt: string;
+  verifyReport: PluginStudioAutoVerifyReport;
 }
 
 export interface PluginStudioAutoVerifyReportStep {
@@ -293,4 +366,10 @@ export interface PluginStudioPackageResult {
   filename: string;
   packageDownloadUrl: string;
   packagedAt: string;
+}
+
+export interface PluginStudioTestMaterialsResponse {
+  sessionId: string;
+  testMaterials: PluginStudioTestMaterial[];
+  selectedTestMaterialPath?: string | null;
 }

@@ -14,15 +14,17 @@ import re
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from src.agents.memory.core import MemoryReadRequest, MemoryWriteRequest
 from src.agents.memory.sqlite_index import OpenVikingSQLiteIndex
+from src.agents.memory.write_graph import MemoryWriteAction, MemoryWriteGraph
 from src.config.app_config import get_app_config
 from src.config.memory_config import get_memory_config
 from src.config.paths import get_paths
+from src.processlog.service import get_processlog_service
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +81,16 @@ def _is_ambiguous_query(query: str) -> bool:
     return len(normalized) <= 8
 
 
+def _parse_iso(value: str | None) -> datetime | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(UTC)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 class OpenVikingRuntime:
     """OpenViking runtime with local ledger/index support."""
 
@@ -94,6 +106,35 @@ class OpenVikingRuntime:
         self._rerank_min_candidates = 6
         self._rerank_overfetch_ratio = 3
         self._governance_promote_threshold = 0.55
+        self._processlog = get_processlog_service()
+        self._write_graph = MemoryWriteGraph(self)
+
+    @staticmethod
+    def _memory_tier(metadata: dict[str, Any] | None) -> str:
+        if not isinstance(metadata, dict):
+            return "episode"
+        value = str(metadata.get("tier") or "").strip().lower()
+        if value in {"profile", "preference", "episode", "trace"}:
+            return value
+        return "episode"
+
+    @staticmethod
+    def _is_expired(metadata: dict[str, Any] | None) -> bool:
+        if not isinstance(metadata, dict):
+            return False
+        expires_at = _parse_iso(str(metadata.get("expires_at") or ""))
+        if expires_at is None:
+            return False
+        return expires_at <= datetime.now(UTC)
+
+    @staticmethod
+    def _memory_retention(meta: dict[str, Any] | None) -> tuple[str, str]:
+        if not isinstance(meta, dict):
+            return ("mid_term_180d", "")
+        return (
+            str(meta.get("retention_policy") or "mid_term_180d"),
+            str(meta.get("expires_at") or ""),
+        )
 
     # ------------------------------------------------------------------
     # MemoryRuntime protocol
@@ -145,13 +186,15 @@ class OpenVikingRuntime:
 
     def queue_update(self, request: MemoryWriteRequest) -> None:
         config = get_memory_config()
-        if config.openviking_session_commit_enabled:
-            # Session commit is best-effort and must never block the user turn.
-            self._commit_session_async(
-                thread_id=request.thread_id,
-                messages=request.messages,
-                agent_name=request.agent_name,
-            )
+        if not config.enabled:
+            return
+
+        # Hard-cut mode: all online writes must go through structured graph.
+        self._write_graph_async(
+            thread_id=request.thread_id,
+            messages=request.messages,
+            agent_name=request.agent_name,
+        )
 
     def save_memory_data(
         self,
@@ -236,7 +279,8 @@ class OpenVikingRuntime:
         try:
             results = self._openviking_find(query=query, limit=limit, agent_name=agent_name)
             if results:
-                self._set_last_fallback_reason(agent_name=agent_name, reason="")
+                if mode == "find":
+                    self._set_last_fallback_reason(agent_name=agent_name, reason="")
                 self._record_search_results(query=query, results=results, agent_name=agent_name)
                 return results
         except Exception as exc:  # noqa: BLE001
@@ -245,7 +289,88 @@ class OpenVikingRuntime:
                 reason=f"openviking_find_error: {exc}",
             )
             logger.debug("OpenViking find failed: %s", exc)
+        local_results = self._search_local_resources(query=query, limit=limit, agent_name=agent_name)
+        if local_results:
+            self._set_last_fallback_reason(agent_name=agent_name, reason="local_ledger_fallback")
+            return local_results
         return []
+
+    def _search_local_resources(self, *, query: str, limit: int, agent_name: str | None) -> list[dict[str, Any]]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return []
+
+        rows = self._sqlite_index.list_resources(agent_name=agent_name, status="active")
+        if not rows:
+            return []
+
+        query_lower = normalized_query.lower()
+        query_tokens = _tokenize(normalized_query)
+        query_cjk_chars = {ch for ch in normalized_query if "\u4e00" <= ch <= "\u9fff"}
+        asks_for_name = any(
+            marker in query_lower
+            for marker in ("叫什么", "名字", "name", "who am i", "my name")
+        )
+        scored: list[tuple[float, dict[str, Any]]] = []
+
+        for row in rows:
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            tier = self._memory_tier(metadata)
+            if tier == "trace":
+                continue
+            if self._is_expired(metadata):
+                continue
+
+            summary = str(row.get("summary") or "").strip()
+            if not summary:
+                continue
+            summary_lower = summary.lower()
+            doc_tokens = _tokenize(summary)
+            token_overlap = len(query_tokens & doc_tokens) / max(1, len(query_tokens))
+            contains = 1.0 if query_lower in summary_lower else 0.0
+            doc_cjk_chars = {ch for ch in summary if "\u4e00" <= ch <= "\u9fff"}
+            cjk_overlap = (
+                len(query_cjk_chars & doc_cjk_chars) / max(1, len(query_cjk_chars))
+                if query_cjk_chars
+                else 0.0
+            )
+            name_hint = 0.0
+            if asks_for_name and any(marker in summary_lower for marker in ("我叫", "名字", "name", "我是")):
+                name_hint = 0.45
+            tier_bonus = {
+                "profile": 0.15,
+                "preference": 0.08,
+                "episode": 0.04,
+            }.get(tier, 0.0)
+            score = max(token_overlap, contains * 0.9, cjk_overlap * 0.7, name_hint) + tier_bonus
+            if score <= 0.0:
+                continue
+            scored.append((score, row))
+
+        scored.sort(
+            key=lambda item: (
+                item[0],
+                str(item[1].get("last_used_at") or item[1].get("updated_at") or item[1].get("created_at") or ""),
+            ),
+            reverse=True,
+        )
+
+        output: list[dict[str, Any]] = []
+        for score, row in scored[: max(1, int(limit))]:
+            uri = str(row.get("uri") or "").strip() or "viking://session/memory"
+            summary = str(row.get("summary") or "").strip()
+            memory_id = str(row.get("memory_id") or "").strip()
+            output.append(
+                {
+                    "id": memory_id or hashlib.sha1(uri.encode("utf-8")).hexdigest()[:16],
+                    "uri": uri,
+                    "score": round(float(score), 6),
+                    "abstract": summary,
+                    "memory": summary,
+                    "retrieval_route": "ledger",
+                }
+            )
+        return output
 
     def store_memory(
         self,
@@ -262,37 +387,68 @@ class OpenVikingRuntime:
             raise ValueError("content must not be empty")
 
         thread = (thread_id or "").strip() or str(uuid.uuid4())
+        write_result = self.write_memory_graph(
+            thread_id=thread,
+            messages=[{"role": "user", "content": text}],
+            agent_name=agent_name,
+            chat_id=thread,
+            write_source="tool",
+            explicit_write=True,
+        )
+
         commit_result = self.commit_session(
             thread_id=thread,
             messages=[{"role": "user", "content": text}],
             agent_name=agent_name,
         )
 
-        fact_id = f"ov_{hashlib.sha1(f'{agent_name}:{text}'.encode()).hexdigest()[:16]}"
         now = _utc_iso()
-        resolved_uri = f"viking://nion/{fact_id}"
+        applied_results = write_result.get("applied_results") or []
+        action_results = [
+            item
+            for item in applied_results
+            if str(item.get("action") or "").upper() in {"ADD", "UPDATE"}
+        ]
+        primary_result = action_results[0] if action_results else None
+        fact_id = str((primary_result or {}).get("memory_id") or "")
+        if not fact_id:
+            fact_id = f"ov_{hashlib.sha1(f'{agent_name}:{text}'.encode()).hexdigest()[:16]}"
+
+        resolved_uri = f"viking://manifest/{fact_id}"
         resolved_score = max(0.0, min(1.0, float(confidence)))
+        resolved_status = "active"
+        resolved_tier = "episode"
+        resolved_reason = "tool_store_fallback"
+        evidence: dict[str, Any] = {}
+        if primary_result is not None:
+            resolved_status = str(primary_result.get("after_status") or resolved_status)
+            resolved_score = float(primary_result.get("quality_score") or resolved_score)
+            resolved_tier = str(primary_result.get("tier") or resolved_tier)
+            resolved_reason = str(primary_result.get("reason") or "tool_store")
+            evidence = primary_result.get("evidence") if isinstance(primary_result.get("evidence"), dict) else {}
 
-        try:
-            hits = self._openviking_find(query=text, limit=1, agent_name=agent_name)
-            if hits:
-                top = hits[0]
-                resolved_uri = str(top.get("uri") or resolved_uri)
-                resolved_score = float(top.get("score") or resolved_score)
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("OpenViking post-store lookup skipped: %s", exc)
-
-        self._sqlite_index.upsert_resource(
-            agent_name=agent_name,
-            memory_id=fact_id,
-            uri=resolved_uri,
-            summary=text,
-            source_thread_id=source or thread,
-            score=resolved_score,
-            status="active",
-            metadata=metadata or {},
-            bump_usage=True,
-        )
+        if fact_id:
+            row = self._sqlite_index.get_resource(agent_name=agent_name, memory_id=fact_id)
+            if row is not None:
+                resolved_uri = str(row.get("uri") or resolved_uri)
+                resolved_score = float(row.get("score") or resolved_score)
+                resolved_status = str(row.get("status") or resolved_status)
+                row_meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+                resolved_tier = self._memory_tier(row_meta)
+                if metadata:
+                    merged_meta = {**row_meta, **metadata}
+                    merged_meta["source"] = source or row_meta.get("source") or "tool"
+                    self._sqlite_index.upsert_resource(
+                        agent_name=agent_name,
+                        memory_id=fact_id,
+                        uri=resolved_uri,
+                        summary=str(row.get("summary") or text),
+                        source_thread_id=source or thread,
+                        score=resolved_score,
+                        status=resolved_status,
+                        metadata=merged_meta,
+                        bump_usage=True,
+                    )
 
         return {
             "memory_id": fact_id,
@@ -300,36 +456,66 @@ class OpenVikingRuntime:
             "stored_at": now,
             "scope": self._scope_name(agent_name),
             "score": resolved_score,
+            "status": resolved_status,
+            "tier": resolved_tier,
+            "source": source or "tool",
+            "quality_score": resolved_score,
+            "decision_reason": resolved_reason,
+            "evidence": evidence,
+            "memory_write_evidence_id": str(evidence.get("write_evidence_id") or ""),
+            "write_result": write_result,
             "commit_status": commit_result.get("status"),
         }
 
     def get_memory_items(self, *, scope: str = "global", agent_name: str | None = None) -> list[dict[str, Any]]:
         resolved_agent = self._resolve_scope_agent(scope=scope, agent_name=agent_name)
         rows = self._sqlite_index.list_resources(agent_name=resolved_agent)
-        return [
-            {
-                "memory_id": row["memory_id"],
-                "uri": row["uri"],
-                "score": row["score"],
-                "status": row["status"],
-                "last_used_at": row["last_used_at"],
-                "use_count": row["use_count"],
-                "summary": row["summary"],
-                "source_thread_id": row["source_thread_id"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-                "scope": row["scope"],
-                # Backward-compatible fields consumed by existing UI/tests.
-                "entry_type": "openviking_resource",
-                "tags": [],
-                "entity_refs": [],
-                "relations": [],
-                "source_refs": [],
-                "confidence": row["score"],
-                "metadata": row.get("metadata") or {},
-            }
-            for row in rows
-        ]
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            tier = self._memory_tier(metadata)
+            source = str(metadata.get("source") or "auto")
+            quality_score = float(metadata.get("quality_score") or row["score"] or 0.0)
+            decision_reason = str(metadata.get("decision_reason") or metadata.get("reason") or "")
+            evidence = metadata.get("evidence") if isinstance(metadata.get("evidence"), dict) else {}
+            retention_policy, expires_at = self._memory_retention(metadata)
+            ttl_seconds: int | None = None
+            expires_at_dt = _parse_iso(expires_at)
+            if expires_at_dt is not None:
+                ttl_seconds = max(0, int((expires_at_dt - datetime.now(UTC)).total_seconds()))
+
+            items.append(
+                {
+                    "memory_id": row["memory_id"],
+                    "uri": row["uri"],
+                    "score": row["score"],
+                    "status": row["status"],
+                    "last_used_at": row["last_used_at"],
+                    "use_count": row["use_count"],
+                    "summary": row["summary"],
+                    "source_thread_id": row["source_thread_id"],
+                    "created_at": row["created_at"],
+                    "updated_at": row["updated_at"],
+                    "scope": row["scope"],
+                    "tier": tier,
+                    "source": source,
+                    "quality": quality_score,
+                    "quality_score": quality_score,
+                    "decision_reason": decision_reason,
+                    "evidence": evidence,
+                    "retention_policy": retention_policy,
+                    "ttl": ttl_seconds,
+                    # Backward-compatible fields consumed by existing UI/tests.
+                    "entry_type": "openviking_resource",
+                    "tags": [],
+                    "entity_refs": [],
+                    "relations": [],
+                    "source_refs": [],
+                    "confidence": row["score"],
+                    "metadata": metadata,
+                }
+            )
+        return items
 
     def compact_memory(self, *, ratio: float = 0.8, scope: str = "global", agent_name: str | None = None) -> dict[str, Any]:
         resolved_agent = self._resolve_scope_agent(scope=scope, agent_name=agent_name)
@@ -444,6 +630,291 @@ class OpenVikingRuntime:
             "graph_stats": self._sqlite_index.graph_stats(agent_name=agent_name),
         }
 
+    def explain_query(self, *, query: str, limit: int = 8, agent_name: str | None = None) -> dict[str, Any]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return {
+                "route_taken": "none",
+                "dense_hits": [],
+                "sparse_hits": [],
+                "fusion_hits": [],
+                "fallback_reason": "empty_query",
+            }
+
+        dense_hits: list[dict[str, Any]] = []
+        sparse_hits: list[dict[str, Any]] = []
+        route_parts: list[str] = []
+
+        try:
+            dense_hits = self._search_vector_memory(
+                query=normalized_query,
+                limit=max(1, int(limit)),
+                agent_name=agent_name,
+                force_vector=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._set_last_fallback_reason(agent_name=agent_name, reason=f"dense_error:{exc}")
+            dense_hits = []
+
+        if dense_hits:
+            route_parts.append("dense")
+
+        sparse_hits = self._search_local_resources(
+            query=normalized_query,
+            limit=max(1, int(limit)),
+            agent_name=agent_name,
+        )
+        if sparse_hits:
+            route_parts.append("sparse")
+
+        fusion_hits = self._rrf_fusion(
+            dense_hits=dense_hits,
+            sparse_hits=sparse_hits,
+            limit=max(1, int(limit)),
+        )
+        if fusion_hits:
+            route_parts.append("fusion")
+
+        fallback_reason = self._last_fallback_reason.get(self._scope_name(agent_name), "")
+        return {
+            "query": normalized_query,
+            "route_taken": "+".join(route_parts) if route_parts else "none",
+            "dense_hits": dense_hits,
+            "sparse_hits": sparse_hits,
+            "fusion_hits": fusion_hits,
+            "fallback_reason": fallback_reason,
+            "recent_actions": self._sqlite_index.list_action_logs(agent_name=agent_name, limit=20),
+        }
+
+    def apply_memory_actions(
+        self,
+        *,
+        actions: list[MemoryWriteAction],
+        thread_id: str,
+        agent_name: str | None = None,
+        trace_id: str | None = None,
+        chat_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if not actions:
+            return []
+
+        applied: list[dict[str, Any]] = []
+        now = _utc_iso()
+        with self._sqlite_index.transaction() as conn:
+            for action in actions:
+                normalized_action = str(action.get("action") or "").strip().upper()
+                memory_id = str(action.get("memory_id") or "").strip()
+                content = str(action.get("content") or "").strip()
+                reason = str(action.get("reason") or "")
+                evidence = action.get("evidence") if isinstance(action.get("evidence"), dict) else {}
+                tier = str(action.get("tier") or evidence.get("tier") or "episode").strip().lower()
+                source = str(action.get("source") or evidence.get("source") or "auto").strip().lower()
+                quality_score = float(action.get("quality_score") or evidence.get("quality_score") or 0.0)
+                retention_policy = str(action.get("retention_policy") or evidence.get("retention_policy") or "")
+                ttl_seconds_raw = action.get("ttl_seconds")
+                ttl_seconds = int(ttl_seconds_raw) if isinstance(ttl_seconds_raw, int | float) else None
+                target_status = str(action.get("target_status") or "active").strip().lower()
+                decision_reason = str(evidence.get("decision_reason") or reason or "")
+                expires_at = str(evidence.get("expires_at") or "")
+                if ttl_seconds is not None and ttl_seconds > 0 and not expires_at:
+                    expires_at = (
+                        datetime.fromtimestamp(datetime.now(UTC).timestamp() + ttl_seconds, tz=UTC)
+                        .isoformat()
+                        .replace("+00:00", "Z")
+                    )
+
+                if not memory_id:
+                    if content:
+                        memory_id = hashlib.sha1(
+                            f"{agent_name or 'global'}:{thread_id}:{content}".encode("utf-8")
+                        ).hexdigest()[:20]
+                    else:
+                        continue
+
+                action_id = uuid.uuid4().hex[:16]
+                before = self._sqlite_index.get_manifest_entry(agent_name=agent_name, memory_id=memory_id)
+                before_content = str(before.get("content") or "") if before else ""
+                before_status = str(before.get("status") or "missing") if before else "missing"
+                evidence_payload = {
+                    **evidence,
+                    "write_evidence_id": action_id,
+                    "tier": tier,
+                    "source": source,
+                    "quality_score": round(quality_score, 6),
+                    "decision_reason": decision_reason,
+                    "retention_policy": retention_policy,
+                    "ttl_seconds": ttl_seconds,
+                    "expires_at": expires_at,
+                    "updated_at": now,
+                }
+
+                if normalized_action == "DELETE":
+                    self._sqlite_index.upsert_manifest_entry(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        content=before_content or content,
+                        status="deleted",
+                        source_thread_id=thread_id,
+                        metadata={"trace_id": trace_id or "", "chat_id": chat_id or "", **evidence_payload},
+                        last_action="DELETE",
+                        conn=conn,
+                    )
+                    self._sqlite_index.delete_resource(agent_name=agent_name, memory_id=memory_id, conn=conn)
+                    after_status = "deleted"
+                    after_content = before_content or content
+                elif normalized_action == "UPDATE":
+                    if not content:
+                        continue
+                    self._sqlite_index.upsert_manifest_entry(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        content=content,
+                        status=target_status if target_status in {"active", "pending", "contested", "archived"} else "active",
+                        source_thread_id=thread_id,
+                        metadata={"trace_id": trace_id or "", "chat_id": chat_id or "", **evidence_payload},
+                        last_action="UPDATE",
+                        conn=conn,
+                    )
+                    self._sqlite_index.upsert_resource(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        uri=f"viking://manifest/{memory_id}",
+                        summary=content,
+                        source_thread_id=thread_id,
+                        score=max(0.0, min(1.0, quality_score if quality_score > 0 else 0.85)),
+                        status=target_status if target_status in {"active", "pending", "contested", "archived"} else "active",
+                        metadata={
+                            "source": source,
+                            "tier": tier,
+                            "quality_score": round(quality_score, 6),
+                            "decision_reason": decision_reason,
+                            "retention_policy": retention_policy,
+                            "ttl_seconds": ttl_seconds,
+                            "expires_at": expires_at,
+                            "evidence": evidence_payload,
+                            "manifest_source": "manifest_update",
+                        },
+                        conn=conn,
+                    )
+                    after_status = target_status if target_status in {"active", "pending", "contested", "archived"} else "active"
+                    after_content = content
+                elif normalized_action == "ADD":
+                    if not content:
+                        continue
+                    self._sqlite_index.upsert_manifest_entry(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        content=content,
+                        status=target_status if target_status in {"active", "pending", "contested", "archived"} else "active",
+                        source_thread_id=thread_id,
+                        metadata={"trace_id": trace_id or "", "chat_id": chat_id or "", **evidence_payload},
+                        last_action="ADD",
+                        conn=conn,
+                    )
+                    self._sqlite_index.upsert_resource(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        uri=f"viking://manifest/{memory_id}",
+                        summary=content,
+                        source_thread_id=thread_id,
+                        score=max(0.0, min(1.0, quality_score if quality_score > 0 else 0.75)),
+                        status=target_status if target_status in {"active", "pending", "contested", "archived"} else "active",
+                        metadata={
+                            "source": source,
+                            "tier": tier,
+                            "quality_score": round(quality_score, 6),
+                            "decision_reason": decision_reason,
+                            "retention_policy": retention_policy,
+                            "ttl_seconds": ttl_seconds,
+                            "expires_at": expires_at,
+                            "evidence": evidence_payload,
+                            "manifest_source": "manifest_add",
+                        },
+                        conn=conn,
+                    )
+                    after_status = target_status if target_status in {"active", "pending", "contested", "archived"} else "active"
+                    after_content = content
+                else:
+                    continue
+
+                self._sqlite_index.append_action_log(
+                    agent_name=agent_name,
+                    action_id=action_id,
+                    trace_id=trace_id,
+                    chat_id=chat_id,
+                    memory_id=memory_id,
+                    action=normalized_action,
+                    reason=reason,
+                    before_content=before_content,
+                    after_content=after_content,
+                    evidence=evidence_payload,
+                    conn=conn,
+                )
+                applied.append(
+                    {
+                        "action_id": action_id,
+                        "action": normalized_action,
+                        "memory_id": memory_id,
+                        "before_status": before_status,
+                        "after_status": after_status,
+                        "reason": reason,
+                        "tier": tier,
+                        "source": source,
+                        "quality_score": round(quality_score, 6),
+                        "decision_reason": decision_reason,
+                        "evidence": evidence_payload,
+                    }
+                )
+
+        self._refresh_vectors_and_graph_from_manifest(agent_name=agent_name)
+        return applied
+
+    def get_manifest_revision(self, *, agent_name: str | None = None) -> int:
+        return self._sqlite_index.get_manifest_revision(agent_name=agent_name)
+
+    def rebuild_from_manifest(self, *, agent_name: str | None = None) -> dict[str, Any]:
+        self._sqlite_index.clear_scope_derived_indexes(agent_name=agent_name)
+
+        active_entries = self._sqlite_index.list_manifest_entries(agent_name=agent_name, status="active")
+        indexed = 0
+        for entry in active_entries:
+            memory_id = str(entry.get("memory_id") or "")
+            content = str(entry.get("content") or "")
+            if not memory_id or not content:
+                continue
+            source_thread = str(entry.get("source_thread_id") or "")
+            entry_meta = entry.get("metadata") if isinstance(entry.get("metadata"), dict) else {}
+            self._sqlite_index.upsert_resource(
+                agent_name=agent_name,
+                memory_id=memory_id,
+                uri=f"viking://manifest/{memory_id}",
+                summary=content,
+                source_thread_id=source_thread,
+                score=float(entry_meta.get("quality_score") or 0.8),
+                status="active",
+                metadata={
+                    "source": str(entry_meta.get("source") or "manifest_rebuild"),
+                    "tier": self._memory_tier(entry_meta),
+                    "quality_score": float(entry_meta.get("quality_score") or 0.8),
+                    "decision_reason": str(entry_meta.get("decision_reason") or "manifest_rebuild"),
+                    "retention_policy": str(entry_meta.get("retention_policy") or "mid_term_180d"),
+                    "ttl_seconds": entry_meta.get("ttl_seconds"),
+                    "expires_at": str(entry_meta.get("expires_at") or ""),
+                    "evidence": entry_meta.get("evidence") if isinstance(entry_meta.get("evidence"), dict) else {},
+                    "manifest_source": "manifest_rebuild",
+                },
+            )
+            indexed += 1
+
+        self._refresh_vectors_and_graph_from_manifest(agent_name=agent_name)
+        return {
+            "status": "ok",
+            "scope": self._scope_name(agent_name),
+            "rebuilt_count": indexed,
+            "manifest_revision": self._sqlite_index.get_manifest_revision(agent_name=agent_name),
+            "completed_at": _utc_iso(),
+        }
+
     def reindex_vectors(self, *, include_agents: bool = True) -> dict[str, Any]:
         embedding_configured, embedding_model = self._resolve_local_embedding_model()
         if not embedding_configured or not embedding_model:
@@ -523,15 +994,63 @@ class OpenVikingRuntime:
             limit=limit,
         )
 
+    def write_memory_graph(
+        self,
+        *,
+        thread_id: str,
+        messages: list[Any],
+        agent_name: str | None = None,
+        write_source: str = "auto",
+        explicit_write: bool = False,
+        trace_id: str | None = None,
+        chat_id: str | None = None,
+    ) -> dict[str, Any]:
+        return self._write_graph.invoke(
+            thread_id=thread_id,
+            messages=messages,
+            agent_name=agent_name,
+            write_source="tool" if str(write_source).strip().lower() == "tool" else "auto",
+            explicit_write=bool(explicit_write),
+            trace_id=trace_id,
+            chat_id=chat_id,
+        )
+
+    def emit_processlog_event(
+        self,
+        *,
+        trace_id: str | None,
+        chat_id: str | None,
+        step: str,
+        level: str,
+        duration_ms: int,
+        data: dict[str, Any],
+    ) -> None:
+        normalized_trace = (trace_id or "").strip()
+        if not normalized_trace:
+            return
+        self._processlog.record(
+            trace_id=normalized_trace,
+            chat_id=(chat_id or "").strip() or None,
+            step=step,
+            level="error" if level == "error" else "info",
+            duration_ms=duration_ms,
+            data=data,
+        )
+
     def commit_session(self, *, thread_id: str, messages: list[Any], agent_name: str | None = None) -> dict[str, Any]:
         normalized_messages = self._normalize_messages(messages)
         if not normalized_messages:
             return {"status": "skipped", "reason": "no_text_messages"}
 
+        commit_status = "committed"
+        commit_result_payload: Any = None
+        degraded_reason = ""
+
         scope_lock = self._lock_for_scope(agent_name)
         with scope_lock:
-            client = self._build_openviking_client(agent_name)
+            client = None
             try:
+                client = self._build_openviking_client(agent_name)
                 for msg in normalized_messages:
                     client.add_message(
                         thread_id,
@@ -539,10 +1058,22 @@ class OpenVikingRuntime:
                         content=msg["content"],
                     )
                 result = client.commit_session(thread_id)
+                commit_result_payload = self._to_jsonable(result)
+            except Exception as exc:  # noqa: BLE001
+                # Degrade to local ledger-only commit when OpenViking is unavailable.
+                commit_status = "committed_local_only"
+                degraded_reason = str(exc)
+                logger.warning(
+                    "OpenViking session commit degraded to local-only mode for thread %s (scope=%s): %s",
+                    thread_id,
+                    self._scope_name(agent_name),
+                    exc,
+                )
             finally:
-                close_fn = getattr(client, "close", None)
-                if callable(close_fn):
-                    close_fn()
+                if client is not None:
+                    close_fn = getattr(client, "close", None)
+                    if callable(close_fn):
+                        close_fn()
 
         try:
             self._upsert_runtime_indexes(
@@ -553,11 +1084,15 @@ class OpenVikingRuntime:
         except Exception as exc:  # noqa: BLE001
             logger.debug("OpenViking local index update skipped: %s", exc)
 
-        return {
-            "status": "committed",
-            "result": self._to_jsonable(result),
+        payload: dict[str, Any] = {
+            "status": commit_status,
             "message_count": len(normalized_messages),
         }
+        if commit_result_payload is not None:
+            payload["result"] = commit_result_payload
+        if degraded_reason:
+            payload["degraded_reason"] = degraded_reason
+        return payload
 
     # ------------------------------------------------------------------
     # Governance
@@ -574,9 +1109,14 @@ class OpenVikingRuntime:
         return self._sqlite_index.list_agent_catalog()
 
     def run_governance(self, *, agent_name: str | None = None) -> dict[str, Any]:
+        self._cleanup_expired_items(agent_name=agent_name)
+        compression_result = self._semantic_compact_episodes(agent_name=agent_name)
+
         pending = self._sqlite_index.list_resources(agent_name=agent_name, status="pending")
+        contested = self._sqlite_index.list_resources(agent_name=agent_name, status="contested")
         promoted = 0
         rejected = 0
+        flagged = 0
         now = _utc_iso()
 
         with self._sqlite_index.transaction() as conn:
@@ -619,11 +1159,32 @@ class OpenVikingRuntime:
                     conn=conn,
                 )
 
+            for item in contested:
+                memory_id = str(item.get("memory_id") or "")
+                score = float(item.get("score") or 0.0)
+                decision_id = f"gov-contested-{memory_id}-{hashlib.sha1(now.encode('utf-8')).hexdigest()[:8]}"
+                self._sqlite_index.record_governance_decision(
+                    agent_name=agent_name,
+                    decision_id=decision_id,
+                    memory_id=memory_id,
+                    action="review",
+                    status="pending_review",
+                    reason="conflict_requires_manual_review",
+                    candidate={"memory_id": memory_id, "score": score},
+                    decided_by="system",
+                    decided_at=now,
+                    conn=conn,
+                )
+                flagged += 1
+
         self._sqlite_index.set_governance_last_run(agent_name=agent_name, last_run_at=now)
         status_payload = self._sqlite_index.get_governance_status(agent_name=agent_name)
         return {
             "promoted": promoted,
             "rejected": rejected,
+            "flagged": flagged,
+            "compressed_story_cards": int(compression_result.get("created_cards", 0)),
+            "archived_episode_items": int(compression_result.get("archived_items", 0)),
             "pending_count": status_payload.get("pending_count", 0),
             "contested_count": status_payload.get("contested_count", 0),
             "last_run_at": status_payload.get("last_run_at", ""),
@@ -677,6 +1238,7 @@ class OpenVikingRuntime:
                 if normalized_action == "override" and override_summary:
                     row = self._sqlite_index.get_resource(agent_name=agent_name, memory_id=memory_id)
                     if row is not None:
+                        existing_meta = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
                         self._sqlite_index.upsert_resource(
                             agent_name=agent_name,
                             memory_id=memory_id,
@@ -685,7 +1247,7 @@ class OpenVikingRuntime:
                             source_thread_id=str(row.get("source_thread_id") or ""),
                             score=float(row.get("score") or 0.0),
                             status="active",
-                            metadata={"override": True, "decision_id": normalized_id},
+                            metadata={**existing_meta, "override": True, "decision_id": normalized_id},
                             conn=conn,
                         )
                         applied_reason = "manual_override"
@@ -713,6 +1275,184 @@ class OpenVikingRuntime:
             "resource": updated,
         }
 
+    def _cleanup_expired_items(self, *, agent_name: str | None = None) -> dict[str, int]:
+        rows = self._sqlite_index.list_resources(agent_name=agent_name)
+        manifest_map = {
+            str(entry.get("memory_id") or ""): entry
+            for entry in self._sqlite_index.list_manifest_entries(agent_name=agent_name, status=None)
+        }
+        expired_ids: list[str] = []
+        for row in rows:
+            if str(row.get("status") or "").strip().lower() not in {"active", "pending", "contested"}:
+                continue
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            if not self._is_expired(metadata):
+                continue
+            expired_ids.append(str(row.get("memory_id") or ""))
+
+        if not expired_ids:
+            return {"expired": 0}
+
+        with self._sqlite_index.transaction() as conn:
+            for memory_id in expired_ids:
+                if not memory_id:
+                    continue
+                self._sqlite_index.set_resource_status(
+                    agent_name=agent_name,
+                    memory_id=memory_id,
+                    status="archived",
+                    conn=conn,
+                )
+                manifest = manifest_map.get(memory_id)
+                if manifest is not None:
+                    metadata = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
+                    metadata["decision_reason"] = "ttl_expired_auto_archive"
+                    self._sqlite_index.upsert_manifest_entry(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        content=str(manifest.get("content") or ""),
+                        status="archived",
+                        source_thread_id=str(manifest.get("source_thread_id") or ""),
+                        metadata=metadata,
+                        last_action="UPDATE",
+                        conn=conn,
+                    )
+        return {"expired": len(expired_ids)}
+
+    def _semantic_compact_episodes(self, *, agent_name: str | None = None) -> dict[str, Any]:
+        rows = self._sqlite_index.list_resources(agent_name=agent_name, status="active")
+        manifest_map = {
+            str(entry.get("memory_id") or ""): entry
+            for entry in self._sqlite_index.list_manifest_entries(agent_name=agent_name, status=None)
+        }
+        groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for row in rows:
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            tier = self._memory_tier(metadata)
+            if tier != "episode":
+                continue
+            if self._is_expired(metadata):
+                continue
+            created_at = str(row.get("created_at") or "")
+            day_key = created_at[:10] if len(created_at) >= 10 else "unknown-day"
+            thread_key = str(row.get("source_thread_id") or "global-thread") or "global-thread"
+            groups.setdefault((day_key, thread_key), []).append(row)
+
+        created_cards = 0
+        archived_items = 0
+        now = _utc_iso()
+        for (day_key, thread_key), entries in groups.items():
+            if len(entries) < 3:
+                continue
+
+            sorted_entries = sorted(entries, key=lambda item: str(item.get("updated_at") or ""))
+            merged_summary = self._build_story_card_from_entries(day_key=day_key, entries=sorted_entries)
+            if not merged_summary.strip():
+                continue
+
+            card_id = hashlib.sha1(
+                f"{agent_name or 'global'}:episode-card:{day_key}:{thread_key}:{merged_summary}".encode("utf-8")
+            ).hexdigest()[:20]
+            refs = [str(item.get("memory_id") or "") for item in sorted_entries]
+            self._sqlite_index.upsert_manifest_entry(
+                agent_name=agent_name,
+                memory_id=card_id,
+                content=merged_summary,
+                status="active",
+                source_thread_id=thread_key,
+                metadata={
+                    "source": "semantic_compact",
+                    "tier": "episode",
+                    "quality_score": 0.79,
+                    "decision_reason": "semantic_episode_compaction",
+                    "retention_policy": "mid_term_180d",
+                    "ttl_seconds": 180 * 24 * 3600,
+                    "expires_at": (datetime.now(UTC) + timedelta(days=180)).isoformat().replace("+00:00", "Z"),
+                    "evidence": {"source_memory_ids": refs},
+                },
+                last_action="ADD",
+            )
+            self._sqlite_index.upsert_resource(
+                agent_name=agent_name,
+                memory_id=card_id,
+                uri=f"viking://manifest/{card_id}",
+                summary=merged_summary,
+                source_thread_id=thread_key,
+                score=0.79,
+                status="active",
+                metadata={
+                    "source": "semantic_compact",
+                    "tier": "episode",
+                    "quality_score": 0.79,
+                    "decision_reason": "semantic_episode_compaction",
+                    "retention_policy": "mid_term_180d",
+                    "ttl_seconds": 180 * 24 * 3600,
+                    "expires_at": (datetime.now(UTC) + timedelta(days=180)).isoformat().replace("+00:00", "Z"),
+                    "evidence": {"source_memory_ids": refs},
+                },
+            )
+            created_cards += 1
+
+            with self._sqlite_index.transaction() as conn:
+                for item in sorted_entries:
+                    memory_id = str(item.get("memory_id") or "")
+                    if not memory_id or memory_id == card_id:
+                        continue
+                    self._sqlite_index.set_resource_status(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        status="archived",
+                        conn=conn,
+                    )
+                    manifest = manifest_map.get(memory_id)
+                    if manifest is not None:
+                        manifest_meta = manifest.get("metadata") if isinstance(manifest.get("metadata"), dict) else {}
+                        manifest_meta["decision_reason"] = "semantic_episode_compaction_archived"
+                        manifest_meta["compacted_into"] = card_id
+                        self._sqlite_index.upsert_manifest_entry(
+                            agent_name=agent_name,
+                            memory_id=memory_id,
+                            content=str(manifest.get("content") or ""),
+                            status="archived",
+                            source_thread_id=str(manifest.get("source_thread_id") or ""),
+                            metadata=manifest_meta,
+                            last_action="UPDATE",
+                            conn=conn,
+                        )
+                        archived_items += 1
+
+        if created_cards > 0:
+            self._refresh_vectors_and_graph_from_manifest(agent_name=agent_name)
+        return {"created_cards": created_cards, "archived_items": archived_items, "timestamp": now}
+
+    @staticmethod
+    def _build_story_card_from_entries(*, day_key: str, entries: list[dict[str, Any]]) -> str:
+        facts = [str(item.get("summary") or "").strip() for item in entries if str(item.get("summary") or "").strip()]
+        if not facts:
+            return ""
+        merged_text = "；".join(facts[:6])
+        entities = re.findall(r"[A-Za-z0-9_\-/+.]{2,}|[\u4e00-\u9fff]{2,}", merged_text)
+        unique_entities: list[str] = []
+        for entity in entities:
+            if entity in unique_entities:
+                continue
+            unique_entities.append(entity)
+            if len(unique_entities) >= 8:
+                break
+        entity_line = ", ".join(unique_entities) if unique_entities else "-"
+        issue_resolution = "contains_issue_resolution" if any(
+            keyword in merged_text.lower() for keyword in ("问题", "报错", "error", "失败", "冲突", "修复", "解决")
+        ) else "-"
+        return (
+            f"when: {day_key}\n"
+            f"task: merged_episode_story\n"
+            f"key_entities: {entity_line}\n"
+            f"actions: {merged_text[:360]}\n"
+            f"issue_resolution: {issue_resolution}\n"
+            f"outcome: compacted_story_card\n"
+            f"followup: -"
+        )
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -734,8 +1474,79 @@ class OpenVikingRuntime:
     def _set_last_fallback_reason(self, *, agent_name: str | None, reason: str) -> None:
         self._last_fallback_reason[self._scope_name(agent_name)] = reason
 
+    def _rrf_fusion(
+        self,
+        *,
+        dense_hits: list[dict[str, Any]],
+        sparse_hits: list[dict[str, Any]],
+        limit: int,
+        k: int = 60,
+    ) -> list[dict[str, Any]]:
+        by_id: dict[str, dict[str, Any]] = {}
+
+        def _merge(source: str, rows: list[dict[str, Any]]) -> None:
+            for rank, row in enumerate(rows, start=1):
+                memory_id = str(row.get("id") or row.get("memory_id") or "").strip()
+                if not memory_id:
+                    continue
+                entry = by_id.setdefault(
+                    memory_id,
+                    {
+                        "memory_id": memory_id,
+                        "content": str(row.get("abstract") or row.get("memory") or row.get("content") or ""),
+                        "sources": [],
+                        "score": 0.0,
+                    },
+                )
+                entry["score"] = float(entry["score"]) + (1.0 / (k + rank))
+                sources = entry.get("sources")
+                if isinstance(sources, list) and source not in sources:
+                    sources.append(source)
+
+        _merge("dense", dense_hits)
+        _merge("sparse", sparse_hits)
+        items = sorted(by_id.values(), key=lambda item: float(item.get("score") or 0.0), reverse=True)
+        return items[: max(1, int(limit))]
+
+    def _refresh_vectors_and_graph_from_manifest(self, *, agent_name: str | None) -> None:
+        entries = self._sqlite_index.list_manifest_entries(agent_name=agent_name, status="active")
+        self._sqlite_index.clear_vectors(agent_name=agent_name)
+        if get_memory_config().graph_enabled:
+            self._sqlite_index.clear_graph(agent_name=agent_name)
+
+        configured, model_name = self._resolve_local_embedding_model()
+        vector_ready = bool(configured and model_name)
+        if vector_ready and model_name:
+            health_ok, _ = self._check_embedding_health(model_name)
+            vector_ready = health_ok
+
+        for entry in entries:
+            memory_id = str(entry.get("memory_id") or "")
+            content = str(entry.get("content") or "")
+            source_thread = str(entry.get("source_thread_id") or "")
+            if not memory_id or not content:
+                continue
+            if vector_ready and model_name:
+                vector = self._embed_text_local(content, model_name)
+                if vector:
+                    self._sqlite_index.upsert_vector(
+                        agent_name=agent_name,
+                        memory_id=memory_id,
+                        thread_id=source_thread or "manifest",
+                        content=content,
+                        vector=vector,
+                        metadata={"source": "manifest"},
+                    )
+            if get_memory_config().graph_enabled:
+                self._sqlite_index.upsert_graph_from_text(
+                    agent_name=agent_name,
+                    memory_id=memory_id,
+                    text=content,
+                )
+
     def _record_search_results(self, *, query: str, results: list[dict[str, Any]], agent_name: str | None) -> None:
         source = f"find:{hashlib.sha1(query.encode('utf-8')).hexdigest()[:10]}"
+        expires_at = (datetime.now(UTC) + timedelta(days=7)).isoformat().replace("+00:00", "Z")
         for item in results:
             uri = str(item.get("uri") or "").strip()
             if not uri:
@@ -753,7 +1564,15 @@ class OpenVikingRuntime:
                 source_thread_id=source,
                 score=score,
                 status="active",
-                metadata={"source": "openviking.find"},
+                metadata={
+                    "source": "openviking.find",
+                    "tier": "trace",
+                    "quality_score": max(0.0, min(1.0, score)),
+                    "decision_reason": "retrieval_trace",
+                    "retention_policy": "short_term_7d",
+                    "ttl_seconds": 7 * 24 * 3600,
+                    "expires_at": expires_at,
+                },
                 bump_usage=True,
             )
 
@@ -912,19 +1731,20 @@ class OpenVikingRuntime:
 
     def _upsert_runtime_indexes(self, *, thread_id: str, messages: list[dict[str, str]], agent_name: str | None) -> None:
         configured, model_name = self._resolve_local_embedding_model()
-        if not configured or not model_name:
+        vector_ready = bool(configured and model_name)
+        if not vector_ready:
             self._set_last_fallback_reason(
                 agent_name=agent_name,
                 reason="local_embedding_not_configured",
             )
-            return
-        health_ok, health_message = self._check_embedding_health(model_name)
-        if not health_ok:
-            self._set_last_fallback_reason(
-                agent_name=agent_name,
-                reason=f"embedding_unhealthy:{health_message}",
-            )
-            return
+        else:
+            health_ok, health_message = self._check_embedding_health(model_name)
+            if not health_ok:
+                vector_ready = False
+                self._set_last_fallback_reason(
+                    agent_name=agent_name,
+                    reason=f"embedding_unhealthy:{health_message}",
+                )
 
         for msg in messages:
             content = str(msg.get("content", "")).strip()
@@ -947,6 +1767,8 @@ class OpenVikingRuntime:
                 bump_usage=True,
             )
 
+            if not vector_ready or not model_name:
+                continue
             vector = self._embed_text_local(content, model_name)
             if not vector:
                 continue
@@ -971,6 +1793,22 @@ class OpenVikingRuntime:
                 self.commit_session(thread_id=thread_id, messages=messages, agent_name=agent_name)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("OpenViking session commit skipped: %s", exc)
+
+        threading.Thread(target=_runner, daemon=True).start()
+
+    def _write_graph_async(self, *, thread_id: str, messages: list[Any], agent_name: str | None) -> None:
+        def _runner():
+            try:
+                self.write_memory_graph(
+                    thread_id=thread_id,
+                    messages=messages,
+                    agent_name=agent_name,
+                    chat_id=thread_id,
+                    write_source="auto",
+                    explicit_write=False,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("OpenViking write graph skipped: %s", exc)
 
         threading.Thread(target=_runner, daemon=True).start()
 

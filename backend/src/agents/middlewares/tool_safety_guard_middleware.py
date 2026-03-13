@@ -10,8 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Awaitable, Callable, NotRequired, TypedDict, cast, override
 
-from langchain.agents import AgentState
-from langchain.agents.middleware import AgentMiddleware
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest

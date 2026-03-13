@@ -82,7 +82,7 @@ export function RuntimeOnboardingOverlay() {
     }
 
     let mounted = true;
-    window.electronAPI
+    void window.electronAPI
       .getRuntimeStatus()
       .then((payload) => {
         if (mounted) {

@@ -5,6 +5,7 @@ export * from "./marketplace";
 export * from "./slot-routing";
 export * from "./sdk";
 export * from "./hooks";
+export * from "./versioning";
 export { getWorkbenchRegistry } from "./registry";
 export { createWorkbenchContext } from "./sdk";
 export {
@@ -25,5 +26,4 @@ export {
   useInstallPlugin,
   useUninstallPlugin,
   useTogglePlugin,
-  useTestInstalledPlugin,
 } from "./hooks";

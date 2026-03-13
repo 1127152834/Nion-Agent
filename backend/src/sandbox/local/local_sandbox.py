@@ -165,14 +165,27 @@ class LocalSandbox(Sandbox):
         # Resolve container paths in command before execution
         resolved_command = self._resolve_paths_in_command(command)
 
-        result = subprocess.run(
-            resolved_command,
-            executable=self._get_shell(),
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
+        if os.name == "nt":
+            # Avoid `shell=True` on Windows for reliability and safety.
+            powershell = shutil.which("pwsh") or shutil.which("powershell")
+            if powershell is None:
+                raise RuntimeError("No suitable PowerShell found. Tried `pwsh` and `powershell` on PATH.")
+            result = subprocess.run(
+                [powershell, "-NoProfile", "-NonInteractive", "-Command", resolved_command],
+                shell=False,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+        else:
+            result = subprocess.run(
+                resolved_command,
+                executable=self._get_shell(),
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
         output = result.stdout
         if result.stderr:
             output += f"\nStd Error:\n{result.stderr}" if output else result.stderr
