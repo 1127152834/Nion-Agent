@@ -582,6 +582,99 @@ export function stripUploadedFilesTag(content: string): string {
     .trim();
 }
 
+export type ImplicitMention = {
+  kind: "context" | "skill" | "mcp" | "cli";
+  value: string;
+  mention: string;
+};
+
+export function isImplicitMention(value: unknown): value is ImplicitMention {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<ImplicitMention>;
+  const validKind =
+    candidate.kind === "context" ||
+    candidate.kind === "skill" ||
+    candidate.kind === "mcp" ||
+    candidate.kind === "cli";
+
+  return (
+    validKind &&
+    typeof candidate.value === "string" &&
+    typeof candidate.mention === "string"
+  );
+}
+
+export function summarizeImplicitMentions(implicitMentions: ImplicitMention[]) {
+  const summary = {
+    context: 0,
+    skill: 0,
+    mcp: 0,
+    cli: 0,
+  };
+
+  for (const item of implicitMentions) {
+    summary[item.kind] += 1;
+  }
+
+  return summary;
+}
+
+/**
+ * When submitting a human message, the frontend may append an auto-generated
+ * "mentions line" (e.g. "/skill @context #cli") separated by a blank line.
+ *
+ * This line is needed for the backend/model side, but should not pollute the UI.
+ * We strip it using a set match so order/spacing changes don't break rendering.
+ */
+export function stripImplicitMentionSuffix(
+  content: string,
+  implicitMentions: ImplicitMention[],
+): string {
+  if (!content || implicitMentions.length === 0) {
+    return content;
+  }
+
+  const normalized = content.replace(/\r\n/g, "\n").trimEnd();
+  const lastDoubleNewlineIndex = normalized.lastIndexOf("\n\n");
+  if (lastDoubleNewlineIndex === -1) {
+    return content;
+  }
+
+  const suffixCandidate = normalized.slice(lastDoubleNewlineIndex + 2).trim();
+  if (!suffixCandidate) {
+    return content;
+  }
+
+  const tokens = suffixCandidate.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) {
+    return content;
+  }
+
+  const expected = new Set(implicitMentions.map((item) => item.mention).filter(Boolean));
+  if (expected.size === 0) {
+    return content;
+  }
+
+  // Reject duplicate tokens; auto-generated mention line is de-duplicated upstream.
+  const tokenSet = new Set(tokens);
+  if (tokenSet.size !== tokens.length) {
+    return content;
+  }
+  if (tokenSet.size !== expected.size) {
+    return content;
+  }
+  for (const mention of expected) {
+    if (!tokenSet.has(mention)) {
+      return content;
+    }
+  }
+
+  return normalized.slice(0, lastDoubleNewlineIndex).trimEnd();
+}
+
 export function parseUploadedFiles(content: string): FileInMessage[] {
   // Match <uploaded_files>...</uploaded_files> tag
   const uploadedFilesRegex = /<uploaded_files>([\s\S]*?)<\/uploaded_files>/;

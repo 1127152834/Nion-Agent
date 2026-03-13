@@ -1,7 +1,7 @@
 import type { Message } from "@langchain/langgraph-sdk";
 import { DownloadIcon, FileIcon, Loader2Icon, SquareArrowOutUpRightIcon } from "lucide-react";
 import { useParams } from "next/navigation";
-import { memo, useMemo, useState, type ImgHTMLAttributes } from "react";
+import { Fragment, memo, useMemo, useState, type ImgHTMLAttributes } from "react";
 import rehypeKatex from "rehype-katex";
 
 import { Loader } from "@/components/ai-elements/loader";
@@ -25,8 +25,12 @@ import { useI18n } from "@/core/i18n/hooks";
 import {
   extractContentFromMessage,
   extractReasoningContentFromMessage,
+  isImplicitMention,
+  type ImplicitMention,
   parseUploadedFiles,
+  stripImplicitMentionSuffix,
   stripUploadedFilesTag,
+  summarizeImplicitMentions,
   type FileInMessage,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
@@ -47,6 +51,23 @@ export function MessageListItem({
   isLoading?: boolean;
 }) {
   const isHuman = message.type === "human";
+  const clipboardData = useMemo(() => {
+    const content = extractContentFromMessage(message);
+    const reasoning = extractReasoningContentFromMessage(message);
+    const baseText = content.trim() ? content : (reasoning ?? "");
+    if (!isHuman) {
+      return baseText;
+    }
+
+    const rawMentions = message.additional_kwargs?.implicit_mentions;
+    const implicitMentions = Array.isArray(rawMentions)
+      ? rawMentions.filter(isImplicitMention)
+      : ([] as ImplicitMention[]);
+
+    const stripped = baseText ? stripUploadedFilesTag(baseText) : "";
+    return stripImplicitMentionSuffix(stripped, implicitMentions);
+  }, [isHuman, message]);
+
   return (
     <AIElementMessage
       className={cn("group/conversation-message relative w-full", className)}
@@ -67,9 +88,7 @@ export function MessageListItem({
           <div className="flex gap-1">
             <CopyButton
               clipboardData={
-                extractContentFromMessage(message) ??
-                extractReasoningContentFromMessage(message) ??
-                ""
+                clipboardData
               }
             />
           </div>
@@ -143,60 +162,6 @@ function MessageImage({
   );
 }
 
-type ImplicitMention = {
-  kind: "context" | "skill" | "mcp";
-  value: string;
-  mention: string;
-};
-
-function isImplicitMention(value: unknown): value is ImplicitMention {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const candidate = value as Partial<ImplicitMention>;
-  const validKind =
-    candidate.kind === "context" ||
-    candidate.kind === "skill" ||
-    candidate.kind === "mcp";
-  return (
-    validKind &&
-    typeof candidate.value === "string" &&
-    typeof candidate.mention === "string"
-  );
-}
-
-function stripImplicitMentionSuffix(
-  content: string,
-  implicitMentions: ImplicitMention[],
-): string {
-  if (!content || implicitMentions.length === 0) {
-    return content;
-  }
-  const mentionLine = implicitMentions.map((item) => item.mention).join(" ");
-  if (!mentionLine) {
-    return content;
-  }
-  const normalized = content.trimEnd();
-  const suffix = `\n\n${mentionLine}`;
-  if (normalized.endsWith(suffix)) {
-    return normalized.slice(0, -suffix.length).trimEnd();
-  }
-  return content;
-}
-
-function implicitMentionDisplayLabel(item: ImplicitMention): string {
-  if (item.kind === "skill") {
-    return `/${item.value}`;
-  }
-  if (item.kind === "mcp") {
-    return `@${item.value}`;
-  }
-  const normalized = item.value.replace(/\/$/, "");
-  const parts = normalized.split("/").filter(Boolean);
-  const basename = parts[parts.length - 1] ?? normalized;
-  return `@${basename || item.value}`;
-}
-
 function MessageContent_({
   className,
   message,
@@ -206,6 +171,7 @@ function MessageContent_({
   message: Message;
   isLoading?: boolean;
 }) {
+  const { t } = useI18n();
   const rehypePlugins = useRehypeSplitWordsIntoSpans(isLoading);
   const isHuman = message.type === "human";
   const { thread_id } = useParams<{ thread_id: string }>();
@@ -253,23 +219,61 @@ function MessageContent_({
       <RichFilesList files={files} threadId={thread_id} />
     ) : null;
 
-  const implicitMentionTags =
-    isHuman && implicitMentions.some((item) => item.kind !== "skill") ? (
-      <div className="flex flex-wrap justify-end gap-1.5">
-        {implicitMentions
-          .filter((item) => item.kind !== "skill")
-          .map((item, index) => (
-            <Badge
-              key={`${item.kind}:${item.value}:${index}`}
-              variant="secondary"
-              className="max-w-72 truncate text-[11px]"
-              title={item.mention}
-            >
-              {implicitMentionDisplayLabel(item)}
-            </Badge>
-          ))}
+  const implicitMentionCounts = (() => {
+    if (!isHuman || implicitMentions.length === 0) {
+      return null;
+    }
+
+    const summary = summarizeImplicitMentions(implicitMentions);
+    const segments: Array<{ id: string; label: string; count: number }> = [];
+    if (summary.context > 0) {
+      segments.push({
+        id: "context",
+        label: t.inputBox.contextLabel,
+        count: summary.context,
+      });
+    }
+    if (summary.skill > 0) {
+      segments.push({
+        id: "skill",
+        label: t.inputBox.skillLabel,
+        count: summary.skill,
+      });
+    }
+    if (summary.mcp > 0) {
+      segments.push({
+        id: "mcp",
+        label: t.inputBox.mcpLabel,
+        count: summary.mcp,
+      });
+    }
+    if (summary.cli > 0) {
+      segments.push({
+        id: "cli",
+        label: t.inputBox.cliLabel ?? "CLI",
+        count: summary.cli,
+      });
+    }
+
+    if (segments.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="text-muted-foreground flex flex-wrap justify-end text-[11px]">
+        {segments.map((segment, index) => (
+          <Fragment key={segment.id}>
+            {index > 0 ? (
+              <span className="text-muted-foreground/70 mx-1">|</span>
+            ) : null}
+            <span className="whitespace-nowrap">
+              {segment.label}×{segment.count}
+            </span>
+          </Fragment>
+        ))}
       </div>
-    ) : null;
+    );
+  })();
 
   // Uploading state: mock AI message shown while files upload
   if (message.additional_kwargs?.element === "task") {
@@ -312,12 +316,12 @@ function MessageContent_({
     return (
       <div className={cn("ml-auto flex flex-col gap-2", className)}>
         {filesList}
-        {implicitMentionTags}
         {messageResponse && (
           <AIElementMessageContent className="w-fit">
             {messageResponse}
           </AIElementMessageContent>
         )}
+        {implicitMentionCounts}
       </div>
     );
   }
