@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from src.config.paths import NION_DATA_DIR
+from src.config.paths import get_paths
 from src.keychain.encryption import KeychainEncryption
 from src.keychain.models import Credential, CredentialType, SessionState
 
@@ -23,7 +23,7 @@ class KeychainManager:
         Args:
             data_dir: Data directory (defaults to .nion/keychain)
         """
-        self.data_dir = data_dir or NION_DATA_DIR / "keychain"
+        self.data_dir = data_dir or get_paths().base_dir / "keychain"
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path = self.data_dir / "credentials.db"
