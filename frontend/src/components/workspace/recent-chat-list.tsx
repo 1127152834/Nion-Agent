@@ -7,7 +7,6 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
-  Share2,
   Trash2,
   X,
 } from "lucide-react";
@@ -119,13 +118,6 @@ export function RecentChatList() {
   const selectedThreads = useMemo(
     () => visibleThreads.filter((thread) => selectedThreadIdSet.has(thread.thread_id)),
     [selectedThreadIdSet, visibleThreads],
-  );
-  const currentThread = useMemo(
-    () =>
-      currentThreadId
-        ? visibleThreads.find((thread) => thread.thread_id === currentThreadId) ?? null
-        : null,
-    [currentThreadId, visibleThreads],
   );
   const threadById = useMemo(
     () => new Map(visibleThreads.map((thread) => [thread.thread_id, thread] as const)),
@@ -272,24 +264,6 @@ export function RecentChatList() {
       setRenameValue("");
     }
   }, [renameThread, renameThreadId, renameValue]);
-
-  const handleShare = useCallback(
-    async (threadId: string) => {
-      const VERCEL_URL = "https://nion-v2.vercel.app";
-      const isLocalhost =
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1";
-      const baseUrl = isLocalhost ? VERCEL_URL : window.location.origin;
-      const shareUrl = `${baseUrl}/workspace/chats/${threadId}`;
-      try {
-        await navigator.clipboard.writeText(shareUrl);
-        toast.success(t.clipboard.linkCopied);
-      } catch {
-        toast.error(t.clipboard.failedToCopyToClipboard);
-      }
-    },
-    [t],
-  );
 
   const performBatchDelete = useCallback(
     async (
@@ -615,12 +589,6 @@ export function RecentChatList() {
                               >
                                 <Pencil className="text-muted-foreground" />
                                 <span>{t.common.rename}</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onSelect={() => handleShare(thread.thread_id)}
-                              >
-                                <Share2 className="text-muted-foreground" />
-                                <span>{t.common.share}</span>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
