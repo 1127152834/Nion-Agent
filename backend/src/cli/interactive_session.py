@@ -10,10 +10,10 @@ import signal
 import struct
 import termios
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
-from src.config.paths import CLIS_VIRTUAL_ROOT
+from src.cli.managed_cli_exec import resolve_managed_cli_command
+from src.config.paths import get_paths
 
 
 @dataclass
@@ -41,7 +41,7 @@ class CLIInteractiveSessionManager:
         self,
         session_id: str,
         tool_id: str,
-        command: list[str],
+        argv: list[str],
         output_callback: Callable[[str, str], None] | None = None,
     ) -> InteractiveSession:
         """Start a new interactive CLI session with PTY.
@@ -49,7 +49,7 @@ class CLIInteractiveSessionManager:
         Args:
             session_id: Unique session identifier
             tool_id: CLI tool identifier
-            command: Command and arguments to execute
+            argv: Command arguments (do not include the executable itself)
             output_callback: Callback for output events (session_id, data)
 
         Returns:
@@ -57,10 +57,27 @@ class CLIInteractiveSessionManager:
         """
         import time
 
-        # Inject managed CLIs path
+        command = resolve_managed_cli_command(tool_id, argv)
+
         env = os.environ.copy()
-        bin_dir = f"{CLIS_VIRTUAL_ROOT}/bin"
-        env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+        try:
+            # Ensure managed CLIs are discoverable if the invoked CLI spawns other tools.
+            bin_dir = str(get_paths().clis_bin_dir)
+            sep = ";" if os.name == "nt" else ":"
+            env["PATH"] = f"{bin_dir}{sep}{env.get('PATH', '')}"
+        except Exception:
+            pass
+
+        # Best-effort: if browser configuration exists, expose it to interactive CLIs.
+        # Not all CLIs use CHROME_PATH, but this is a common convention.
+        try:
+            from src.config.browser_config import load_browser_config  # type: ignore
+
+            chrome_path = load_browser_config().resolved_chrome_path()
+            if chrome_path:
+                env["CHROME_PATH"] = chrome_path
+        except Exception:
+            pass
 
         # Create PTY
         master_fd, slave_fd = pty.openpty()

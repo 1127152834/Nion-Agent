@@ -10,6 +10,8 @@ import { XIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { getBackendBaseURL } from "@/core/config";
+import { toWebSocketBaseURL } from "@/core/config/ws";
 
 import "@xterm/xterm/css/xterm.css";
 
@@ -74,7 +76,8 @@ export function CLITerminal({ sessionId, toolId, command, onClose }: CLITerminal
     fitAddonRef.current = fitAddon;
 
     // Connect WebSocket
-    const wsUrl = `ws://localhost:8001/api/cli/sessions/${sessionId}/stream`;
+    const wsBaseURL = toWebSocketBaseURL(getBackendBaseURL());
+    const wsUrl = `${wsBaseURL}/api/cli/sessions/${sessionId}/stream`;
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -84,7 +87,7 @@ export function CLITerminal({ sessionId, toolId, command, onClose }: CLITerminal
       ws.send(
         JSON.stringify({
           tool_id: toolId,
-          command: command,
+          argv: command,
         })
       );
     };

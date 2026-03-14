@@ -48,12 +48,15 @@ export interface ClarificationPayload {
 }
 
 export interface CLIInteractivePayload {
-  status?: "awaiting_input" | "resolved" | "error" | string;
+  status?: "awaiting_input" | "awaiting_terminal" | "resolved" | "error" | string;
   tool_id?: string;
+  argv?: string[];
   command?: string[];
   interactive_type?: "password" | "confirm" | "input";
   prompt?: string;
-  input_method?: "stdin" | "env" | "arg";
+  input_method?: "stdin" | "env" | "arg" | "pty";
+  session_id?: string | null;
+  websocket_url?: string | null;
   tool_call_id?: string | null;
   asked_at?: string | null;
   resolved_at?: string | null;

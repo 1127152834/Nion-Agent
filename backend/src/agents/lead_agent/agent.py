@@ -7,6 +7,7 @@ from src.agents.lead_agent.prompt import apply_prompt_template
 from src.agents.middlewares.clarification_middleware import ClarificationMiddleware
 from src.agents.middlewares.cli_interactive_middleware import CLIInteractiveMiddleware
 from src.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
+from src.agents.middlewares.internal_tool_recall_middleware import InternalToolRecallMiddleware
 from src.agents.middlewares.memory_middleware import MemoryMiddleware
 from src.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
 from src.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
@@ -38,6 +39,23 @@ def _load_create_agent():
             "Please install/upgrade langchain to a compatible version."
         ) from exc
     return _create_agent
+
+
+def create_agent(*args, **kwargs):
+    """Compatibility wrapper around ``langchain.agents.create_agent``.
+
+    Why this exists:
+    - We want to keep a *lazy import* to avoid import-time failures when LangChain
+      optional components are missing or version-mismatched.
+    - Our unit tests (and potentially other code) monkeypatch
+      ``src.agents.lead_agent.agent.create_agent`` directly.
+
+    Implementation:
+    - Load the real factory at call-time via ``_load_create_agent()``.
+    - Delegate the invocation with the same arguments.
+    """
+    create_agent_fn = _load_create_agent()
+    return create_agent_fn(*args, **kwargs)
 
 
 def _load_summarization_middleware():
@@ -281,6 +299,9 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
     # Add OpenVikingContextMiddleware (before MemoryMiddleware)
     middlewares.append(OpenVikingContextMiddleware(agent_name=agent_name))
 
+    # Add InternalToolRecallMiddleware to enforce "internal tools first" behavior.
+    middlewares.append(InternalToolRecallMiddleware())
+
     # Add MemoryMiddleware (after TitleMiddleware)
     middlewares.append(MemoryMiddleware(agent_name=agent_name))
 
@@ -402,8 +423,7 @@ def make_lead_agent(config: RunnableConfig):
             requested_skills=requested_skills,
         )
 
-        create_agent_fn = _load_create_agent()
-        return create_agent_fn(
+        return create_agent(
             model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
             tools=get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled, agent_name=agent_name) + [setup_agent],
             middleware=_build_middlewares(config, model_name=model_name),
@@ -412,8 +432,7 @@ def make_lead_agent(config: RunnableConfig):
         )
 
     # Default lead agent (unchanged behavior)
-    create_agent_fn = _load_create_agent()
-    return create_agent_fn(
+    return create_agent(
         model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort),
         tools=get_available_tools(
             model_name=model_name,
