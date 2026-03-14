@@ -44,6 +44,7 @@ docs/*
 !docs/product-design/**
 !docs/plans/
 !docs/plans/**
+!docs/CLI_INTERACTIVE_MODE.md
 docs/testing/
 scripts/testing/
 frontend/test-results/
