@@ -30,6 +30,7 @@ import { TodoList } from "@/components/workspace/todo-list";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { useAgent } from "@/core/agents";
 import { getAPIClient } from "@/core/api";
+import type { A2UIUserAction } from "@/core/a2ui/types";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
 import { useAppRouter as useRouter } from "@/core/navigation";
@@ -120,7 +121,7 @@ export default function AgentChatPage() {
     [hostModeCopy],
   );
 
-  const [thread, sendMessage] = useThreadStream({
+  const [thread, sendMessage, submitA2UIAction] = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: { ...settings.context, agent_name: agent_name },
     onStart: (startedThreadId) => {
@@ -544,6 +545,28 @@ export default function AgentChatPage() {
     [handleSubmit],
   );
 
+  const handleA2UIAction = useCallback(
+    (action: A2UIUserAction) => {
+      if (hostModeMissingDir) {
+        toast.error(hostModeCopy.hostDirMissing);
+        return;
+      }
+      void submitA2UIAction(
+        threadId,
+        action,
+        {
+          agent_name,
+          execution_mode: runtimeProfile.execution_mode,
+          host_workdir: runtimeProfile.host_workdir ?? undefined,
+        },
+      ).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to submit UI action: ${message}`);
+      });
+    },
+    [agent_name, hostModeCopy.hostDirMissing, hostModeMissingDir, runtimeProfile.execution_mode, runtimeProfile.host_workdir, submitA2UIAction, threadId],
+  );
+
   const handleRetryLastMessage = useCallback(() => {
     if (thread.isLoading) {
       return;
@@ -679,6 +702,7 @@ export default function AgentChatPage() {
                     thread={thread}
                     onClarificationSelect={handleClarificationSelect}
                     onRetryLastMessage={handleRetryLastMessage}
+                    onA2UIAction={handleA2UIAction}
                   />
                 </div>
                 <div className="absolute right-0 bottom-0 left-0 z-30 flex justify-center px-4">

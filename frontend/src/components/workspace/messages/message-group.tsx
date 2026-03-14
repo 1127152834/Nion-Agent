@@ -487,7 +487,14 @@ function convertToSteps(messages: Message[]): CoTStep[] {
       for (const tool_call of message.tool_calls ?? []) {
         // ask_clarification has a dedicated ClarificationCard in MessageList.
         // Exclude it from ChainOfThought to avoid duplicate cards.
-        if (tool_call.name === "task" || tool_call.name === "ask_clarification") {
+        // send_a2ui_json_to_client is rendered as a dedicated A2UI card in MessageList.
+        // log_a2ui_event is an internal synthetic tool event representing user interaction.
+        if (
+          tool_call.name === "task"
+          || tool_call.name === "ask_clarification"
+          || tool_call.name === "send_a2ui_json_to_client"
+          || tool_call.name === "log_a2ui_event"
+        ) {
           continue;
         }
         const step: CoTToolCallStep = {

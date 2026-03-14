@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
 import { getAPIClient } from "../api";
+import type { A2UIUserAction } from "../a2ui/types";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
@@ -440,6 +441,44 @@ export function useThreadStream({
     [thread, t.uploads.uploadingFiles, context, queryClient],
   );
 
+  const submitA2UIAction = useCallback(
+    async (
+      threadId: string,
+      action: A2UIUserAction,
+      extraContext?: Record<string, unknown>,
+    ) => {
+      const runtimeContext: Record<string, unknown> = {
+        ...context,
+        thinking_enabled: context.mode !== "flash",
+        is_plan_mode: context.mode === "pro" || context.mode === "ultra",
+        subagent_enabled: context.mode === "ultra",
+        user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        thread_id: threadId,
+        a2ui_action: {
+          user_action: action,
+        },
+        ...(extraContext ?? {}),
+      };
+
+      await thread.submit(
+        {
+          messages: [],
+        },
+        {
+          threadId: threadId,
+          streamSubgraphs: true,
+          streamResumable: true,
+          streamMode: ["values", "messages-tuple", "custom"],
+          config: {
+            recursion_limit: 1000,
+          },
+          context: runtimeContext,
+        },
+      );
+    },
+    [context, thread],
+  );
+
   // Wrap stream with a safe adapter:
   // 1) merge optimistic messages
   // 2) guard lazy getters (`history` / `experimental_branchTree`) when
@@ -470,7 +509,7 @@ export function useThreadStream({
     });
   }, [optimisticMessages, thread]);
 
-  return [safeThread, sendMessage] as const;
+  return [safeThread, sendMessage, submitA2UIAction] as const;
 }
 
 export function useThreads(

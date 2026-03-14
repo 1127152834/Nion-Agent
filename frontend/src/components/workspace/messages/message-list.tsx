@@ -30,6 +30,8 @@ import { cn } from "@/lib/utils";
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
+import type { A2UIUserAction } from "@/core/a2ui/types";
+import { A2UICard } from "./a2ui-card";
 import { ClarificationCard } from "./clarification-card";
 import { CLIInteractiveCard } from "./cli-interactive-card";
 import { CLITerminal } from "./cli-terminal";
@@ -87,6 +89,7 @@ export function MessageList({
   onClarificationSelect,
   onRetryLastMessage,
   onSubmitMessage,
+  onA2UIAction,
 }: {
   className?: string;
   threadId: string;
@@ -95,6 +98,7 @@ export function MessageList({
   onClarificationSelect?: (option: string) => void;
   onRetryLastMessage?: () => void;
   onSubmitMessage?: (text: string) => void;
+  onA2UIAction?: (action: A2UIUserAction) => void;
 }) {
   const { t } = useI18n();
   const copy = t.workspace.messageList;
@@ -255,6 +259,17 @@ export function MessageList({
                 onSubmitInput={(input) => {
                   onSubmitMessage?.(input);
                 }}
+              />
+            );
+          } else if (group.type === "assistant:a2ui") {
+            const message = group.messages[0];
+            if (!message) return null;
+            return (
+              <A2UICard
+                key={group.id}
+                message={message}
+                isLoading={thread.isLoading}
+                onAction={onA2UIAction}
               />
             );
           } else if (group.type === "assistant:present-files") {

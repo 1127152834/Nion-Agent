@@ -19,6 +19,7 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import type { Agent } from "@/core/agents";
 import { checkAgentName, getAgent } from "@/core/agents/api";
 import { AGENT_SLUG_RE, toAgentSlug } from "@/core/agents/slug";
+import type { A2UIUserAction } from "@/core/a2ui/types";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
 import { useAppRouter as useRouter } from "@/core/navigation";
@@ -49,7 +50,7 @@ export default function NewAgentPage() {
   // Stable thread ID — all turns belong to the same thread
   const threadId = useMemo(() => uuid(), []);
 
-  const [thread, sendMessage] = useThreadStream({
+  const [thread, sendMessage, submitA2UIAction] = useThreadStream({
     threadId: step === "chat" ? threadId : undefined,
     context: {
       ...settings.context,
@@ -158,6 +159,23 @@ export default function NewAgentPage() {
       );
     },
     [thread.isLoading, sendMessage, threadId, agentName, agentDisplayName],
+  );
+
+  const handleA2UIAction = useCallback(
+    (action: A2UIUserAction) => {
+      if (thread.isLoading) {
+        return;
+      }
+      void submitA2UIAction(
+        threadId,
+        action,
+        { agent_name: agentName, agent_display_name: agentDisplayName },
+      ).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to submit UI action: ${message}`);
+      });
+    },
+    [agentName, agentDisplayName, submitA2UIAction, thread.isLoading, threadId],
   );
 
   const handleRetryLastMessage = useCallback(() => {
@@ -292,6 +310,7 @@ export default function NewAgentPage() {
                   void handleChatSubmit(option);
                 }}
                 onRetryLastMessage={handleRetryLastMessage}
+                onA2UIAction={handleA2UIAction}
               />
             </div>
 

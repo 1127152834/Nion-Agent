@@ -18,6 +18,7 @@ from src.tools.builtins import (
     ov_session_commit_tool,
     present_file_tool,
     query_history_tool,
+    send_a2ui_json_to_client_tool,
     scheduler_create_task_tool,
     scheduler_operate_task_tool,
     search_memory_tool,
@@ -34,6 +35,7 @@ DEFAULT_WEB_FETCH_TOOL_USE = "src.community.web_fetch.tools:web_fetch_tool"
 BUILTIN_TOOLS = [
     present_file_tool,
     ask_clarification_tool,
+    send_a2ui_json_to_client_tool,
     memory_query_tool,
     search_memory_tool,
     memory_store_tool,

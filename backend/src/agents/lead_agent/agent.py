@@ -4,6 +4,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 
 from src.agents.lead_agent.prompt import apply_prompt_template
+from src.agents.middlewares.a2ui_middleware import A2UIMiddleware
 from src.agents.middlewares.clarification_middleware import ClarificationMiddleware
 from src.agents.middlewares.cli_interactive_middleware import CLIInteractiveMiddleware
 from src.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
@@ -323,6 +324,9 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
 
     # Safety guard for host-mode operations
     middlewares.append(ToolSafetyGuardMiddleware())
+
+    # A2UIMiddleware should run before other interrupt-style middlewares.
+    middlewares.append(A2UIMiddleware())
 
     # CLIInteractiveMiddleware must be before ClarificationMiddleware
     middlewares.append(CLIInteractiveMiddleware())

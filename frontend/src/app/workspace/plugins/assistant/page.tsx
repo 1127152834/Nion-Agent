@@ -36,6 +36,7 @@ import { InputBox } from "@/components/workspace/input-box";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
 import { getAPIClient } from "@/core/api";
+import type { A2UIUserAction } from "@/core/a2ui/types";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
 import { useAppRouter as useRouter } from "@/core/navigation";
@@ -721,7 +722,7 @@ export default function PluginAssistantPage() {
     };
   }, [bindChatThreadToSession, isDebugEntry, session, threadId]);
 
-  const [thread, sendMessage] = useThreadStream({
+  const [thread, sendMessage, submitA2UIAction] = useThreadStream({
     threadId: threadExists ? threadId : undefined,
     isNewThread: !threadExists,
     context: assistantContext,
@@ -766,6 +767,19 @@ export default function PluginAssistantPage() {
       });
     },
     [handleSubmit],
+  );
+
+  const handleA2UIAction = useCallback(
+    (action: A2UIUserAction) => {
+      if (!session || !threadId) {
+        return;
+      }
+      void submitA2UIAction(threadId, action, pluginAssistantRuntimeContext).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to submit UI action: ${message}`);
+      });
+    },
+    [pluginAssistantRuntimeContext, session, submitA2UIAction, threadId],
   );
 
   const handleRetryLastMessage = useCallback(() => {
@@ -1743,6 +1757,7 @@ export default function PluginAssistantPage() {
                     paddingBottom={224}
                     onClarificationSelect={handleClarificationSelect}
                     onRetryLastMessage={handleRetryLastMessage}
+                    onA2UIAction={handleA2UIAction}
                   />
                 </div>
                 <div className="border-t px-4 py-3">

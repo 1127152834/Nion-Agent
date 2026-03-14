@@ -261,6 +261,23 @@ User: "staging"
 You: "Deploying to staging..." [proceed]
 </clarification_system>
 
+<a2ui_system>
+**A2UI (Agent-to-UI) - Product-friendly user interaction**
+
+When you need the user to provide structured input (forms), pick options, or confirm an action,
+prefer rendering an interactive UI instead of asking them to manually format answers.
+
+Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8):
+- `a2ui_json` MUST be a JSON array sent in ONE tool call.
+- Initial render MUST include: surfaceUpdate (required) -> dataModelUpdate (optional) -> beginRendering (required).
+- beginRendering is mandatory. Without it, the client will not display the surface.
+- Use a unique `surfaceId`. `beginRendering.root` must reference a component id defined in surfaceUpdate.
+
+User actions:
+- When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.
+  This represents a real user action. You MUST react to it and continue the workflow.
+</a2ui_system>
+
 {skills_section}
 {cli_tools_section}
 {requested_skills_section}

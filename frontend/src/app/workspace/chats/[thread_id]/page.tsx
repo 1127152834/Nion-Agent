@@ -33,6 +33,7 @@ import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { Welcome } from "@/components/workspace/welcome";
 import { getAPIClient } from "@/core/api";
+import type { A2UIUserAction } from "@/core/a2ui/types";
 import { getLangGraphBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
@@ -144,7 +145,7 @@ export default function ChatPage() {
     [chatThreadVisibilityOverrides, isMock],
   );
 
-  const [thread, sendMessage] = useThreadStream({
+  const [thread, sendMessage, submitA2UIAction] = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     context: settings.context,
     isMock,
@@ -695,6 +696,36 @@ export default function ChatPage() {
     [handleSubmit],
   );
 
+  const handleA2UIAction = useCallback(
+    (action: A2UIUserAction) => {
+      if (hostModeMissingDir) {
+        toast.error(hostModeCopy.hostDirMissing);
+        return;
+      }
+
+      void submitA2UIAction(
+        threadId,
+        action,
+        {
+          ...(isTemporarySession
+            ? {
+              memory_read: true,
+              memory_write: false,
+              session_mode: "temporary_chat",
+            }
+            : {}),
+          execution_mode: runtimeProfile.execution_mode,
+          host_workdir: runtimeProfile.host_workdir ?? undefined,
+          ...(chatThreadVisibilityOverrides ?? {}),
+        },
+      ).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to submit UI action: ${message}`);
+      });
+    },
+    [chatThreadVisibilityOverrides, hostModeCopy.hostDirMissing, hostModeMissingDir, isTemporarySession, runtimeProfile.execution_mode, runtimeProfile.host_workdir, submitA2UIAction, threadId],
+  );
+
   const handleRetryLastMessage = useCallback(() => {
     if (thread.isLoading) {
       return;
@@ -870,6 +901,7 @@ export default function ChatPage() {
                     onClarificationSelect={handleClarificationSelect}
                     onRetryLastMessage={handleRetryLastMessage}
                     onSubmitMessage={handleCLIInteractiveSubmit}
+                    onA2UIAction={handleA2UIAction}
                   />
                 </div>
                 <div className="pointer-events-none absolute right-0 bottom-4 left-0 z-30 flex justify-center px-4 sm:bottom-6 sm:px-6">

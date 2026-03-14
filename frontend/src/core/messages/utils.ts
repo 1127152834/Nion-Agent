@@ -25,6 +25,8 @@ interface AssistantCLIInteractiveGroup extends GenericMessageGroup<"assistant:cl
 
 interface AssistantSubagentGroup extends GenericMessageGroup<"assistant:subagent"> {}
 
+interface AssistantA2UIGroup extends GenericMessageGroup<"assistant:a2ui"> {}
+
 type MessageGroup =
   | HumanMessageGroup
   | AssistantProcessingGroup
@@ -32,6 +34,7 @@ type MessageGroup =
   | AssistantPresentFilesGroup
   | AssistantClarificationGroup
   | AssistantCLIInteractiveGroup
+  | AssistantA2UIGroup
   | AssistantSubagentGroup;
 
 export interface ClarificationPayload {
@@ -63,6 +66,22 @@ export interface CLIInteractivePayload {
   resolved_by_message_id?: string | null;
   result?: string | null;
   error?: string | null;
+}
+
+export interface A2UISurfacePayload {
+  status?: "awaiting_user" | "resolved" | "error" | string;
+  surface_id?: string | null;
+  catalog_id?: string | null;
+  operations?: unknown[];
+  tool_call_id?: string | null;
+  asked_at?: string | null;
+  resolved_at?: string | null;
+  resolved_by_message_id?: string | null;
+  error?: string | null;
+}
+
+function isInternalMessage(message: Message) {
+  return message.additional_kwargs?.internal === true || message.name === "log_a2ui_event";
 }
 
 function normalizeOptionalText(value: unknown): string | null {
@@ -233,7 +252,8 @@ export function groupMessages<T>(
       last &&
       last.type !== "human" &&
       last.type !== "assistant" &&
-      last.type !== "assistant:clarification"
+      last.type !== "assistant:clarification" &&
+      last.type !== "assistant:a2ui"
     ) {
       return last;
     }
@@ -241,6 +261,10 @@ export function groupMessages<T>(
   }
 
   for (const message of messages) {
+    if (isInternalMessage(message)) {
+      continue;
+    }
+
     // Filter out todo_reminder to avoid showing internal system reminders.
     if (message.name === "todo_reminder") {
       continue;
@@ -264,6 +288,13 @@ export function groupMessages<T>(
         groups.push({
           id: message.id,
           type: "assistant:cli-interactive",
+          messages: [message],
+        });
+      } else if (isA2UIToolMessage(message)) {
+        lastOpenGroup()?.messages.push(message);
+        groups.push({
+          id: message.id,
+          type: "assistant:a2ui",
           messages: [message],
         });
       } else {
@@ -417,6 +448,81 @@ export function isCLIInteractiveToolMessage(message: Message) {
     message.name?.startsWith("cli_") &&
     message.additional_kwargs?.cli_interactive != null
   );
+}
+
+export function isA2UIToolMessage(message: Message) {
+  return (
+    message.type === "tool" &&
+    message.name === "send_a2ui_json_to_client" &&
+    message.additional_kwargs?.a2ui != null
+  );
+}
+
+export function extractA2UISurfacePayload(message: Message): A2UISurfacePayload | null {
+  if (!isA2UIToolMessage(message)) {
+    return null;
+  }
+
+  const raw = message.additional_kwargs?.a2ui;
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const payload = raw as Record<string, unknown>;
+  const operations = Array.isArray(payload.operations)
+    ? payload.operations
+    : null;
+
+  if (!operations || operations.length === 0) {
+    return null;
+  }
+
+  return {
+    status: typeof payload.status === "string" ? payload.status : undefined,
+    surface_id:
+      typeof payload.surface_id === "string"
+        ? payload.surface_id
+        : payload.surface_id === null
+          ? null
+          : undefined,
+    catalog_id:
+      typeof payload.catalog_id === "string"
+        ? payload.catalog_id
+        : payload.catalog_id === null
+          ? null
+          : undefined,
+    operations,
+    tool_call_id:
+      typeof payload.tool_call_id === "string"
+        ? payload.tool_call_id
+        : payload.tool_call_id === null
+          ? null
+          : undefined,
+    asked_at:
+      typeof payload.asked_at === "string"
+        ? payload.asked_at
+        : payload.asked_at === null
+          ? null
+          : undefined,
+    resolved_at:
+      typeof payload.resolved_at === "string"
+        ? payload.resolved_at
+        : payload.resolved_at === null
+          ? null
+          : undefined,
+    resolved_by_message_id:
+      typeof payload.resolved_by_message_id === "string"
+        ? payload.resolved_by_message_id
+        : payload.resolved_by_message_id === null
+          ? null
+          : undefined,
+    error:
+      typeof payload.error === "string"
+        ? payload.error
+        : payload.error === null
+          ? null
+          : undefined,
+  };
 }
 
 function normalizeClarificationOptions(raw: unknown): string[] {
