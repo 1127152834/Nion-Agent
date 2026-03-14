@@ -272,6 +272,10 @@ Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8)
 - Initial render MUST include: surfaceUpdate (required) -> dataModelUpdate (optional) -> beginRendering (required).
 - beginRendering is mandatory. Without it, the client will not display the surface.
 - Use a unique `surfaceId`. `beginRendering.root` must reference a component id defined in surfaceUpdate.
+- surfaceUpdate MUST use `components` (array of component definitions). If you are unsure, omit extra fields but keep `surfaceId` and `components`.
+- dataModelUpdate is optional. If you include it, `dataModelUpdate.contents` MUST be an array of DataEntry items:
+  - { key, valueString | valueNumber | valueBoolean | valueMap }
+  - Do NOT send a plain JSON object for contents. If you cannot build DataEntry[], omit dataModelUpdate.
 
 User actions:
 - When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.

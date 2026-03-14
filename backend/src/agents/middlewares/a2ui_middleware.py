@@ -107,6 +107,205 @@ def _parse_a2ui_operations(raw: object) -> list[dict[str, Any]] | None:
     return operations or None
 
 
+def _parse_json_if_string(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text:
+        return value
+    try:
+        return json.loads(text)
+    except Exception:  # noqa: BLE001
+        return value
+
+
+def _object_to_data_entries(value: dict[str, Any]) -> list[dict[str, Any]]:
+    """Best-effort conversion from a plain object to A2UI DataEntry[].
+
+    A2UI v0.8 DataEntry supports:
+    - { key, valueString }
+    - { key, valueNumber }
+    - { key, valueBoolean }
+    - { key, valueMap: DataEntry[] }
+
+    Arrays and nulls are ignored (no stable encoding in DataEntry).
+    """
+    entries: list[dict[str, Any]] = []
+    for k, v in value.items():
+        key = _normalize_surface_id(k)
+        if not key:
+            continue
+
+        if isinstance(v, str):
+            entries.append({"key": key, "valueString": v})
+            continue
+        if isinstance(v, bool):
+            entries.append({"key": key, "valueBoolean": v})
+            continue
+        if isinstance(v, int | float) and not isinstance(v, bool):
+            entries.append({"key": key, "valueNumber": v})
+            continue
+        if isinstance(v, dict):
+            entries.append({"key": key, "valueMap": _object_to_data_entries(v)})
+            continue
+
+    return entries
+
+
+def _coerce_data_model_contents(raw: object) -> list[dict[str, Any]] | None:
+    value = _parse_json_if_string(raw)
+
+    if isinstance(value, dict):
+        entries = _object_to_data_entries(value)
+        return entries or None
+
+    if not isinstance(value, list):
+        return None
+
+    contents: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            # Minimal shape check: key must be present and non-empty.
+            key = item.get("key")
+            if isinstance(key, str) and key.strip():
+                contents.append(item)
+    return contents or None
+
+
+def _coerce_components(raw: object) -> list[dict[str, Any]] | None:
+    value = _parse_json_if_string(raw)
+
+    if isinstance(value, dict):
+        # Common model mistake: emit a dict keyed by component id.
+        components: list[dict[str, Any]] = []
+        for cid, comp in value.items():
+            if not isinstance(comp, dict):
+                continue
+            component_id = comp.get("id")
+            if not isinstance(component_id, str) or not component_id.strip():
+                component_id = cid if isinstance(cid, str) else None
+            if not isinstance(component_id, str) or not component_id.strip():
+                continue
+            merged = {"id": component_id, **comp}
+            components.append(merged)
+        return components or None
+
+    if not isinstance(value, list):
+        return None
+
+    components: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, dict):
+            component_id = item.get("id")
+            if isinstance(component_id, str) and component_id.strip():
+                components.append(item)
+    return components or None
+
+
+def _normalize_a2ui_operation(operation: dict[str, Any]) -> dict[str, Any] | None:
+    """Normalize a single A2UI operation to the @a2ui-sdk/react v0.8 shape.
+
+    Why:
+    - The renderer expects strict field names (`surfaceId`, `components`, `contents`).
+    - Malformed payloads can crash the frontend (e.g., dataModelUpdate.contents not being an array).
+    """
+
+    begin = operation.get("beginRendering")
+    if isinstance(begin, dict):
+        surface_id = begin.get("surfaceId") or begin.get("surface_id")
+        root = begin.get("root")
+        normalized_surface_id = _normalize_surface_id(surface_id)
+        normalized_root = _normalize_surface_id(root) if isinstance(root, str) else None
+        if not normalized_surface_id or not normalized_root:
+            return None
+        payload: dict[str, Any] = {
+            "surfaceId": normalized_surface_id,
+            "root": normalized_root,
+        }
+        catalog_id = begin.get("catalogId") or begin.get("catalog_id")
+        if isinstance(catalog_id, str) and catalog_id.strip():
+            payload["catalogId"] = catalog_id.strip()
+        styles = begin.get("styles")
+        if isinstance(styles, dict):
+            payload["styles"] = styles
+        return {"beginRendering": payload}
+
+    surface = operation.get("surfaceUpdate")
+    if isinstance(surface, dict):
+        surface_id = surface.get("surfaceId") or surface.get("surface_id")
+        normalized_surface_id = _normalize_surface_id(surface_id)
+        if not normalized_surface_id:
+            return None
+
+        raw_components = surface.get("components")
+        if raw_components is None:
+            raw_components = surface.get("contents")
+        components = _coerce_components(raw_components)
+        if not components:
+            return None
+
+        return {
+            "surfaceUpdate": {
+                "surfaceId": normalized_surface_id,
+                "components": components,
+            }
+        }
+
+    data = operation.get("dataModelUpdate")
+    if isinstance(data, dict):
+        surface_id = data.get("surfaceId") or data.get("surface_id")
+        normalized_surface_id = _normalize_surface_id(surface_id)
+        if not normalized_surface_id:
+            return None
+
+        raw_contents = data.get("contents")
+        if raw_contents is None:
+            raw_contents = data.get("content")
+        contents = _coerce_data_model_contents(raw_contents)
+        if not contents:
+            # dataModelUpdate is optional; drop malformed ones to avoid crashing the client.
+            return None
+
+        payload: dict[str, Any] = {
+            "surfaceId": normalized_surface_id,
+            "contents": contents,
+        }
+        path = data.get("path")
+        if isinstance(path, str) and path.strip():
+            payload["path"] = path.strip()
+        return {"dataModelUpdate": payload}
+
+    delete = operation.get("deleteSurface")
+    if isinstance(delete, dict):
+        surface_id = delete.get("surfaceId") or delete.get("surface_id")
+        normalized_surface_id = _normalize_surface_id(surface_id)
+        if not normalized_surface_id:
+            return None
+        return {"deleteSurface": {"surfaceId": normalized_surface_id}}
+
+    return None
+
+
+def _normalize_a2ui_operations(operations: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    normalized: list[dict[str, Any]] = []
+    has_begin = False
+    has_surface = False
+
+    for op in operations:
+        normalized_op = _normalize_a2ui_operation(op)
+        if not normalized_op:
+            continue
+        if "beginRendering" in normalized_op:
+            has_begin = True
+        if "surfaceUpdate" in normalized_op:
+            has_surface = True
+        normalized.append(normalized_op)
+
+    if not normalized or not has_begin or not has_surface:
+        return None
+    return normalized
+
+
 def _format_user_action_result(action: dict[str, Any]) -> str:
     name = action.get("name")
     surface_id = action.get("surfaceId") or action.get("surface_id")
@@ -195,14 +394,14 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
             # Invalid payload: let the tool execute normally so the agent can fall back to text.
             return handler(request)
 
-        # Minimal renderability validation (v0.8):
-        # - An initial render must include surfaceUpdate + beginRendering in the same call.
-        if not _has_surface_update(operations) or not _has_begin_rendering(operations):
+        normalized_operations = _normalize_a2ui_operations(operations)
+        if not normalized_operations:
+            # Treat malformed A2UI as invalid so we never crash the client.
             return handler(request)
 
         # Compute a best-effort primary surfaceId (for debugging / client-side grouping).
         surface_id = None
-        for op in operations:
+        for op in normalized_operations:
             surface_id = _get_operation_surface_id(op)
             if surface_id:
                 break
@@ -212,7 +411,7 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
             "status": "awaiting_user",
             "surface_id": surface_id,
             "catalog_id": None,
-            "operations": operations,
+            "operations": normalized_operations,
             "tool_call_id": tool_call_id,
             "asked_at": _now_iso(),
             "resolved_at": None,
@@ -241,11 +440,12 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         if not operations:
             return await handler(request)
 
-        if not _has_surface_update(operations) or not _has_begin_rendering(operations):
+        normalized_operations = _normalize_a2ui_operations(operations)
+        if not normalized_operations:
             return await handler(request)
 
         surface_id = None
-        for op in operations:
+        for op in normalized_operations:
             surface_id = _get_operation_surface_id(op)
             if surface_id:
                 break
@@ -255,7 +455,7 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
             "status": "awaiting_user",
             "surface_id": surface_id,
             "catalog_id": None,
-            "operations": operations,
+            "operations": normalized_operations,
             "tool_call_id": tool_call_id,
             "asked_at": _now_iso(),
             "resolved_at": None,

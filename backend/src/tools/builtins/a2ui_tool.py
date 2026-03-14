@@ -26,6 +26,75 @@ def send_a2ui_json_to_client_tool(a2ui_json: str) -> str:
     - beginRendering is mandatory. Without it, the UI will not display.
     - surfaceId must be unique per surface.
     - beginRendering.root must reference a component id defined in surfaceUpdate.
+    - surfaceUpdate MUST use `components` (an array), not `contents`.
+    - If you include dataModelUpdate, it MUST include `contents` as an array of DataEntry items:
+      - { key, valueString | valueNumber | valueBoolean | valueMap }
+      - Do NOT send a plain JSON object for contents (the client renderer will crash).
+
+    Minimal example (static UI + safe data model):
+
+    ```json
+    [
+      {
+        "surfaceUpdate": {
+          "surfaceId": "chat:THREAD:CALL",
+          "components": [
+            {
+              "id": "root",
+              "component": {
+                "Column": {
+                  "children": { "explicitList": ["title", "nameField", "submitBtn"] }
+                }
+              }
+            },
+            {
+              "id": "title",
+              "component": {
+                "Text": { "text": { "literalString": "Create Task" }, "usageHint": "h2" }
+              }
+            },
+            {
+              "id": "nameField",
+              "component": {
+                "TextField": {
+                  "label": { "literalString": "Name" },
+                  "text": { "path": "/form/name" },
+                  "textFieldType": "shortText"
+                }
+              }
+            },
+            {
+              "id": "submitText",
+              "component": { "Text": { "text": { "literalString": "Submit" } } }
+            },
+            {
+              "id": "submitBtn",
+              "component": {
+                "Button": {
+                  "primary": true,
+                  "child": "submitText",
+                  "action": {
+                    "name": "submit",
+                    "context": [{ "key": "name", "value": { "path": "/form/name" } }]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "dataModelUpdate": {
+          "surfaceId": "chat:THREAD:CALL",
+          "path": "/",
+          "contents": [
+            { "key": "form", "valueMap": [{ "key": "name", "valueString": "" }] }
+          ]
+        }
+      },
+      { "beginRendering": { "surfaceId": "chat:THREAD:CALL", "root": "root" } }
+    ]
+    ```
 
     User interaction:
     - When the user clicks a button / submits a form, the system will inject a
@@ -41,4 +110,3 @@ def send_a2ui_json_to_client_tool(a2ui_json: str) -> str:
         "or the provided a2ui_json was invalid. Please regenerate the A2UI JSON "
         "and ensure it contains surfaceUpdate + beginRendering in the same array."
     )
-
