@@ -274,7 +274,7 @@ Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8)
 - Use a unique `surfaceId`. `beginRendering.root` must reference a component id defined in surfaceUpdate.
 - surfaceUpdate MUST use `components` (array of component definitions). If you are unsure, omit extra fields but keep `surfaceId` and `components`.
 - dataModelUpdate is optional. If you include it, `dataModelUpdate.contents` MUST be an array of DataEntry items:
-  - { key, valueString | valueNumber | valueBoolean | valueMap }
+  - DataEntry item fields: `key` + one of `valueString` / `valueNumber` / `valueBoolean` / `valueMap`
   - Do NOT send a plain JSON object for contents. If you cannot build DataEntry[], omit dataModelUpdate.
 
 User actions:
