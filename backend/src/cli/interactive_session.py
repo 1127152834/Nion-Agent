@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import pty
 import select
@@ -14,6 +15,8 @@ from typing import Callable
 
 from src.cli.managed_cli_exec import resolve_managed_cli_command
 from src.config.paths import get_paths
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,8 +133,6 @@ class CLIInteractiveSessionManager:
         if not session:
             return
 
-        loop = asyncio.get_event_loop()
-
         try:
             while True:
                 # Check if process is still alive
@@ -159,7 +160,18 @@ class CLIInteractiveSessionManager:
                         # Send to callback
                         callback = self._output_callbacks.get(session_id)
                         if callback:
-                            await loop.run_in_executor(None, callback, session_id, text)
+                            # IMPORTANT: invoke callbacks on the event-loop thread.
+                            #
+                            # Our WebSocket router's output callback schedules
+                            # websocket.send_json() via asyncio.create_task().
+                            # If we call it inside a threadpool executor, it
+                            # will raise "no running event loop" and the
+                            # streaming terminal will appear "stuck" with no
+                            # output in the UI.
+                            try:
+                                callback(session_id, text)
+                            except Exception:  # noqa: BLE001
+                                logger.exception("Interactive session output callback failed (session_id=%s)", session_id)
 
                     except OSError:
                         break
