@@ -1,8 +1,9 @@
-# Nion Chat 引入 A2UI 的集成设计（草案 v0.1）
+# Nion Chat 引入 A2UI 的集成设计（草案 v0.2）
 
 日期：2026-03-14  
 作者：Codex（协作）  
-范围：Nion-Agent（Gateway + LangGraph + Next.js 前端工作台）
+范围：Nion-Agent（Gateway + LangGraph + Next.js 前端工作台）  
+关键决策：仅使用 LangGraph；不引入 AG-UI 作为 transport（但**参考 AG-UI 的 A2UI middleware 语义**来设计双向交互闭环）
 
 ## 1. 背景与动机
 
@@ -73,12 +74,24 @@ A2UI（Agent-to-UI）提供了一套“LLM 生成结构化 UI 描述，前端用
 
 ### 4.2 AG-UI 生态：现成的 LangGraph + A2UI 组合
 
-AG-UI 仓库里存在一条相对成熟的组合链路，核心思路是：
+AG-UI 仓库里存在一条相对成熟的组合链路，核心思路是（我们会复用其语义，而不是直接引入其协议栈）：
 
 - `@ag-ui/langgraph`：把 LangGraph agent 适配到 AG-UI 事件流（含 interrupt/human-in-the-loop）。
-- `@ag-ui/a2ui-middleware`：在 agent 侧注入 `send_a2ui_json_to_client` tool，并把 A2UI payload 转成前端可渲染的 “activity” 事件；同时把用户点击行为注入为 `log_a2ui_event` 的 tool call + tool result，确保 agent 能“看到”用户交互结果并继续推进流程。
+- `@ag-ui/a2ui-middleware`：
+  - 在 agent 侧**注入** `send_a2ui_json_to_client` tool（并强制覆盖 schema，避免前端/转换器产生空 schema 导致 LLM 乱填参数）。
+  - 将 agent 输出的 A2UI operations 归并为「按 surfaceId 分组」的 UI activity（delta + snapshot），前端用 renderer 直接渲染。
+  - 将用户交互（userAction）通过 `forwardedProps.a2uiAction.userAction` 回传，并在 agent 输入 messages 尾部**合成**一组消息：`log_a2ui_event` tool call + tool result（这一步非常关键，让模型稳定地“看到用户刚刚点了什么/提交了什么”。）
 
 这套模式对我们很有价值：即便我们不迁移到 AG-UI，也可以复用“**用户交互 -> 注入成 tool 事件 -> agent 继续**”的语义与 prompt 约定。
+
+### 4.3（新增）我们在 LangGraph 中复用 AG-UI 语义的方式
+
+由于 Nion 后端是 Python（LangGraph + 自有 middleware），无法直接复用 TS 的 `@ag-ui/a2ui-middleware` 实现；但可以在**语义层**对齐：
+
+- **Tool 名称对齐**：复用 `send_a2ui_json_to_client` / `log_a2ui_event`，降低 prompt 与生态示例迁移成本。
+- **userAction 透传方式对齐**：AG-UI 用 `forwardedProps`，我们改成 LangGraph 的 `configurable`（也就是前端 `thread.submit(..., { context })` 里的 runtimeContext）透传：`context.a2ui_action.user_action`。
+- **合成消息对齐**：在 `A2UIMiddleware.before_agent()` 中把 `a2ui_action` 合成为 `log_a2ui_event` tool call + tool result（并标记为 UI 不展示的 internal 消息）。
+- **中断式交互对齐**：沿用 Nion 现有 Clarification/CLIInteractive 的模式：拦截 `send_a2ui_json_to_client` tool call，写入 ToolMessage（包含 A2UI payload），然后 `goto=END` 等待用户交互。
 
 ### 4.3 前端渲染器的选择建议
 
@@ -93,7 +106,7 @@ AG-UI 仓库里存在一条相对成熟的组合链路，核心思路是：
 - v1 内测先用 **官方渲染器**跑通协议与交互闭环（减少不确定性）。
 - v1 产品化落地（尤其面向普通用户）建议逐步走向“映射到我们既有 UI 体系”，避免在一个产品里出现两套视觉语言。
 
-## 5. 推荐集成方案（Nion v1）
+## 5. 推荐集成方案（Nion v1，LangGraph 原生接入，参考 AG-UI 语义）
 
 ### 5.1 核心设计：A2UI 作为一种“专用工具消息卡片”
 
@@ -113,22 +126,42 @@ AG-UI 仓库里存在一条相对成熟的组合链路，核心思路是：
 - `assistant:a2ui`：识别 `tool` 消息且 `additional_kwargs.a2ui` 存在，渲染 `A2UICard`。
 - 同时在 Chain-of-Thought 的工具列表里 **隐藏** `send_a2ui_json_to_client`，避免普通用户看到“工具细节”，只看到 UI 卡片。
 
-### 5.2 用户交互回传：避免污染对话、保证 agent 能理解
+### 5.2 用户交互回传：避免污染对话、保证 agent 能理解（参考 AG-UI 语义）
 
 关键难点：用户点击/表单提交必须“可被 agent 可靠消费”，且不应该作为普通用户可见的对话内容。
 
-推荐 v1 的务实方案（最小侵入、可演进）：
+推荐 v1 的务实方案（对齐 AG-UI：用 context 透传 + 合成 tool 消息，不往对话里塞隐藏 human message）：
 
 1. 前端 `A2UICard` 的 `onAction` 回调拿到 A2UI `userAction` 事件。
-2. 前端向 LangGraph 提交一条“内部 human message”，内容使用明确的机器可解析 tag，例如：
-   - `<a2ui_action>{"userAction": {...}}</a2ui_action>`
-3. 前端展示层过滤该内部消息（不渲染，或标记为系统事件）。
-4. 后端 `A2UIMiddleware.before_agent` 检测到该 tag：
-   - 解析 JSON
-   - 将这条 human message 转写为一条结构化 `ToolMessage(name="log_a2ui_event", content="User performed action ... Context: {...}")`
-   - 或者保留 human message 但将其内容替换为更适合模型消费的简洁描述（避免模型直接看到 tag + 原始 JSON）。
+2. 前端调用 `thread.submit()` 发起一次“恢复/继续”运行：
+   - `input.messages` 为空数组（不新增 human message，不污染聊天记录）。
+   - `context` 里携带 `a2ui_action.user_action`（结构见下方）。
+3. 后端 `A2UIMiddleware.before_agent()` 检测到 `runtime.context["a2ui_action"]`：
+   - 读取 `user_action`
+   - 将其**合成为**两条消息追加到 state.messages 末尾：
+     - `AIMessage(tool_calls=[{name: "log_a2ui_event", args: user_action_json}])`
+     - `ToolMessage(name="log_a2ui_event", content="User performed action ... Context: {...}")`
+   - 同时在 UI 层将 `log_a2ui_event` 标记为 internal（不在普通用户界面展示）。
 
-这一步的设计要点：我们要保证“模型看到的内容”是稳定、低噪声、可指令化的，而不是让模型去猜 UI 点击意味着什么。
+这一步的设计要点：
+
+- 对模型：它“像看到真实 tool call 一样”看到用户刚刚的点击/提交，从而稳定驱动后续步骤。
+- 对用户：聊天记录里不会出现一条奇怪的隐藏 human message，也不会出现“log_a2ui_event”这类内部工具。
+
+**`a2ui_action.user_action` 推荐结构（参考 AG-UI）：**
+
+```json
+{
+  "name": "submit",
+  "surface_id": "chat:{thread_id}:{tool_call_id}",
+  "source_component_id": "submit-btn",
+  "context": {
+    "userName": "Alice",
+    "plan": "pro"
+  },
+  "timestamp": "2026-03-14T22:00:00+08:00"
+}
+```
 
 ### 5.3 SurfaceId 策略
 
@@ -190,3 +223,24 @@ AG-UI 仓库里存在一条相对成熟的组合链路，核心思路是：
 - 版本隔离清晰：通过 `@a2ui-sdk/react/0.8` 显式锁定协议版本，降低 A2UI Public Preview 演进对线上产品的影响面。
 
 同时保留官方 `@a2ui/react` 作为协议对照实现，用于排查兼容性/行为差异，但不作为 v1 产品化首选渲染器。
+
+## 10. 是否引入 AG-UI：收益/成本/风险评估（结论性版本）
+
+我们只用 LangGraph 的前提下，AG-UI 的引入可以拆成三档（从轻到重）：
+
+- 档位 A（推荐，v1）：**不引入 AG-UI 协议栈，仅复用其 A2UI middleware 语义**
+  - 收益：最小改动拿到“userAction -> tool 事件 -> agent 继续”的成熟范式；prompt/工具命名与生态对齐。
+  - 成本：实现一个 Python 版 `A2UIMiddleware` + 前端 A2UI 卡片；把 `log_a2ui_event` 设为 internal 不展示。
+  - 风险：主要是协议仍在 Public Preview（A2UI v0.8），需要做 payload 校验与降级。
+
+- 档位 B（可选，后续）：**局部引入 AG-UI 的事件层/Activity 形态（前端）**
+  - 收益：多 surface、多 delta/snapshot 的 UI 流更标准化。
+  - 成本：需要把现有 LangGraph message 流转成 AG-UI event 流，或在前端维护两套渲染数据流；收益不一定覆盖复杂度。
+  - 风险：会扩大回归面（消息分组、tool 可视化、历史记录、重连逻辑）。
+
+- 档位 C（不建议）：**全面引入 AG-UI（transport + event + agent 适配）**
+  - 收益：全链路标准化，生态组件更多。
+  - 成本：等价于“重写聊天协议层与前端流式渲染”，几乎必然触发大量 UI/状态管理重构。
+  - 风险：回归面巨大，且与我们现有 Clarification/CLIInteractive/Artifacts 体系存在语义冲突，需要逐个重新适配。
+
+结论：v1 选档位 A，先把 A2UI 作为“可中断的结构化 UI 卡片”跑通闭环；未来如果多 surface / streaming UI 更新的需求明确，再评估档位 B。
