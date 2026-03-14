@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import override
@@ -67,13 +68,36 @@ class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):
         tool_call_id: str | None,
     ) -> dict:
         """Build CLI interactive payload for the ToolMessage."""
+        input_method = interactive_config.get("input_method", "stdin")
+
+        # PTY mode: the UI should open a streaming terminal connected via WebSocket.
+        if input_method == "pty":
+            session_id = str(uuid.uuid4())
+            return {
+                "status": "awaiting_terminal",
+                "tool_id": tool_id,
+                # Prefer argv going forward; keep legacy `command` for backward compatibility.
+                "argv": argv,
+                "command": argv,
+                "interactive_type": interactive_config.get("type", "input"),
+                "prompt": interactive_config.get("prompt", "该命令需要交互终端"),
+                "input_method": "pty",
+                "session_id": session_id,
+                "websocket_url": f"/api/cli/sessions/{session_id}/stream",
+                "tool_call_id": tool_call_id,
+                "asked_at": self._now_iso(),
+                "resolved_at": None,
+                "resolved_by_message_id": None,
+            }
+
         return {
             "status": "awaiting_input",
             "tool_id": tool_id,
+            "argv": argv,
             "command": argv,
             "interactive_type": interactive_config.get("type", "input"),
             "prompt": interactive_config.get("prompt", "请输入内容"),
-            "input_method": interactive_config.get("input_method", "stdin"),
+            "input_method": input_method,
             "tool_call_id": tool_call_id,
             "asked_at": self._now_iso(),
             "resolved_at": None,
@@ -105,7 +129,14 @@ class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):
 
         # Format message
         prompt = interactive_config.get("prompt", "请输入内容")
-        formatted_message = f"🔐 CLI 工具需要交互输入\n\n工具: {tool_id}\n命令: {' '.join(argv)}\n\n{prompt}"
+        if interactive_config.get("input_method") == "pty":
+            formatted_message = (
+                "🧪 CLI 工具需要交互终端\n\n"
+                f"工具: {tool_id}\n命令: {' '.join(argv)}\n\n"
+                f"{prompt}"
+            )
+        else:
+            formatted_message = f"🔐 CLI 工具需要交互输入\n\n工具: {tool_id}\n命令: {' '.join(argv)}\n\n{prompt}"
 
         # Create ToolMessage
         tool_message = ToolMessage(
