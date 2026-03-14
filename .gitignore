@@ -42,10 +42,18 @@ backend/docs/
 docs/*
 !docs/product-design/
 !docs/product-design/**
+!docs/plans/
+!docs/plans/**
 docs/testing/
 scripts/testing/
 frontend/test-results/
 reports/testing/
+
+# backend/tests is part of the repository (pytest suite). The ignore rule above
+# blocks new test files from being added unless force-added; unignore it so TDD
+# flows work normally.
+!backend/tests/
+!backend/tests/**
 
 .nion/
 .claude/
