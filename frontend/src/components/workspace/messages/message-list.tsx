@@ -18,6 +18,7 @@ import {
   hasPresentFiles,
   hasReasoning,
   hasSubagent,
+  isA2UIToolMessage,
   isClarificationToolMessage,
   type CLIInteractivePayload,
 } from "@/core/messages/utils";
@@ -140,6 +141,9 @@ export function MessageList({
             return true;
           }
           return extractTextFromMessage(message).trim().length > 0;
+        }
+        if (isA2UIToolMessage(message)) {
+          return true;
         }
         return false;
       }
