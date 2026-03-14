@@ -55,6 +55,11 @@ reports/testing/
 !backend/tests/
 !backend/tests/**
 
+# frontend/tests is also part of the repository (vitest unit tests). Keep the
+# directory addable by default; otherwise new test files are silently ignored.
+!frontend/tests/
+!frontend/tests/**
+
 .nion/
 .claude/
 skills/custom/*
