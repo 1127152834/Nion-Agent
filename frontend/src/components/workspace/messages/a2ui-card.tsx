@@ -265,6 +265,11 @@ export function A2UICard({
 }) {
   const payload = useMemo(() => extractA2UISurfacePayload(message), [message]);
   const operations = payload?.operations ?? null;
+  const errorMessage = useMemo(() => {
+    if (!payload) return null;
+    const error = typeof payload.error === "string" ? payload.error.trim() : "";
+    return error ? error : null;
+  }, [payload]);
 
   const a2uiMessages = useMemo(() => {
     if (!Array.isArray(operations) || operations.length === 0) {
@@ -282,6 +287,11 @@ export function A2UICard({
         <div className="text-muted-foreground mt-1 text-xs leading-5">
           后端返回了 A2UI 卡片，但未包含可渲染的 operations。请重试或检查服务端日志。
         </div>
+        {errorMessage && (
+          <div className="text-destructive mt-2 text-xs leading-5">
+            {errorMessage}
+          </div>
+        )}
       </div>
     );
   }
@@ -308,6 +318,11 @@ export function A2UICard({
             A2UI operations 不符合 v0.8 协议（常见原因：dataModelUpdate.contents 不是数组）。
             已降级展示 raw payload，方便排查并让模型重试生成。
           </div>
+          {errorMessage && (
+            <div className="text-destructive mt-2 text-xs leading-5">
+              {errorMessage}
+            </div>
+          )}
           <details className="mt-3 text-xs">
             <summary className="cursor-pointer select-none text-xs">
               查看 A2UI payload

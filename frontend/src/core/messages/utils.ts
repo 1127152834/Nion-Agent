@@ -469,13 +469,7 @@ export function extractA2UISurfacePayload(message: Message): A2UISurfacePayload 
   }
 
   const payload = raw as Record<string, unknown>;
-  const operations = Array.isArray(payload.operations)
-    ? payload.operations
-    : null;
-
-  if (!operations || operations.length === 0) {
-    return null;
-  }
+  const operations = Array.isArray(payload.operations) ? payload.operations : [];
 
   return {
     status: typeof payload.status === "string" ? payload.status : undefined,

@@ -11,7 +11,7 @@ from langchain.tools import tool
 
 
 @tool("send_a2ui_json_to_client", parse_docstring=True)
-def send_a2ui_json_to_client_tool(a2ui_json: str) -> str:
+def send_a2ui_json_to_client_tool(a2ui_json: object | None = None) -> str:
     """Send A2UI JSON to the client to render an interactive UI surface.
 
     Use this tool when you need the user to fill a form, choose options, or
@@ -102,7 +102,7 @@ def send_a2ui_json_to_client_tool(a2ui_json: str) -> str:
       history. Treat that as a real user action and continue the workflow.
 
     Args:
-        a2ui_json: A JSON string representing an array of A2UI messages.
+        a2ui_json: A JSON array (recommended) OR a JSON string representing an array of A2UI messages.
     """
     return (
         "A2UI payload received, but no UI was rendered. "

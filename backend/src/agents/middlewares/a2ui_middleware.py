@@ -328,6 +328,57 @@ def _format_user_action_result(action: dict[str, Any]) -> str:
     return message
 
 
+def _safe_json_value(value: object) -> object:
+    """Best-effort normalize a value into a JSON-serializable shape.
+
+    Notes:
+    - Tool call args come from upstream HTTP JSON, so they *should* already be JSON.
+    - Still, defensive conversion avoids hard failures when we embed raw payloads
+      into `additional_kwargs` for UI debugging.
+    """
+    try:
+        json.dumps(value, ensure_ascii=False)
+        return value
+    except TypeError:
+        return str(value)
+
+
+def _build_error_tool_message(
+    *,
+    tool_call_id: str | None,
+    raw_a2ui_json: object,
+    error: str,
+) -> ToolMessage:
+    """Return an A2UI-shaped ToolMessage that the frontend can render safely.
+
+    Why:
+    - We must never crash the run due to tool arg validation or malformed A2UI.
+    - We still want the user (and the model) to see a product-friendly failure
+      surface, and keep enough raw payload for debugging/regeneration.
+    """
+    debug_payload = _safe_json_value(raw_a2ui_json)
+    operations: list[dict[str, Any]] = [{"_a2ui_error": error, "_raw_a2ui_json": debug_payload}]
+
+    payload = {
+        "status": "error",
+        "surface_id": None,
+        "catalog_id": None,
+        "operations": operations,
+        "tool_call_id": tool_call_id,
+        "asked_at": _now_iso(),
+        "resolved_at": _now_iso(),
+        "resolved_by_message_id": None,
+        "error": error,
+    }
+
+    return ToolMessage(
+        content=error,
+        tool_call_id=tool_call_id or "",
+        name=_A2UI_SEND_TOOL_NAME,
+        additional_kwargs={"a2ui": payload},
+    )
+
+
 class A2UIMiddleware(AgentMiddleware[AgentState]):
     """Intercept `send_a2ui_json_to_client` tool calls and handle A2UI user actions."""
 
@@ -389,15 +440,32 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         if not isinstance(args, dict):
             args = {}
 
-        operations = _parse_a2ui_operations(args.get("a2ui_json"))
+        tool_call_id = cast(str | None, request.tool_call.get("id"))
+        raw_a2ui_json = args.get("a2ui_json")
+
+        operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
-            # Invalid payload: let the tool execute normally so the agent can fall back to text.
-            return handler(request)
+            # Never execute the real tool for malformed calls: missing args/type
+            # mismatches can raise validation errors and break the whole run.
+            return _build_error_tool_message(
+                tool_call_id=tool_call_id,
+                raw_a2ui_json=raw_a2ui_json,
+                error=(
+                    "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
+                    "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
+                ),
+            )
 
         normalized_operations = _normalize_a2ui_operations(operations)
         if not normalized_operations:
-            # Treat malformed A2UI as invalid so we never crash the client.
-            return handler(request)
+            return _build_error_tool_message(
+                tool_call_id=tool_call_id,
+                raw_a2ui_json=operations,
+                error=(
+                    "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
+                    "已降级展示 raw payload，便于你修正后重新发送。"
+                ),
+            )
 
         # Compute a best-effort primary surfaceId (for debugging / client-side grouping).
         surface_id = None
@@ -406,7 +474,6 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
             if surface_id:
                 break
 
-        tool_call_id = cast(str | None, request.tool_call.get("id"))
         payload = {
             "status": "awaiting_user",
             "surface_id": surface_id,
@@ -436,13 +503,30 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         if not isinstance(args, dict):
             args = {}
 
-        operations = _parse_a2ui_operations(args.get("a2ui_json"))
+        tool_call_id = cast(str | None, request.tool_call.get("id"))
+        raw_a2ui_json = args.get("a2ui_json")
+
+        operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
-            return await handler(request)
+            return _build_error_tool_message(
+                tool_call_id=tool_call_id,
+                raw_a2ui_json=raw_a2ui_json,
+                error=(
+                    "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
+                    "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
+                ),
+            )
 
         normalized_operations = _normalize_a2ui_operations(operations)
         if not normalized_operations:
-            return await handler(request)
+            return _build_error_tool_message(
+                tool_call_id=tool_call_id,
+                raw_a2ui_json=operations,
+                error=(
+                    "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
+                    "已降级展示 raw payload，便于你修正后重新发送。"
+                ),
+            )
 
         surface_id = None
         for op in normalized_operations:
@@ -450,7 +534,6 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
             if surface_id:
                 break
 
-        tool_call_id = cast(str | None, request.tool_call.get("id"))
         payload = {
             "status": "awaiting_user",
             "surface_id": surface_id,
