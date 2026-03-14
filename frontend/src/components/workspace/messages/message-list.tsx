@@ -19,6 +19,7 @@ import {
   hasReasoning,
   hasSubagent,
   isClarificationToolMessage,
+  type CLIInteractivePayload,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import type { Subtask } from "@/core/tasks";
@@ -31,6 +32,7 @@ import { StreamingIndicator } from "../streaming-indicator";
 
 import { ClarificationCard } from "./clarification-card";
 import { CLIInteractiveCard } from "./cli-interactive-card";
+import { CLITerminal } from "./cli-terminal";
 import { MarkdownContent } from "./markdown-content";
 import { MessageGroup } from "./message-group";
 import { MessageListItem } from "./message-list-item";
@@ -225,6 +227,26 @@ export function MessageList({
           } else if (group.type === "assistant:cli-interactive") {
             const message = group.messages[0];
             if (!message) return null;
+
+            const payload = message.additional_kwargs?.cli_interactive as CLIInteractivePayload | undefined;
+            if (
+              payload?.status === "awaiting_terminal"
+              && typeof payload.session_id === "string"
+              && typeof payload.tool_id === "string"
+            ) {
+              const argv =
+                payload.argv ??
+                payload.command ??
+                [];
+              return (
+                <CLITerminal
+                  key={group.id}
+                  sessionId={payload.session_id}
+                  toolId={payload.tool_id}
+                  command={argv}
+                />
+              );
+            }
 
             return (
               <CLIInteractiveCard
