@@ -19,7 +19,11 @@ class StartSessionRequest(BaseModel):
     """Request to start an interactive CLI session."""
 
     tool_id: str
-    command: list[str]
+    # NOTE: This endpoint currently only allocates a session id; the actual PTY
+    # process is started when the WebSocket connects. Keep both fields for
+    # compatibility with older clients while standardizing on argv.
+    argv: list[str] | None = None
+    command: list[str] | None = None
     restore_session: bool = True  # Try to restore previous session
 
 
@@ -85,7 +89,11 @@ async def stream_cli_session(websocket: WebSocket, session_id: str):
     try:
         init_msg = await websocket.receive_json()
         tool_id = init_msg["tool_id"]
-        command = init_msg["command"]
+        argv = init_msg.get("argv")
+        if not isinstance(argv, list):
+            argv = init_msg.get("command")
+        if not isinstance(argv, list):
+            raise ValueError("Missing 'argv' (preferred) or legacy 'command' list")
     except Exception as e:
         await websocket.send_json({"type": "error", "error": f"Invalid init message: {e}"})
         await websocket.close()
@@ -100,7 +108,7 @@ async def stream_cli_session(websocket: WebSocket, session_id: str):
         session = manager.start_session(
             session_id=session_id,
             tool_id=tool_id,
-            command=command,
+            argv=argv,
             output_callback=output_callback,
         )
 
