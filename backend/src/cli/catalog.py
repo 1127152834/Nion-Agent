@@ -145,7 +145,23 @@ def default_cli_marketplace_assets_dir(repo_root: Path) -> Path:
 
 
 def repo_root_from_module(file: str) -> Path:
-    return Path(file).resolve().parents[4]
+    """
+    Resolve the repository root from a module file path.
+
+    This codebase expects the CLI marketplace catalog to live at:
+      <repo-root>/backend/data/cli_marketplace/catalog.json
+
+    Avoid brittle `parents[n]` indexing (worktrees, different checkout depths,
+    and packaged environments can change the directory depth).
+    """
+    start = Path(file).resolve()
+    for parent in start.parents:
+        candidate = parent / "backend" / "data" / "cli_marketplace" / "catalog.json"
+        if candidate.exists():
+            return parent
+
+    # Fallback: best-effort guess (repo-root/backend/src/cli/catalog.py -> parents[3]).
+    return start.parents[3] if len(start.parents) > 3 else start.parent
 
 
 def load_cli_catalog() -> dict[str, Any]:

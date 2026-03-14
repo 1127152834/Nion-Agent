@@ -40,8 +40,8 @@
         {
           "pattern": "login",
           "type": "input",
-          "prompt": "请输入小红书登录凭证（cookie 字符串）",
-          "input_method": "stdin"
+          "prompt": "该命令需要交互终端。请在终端中按提示完成登录（如输出二维码，请用小红书 App 扫码）。",
+          "input_method": "pty"
         }
       ],
       "platforms": [
