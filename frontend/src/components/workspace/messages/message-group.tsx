@@ -27,6 +27,7 @@ import { useI18n } from "@/core/i18n/hooks";
 import {
   extractReasoningContentFromMessage,
   findToolCallResult,
+  isA2UIToolMessage,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
@@ -487,12 +488,24 @@ function convertToSteps(messages: Message[]): CoTStep[] {
       for (const tool_call of message.tool_calls ?? []) {
         // ask_clarification has a dedicated ClarificationCard in MessageList.
         // Exclude it from ChainOfThought to avoid duplicate cards.
-        // send_a2ui_json_to_client is rendered as a dedicated A2UI card in MessageList.
+        // send_a2ui_json_to_client is rendered as a dedicated A2UI card in MessageList
+        // only when the corresponding tool result contains `additional_kwargs.a2ui`.
         // log_a2ui_event is an internal synthetic tool event representing user interaction.
+
+        const hasDedicatedA2UICard =
+          tool_call.name === "send_a2ui_json_to_client" &&
+          !!tool_call.id &&
+          messages.some(
+            (candidate) =>
+              candidate.type === "tool" &&
+              isA2UIToolMessage(candidate) &&
+              candidate.tool_call_id === tool_call.id,
+          );
+
         if (
           tool_call.name === "task"
           || tool_call.name === "ask_clarification"
-          || tool_call.name === "send_a2ui_json_to_client"
+          || hasDedicatedA2UICard
           || tool_call.name === "log_a2ui_event"
         ) {
           continue;
