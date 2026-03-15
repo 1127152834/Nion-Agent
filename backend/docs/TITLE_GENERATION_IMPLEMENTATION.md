@@ -22,16 +22,17 @@
 
 #### [`src/config/app_config.py`](../src/config/app_config.py)
 - ✅ 导入 `load_title_config_from_dict`
-- ✅ 在 `from_file()` 中加载 title 配置
+- ✅ 在配置加载流程中注入 title 配置（Config Store 与 legacy YAML 兜底路径均可）
 
 #### [`src/agents/lead_agent/agent.py`](../src/agents/lead_agent/agent.py)
 - ✅ 导入 `TitleMiddleware`
 - ✅ 注册到 `middleware` 列表：`[SandboxMiddleware(), TitleMiddleware()]`
 
-### 2. 配置文件
+### 2. 配置（Config Store payload）
 
-#### [`config.yaml`](../config.yaml)
-- ✅ 添加 title 配置段：
+#### Title section
+
+title 配置存放在 Config Store（SQLite）的 payload 中，通常通过前端“配置中心”或 `GET/PUT /api/config` 编辑：
 ```yaml
 title:
   enabled: true
@@ -102,7 +103,7 @@ Checkpointer 自动持久化（如果配置了）
 
 1. **启用/禁用功能**
 ```yaml
-# config.yaml
+# Config Store payload
 title:
   enabled: true  # 设为 false 禁用
 ```

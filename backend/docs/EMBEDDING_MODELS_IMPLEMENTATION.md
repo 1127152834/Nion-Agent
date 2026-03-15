@@ -97,44 +97,40 @@ from src.gateway.routers import embedding_models
 app.include_router(embedding_models.router)
 ```
 
-### 2. 更新主配置
+### 2. 更新配置（Config Store payload）
 
-在主配置文件中添加 embedding 配置：
+在 Config Store（SQLite）的配置 payload 中添加/更新 `retrieval_models` 配置（通常通过前端“配置中心”或 `GET/PUT /api/config` 编辑）：
 
 ```yaml
-# config.yaml
-embedding:
+retrieval_models:
   enabled: true
-  provider: local  # local | openai | custom
-  local:
-    model: all-MiniLM-L6-v2
-    device: cpu  # cpu | cuda | mps
-  openai:
-    model: text-embedding-3-small
-    api_key: $OPENAI_API_KEY
-    dimension: 1536
-  custom:
-    model: ""
-    api_base: ""
-    api_key: ""
-    dimension: 1536
+  active:
+    embedding:
+      provider: openai_compatible
+      model: text-embedding-3-small
+  providers:
+    openai_embedding:
+      enabled: true
+      api_key: $OPENAI_API_KEY
+      model: text-embedding-3-small
+      dimension: 1536
 ```
 
 ### 3. 集成到 Memory v2
 
-修改 `backend/src/agents/memory/memory.py`，使用新的嵌入配置：
+修改 `backend/src/agents/memory/memory.py`，使用 retrieval models 配置：
 
 ```python
-from src.config import get_config
-from src.embedding_models import EmbeddingModelsService
+	from src.config import get_app_config
+	from src.retrieval_models import RetrievalModelsService
 
 class MemoryManager:
     def __init__(self, ...):
-        # 使用新的嵌入配置
-        config = get_config()
-        if hasattr(config, 'embedding') and config.embedding.enabled:
-            embedding_service = EmbeddingModelsService()
-            # 使用 embedding_service 获取嵌入
+	        # 使用 retrieval_models 配置
+	        config = get_app_config()
+	        if getattr(config, "retrieval_models", None) and config.retrieval_models.enabled:
+	            retrieval_models = RetrievalModelsService()
+	            # 使用 retrieval_models 获取嵌入 / rerank
 ```
 
 ### 4. 添加到设置菜单
@@ -333,9 +329,9 @@ def _build_embedding_provider(self, embeddings_module: Any) -> Any:
    - 在 Gateway 应用中注册 `embedding_models.router`
    - 确保路由可访问
 
-2. **更新主配置文件**
-   - 在 `config.yaml` 中添加 `embedding` 配置节
-   - 或在配置加载逻辑中支持 `EmbeddingConfig`
+2. **更新配置 payload（Config Store）**
+   - 在 Config Store payload 中补齐 `retrieval_models`（embedding/rerank）配置字段
+   - 确保前端配置中心可以编辑并保存该 section
 
 3. **集成到 Memory v2**
    - 修改 `MemoryManager._build_embedding_provider()`
