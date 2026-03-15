@@ -5,6 +5,7 @@ import {
   BrainIcon,
   MessageSquareIcon,
   OrbitIcon,
+  SparklesIcon,
   SettingsIcon,
   Trash2Icon,
   WrenchIcon,
@@ -96,6 +97,10 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
 
   function handleSettings() {
     router.push(`/workspace/agents/${encodeURIComponent(agent.name)}/settings`);
+  }
+
+  function handleBootstrap() {
+    router.push("/workspace/agents/bootstrap");
   }
 
   async function handleDelete() {
@@ -194,6 +199,22 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
             </TooltipTrigger>
             <TooltipContent>{t.agents.viewMemory}</TooltipContent>
           </Tooltip>
+
+          {isDefault ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  className="size-9 rounded-xl"
+                  onClick={handleBootstrap}
+                >
+                  <SparklesIcon className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t.agents.bootstrap.tooltip}</TooltipContent>
+            </Tooltip>
+          ) : null}
 
           <Tooltip>
             <TooltipTrigger asChild>
