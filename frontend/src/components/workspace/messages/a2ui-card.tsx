@@ -576,6 +576,66 @@ function A2UIRecoveryActions({
   );
 }
 
+function A2UIInlineSystemActions({
+  surfaceId,
+  operations,
+  isLoading,
+  onAction,
+}: {
+  surfaceId: string;
+  operations: unknown[] | null;
+  isLoading: boolean;
+  onAction?: (action: A2UIUserAction) => void;
+}) {
+  if (!onAction) {
+    return null;
+  }
+
+  const payloadText = operations ? safeJSONStringifyCompact(operations) : "";
+  const truncatedPayload = payloadText ? truncateText(payloadText, 8000) : "";
+
+  return (
+    <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+      <span>界面不符合预期？</span>
+      <Button
+        variant="link"
+        size="sm"
+        className="h-auto p-0 text-xs"
+        disabled={isLoading}
+        onClick={() => {
+          onAction(buildSystemAction({
+            surfaceId,
+            name: "__a2ui_retry__",
+            context: {
+              reason: "a2ui_user_manual_regenerate",
+              last_payload: truncatedPayload || undefined,
+            },
+          }));
+        }}
+      >
+        重试生成界面
+      </Button>
+      <Button
+        variant="link"
+        size="sm"
+        className="h-auto p-0 text-xs"
+        disabled={isLoading}
+        onClick={() => {
+          onAction(buildSystemAction({
+            surfaceId,
+            name: "__a2ui_fallback_text__",
+            context: {
+              reason: "a2ui_user_manual_regenerate",
+            },
+          }));
+        }}
+      >
+        改用文字继续
+      </Button>
+    </div>
+  );
+}
+
 class A2UIRenderErrorBoundary extends React.Component<
   React.PropsWithChildren<{
     rawOperations: unknown[];
@@ -714,6 +774,12 @@ export function A2UICard({
               }}
             />
           </A2UIProvider>
+          <A2UIInlineSystemActions
+            surfaceId={surfaceId}
+            operations={Array.isArray(operations) ? operations : null}
+            isLoading={isLoading}
+            onAction={onAction}
+          />
         </div>
       ) : (
         <div className={cn("bg-background/60 w-full rounded-xl border p-4", className)}>
