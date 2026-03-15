@@ -295,7 +295,7 @@ export const zhCN: Translations = {
     nameStepAlreadyExistsError: "英文 ID 已被占用",
     nameStepCheckError: "无法验证名称可用性，请稍后重试",
     nameStepBootstrapMessage:
-      "新智能体的显示名称是 {displayName}（ID: {name}），现在开始为它生成 **SOUL**。",
+      "/bootstrap 新智能体「{displayName}」（ID: {name}）创建引导：我会生成 SOUL.md + IDENTITY.md，并可选把你的偏好沉淀到 USER.md（用户画像）。",
     agentCreated: "智能体已创建！",
     startChatting: "开始对话",
     backToGallery: "返回 Gallery",

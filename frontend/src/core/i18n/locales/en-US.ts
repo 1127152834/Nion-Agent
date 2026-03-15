@@ -305,7 +305,7 @@ export const enUS: Translations = {
     nameStepAlreadyExistsError: "This Agent ID is already taken",
     nameStepCheckError: "Could not verify name availability — please try again",
     nameStepBootstrapMessage:
-      "The new custom agent display name is {displayName} (ID: {name}). Let's bootstrap its **SOUL**.",
+      "/bootstrap Bootstrapping “{displayName}” (ID: {name}): I will generate SOUL.md + IDENTITY.md, and optionally update USER.md (user profile).",
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
     backToGallery: "Back to Gallery",
