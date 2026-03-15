@@ -54,7 +54,7 @@ class AioSandboxProvider(SandboxProvider):
         - Remote/K8s mode (connect to pre-existing sandbox URL)
         - Cross-process consistency via file-based or Redis state stores
 
-    Configuration options in config.yaml under sandbox:
+    Configuration options in the runtime config payload under `sandbox` (Config Store / UI / API):
         use: src.community.aio_sandbox:AioSandboxProvider
         image: <container image>
         port: 8080                      # Base port for local containers

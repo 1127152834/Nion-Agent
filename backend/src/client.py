@@ -145,7 +145,10 @@ class NionClient:
         Loads configuration but defers agent creation to first use.
 
         Args:
-            config_path: Path to config.yaml. Uses default resolution if None.
+            config_path: Optional path to legacy `config.yaml` used only during first-time bootstrap
+                (one-time import/migration into Config Store) or YAML fallback when the store is not
+                initialized. Prefer using the Config Center UI or the Config Center API (/api/config)
+                to manage runtime configuration.
             checkpointer: LangGraph checkpointer instance for state persistence.
                 Required for multi-turn conversations on the same thread_id.
                 Without a checkpointer, each call is stateless.
