@@ -38,6 +38,7 @@ class TaskMode(str, Enum):
     WORKFLOW = "workflow"
     REMINDER = "reminder"
     HEARTBEAT = "heartbeat"
+    EVOLUTION = "evolution"
 
 
 class CompletionCriteriaType(str, Enum):
@@ -179,6 +180,9 @@ class ScheduledTask(BaseModel):
         if self.mode == TaskMode.HEARTBEAT:
             if self.steps:
                 raise ValueError("steps must be empty for heartbeat mode")
+        if self.mode == TaskMode.EVOLUTION:
+            if self.steps:
+                raise ValueError("steps must be empty for evolution mode")
         return self
 
 

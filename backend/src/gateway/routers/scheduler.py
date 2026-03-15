@@ -100,7 +100,7 @@ def _scheduler_started():
 
 
 def _is_system_task(task: ScheduledTask) -> bool:
-    return task.created_by == "heartbeat" or task.name.startswith("heartbeat:")
+    return task.mode in {TaskMode.HEARTBEAT, TaskMode.EVOLUTION} or task.name.startswith("heartbeat:")
 
 
 def _validate_user_task_contract(*, agent_name: str, mode: TaskMode, trigger: TriggerConfig) -> str:
