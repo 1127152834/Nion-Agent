@@ -1,5 +1,5 @@
 import { Code2Icon, FileTextIcon, FolderIcon, Loader2Icon, XIcon } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GroupImperativeHandle } from "react-resizable-panels";
 
@@ -21,10 +21,10 @@ import { useWorkspaceLiveSync, useWorkspaceTree } from "@/core/artifacts";
 import { useI18n } from "@/core/i18n/hooks";
 import { useAppRouter as useRouter } from "@/core/navigation";
 import { useDesktopRuntime } from "@/core/platform/hooks";
-import { pathOfPluginAssistant } from "@/core/threads/utils";
 import {
   getWorkbenchRegistry,
   parseWorkbenchSlotRouteState,
+  WORKBENCH_SLOT_QUERY_KEYS,
   useInstalledPluginPackage,
 } from "@/core/workbench";
 import { env } from "@/env";
@@ -64,6 +64,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
   const { t } = useI18n();
   const copy = t.workspace.artifactPanel;
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const router = useRouter();
   const { thread } = useThread();
   const layoutRef = useRef<GroupImperativeHandle>(null);
@@ -554,12 +555,19 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
                   variant="ghost"
                   onClick={() => {
                     setArtifactsOpen(false);
-                    if (
-                      panelType === "workbench"
-                      && pluginSlotState.pluginId === FRONTEND_WORKBENCH_PLUGIN_ID
-                    ) {
-                      router.push(pathOfPluginAssistant());
+                    const next = new URLSearchParams(searchParams.toString());
+                    let mutated = false;
+                    for (const key of Object.values(WORKBENCH_SLOT_QUERY_KEYS)) {
+                      if (next.has(key)) {
+                        next.delete(key);
+                        mutated = true;
+                      }
                     }
+                    if (!mutated) {
+                      return;
+                    }
+                    const query = next.toString();
+                    router.replace(query ? `${pathname}?${query}` : pathname);
                   }}
                 >
                   <XIcon className="size-4" />
