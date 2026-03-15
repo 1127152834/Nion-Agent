@@ -4,7 +4,6 @@ import type { ChatStatus } from "ai";
 import {
   CheckIcon,
   FileIcon,
-  FilesIcon,
   FolderIcon,
   GraduationCapIcon,
   LightbulbIcon,
@@ -61,7 +60,6 @@ import { useLocalSettings } from "@/core/settings";
 import { useSkills } from "@/core/skills/hooks";
 import { getLocalizedSkillDescription, getLocalizedSkillName } from "@/core/skills/i18n";
 import type { AgentThreadContext } from "@/core/threads";
-import { useArtifactCenter } from "@/hooks/use-artifact-center";
 import { cn } from "@/lib/utils";
 
 import {
@@ -84,7 +82,6 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
-import { ArtifactCenter } from "./artifact-center";
 import { useThread } from "./messages/context";
 import { ModeHoverGuide } from "./mode-hover-guide";
 import { Tooltip } from "./tooltip";
@@ -621,16 +618,9 @@ export function InputBox({
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const { models } = useModels();
   const [localSettings, setLocalSettings] = useLocalSettings();
-  const artifactCenter = useArtifactCenter();
-  const { toggleOpen } = artifactCenter;
   const [localModelName, setLocalModelName] = useState<string | undefined>(
     undefined,
   );
-  const artifacts = useMemo(
-    () => thread.values.artifacts ?? [],
-    [thread.values.artifacts],
-  );
-  const artifactCenterEnabled = !isNewThread;
 
   // Mention system state
   const [mentionState, setMentionState] = useState<MentionState | null>(null);
@@ -669,29 +659,6 @@ export function InputBox({
       typeof persistedModelName === "string" ? persistedModelName : undefined,
     );
   }, [localSettings.context.model_name]);
-
-  // Toggle artifact center with Cmd/Ctrl + Shift + A
-  useEffect(() => {
-    if (!artifactCenterEnabled) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const hasPrimaryModifier = event.metaKey || event.ctrlKey;
-      if (!hasPrimaryModifier || !event.shiftKey) {
-        return;
-      }
-      if (event.key.toLowerCase() !== "a") {
-        return;
-      }
-      event.preventDefault();
-      toggleOpen();
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [artifactCenterEnabled, toggleOpen]);
 
   // Fetch data for mention options
   const { skills } = useSkills();
@@ -2309,21 +2276,6 @@ export function InputBox({
           )}
         </PromptInputTools>
         <PromptInputTools className="ml-auto min-w-0 flex w-full flex-wrap items-center justify-end gap-1 sm:w-auto">
-          {artifactCenterEnabled && (
-            <PromptInputButton
-              className="gap-1! px-2! text-xs"
-              onClick={toggleOpen}
-              disabled={disabled}
-            >
-              <FilesIcon className="size-3" />
-              <span>{t.artifactCenter.triggerLabel}</span>
-              {artifacts.length > 0 && (
-                <span className="bg-foreground text-background inline-flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 font-semibold">
-                  {artifacts.length}
-                </span>
-              )}
-            </PromptInputButton>
-          )}
           <ModelSelector
             open={modelDialogOpen}
             onOpenChange={setModelDialogOpen}
@@ -2388,14 +2340,6 @@ export function InputBox({
           />
         </PromptInputTools>
       </PromptInputFooter>
-      {artifactCenterEnabled && (
-        <ArtifactCenter
-          open={artifactCenter.open}
-          onOpenChange={artifactCenter.setOpen}
-          artifacts={artifacts}
-          threadId={threadId}
-        />
-      )}
       {isNewThread &&
         searchParams.get("mode") !== "skill" &&
         searchParams.get("mode") !== "workbench-plugin" &&
