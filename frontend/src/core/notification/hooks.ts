@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 import { useLocalSettings } from "../settings";
 
+const DEFAULT_NOTIFICATION_ICON_PATH = "/images/nion-notification.png";
+
 interface NotificationOptions {
   body?: string;
   icon?: string;
@@ -74,7 +76,13 @@ export function useNotification(): UseNotificationReturn {
         return;
       }
 
-      const notification = new Notification(title, options);
+      // 未显式指定 icon 时，部分平台会回退到 favicon，导致通知图标不一致。
+      const resolvedOptions: NotificationOptions = {
+        ...options,
+        icon: options?.icon ?? DEFAULT_NOTIFICATION_ICON_PATH,
+      };
+
+      const notification = new Notification(title, resolvedOptions);
 
       // Optional: Add event listeners
       notification.onclick = () => {
