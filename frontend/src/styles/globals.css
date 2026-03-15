@@ -145,6 +145,20 @@
       transform: rotate(20deg);
     }
   }
+
+  /* Agent card status dot: subtle "breathing light" glow for enabled states. */
+  --animate-signal-breathe: signal-breathe 1.6s ease-in-out infinite;
+  @keyframes signal-breathe {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scale(0.92);
+    }
+    50% {
+      opacity: 0.82;
+      transform: scale(1.08);
+    }
+  }
 }
 
 @theme inline {

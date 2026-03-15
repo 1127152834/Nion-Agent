@@ -54,12 +54,22 @@ function SignalIndicator({ title, active, tone = "ok", icon: Icon }: SignalIndic
           <Icon className="size-3.5" />
           <span
             className={cn(
-              "size-2 rounded-full",
-              active && tone === "ok" ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.18)]" : "",
-              active && tone === "warn" ? "bg-amber-500 shadow-[0_0_0_4px_rgba(245,158,11,0.18)]" : "",
-              !active ? "bg-muted-foreground/45" : "",
+              "relative size-2 shrink-0 rounded-full",
+              active && tone === "ok" ? "bg-emerald-500" : "",
+              active && tone === "warn" ? "bg-amber-500" : "",
+              !active ? "bg-muted-foreground/65" : "",
             )}
-          />
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute -inset-0.5 rounded-full blur-[2px]",
+                active && tone === "ok" ? "bg-emerald-500/55 animate-signal-breathe" : "",
+                active && tone === "warn" ? "bg-amber-500/45" : "",
+                !active ? "bg-muted-foreground/22" : "",
+              )}
+            />
+          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent>{title}</TooltipContent>
@@ -150,12 +160,12 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
               <SignalIndicator
                 icon={ActivityIcon}
                 active={heartbeatEnabled}
-                title={t.agents.status.heartbeat}
+                title={heartbeatEnabled ? t.agents.heartbeatOn : t.agents.heartbeatOff}
               />
               <SignalIndicator
                 icon={OrbitIcon}
                 active={evolutionEnabled}
-                title={t.agents.status.evolution}
+                title={evolutionEnabled ? t.agents.evolutionOn : t.agents.evolutionOff}
               />
               <SignalIndicator
                 icon={WrenchIcon}
