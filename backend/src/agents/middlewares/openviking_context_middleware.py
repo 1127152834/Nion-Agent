@@ -10,6 +10,7 @@ from langgraph.runtime import Runtime
 
 from src.agents.memory.core import MemoryReadRequest
 from src.agents.memory.registry import get_default_memory_provider
+from src.agents.memory.scope import normalize_agent_name_for_memory
 from src.config.app_config import get_app_config
 from src.config.memory_config import get_memory_config
 
@@ -97,7 +98,8 @@ class OpenVikingContextMiddleware(AgentMiddleware[OpenVikingContextState]):
 
     def __init__(self, agent_name: str | None = None):
         super().__init__()
-        self._agent_name = agent_name
+        # Default agent ("_default") shares global memory; do not create a separate scope.
+        self._agent_name = normalize_agent_name_for_memory(agent_name)
 
     @staticmethod
     def _is_anthropic_compatible_model(runtime: Runtime) -> bool:
