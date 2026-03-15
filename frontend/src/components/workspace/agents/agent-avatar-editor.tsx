@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDeleteAgentAvatar, useDeleteDefaultAgentAvatar, useUploadAgentAvatar, useUploadDefaultAgentAvatar } from "@/core/agents";
+import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
@@ -50,9 +51,62 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function resolveAvatarURL(raw: string | null | undefined): string | null {
+  if (!raw) {
+    return null;
+  }
+  const value = raw.trim();
+  if (!value) {
+    return null;
+  }
+
+  const lower = value.toLowerCase();
+  if (
+    lower.startsWith("http://")
+    || lower.startsWith("https://")
+    || lower.startsWith("blob:")
+    || lower.startsWith("data:")
+  ) {
+    return value;
+  }
+
+  // Backend returns relative avatar URLs like `/api/agents/<name>/avatar`.
+  // In Electron we run frontend (3000) and gateway (8001) on different ports,
+  // so we must pin the image request to the gateway origin.
+  if (value.startsWith("/")) {
+    return `${getBackendBaseURL()}${value}`;
+  }
+
+  return value;
+}
+
+function withAvatarCacheBust(url: string | null, nonce: number): string | null {
+  if (!url) {
+    return null;
+  }
+
+  const lower = url.toLowerCase();
+  // `blob:` / `data:` URLs should not be mutated.
+  if (lower.startsWith("blob:") || lower.startsWith("data:")) {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("v", String(nonce));
+    return parsed.toString();
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}v=${nonce}`;
+  }
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
+    // Ensure the resulting canvas remains readable when the avatar is loaded from
+    // a different origin/port (e.g. frontend 3000 -> gateway 8001 in Electron).
+    image.crossOrigin = "anonymous";
     image.onload = () => resolve(image);
     image.onerror = () => reject(new Error("Failed to load image"));
     image.src = src;
@@ -120,6 +174,7 @@ export function AgentAvatarEditor({
   const [open, setOpen] = useState(false);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [transform, setTransform] = useState<CropTransform | null>(null);
+  const [avatarNonce, setAvatarNonce] = useState(0);
 
   const isBusy = uploadAgentAvatar.isPending
     || deleteAgentAvatar.isPending
@@ -128,6 +183,11 @@ export function AgentAvatarEditor({
 
   const avatarCopy = t.agents.avatar;
   const fallback = useMemo(() => fallbackLabel.slice(0, 1).toUpperCase(), [fallbackLabel]);
+  const resolvedAvatarUrl = useMemo(() => resolveAvatarURL(avatarUrl), [avatarUrl]);
+  const resolvedAvatarUrlWithNonce = useMemo(
+    () => withAvatarCacheBust(resolvedAvatarUrl, avatarNonce),
+    [avatarNonce, resolvedAvatarUrl],
+  );
 
   const initializeTransform = useCallback((nextImage: HTMLImageElement) => {
     const baseScale = Math.max(STAGE_SIZE / nextImage.width, STAGE_SIZE / nextImage.height);
@@ -198,13 +258,13 @@ export function AgentAvatarEditor({
 
     let cancelled = false;
     async function hydrate() {
-      if (!avatarUrl) {
+      if (!resolvedAvatarUrlWithNonce) {
         setImage(null);
         setTransform(null);
         return;
       }
       try {
-        const loaded = await loadImage(avatarUrl);
+        const loaded = await loadImage(resolvedAvatarUrlWithNonce);
         if (cancelled) {
           return;
         }
@@ -223,7 +283,7 @@ export function AgentAvatarEditor({
     return () => {
       cancelled = true;
     };
-  }, [avatarUrl, initializeTransform, open]);
+  }, [initializeTransform, open, resolvedAvatarUrlWithNonce]);
 
   const applyZoom = useCallback((nextZoom: number) => {
     setTransform((prev) => {
@@ -282,6 +342,7 @@ export function AgentAvatarEditor({
       } else {
         await uploadAgentAvatar.mutateAsync({ name: agentName, file });
       }
+      setAvatarNonce(Date.now());
       toast.success(avatarCopy.uploadSuccess);
       setOpen(false);
     } catch (error) {
@@ -306,6 +367,7 @@ export function AgentAvatarEditor({
       } else {
         await deleteAgentAvatar.mutateAsync(agentName);
       }
+      setAvatarNonce(Date.now());
       toast.success(avatarCopy.deleteSuccess);
       setOpen(false);
     } catch (error) {
@@ -384,7 +446,11 @@ export function AgentAvatarEditor({
         title={avatarCopy.edit}
       >
         <Avatar className="size-14 border-2 border-border/80 bg-muted/60 shadow-sm">
-          <AvatarImage src={avatarUrl ?? undefined} alt={fallbackLabel} className="object-cover" />
+          <AvatarImage
+            src={resolvedAvatarUrlWithNonce ?? undefined}
+            alt={fallbackLabel}
+            className="object-cover"
+          />
           <AvatarFallback className="bg-primary/10 text-primary font-semibold">
             {fallback}
           </AvatarFallback>
