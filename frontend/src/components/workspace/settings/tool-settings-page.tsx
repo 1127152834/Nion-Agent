@@ -1,21 +1,16 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { ConfigValidationErrors } from "./config-validation-errors";
 import { ConfigSaveBar } from "./configuration/config-save-bar";
 import { ToolsSection } from "./configuration/sections/tools-section";
-import { useSettingsDialog } from "./settings-dialog-context";
 import { SettingsSection } from "./settings-section";
 import { useConfigEditor } from "./use-config-editor";
 
 const DEFAULT_TOOL_PAGE_COPY = {
   builtInTitle: "Built-in tools",
   builtInDesc: "Manage built-in tool presets.",
-  searchSettingsTitle: "Search settings",
-  searchSettingsDesc: "Configure web search and web fetch providers, priority, and fallback.",
-  searchSettingsAction: "Open search settings",
   loadConfigFailed: "Failed to load tool config",
   runtimeTitle: "Runtime config status",
   runtimeSource: "Source",
@@ -28,7 +23,6 @@ const DEFAULT_TOOL_PAGE_COPY = {
 
 export function ToolSettingsPage() {
   const { t } = useI18n();
-  const dialog = useSettingsDialog();
   const settingsLike = t.settings as {
     toolPage?: Partial<typeof DEFAULT_TOOL_PAGE_COPY>;
   };
@@ -72,25 +66,6 @@ export function ToolSettingsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-lg border bg-muted/20 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{copy.searchSettingsTitle}</div>
-                    <p className="text-muted-foreground mt-0.5 text-xs">
-                      {copy.searchSettingsDesc}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => dialog?.goToSection("searchSettings")}
-                  >
-                    {copy.searchSettingsAction}
-                  </Button>
-                </div>
-              </div>
-
               {runtimeStatus && (
                 <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-xs">
                   <div className="text-sm font-medium">{copy.runtimeTitle}</div>
