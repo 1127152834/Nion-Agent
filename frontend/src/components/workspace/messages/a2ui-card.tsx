@@ -10,6 +10,7 @@ import React, { useMemo } from "react";
 
 import type { A2UIUserAction } from "@/core/a2ui/types";
 import { extractA2UISurfacePayload } from "@/core/messages/utils";
+import { tryParseJSON } from "@/core/utils/json";
 import { cn } from "@/lib/utils";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -35,7 +36,8 @@ function parseJSONIfString(value: unknown): unknown {
   try {
     return JSON.parse(text);
   } catch {
-    return value;
+    const repaired = tryParseJSON(text);
+    return repaired ?? value;
   }
 }
 
@@ -75,7 +77,168 @@ function objectToDataEntries(value: Record<string, unknown>): DataEntry[] {
   return entries;
 }
 
+const A2UI_OPERATION_KEYS = [
+  "surfaceUpdate",
+  "dataModelUpdate",
+  "beginRendering",
+  "deleteSurface",
+] as const;
+
+type A2UIOperationKey = typeof A2UI_OPERATION_KEYS[number];
+
+function normalizeA2UIOperationKey(rawKey: string): A2UIOperationKey | null {
+  for (const key of A2UI_OPERATION_KEYS) {
+    if (rawKey === key || rawKey.includes(key)) {
+      return key;
+    }
+  }
+  return null;
+}
+
+function splitOperationEnvelope(operation: Record<string, unknown>): Record<string, unknown>[] {
+  const extracted: Record<string, unknown>[] = [];
+  for (const [key, value] of Object.entries(operation)) {
+    const normalizedKey = normalizeA2UIOperationKey(key);
+    if (!normalizedKey) {
+      continue;
+    }
+    if (!isRecord(value)) {
+      continue;
+    }
+    extracted.push({ [normalizedKey]: value });
+  }
+  return extracted.length > 0 ? extracted : [operation];
+}
+
+function normalizeValueSource(value: unknown): Record<string, unknown> | null {
+  if (isRecord(value)) {
+    if (typeof value.path === "string" && value.path.trim()) {
+      return { path: value.path.trim() };
+    }
+    if (typeof value.literalString === "string") {
+      return { literalString: value.literalString };
+    }
+    if (typeof value.literalNumber === "number" && Number.isFinite(value.literalNumber)) {
+      return { literalNumber: value.literalNumber };
+    }
+    if (typeof value.literalBoolean === "boolean") {
+      return { literalBoolean: value.literalBoolean };
+    }
+    if (Array.isArray(value.literalArray) && value.literalArray.every((item) => typeof item === "string")) {
+      return { literalArray: value.literalArray };
+    }
+  }
+
+  if (typeof value === "string") {
+    return { literalString: value };
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return { literalNumber: value };
+  }
+  if (typeof value === "boolean") {
+    return { literalBoolean: value };
+  }
+
+  return null;
+}
+
+function normalizeComponentDefinition(definition: Record<string, unknown>): Record<string, unknown> | null {
+  const id = coerceString(definition.id);
+  if (!id) {
+    return null;
+  }
+  const component = definition.component;
+  if (!isRecord(component)) {
+    return null;
+  }
+
+  const entries = Object.entries(component);
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const [rawType, rawProps] = entries[0]!;
+  const props = isRecord(rawProps) ? rawProps : {};
+
+  // Resilience for common (non-spec) component names:
+  // - "Checkbox" -> "CheckBox" (label/value semantics)
+  // - "CheckboxGroup" -> "Column" (children list)
+  if (rawType === "Checkbox") {
+    const label = normalizeValueSource(props.label);
+    const value = normalizeValueSource(props.value ?? props.checked);
+    const nextProps: Record<string, unknown> = {};
+    if (label) nextProps.label = label;
+    if (value) nextProps.value = value;
+
+    return {
+      ...definition,
+      id,
+      component: {
+        CheckBox: nextProps,
+      },
+    };
+  }
+
+  if (rawType === "CheckboxGroup") {
+    const children = props.children;
+    return {
+      ...definition,
+      id,
+      component: {
+        Column: {
+          children,
+        },
+      },
+    };
+  }
+
+  if (rawType === "CheckBox") {
+    const label = normalizeValueSource(props.label);
+    const value = normalizeValueSource(props.value);
+    const nextProps: Record<string, unknown> = { ...props };
+    if (label) nextProps.label = label;
+    if (value) nextProps.value = value;
+    return {
+      ...definition,
+      id,
+      component: {
+        CheckBox: nextProps,
+      },
+    };
+  }
+
+  return {
+    ...definition,
+    id,
+    component,
+  };
+}
+
 function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
+  let rawOperations: unknown[] = operations;
+
+  // If backend couldn't parse the tool argument, it returns a diagnostic wrapper:
+  //   [{ _raw_a2ui_json: "...", _a2ui_error: "..." }]
+  // Try to salvage the original operations with a best-effort parser to keep UX stable.
+  if (rawOperations.length === 1 && isRecord(rawOperations[0])) {
+    const raw = rawOperations[0] as Record<string, unknown>;
+    const rawA2UIJSON = raw._raw_a2ui_json;
+    if (typeof rawA2UIJSON === "string" && rawA2UIJSON.trim()) {
+      const parsed = parseJSONIfString(rawA2UIJSON);
+      if (Array.isArray(parsed)) {
+        rawOperations = parsed;
+      } else if (isRecord(parsed)) {
+        rawOperations = [parsed];
+      }
+    }
+  }
+
+  const flattenedOperations: Record<string, unknown>[] = [];
+  for (const op of rawOperations) {
+    if (!isRecord(op)) continue;
+    flattenedOperations.push(...splitOperationEnvelope(op));
+  }
+
   const normalized: A2UIMessage[] = [];
   let hasBeginRendering = false;
   let hasSurfaceUpdate = false;
@@ -83,13 +246,7 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
   type SurfaceUpdatePayload = Exclude<A2UIMessage["surfaceUpdate"], undefined>;
   type DataModelUpdatePayload = Exclude<A2UIMessage["dataModelUpdate"], undefined>;
 
-  for (const rawOperation of operations) {
-    if (!isRecord(rawOperation)) {
-      continue;
-    }
-
-    const operation = rawOperation as Record<string, unknown>;
-
+  for (const operation of flattenedOperations) {
     if (isRecord(operation.beginRendering)) {
       const payload = operation.beginRendering as Record<string, unknown>;
       const surfaceId =
@@ -143,10 +300,19 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
         continue;
       }
 
+      const normalizedComponents = components
+        .filter(isRecord)
+        .map((componentDefinition) => normalizeComponentDefinition(componentDefinition))
+        .filter(Boolean) as unknown as SurfaceUpdatePayload["components"];
+
+      if (normalizedComponents.length === 0) {
+        continue;
+      }
+
       normalized.push({
         surfaceUpdate: {
           surfaceId,
-          components: components.filter(isRecord) as unknown as SurfaceUpdatePayload["components"],
+          components: normalizedComponents,
         },
       });
       hasSurfaceUpdate = true;

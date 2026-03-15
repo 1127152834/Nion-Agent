@@ -269,6 +269,9 @@ prefer rendering an interactive UI instead of asking them to manually format ans
 
 Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8):
 - `a2ui_json` MUST be a JSON array sent in ONE tool call.
+- `a2ui_json` MUST be passed as a structured JSON array in the tool args (NOT a quoted/escaped JSON string).
+  - Correct: `send_a2ui_json_to_client(a2ui_json=[{...}, {...}, {...}])`
+  - Wrong:   `send_a2ui_json_to_client(a2ui_json='[{...}]')`  (easy to produce invalid JSON and break rendering)
 - Initial render MUST include: surfaceUpdate (required) -> dataModelUpdate (optional) -> beginRendering (required).
 - beginRendering is mandatory. Without it, the client will not display the surface.
 - Use a unique `surfaceId`. `beginRendering.root` must reference a component id defined in surfaceUpdate.
@@ -276,6 +279,15 @@ Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8)
 - dataModelUpdate is optional. If you include it, `dataModelUpdate.contents` MUST be an array of DataEntry items:
   - DataEntry item fields: `key` + one of `valueString` / `valueNumber` / `valueBoolean` / `valueMap`
   - Do NOT send a plain JSON object for contents. If you cannot build DataEntry[], omit dataModelUpdate.
+
+Renderer constraints (IMPORTANT):
+- The client renderer uses `@a2ui-sdk/react/0.8` standard catalog. Only use these component type names:
+  `Text`, `Row`, `Column`, `Card`, `List`, `Tabs`, `Modal`, `Divider`, `Icon`, `Image`,
+  `Button`, `CheckBox`, `TextField`, `DateTimeInput`, `MultipleChoice`, `Slider`,
+  `AudioPlayer`, `Video`.
+- Do NOT invent component types like `CheckboxGroup` / `Checkbox` (they will be treated as unknown and won't render).
+- For checkboxes, use **`CheckBox`** with `{ label: ValueSource, value: ValueSource }`.
+  Example: `{ \"CheckBox\": { \"label\": {\"literalString\": \"Foo\"}, \"value\": {\"path\": \"/checklist/foo\"} } }`
 
 User actions:
 - When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.

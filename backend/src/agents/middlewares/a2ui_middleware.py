@@ -39,6 +39,16 @@ _A2UI_ALLOWED_OP_KEYS = (
     "deleteSurface",
 )
 
+# Some models may emit camelCase tool args even when the tool schema uses snake_case.
+# Keep this list small and intentional to avoid accidentally parsing unrelated args.
+_A2UI_ARGS_CANDIDATE_KEYS = (
+    "a2ui_json",
+    "a2uiJson",
+    "a2ui",
+    "operations",
+    "messages",
+)
+
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -105,6 +115,36 @@ def _parse_a2ui_operations(raw: object) -> list[dict[str, Any]] | None:
         if isinstance(item, dict):
             operations.append(item)
     return operations or None
+
+
+def _extract_raw_a2ui_json_from_args(raw_args: object) -> object:
+    """Extract the most likely A2UI payload from a tool-call args object.
+
+    Why this exists:
+    - The canonical argument name is `a2ui_json`.
+    - Some LLMs still emit `a2uiJson` or wrap the payload under generic keys.
+    - In rare cases, the model may pass the operations array directly as `args`
+      (non-dict). We treat that as the payload itself.
+
+    This function is intentionally conservative: it only checks a small, known set
+    of candidate keys, and otherwise returns the original args unchanged.
+    """
+    if not isinstance(raw_args, dict):
+        return raw_args
+
+    for key in _A2UI_ARGS_CANDIDATE_KEYS:
+        if key in raw_args and raw_args[key] is not None:
+            return raw_args[key]
+
+    # As a last resort, if the model mistakenly wrapped the payload under `payload`,
+    # attempt a single level unwrap.
+    payload = raw_args.get("payload")
+    if isinstance(payload, dict):
+        for key in _A2UI_ARGS_CANDIDATE_KEYS:
+            if key in payload and payload[key] is not None:
+                return payload[key]
+
+    return raw_args.get("a2ui_json")
 
 
 def _parse_json_if_string(value: object) -> object:
@@ -436,12 +476,10 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], ToolMessage | Command],
     ) -> ToolMessage | Command:
-        args = request.tool_call.get("args", {})
-        if not isinstance(args, dict):
-            args = {}
+        raw_args = request.tool_call.get("args", {})
 
         tool_call_id = cast(str | None, request.tool_call.get("id"))
-        raw_a2ui_json = args.get("a2ui_json")
+        raw_a2ui_json = _extract_raw_a2ui_json_from_args(raw_args)
 
         operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
@@ -499,12 +537,10 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         request: ToolCallRequest,
         handler: Callable[[ToolCallRequest], ToolMessage | Command],
     ) -> ToolMessage | Command:
-        args = request.tool_call.get("args", {})
-        if not isinstance(args, dict):
-            args = {}
+        raw_args = request.tool_call.get("args", {})
 
         tool_call_id = cast(str | None, request.tool_call.get("id"))
-        raw_a2ui_json = args.get("a2ui_json")
+        raw_a2ui_json = _extract_raw_a2ui_json_from_args(raw_args)
 
         operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
