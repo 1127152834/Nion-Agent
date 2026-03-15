@@ -303,7 +303,8 @@ Display-only rule (CRITICAL):
 
 Charts / visualization:
 - The client supports a product-specific component `TempRangeChart` for small line charts (e.g. 7-day forecast).
-- Use it when the user explicitly asks for a chart/graph visualization.
+- Use it when the user asks for \"可视化\" and the content is a small time-series / trend (weather, metrics, weekly stats),
+  even if they do not explicitly say \"chart\".
 - Props (recommended literals):
   - `title`: ValueSource (literalString)
   - `labels`: ValueSource (literalArray of strings, e.g. [\"Mon\",\"Tue\",...])
