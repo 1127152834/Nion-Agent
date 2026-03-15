@@ -7,7 +7,8 @@ wheels/
 *.egg-info
 .coverage
 .coverage.*
-.ruff_cache
+.pytest_cache/
+.ruff_cache/
 agent_history.gif
 static/browser_history/*.gif
 
@@ -16,6 +17,7 @@ log/*
 
 # Virtual environments
 .venv
+.venv.*
 venv/
 
 # User config file
