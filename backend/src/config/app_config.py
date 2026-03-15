@@ -10,6 +10,7 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.config.a2ui_config import A2UIConfig
 from src.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from src.config.config_store import (
     DEFAULT_CHECKPOINTER_CONFIG,
@@ -36,6 +37,10 @@ class AppConfig(BaseModel):
     """Config for the Nion application."""
 
     models: list[ModelConfig] = Field(default_factory=list, description="Available models")
+    a2ui: A2UIConfig = Field(
+        default_factory=A2UIConfig,
+        description="A2UI (Agent-to-UI) configuration",
+    )
     sandbox: SandboxConfig = Field(description="Sandbox configuration")
     tools: list[ToolConfig] = Field(default_factory=list, description="Available tools")
     tool_groups: list[ToolGroupConfig] = Field(default_factory=list, description="Available tool groups")

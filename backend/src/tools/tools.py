@@ -125,6 +125,21 @@ def get_available_tools(
     # Conditionally add tools based on config
     builtin_tools = BUILTIN_TOOLS.copy()
 
+    # A2UI is a user-facing UX capability. If globally disabled via Config Center,
+    # do NOT expose `send_a2ui_json_to_client` to the model. This prevents tool-call
+    # attempts and keeps the interaction purely text-based.
+    try:
+        a2ui_enabled = bool(getattr(getattr(config, "a2ui", None), "enabled", True))
+    except Exception:  # noqa: BLE001
+        a2ui_enabled = True
+    if not a2ui_enabled:
+        builtin_tools = [
+            tool
+            for tool in builtin_tools
+            if getattr(tool, "name", None) != "send_a2ui_json_to_client"
+        ]
+        logger.info("A2UI is disabled by config; removed send_a2ui_json_to_client tool from available tools")
+
     # Add subagent tools only if enabled via runtime parameter
     if subagent_enabled:
         builtin_tools.extend(SUBAGENT_TOOLS)

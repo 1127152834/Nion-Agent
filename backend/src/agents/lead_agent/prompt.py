@@ -173,6 +173,97 @@ bash("npm test")  # Direct execution, not task()
 </subagent_system>"""
 
 
+A2UI_SYSTEM_PROMPT_SECTION = """
+<a2ui_system>
+**A2UI (Agent-to-UI) - Product-friendly user interaction**
+
+When you need the user to provide structured input (forms), pick options, or confirm an action,
+prefer rendering an interactive UI instead of asking them to manually format answers.
+
+Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8):
+- `a2ui_json` MUST be a JSON array sent in ONE tool call.
+- `a2ui_json` MUST be passed as a structured JSON array in the tool args (NOT a quoted/escaped JSON string).
+  - Correct: `send_a2ui_json_to_client(a2ui_json=[OPERATION_1, OPERATION_2, OPERATION_3])`
+  - Wrong:   `send_a2ui_json_to_client(a2ui_json='[...]')`  (easy to produce invalid JSON and break rendering)
+- Initial render MUST include: surfaceUpdate (required) -> dataModelUpdate (optional) -> beginRendering (required).
+- beginRendering is mandatory. Without it, the client will not display the surface.
+- Use a unique `surfaceId`. `beginRendering.root` must reference a component id defined in surfaceUpdate.
+- surfaceUpdate MUST use `components` (array of component definitions). If you are unsure, omit extra fields but keep `surfaceId` and `components`.
+- dataModelUpdate is optional. If you include it, `dataModelUpdate.contents` MUST be an array of DataEntry items:
+  - DataEntry item fields: `key` + one of `valueString` / `valueNumber` / `valueBoolean` / `valueMap`
+  - Do NOT send a plain JSON object for contents. If you cannot build DataEntry[], omit dataModelUpdate.
+
+Renderer constraints (IMPORTANT):
+- The client renderer uses `@a2ui-sdk/react/0.8` standard catalog. Only use these component type names:
+  `Text`, `Row`, `Column`, `Card`, `List`, `Tabs`, `Modal`, `Divider`, `Icon`, `Image`, `TempRangeChart`,
+  `Button`, `CheckBox`, `TextField`, `DateTimeInput`, `MultipleChoice`, `Slider`,
+  `AudioPlayer`, `Video`.
+- Do NOT invent component types like `CheckboxGroup` / `Checkbox` (they will be treated as unknown and won't render).
+- For checkboxes, use **`CheckBox`** with props: `label` (ValueSource) and `value` (ValueSource).
+  Example: `label.literalString="Foo"` and `value.path="/checklist/foo"`
+
+Component property cheat-sheet (use EXACT prop names):
+- `Card`: use prop `child` (string component id). DO NOT use `children`.
+- `Button`: props: `child` (string component id), `primary` (boolean), `action.name` (string), optional `action.context` (ActionContextItem[]).
+- `Modal`: props: `entryPointChild` + `contentChild` (both are component ids).
+- `Tabs`: prop `tabItems` is an array of items. Each item: `title` (ValueSource) + `child` (component id).
+- `TextField`: for INPUT only. Use `label` (ValueSource) and `text.path="/..."` (path binding). Pick `textFieldType` deliberately.
+
+Display-only rule (CRITICAL):
+- If the user wants a visualization / dashboard / report (no input needed), DO NOT use input components
+  like `TextField` / `MultipleChoice` / `Slider` as display placeholders (they often render as blank fields).
+  Use `Text` + `Row`/`Column`/`List`/`Card` to display values.
+
+Charts / visualization:
+- The client supports a product-specific component `TempRangeChart` for small line charts (e.g. 7-day forecast).
+- Use it when the user asks for "可视化" and the content is a small time-series / trend (weather, metrics, weekly stats),
+  even if they do not explicitly say "chart".
+- Props (recommended literals):
+  - `title`: ValueSource (literalString)
+  - `labels`: ValueSource (literalArray of strings, e.g. ["Mon","Tue",...])
+  - `high`: ValueSource (literalArray of strings, numbers encoded as strings, e.g. ["17","16",...])
+  - `low`:  ValueSource (literalArray of strings, numbers encoded as strings)
+  - `unit`: ValueSource (literalString, e.g. "°C")
+  Example:
+  `{"TempRangeChart": {"title": {"literalString": "武汉·7天"}, "labels": {"literalArray": ["Mon","Tue"]}, "high": {"literalArray": ["17","16"]}, "low": {"literalArray": ["8","9"]}, "unit": {"literalString": "°C"}}}`
+
+User actions:
+- When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.
+  This represents a real user action. You MUST react to it and continue the workflow.
+
+Text vs UI alignment:
+- When you call `send_a2ui_json_to_client`, keep your normal assistant text minimal (0-1 short sentences).
+- Do NOT claim that the UI is already rendered or describe visual styling (colors/themes/spacing) you did not encode in the payload.
+  The UI card itself is the output; extra prose often becomes inaccurate and confuses end users.
+
+Repair loop (CRITICAL):
+- If you receive a tool RESULT for `send_a2ui_json_to_client` that says A2UI validation failed
+  (and includes internal field name `a2ui_validation_error`), you MUST immediately:
+  1) fix the payload to satisfy v0.8 rules
+  2) call `send_a2ui_json_to_client(a2ui_json=[...])` again in the same run
+- Do NOT fall back to creating HTML files, asking the user to copy/paste JSON, or switching to unrelated tools.
+  Only generate export artifacts (HTML/CSV/etc.) when the user explicitly asks for an export.
+
+Client metadata:
+- `log_a2ui_event` may include `client_capabilities` and `data_model_snapshot`.
+  Use them to generate UI that the client can render and to preserve user-entered values.
+
+Special UI actions:
+- You may receive `log_a2ui_event` with action name `__a2ui_retry__` (user wants the UI regenerated)
+  or `__a2ui_fallback_text__` (user chooses to continue in plain text). Treat this as explicit user intent.
+</a2ui_system>
+"""
+
+
+A2UI_DISABLED_PROMPT_SECTION = """
+<a2ui_policy enabled="false">
+A2UI is disabled for this runtime.
+- Do NOT call `send_a2ui_json_to_client`.
+- If you need structured input, ask the user in plain text (questions/options) instead.
+</a2ui_policy>
+"""
+
+
 SYSTEM_PROMPT_TEMPLATE = """
 <role>
 You are {agent_name}, an open-source super agent.
@@ -261,84 +352,7 @@ User: "staging"
 You: "Deploying to staging..." [proceed]
 </clarification_system>
 
-<a2ui_system>
-**A2UI (Agent-to-UI) - Product-friendly user interaction**
-
-When you need the user to provide structured input (forms), pick options, or confirm an action,
-prefer rendering an interactive UI instead of asking them to manually format answers.
-
-Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8):
-- `a2ui_json` MUST be a JSON array sent in ONE tool call.
-- `a2ui_json` MUST be passed as a structured JSON array in the tool args (NOT a quoted/escaped JSON string).
-  - Correct: `send_a2ui_json_to_client(a2ui_json=[OPERATION_1, OPERATION_2, OPERATION_3])`
-  - Wrong:   `send_a2ui_json_to_client(a2ui_json='[...]')`  (easy to produce invalid JSON and break rendering)
-- Initial render MUST include: surfaceUpdate (required) -> dataModelUpdate (optional) -> beginRendering (required).
-- beginRendering is mandatory. Without it, the client will not display the surface.
-- Use a unique `surfaceId`. `beginRendering.root` must reference a component id defined in surfaceUpdate.
-- surfaceUpdate MUST use `components` (array of component definitions). If you are unsure, omit extra fields but keep `surfaceId` and `components`.
-- dataModelUpdate is optional. If you include it, `dataModelUpdate.contents` MUST be an array of DataEntry items:
-  - DataEntry item fields: `key` + one of `valueString` / `valueNumber` / `valueBoolean` / `valueMap`
-  - Do NOT send a plain JSON object for contents. If you cannot build DataEntry[], omit dataModelUpdate.
-
-Renderer constraints (IMPORTANT):
-- The client renderer uses `@a2ui-sdk/react/0.8` standard catalog. Only use these component type names:
-  `Text`, `Row`, `Column`, `Card`, `List`, `Tabs`, `Modal`, `Divider`, `Icon`, `Image`, `TempRangeChart`,
-  `Button`, `CheckBox`, `TextField`, `DateTimeInput`, `MultipleChoice`, `Slider`,
-  `AudioPlayer`, `Video`.
-- Do NOT invent component types like `CheckboxGroup` / `Checkbox` (they will be treated as unknown and won't render).
-- For checkboxes, use **`CheckBox`** with props: `label` (ValueSource) and `value` (ValueSource).
-  Example: `label.literalString=\"Foo\"` and `value.path=\"/checklist/foo\"`
-
-Component property cheat-sheet (use EXACT prop names):
-- `Card`: use prop `child` (string component id). DO NOT use `children`.
-- `Button`: props: `child` (string component id), `primary` (boolean), `action.name` (string), optional `action.context` (ActionContextItem[]).
-- `Modal`: props: `entryPointChild` + `contentChild` (both are component ids).
-- `Tabs`: prop `tabItems` is an array of items. Each item: `title` (ValueSource) + `child` (component id).
-- `TextField`: for INPUT only. Use `label` (ValueSource) and `text.path="/..."` (path binding). Pick `textFieldType` deliberately.
-
-Display-only rule (CRITICAL):
-- If the user wants a visualization / dashboard / report (no input needed), DO NOT use input components
-  like `TextField` / `MultipleChoice` / `Slider` as display placeholders (they often render as blank fields).
-  Use `Text` + `Row`/`Column`/`List`/`Card` to display values.
-
-Charts / visualization:
-- The client supports a product-specific component `TempRangeChart` for small line charts (e.g. 7-day forecast).
-- Use it when the user asks for \"可视化\" and the content is a small time-series / trend (weather, metrics, weekly stats),
-  even if they do not explicitly say \"chart\".
-- Props (recommended literals):
-  - `title`: ValueSource (literalString)
-  - `labels`: ValueSource (literalArray of strings, e.g. [\"Mon\",\"Tue\",...])
-  - `high`: ValueSource (literalArray of strings, numbers encoded as strings, e.g. [\"17\",\"16\",...])
-  - `low`:  ValueSource (literalArray of strings, numbers encoded as strings)
-  - `unit`: ValueSource (literalString, e.g. \"°C\")
-  Example:
-  `{{\"TempRangeChart\": {{\"title\": {{\"literalString\": \"武汉·7天\"}}, \"labels\": {{\"literalArray\": [\"Mon\",\"Tue\"]}}, \"high\": {{\"literalArray\": [\"17\",\"16\"]}}, \"low\": {{\"literalArray\": [\"8\",\"9\"]}}, \"unit\": {{\"literalString\": \"°C\"}}}}}}`
-
-User actions:
-- When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.
-  This represents a real user action. You MUST react to it and continue the workflow.
-
-Text vs UI alignment:
-- When you call `send_a2ui_json_to_client`, keep your normal assistant text minimal (0-1 short sentences).
-- Do NOT claim that the UI is already rendered or describe visual styling (colors/themes/spacing) you did not encode in the payload.
-  The UI card itself is the output; extra prose often becomes inaccurate and confuses end users.
-
-Repair loop (CRITICAL):
-- If you receive a tool RESULT for `send_a2ui_json_to_client` that says A2UI validation failed
-  (and includes internal field name `a2ui_validation_error`), you MUST immediately:
-  1) fix the payload to satisfy v0.8 rules
-  2) call `send_a2ui_json_to_client(a2ui_json=[...])` again in the same run
-- Do NOT fall back to creating HTML files, asking the user to copy/paste JSON, or switching to unrelated tools.
-  Only generate export artifacts (HTML/CSV/etc.) when the user explicitly asks for an export.
-
-Client metadata:
-- `log_a2ui_event` may include `client_capabilities` and `data_model_snapshot`.
-  Use them to generate UI that the client can render and to preserve user-entered values.
-
-Special UI actions:
-- You may receive `log_a2ui_event` with action name `__a2ui_retry__` (user wants the UI regenerated)
-  or `__a2ui_fallback_text__` (user chooses to continue in plain text). Treat this as explicit user intent.
-</a2ui_system>
+{a2ui_section}
 
 {skills_section}
 {cli_tools_section}
@@ -691,6 +705,7 @@ def _build_memory_policy_section(
 def apply_prompt_template(
     subagent_enabled: bool = False,
     max_concurrent_subagents: int = 3,
+    a2ui_enabled: bool = True,
     *,
     agent_name: str | None = None,
     available_skills: set[str] | None = None,
@@ -745,6 +760,8 @@ def apply_prompt_template(
         plugin_studio_session_id=plugin_studio_session_id,
     )
 
+    a2ui_section = A2UI_SYSTEM_PROMPT_SECTION if a2ui_enabled else A2UI_DISABLED_PROMPT_SECTION
+
     # Get user profile with policy enforcement
     user_profile = get_user_profile(session_mode=session_mode, memory_read=memory_read)
 
@@ -757,6 +774,7 @@ def apply_prompt_template(
         cli_tools_section=cli_tools_section,
         requested_skills_section=requested_skills_section,
         plugin_assistant_section=plugin_assistant_section,
+        a2ui_section=a2ui_section,
         memory_context=memory_context,
         memory_policy_section=memory_policy_section,
         subagent_section=subagent_section,

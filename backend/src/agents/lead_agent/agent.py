@@ -316,6 +316,12 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
     if model_config is not None and model_config.supports_vision:
         middlewares.append(ViewImageMiddleware())
 
+    # A2UI is a global UX feature; default to enabled for backwards compatibility.
+    try:
+        a2ui_enabled = bool(getattr(getattr(app_config, "a2ui", None), "enabled", True))
+    except Exception:  # noqa: BLE001
+        a2ui_enabled = True
+
     # Add SubagentLimitMiddleware to truncate excess parallel task calls
     subagent_enabled = config.get("configurable", {}).get("subagent_enabled", False)
     if subagent_enabled:
@@ -329,7 +335,11 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
     middlewares.append(ToolSafetyGuardMiddleware())
 
     # A2UIMiddleware should run before other interrupt-style middlewares.
-    middlewares.append(A2UIMiddleware())
+    # If A2UI is disabled via Config Center, we skip it entirely so:
+    # - the send_a2ui_json_to_client tool is not intercepted
+    # - the runtime behaves as pure text interaction
+    if a2ui_enabled:
+        middlewares.append(A2UIMiddleware())
 
     # CLIInteractiveMiddleware must be before ClarificationMiddleware
     middlewares.append(CLIInteractiveMiddleware())
@@ -393,6 +403,12 @@ def make_lead_agent(config: RunnableConfig):
         logger.warning(f"Thinking mode is enabled but model '{model_name}' does not support it; fallback to non-thinking mode.")
         thinking_enabled = False
 
+    # Global A2UI toggle (defaults to enabled for backwards compatibility).
+    try:
+        a2ui_enabled = bool(getattr(getattr(app_config, "a2ui", None), "enabled", True))
+    except Exception:  # noqa: BLE001
+        a2ui_enabled = True
+
     logger.info(
         "Create Agent(%s) -> thinking_enabled: %s, reasoning_effort: %s, model_name: %s, is_plan_mode: %s, subagent_enabled: %s, max_concurrent_subagents: %s",
         agent_name or "default",
@@ -425,6 +441,7 @@ def make_lead_agent(config: RunnableConfig):
         system_prompt = apply_prompt_template(
             subagent_enabled=subagent_enabled,
             max_concurrent_subagents=max_concurrent_subagents,
+            a2ui_enabled=a2ui_enabled,
             available_skills=set(["bootstrap"]),
             session_mode=session_mode,
             memory_read=memory_read,
@@ -455,6 +472,7 @@ def make_lead_agent(config: RunnableConfig):
         system_prompt=apply_prompt_template(
             subagent_enabled=subagent_enabled,
             max_concurrent_subagents=max_concurrent_subagents,
+            a2ui_enabled=a2ui_enabled,
             agent_name=agent_name,
             session_mode=session_mode,
             memory_read=memory_read,

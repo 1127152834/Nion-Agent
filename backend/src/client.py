@@ -298,6 +298,16 @@ class NionClient:
         memory_read = cfg.get("memory_read")
         memory_write = cfg.get("memory_write")
 
+        # Keep A2UI toggle consistent across all runtimes (desktop / langgraph / embedded client).
+        # Default is enabled to preserve existing behavior.
+        try:
+            from src.config.app_config import ensure_latest_app_config
+
+            app_config = ensure_latest_app_config(process_name="client")
+            a2ui_enabled = bool(getattr(getattr(app_config, "a2ui", None), "enabled", True))
+        except Exception:  # noqa: BLE001
+            a2ui_enabled = True
+
         kwargs: dict[str, Any] = {
             "model": create_chat_model(name=model_name, thinking_enabled=thinking_enabled),
             "tools": self._get_tools(model_name=model_name, subagent_enabled=subagent_enabled, agent_name=agent_name),
@@ -305,6 +315,7 @@ class NionClient:
             "system_prompt": apply_prompt_template(
                 subagent_enabled=subagent_enabled,
                 max_concurrent_subagents=max_concurrent_subagents,
+                a2ui_enabled=a2ui_enabled,
                 agent_name=agent_name,
                 session_mode=session_mode,
                 memory_read=memory_read,
