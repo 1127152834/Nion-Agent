@@ -1162,11 +1162,11 @@ export function SearchSettingsPage() {
     legacyHint: tr(
       "legacyHint",
       fb(
-        "当前未检测到 search_settings，页面使用历史工具配置进行展示。点击“保存”后会写入 search_settings。",
-        "search_settings is not found. This page is showing legacy tool config. Click Save to write search_settings.",
+        "当前未检测到 search_settings，页面使用历史工具配置进行展示。点击右侧“写入并保存”会将当前展示的配置写入 search_settings。",
+        "search_settings is not found. This page is showing legacy tool config. Click \"Write & save\" to persist search_settings.",
       ),
     ),
-    btnMigrate: tr("btnMigrate", fb("写入草稿", "Add to draft")),
+    btnMigrate: tr("btnMigrate", fb("写入并保存", "Write & save")),
     tabSearch: tr("tabSearch", "Web Search"),
     tabFetch: tr("tabFetch", "Web Fetch"),
     optionsTitle: tr("optionsTitle", fb("行为参数", "Options")),
@@ -1227,6 +1227,7 @@ export function SearchSettingsPage() {
     onConfigChange,
     onDiscard,
     onSave,
+    onSaveConfig,
   } = useConfigEditor({
     prepareConfig: (config) => {
       // Only enforce invariants if search_settings already exists.
@@ -1314,13 +1315,13 @@ export function SearchSettingsPage() {
     onConfigChange(next);
   };
 
-  const migrateLegacyToDraft = () => {
+  const migrateLegacyToConfig = async () => {
     if (!derivedLegacySettings) {
       return;
     }
     const next = cloneConfig(draftConfig);
     (next as Record<string, unknown>).search_settings = cloneConfig(derivedLegacySettings);
-    onConfigChange(next);
+    await onSaveConfig(next);
   };
 
   const reorderProviders = (kind: SearchKind, nextProviders: string[]) => {
@@ -1554,7 +1555,13 @@ export function SearchSettingsPage() {
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">{text.legacyHint}</div>
-                    <Button type="button" size="sm" variant="secondary" disabled={disabled} onClick={migrateLegacyToDraft}>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      disabled={disabled || saving}
+                      onClick={() => void migrateLegacyToConfig()}
+                    >
                       {text.btnMigrate}
                     </Button>
                   </div>

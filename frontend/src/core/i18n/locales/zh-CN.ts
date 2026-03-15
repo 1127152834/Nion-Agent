@@ -1478,8 +1478,9 @@ export const zhCN: Translations = {
       title: "搜索设置",
       description: "配置 Web Search 与 Web Fetch 的服务优先级、密钥与兜底策略。",
       loadFailed: "加载配置失败",
-      legacyHint: "当前未检测到 search_settings，页面使用历史工具配置进行展示。点击“保存”后会写入 search_settings。",
-      btnMigrate: "写入草稿",
+      legacyHint:
+        "当前未检测到 search_settings，页面使用历史工具配置进行展示。点击右侧“写入并保存”会将当前展示的配置写入 search_settings。",
+      btnMigrate: "写入并保存",
       tabSearch: "Web Search",
       tabFetch: "Web Fetch",
       optionsTitle: "行为参数",

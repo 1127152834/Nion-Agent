@@ -1402,8 +1402,8 @@ export const enUS: Translations = {
       description: "Configure provider priority, credentials, and fallback for Web Search and Web Fetch.",
       loadFailed: "Failed to load config",
       legacyHint:
-        "search_settings is not found. This page is showing legacy tool config. Click Save to write search_settings.",
-      btnMigrate: "Add to draft",
+        "search_settings is not found. This page is showing legacy tool config. Click \"Write & save\" to persist search_settings.",
+      btnMigrate: "Write & save",
       tabSearch: "Web Search",
       tabFetch: "Web Fetch",
       optionsTitle: "Options",
