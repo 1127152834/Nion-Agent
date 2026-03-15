@@ -41,6 +41,17 @@
 
 排障信息对开发有用，但对普通用户是噪音且会破坏信任。产品化必须分离“用户可理解提示”和“开发诊断详情”。
 
+### 2.5 组件 props 严格导致“合法但空白”（容易被忽略的 P1）
+
+`@a2ui-sdk/react/0.8` 的部分组件 props 命名很严格，模型常见误用不会触发校验错误，但会产生“空白 UI”：
+
+- `Card` 需要 `child`（单个 componentId），模型常写成 `children`，渲染器会输出空 Card 容器但不报错。
+
+这类问题无法只靠“surfaceUpdate + beginRendering”层面的校验发现，因此需要：
+
+- prompt 明确 props 速查表
+- 前端做针对性归一化/容错（尽可能从 `children.explicitList` 兜底提取一个 `child`）
+
 ## 3. 最终技术方案（已落地的产品化决策）
 
 ### 3.1 协议栈策略：内部以 v0.8 为 Canonical，外部输入做最大化兼容
