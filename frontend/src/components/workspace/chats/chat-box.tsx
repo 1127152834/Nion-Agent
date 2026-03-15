@@ -119,7 +119,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
 
   const workspaceMeta = useWorkspaceLiveSync(threadId, {
     enabled: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory" && isDesktopRuntime,
-    root: "/mnt/user-data/workspace",
+    root: "/mnt/user-data",
   });
 
   const shouldPollWorkspaceTree = !isDesktopRuntime || workspaceMeta.data?.watch_supported === false;
@@ -131,7 +131,7 @@ const ChatBox: React.FC<{ children: React.ReactNode; threadId: string }> = ({
     error: workspaceTreeError,
   } = useWorkspaceTree(threadId, {
     enabled: artifactPanelOpen && supportsWorkspaceView && panelType === "working-directory",
-    root: "/mnt/user-data/workspace",
+    root: "/mnt/user-data",
     depth: 6,
     includeHidden: false,
     maxNodes: 5000,
