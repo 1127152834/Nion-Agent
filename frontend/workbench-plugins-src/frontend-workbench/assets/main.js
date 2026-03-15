@@ -5,7 +5,7 @@
     return;
   }
 
-  const ROOT = "/mnt/user-data/workspace";
+  const ROOT = "/mnt/user-data";
   const PREVIEW_TIMEOUT_MS = 120000;
   const PREVIEW_PORT_START = 14900;
   const PREVIEW_PORT_MAX = 15999;
