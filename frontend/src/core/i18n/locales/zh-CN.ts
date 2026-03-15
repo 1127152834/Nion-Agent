@@ -323,7 +323,7 @@ export const zhCN: Translations = {
     },
     avatar: {
       edit: "上传头像",
-      title: "上传并裁剪圆形头像",
+      title: "上传并裁剪方形头像",
       hint: "拖拽调整位置，使用滑块缩放，保存后自动应用到卡片。",
       emptyHint: "请先选择图片",
       unsupportedType: "仅支持 PNG / JPG / WEBP 图片",

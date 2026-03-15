@@ -333,7 +333,7 @@ export const enUS: Translations = {
     },
     avatar: {
       edit: "Edit avatar",
-      title: "Upload and crop circular avatar",
+      title: "Upload and crop square avatar",
       hint: "Drag to reposition, use slider to zoom, then apply.",
       emptyHint: "Select an image first",
       unsupportedType: "Only PNG / JPG / WEBP are supported",

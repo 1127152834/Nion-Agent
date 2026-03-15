@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 const STAGE_SIZE = 320;
 const OUTPUT_SIZE = 256;
 const MASK_PADDING = 16;
+const CROP_SIZE = STAGE_SIZE - MASK_PADDING * 2;
+const CROP_CORNER_RADIUS = 20;
 
 type CropTransform = {
   offsetX: number;
@@ -49,6 +51,31 @@ interface AgentAvatarEditorProps {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function buildRoundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+) {
+  const clampedRadius = clamp(radius, 0, Math.min(width, height) / 2);
+  const right = x + width;
+  const bottom = y + height;
+
+  ctx.beginPath();
+  ctx.moveTo(x + clampedRadius, y);
+  ctx.lineTo(right - clampedRadius, y);
+  ctx.arcTo(right, y, right, y + clampedRadius, clampedRadius);
+  ctx.lineTo(right, bottom - clampedRadius);
+  ctx.arcTo(right, bottom, right - clampedRadius, bottom, clampedRadius);
+  ctx.lineTo(x + clampedRadius, bottom);
+  ctx.arcTo(x, bottom, x, bottom - clampedRadius, clampedRadius);
+  ctx.lineTo(x, y + clampedRadius);
+  ctx.arcTo(x, y, x + clampedRadius, y, clampedRadius);
+  ctx.closePath();
 }
 
 function resolveAvatarURL(raw: string | null | undefined): string | null {
@@ -123,16 +150,16 @@ function exportCroppedAvatar(image: HTMLImageElement, transform: CropTransform):
   }
 
   ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-  ctx.beginPath();
-  ctx.arc(OUTPUT_SIZE / 2, OUTPUT_SIZE / 2, OUTPUT_SIZE / 2, 0, Math.PI * 2);
-  ctx.clip();
 
   const scale = transform.baseScale * transform.zoom;
-  const ratio = OUTPUT_SIZE / STAGE_SIZE;
+  const ratio = OUTPUT_SIZE / CROP_SIZE;
+
+  buildRoundedRectPath(ctx, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE, Math.round(CROP_CORNER_RADIUS * ratio));
+  ctx.clip();
   ctx.drawImage(
     image,
-    transform.offsetX * ratio,
-    transform.offsetY * ratio,
+    (transform.offsetX - MASK_PADDING) * ratio,
+    (transform.offsetY - MASK_PADDING) * ratio,
     image.width * scale * ratio,
     image.height * scale * ratio,
   );
@@ -190,10 +217,10 @@ export function AgentAvatarEditor({
   );
 
   const initializeTransform = useCallback((nextImage: HTMLImageElement) => {
-    const baseScale = Math.max(STAGE_SIZE / nextImage.width, STAGE_SIZE / nextImage.height);
+    const baseScale = Math.max(CROP_SIZE / nextImage.width, CROP_SIZE / nextImage.height);
     setTransform({
-      offsetX: (STAGE_SIZE - nextImage.width * baseScale) / 2,
-      offsetY: (STAGE_SIZE - nextImage.height * baseScale) / 2,
+      offsetX: MASK_PADDING + (CROP_SIZE - nextImage.width * baseScale) / 2,
+      offsetY: MASK_PADDING + (CROP_SIZE - nextImage.height * baseScale) / 2,
       baseScale,
       zoom: 1,
     });
@@ -233,13 +260,11 @@ export function AgentAvatarEditor({
     ctx.fillStyle = "rgba(16, 16, 16, 0.45)";
     ctx.fillRect(0, 0, STAGE_SIZE, STAGE_SIZE);
     ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    ctx.arc(STAGE_SIZE / 2, STAGE_SIZE / 2, STAGE_SIZE / 2 - MASK_PADDING, 0, Math.PI * 2);
+    buildRoundedRectPath(ctx, MASK_PADDING, MASK_PADDING, CROP_SIZE, CROP_SIZE, CROP_CORNER_RADIUS);
     ctx.fill();
     ctx.restore();
 
-    ctx.beginPath();
-    ctx.arc(STAGE_SIZE / 2, STAGE_SIZE / 2, STAGE_SIZE / 2 - MASK_PADDING, 0, Math.PI * 2);
+    buildRoundedRectPath(ctx, MASK_PADDING, MASK_PADDING, CROP_SIZE, CROP_SIZE, CROP_CORNER_RADIUS);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -441,11 +466,11 @@ export function AgentAvatarEditor({
     <>
       <button
         type="button"
-        className="group/avatar relative rounded-full"
+        className="group/avatar relative rounded-lg"
         onClick={() => setOpen(true)}
         title={avatarCopy.edit}
       >
-        <Avatar className="size-14 border-2 border-border/80 bg-muted/60 shadow-sm">
+        <Avatar className="size-14 rounded-lg border-2 border-border/80 bg-muted/60 shadow-sm">
           <AvatarImage
             src={resolvedAvatarUrlWithNonce ?? undefined}
             alt={fallbackLabel}
