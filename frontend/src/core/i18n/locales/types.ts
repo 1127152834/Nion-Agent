@@ -683,7 +683,6 @@ export interface Translations {
       title: string;
       description: string;
       timezoneBadge: string;
-      heartbeatLink: string;
       createTask: string;
       taskListTitle: string;
       taskListDescription: string;

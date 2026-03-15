@@ -762,7 +762,6 @@ export const zhCN: Translations = {
       title: "{agent} 的定时任务",
       description: "定时任务强绑定当前智能体，并在该智能体的人设、记忆与工具策略上下文中执行。",
       timezoneBadge: "时区：{timezone}",
-      heartbeatLink: "时区设置",
       createTask: "新建任务",
       taskListTitle: "任务列表",
       taskListDescription: "启停、立即执行、编辑与删除都在这里完成。",

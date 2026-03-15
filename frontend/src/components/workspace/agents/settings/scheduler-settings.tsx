@@ -5,7 +5,6 @@ import {
   Loader2Icon,
   PlayCircleIcon,
   PlusIcon,
-  Settings2Icon,
   SquarePenIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -689,12 +688,6 @@ export function SchedulerSettingsPanel({
           </div>
 
           <div className="flex gap-2">
-            <Button asChild variant="outline" className="rounded-xl">
-              <Link href={timezoneSettingsHref}>
-                <Settings2Icon className="size-4" />
-                {copy.heartbeatLink}
-              </Link>
-            </Button>
             <Button className="rounded-xl" onClick={onCreateTask}>
               <PlusIcon className="size-4" />
               {copy.createTask}

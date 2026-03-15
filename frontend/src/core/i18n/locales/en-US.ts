@@ -778,7 +778,6 @@ export const enUS: Translations = {
       description:
         "Tasks are bound to this agent and execute under the agent's persona, memory, and tool policy context.",
       timezoneBadge: "Timezone: {timezone}",
-      heartbeatLink: "Timezone",
       createTask: "New task",
       taskListTitle: "Tasks",
       taskListDescription: "Enable/disable, run now, edit, and delete tasks here.",
