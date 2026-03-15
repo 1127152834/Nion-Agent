@@ -710,7 +710,9 @@ function A2UISupplementaryText({
   rehypePlugins: MarkdownContentProps["rehypePlugins"];
 }) {
   const normalized = content.trim();
-  const [open, setOpen] = useState(false);
+  // Product default: expand text by default so users see the "text version" immediately,
+  // while still allowing them to collapse when they only want the UI card.
+  const [open, setOpen] = useState(true);
 
   if (!normalized) {
     return null;

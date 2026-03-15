@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { MessageList } from "@/components/workspace/messages/message-list";
@@ -51,12 +51,11 @@ describe("FE-CHAT-007 A2UI 渲染后文字说明收纳", () => {
       </I18nProvider>,
     );
 
-    // The markdown should NOT be rendered as a standalone assistant message in the timeline.
-    expect(screen.queryByText("武汉未来七天天气预报如下：")).not.toBeInTheDocument();
+    // Default UX: the supplementary text is expanded inside the A2UI card.
+    expect(screen.getByRole("button", { name: "收起文字说明" })).toBeInTheDocument();
 
-    // The text is still available behind the expander inside the A2UI card.
-    fireEvent.click(screen.getByRole("button", { name: "查看文字说明" }));
-    expect(screen.getByText("武汉未来七天天气预报如下：")).toBeInTheDocument();
+    // The markdown should NOT be duplicated as a standalone assistant message in the timeline.
+    // If it were duplicated, we'd see two occurrences of the same sentence.
+    expect(screen.getAllByText("武汉未来七天天气预报如下：")).toHaveLength(1);
   });
 });
-
