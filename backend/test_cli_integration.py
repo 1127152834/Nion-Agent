@@ -46,7 +46,9 @@ def _agent_tools_integration_ok() -> bool:
 
     from src.tools.tools import get_available_tools
 
-    tools = get_available_tools(agent_name='lead')
+    # NOTE: MCP tools may require external servers / async event loops; this
+    # integration smoke test should remain offline and deterministic.
+    tools = get_available_tools(agent_name='lead', include_mcp=False)
     cli_tools = [t for t in tools if hasattr(t, 'name') and t.name.startswith('cli_')]
 
     print(f"✅ Agent 工具系统中找到 {len(cli_tools)} 个 CLI 工具:")
