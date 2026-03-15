@@ -48,3 +48,12 @@ pnpm run dist:unsigned
 3. 必要时清理 Launch Services / Dock 图标缓存后重新登录或重启 Dock
 
 不要只根据仓库中的静态图标文件判断最终桌面图标是否已生效。
+
+## macOS 通知图标说明
+
+macOS 通知左侧显示的“应用图标”，**只**取决于发送通知的 `.app` 包图标（也就是 `electron-builder` 打包时的 `build/icon.icns`）。它不受 Web Notification API 的 `icon` 字段控制。
+
+因此：
+
+- 运行 `pnpm run dev/start` 时，本质是在 `Electron.app` 里加载 `dist/main.js`，通知中心左侧会显示 Electron 默认图标，这是正常现象。
+- 需要验证最终通知图标（应为 Nion Logo）时，请使用打包产物（例如 `pnpm run dist:unsigned`）运行 `.app` 进行确认。

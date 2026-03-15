@@ -2,7 +2,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 
 import { useLocalSettings } from "../settings";
 
-const DEFAULT_NOTIFICATION_ICON_PATH = "/images/nion-notification.png";
+const DEFAULT_WEB_NOTIFICATION_ICON_PATH = "/images/nion-notification.png";
+
+function isDesktopElectronRuntime(): boolean {
+  // `desktop/electron` 通过 preload 暴露 `window.electronAPI`。
+  // 在 macOS 上，通知左侧的“应用图标”由 .app 包的 icon 决定；
+  // 如果我们在 Web Notification API 里强行设置 `icon`，会被系统当作右侧内容图像展示，
+  // 反而出现“双图标”，且无法替换左侧的应用图标。
+  return typeof window !== "undefined" && "electronAPI" in window;
+}
 
 interface NotificationOptions {
   body?: string;
@@ -76,11 +84,11 @@ export function useNotification(): UseNotificationReturn {
         return;
       }
 
-      // 未显式指定 icon 时，部分平台会回退到 favicon，导致通知图标不一致。
-      const resolvedOptions: NotificationOptions = {
-        ...options,
-        icon: options?.icon ?? DEFAULT_NOTIFICATION_ICON_PATH,
-      };
+      const resolvedOptions: NotificationOptions = { ...options };
+      if (!isDesktopElectronRuntime() && !resolvedOptions.icon) {
+        // 浏览器环境未显式指定 icon 时，可能回退到 favicon，导致通知图标不一致。
+        resolvedOptions.icon = DEFAULT_WEB_NOTIFICATION_ICON_PATH;
+      }
 
       const notification = new Notification(title, resolvedOptions);
 
