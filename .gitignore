@@ -77,3 +77,6 @@ sandbox_image_cache.tar
 # ignore the legacy `web` folder
 web/
 .gitnexus
+
+# Git worktrees (project-local isolation dir)
+.worktrees/
