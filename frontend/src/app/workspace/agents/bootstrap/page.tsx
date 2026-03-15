@@ -28,6 +28,30 @@ export default function AgentBootstrapPage() {
   const [settings] = useLocalSettings();
   const copy = t.agents.bootstrap;
 
+  const hasNonEmptyString = (value: unknown): value is string =>
+    typeof value === "string" && value.trim().length > 0;
+
+  const deepFindStringValue = (input: unknown, key: string): string | null => {
+    if (!input) return null;
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        const found = deepFindStringValue(item, key);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (typeof input !== "object") return null;
+    const record = input as Record<string, unknown>;
+    if (hasNonEmptyString(record[key])) {
+      return record[key];
+    }
+    for (const value of Object.values(record)) {
+      const found = deepFindStringValue(value, key);
+      if (found) return found;
+    }
+    return null;
+  };
+
   const threadId = useMemo(() => uuid(), []);
   const firstMessageSentRef = useRef(false);
   const [completed, setCompleted] = useState(false);
@@ -39,9 +63,25 @@ export default function AgentBootstrapPage() {
       mode: "flash",
       is_bootstrap: true,
     },
-    onToolEnd({ name }) {
+    onToolEnd({ name, data }) {
       if (name !== "setup_agent") return;
-      setCompleted(true);
+
+      // Only mark completed on successful tool output (avoid false positives when
+      // setup_agent returns an error ToolMessage).
+      const createdName = deepFindStringValue(data, "created_agent_name");
+      const updatedName = deepFindStringValue(data, "updated_agent_name");
+      if (createdName || updatedName) {
+        setCompleted(true);
+        return;
+      }
+
+      const raw = JSON.stringify(data).toLowerCase();
+      if (
+        (raw.includes("created successfully") || raw.includes("updated successfully")) &&
+        !raw.includes("error:")
+      ) {
+        setCompleted(true);
+      }
     },
   });
 
@@ -172,4 +212,3 @@ export default function AgentBootstrapPage() {
     </ThreadContext.Provider>
   );
 }
-
