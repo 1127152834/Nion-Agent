@@ -92,6 +92,18 @@ def _parse_iso(value: str | None) -> datetime | None:
         return None
 
 
+def _is_not_found_error(exc: Exception) -> bool:
+    """Best-effort classification for idempotent delete.
+
+    OpenViking rm/forget/compact is expected to be idempotent from the caller
+    perspective. When the remote resource is already missing, we still want to
+    continue cleaning up the local ledger.
+    """
+
+    text = str(exc).strip().lower()
+    return "not found" in text
+
+
 class OpenVikingRuntime:
     """OpenViking runtime with local ledger/index support."""
 
@@ -554,7 +566,17 @@ class OpenVikingRuntime:
             uri = str(item.get("uri") or "").strip()
             if not uri:
                 raise RuntimeError(f"Missing uri for memory_id={item.get('memory_id')}")
-            self._openviking_rm(uri=uri, agent_name=resolved_agent)
+            try:
+                self._openviking_rm(uri=uri, agent_name=resolved_agent)
+            except Exception as exc:  # noqa: BLE001
+                if not _is_not_found_error(exc):
+                    raise
+                logger.debug(
+                    "OpenViking rm not-found tolerated during compact (scope=%s uri=%s): %s",
+                    self._scope_name(resolved_agent),
+                    uri,
+                    exc,
+                )
             removed_uris.append(uri)
 
         with self._sqlite_index.transaction() as conn:
@@ -588,7 +610,17 @@ class OpenVikingRuntime:
         if not uri:
             raise RuntimeError(f"memory_id {target_id} does not have a deletable uri")
 
-        self._openviking_rm(uri=uri, agent_name=resolved_agent)
+        try:
+            self._openviking_rm(uri=uri, agent_name=resolved_agent)
+        except Exception as exc:  # noqa: BLE001
+            if not _is_not_found_error(exc):
+                raise
+            logger.debug(
+                "OpenViking rm not-found tolerated during forget (scope=%s uri=%s): %s",
+                self._scope_name(resolved_agent),
+                uri,
+                exc,
+            )
 
         with self._sqlite_index.transaction() as conn:
             deleted = self._sqlite_index.delete_resource(
