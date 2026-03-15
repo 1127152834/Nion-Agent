@@ -269,7 +269,7 @@ async def update_mcp_configuration(request: McpConfigUpdateRequest) -> McpConfig
     """Update the MCP configuration.
 
     This will:
-    1. Save the new configuration to the mcp_config.json file
+    1. Save the new configuration to the extensions_config.json file
     2. Reload the configuration cache
     3. Reset MCP tools cache to trigger reinitialization
 
@@ -298,13 +298,16 @@ async def update_mcp_configuration(request: McpConfigUpdateRequest) -> McpConfig
         ```
     """
     try:
-        # Get the current config path (or determine where to save it)
-        config_path = ExtensionsConfig.resolve_config_path()
-
-        # If no config file exists, create one in the parent directory (project root)
-        if config_path is None:
-            config_path = Path.cwd().parent / "extensions_config.json"
-            logger.info(f"No existing extensions config found. Creating new config at: {config_path}")
+        # NOTE: The extensions config MUST live in the Nion data dir (NION_HOME / $HOME/.nion),
+        # not under the repository checkout. Desktop runtime can restart from different CWDs,
+        # and the repo itself may be replaced (re-clone / history rewrite), which would make
+        # installed MCP servers "disappear" if we write relative to CWD.
+        config_path = (
+            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
+            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
+            else ExtensionsConfig.default_config_path()
+        )
+        config_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load current config to preserve skills configuration
         current_config = get_extensions_config()
@@ -316,9 +319,10 @@ async def update_mcp_configuration(request: McpConfigUpdateRequest) -> McpConfig
             "clis": {name: cli.model_dump() for name, cli in current_config.clis.items()},
         }
 
-        # Write the configuration to file
-        with open(config_path, "w") as f:
-            json.dump(config_data, f, indent=2)
+        # Write atomically to avoid corrupting the config on crash/interruption.
+        temp_path = config_path.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(config_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        temp_path.replace(config_path)
 
         logger.info(f"MCP configuration updated and saved to: {config_path}")
 
@@ -326,7 +330,7 @@ async def update_mcp_configuration(request: McpConfigUpdateRequest) -> McpConfig
         # will detect config file changes via mtime and reinitialize MCP tools automatically
 
         # Reload the configuration and update the global cache
-        reloaded_config = reload_extensions_config()
+        reloaded_config = reload_extensions_config(str(config_path))
         return McpConfigResponse(mcp_servers={name: McpServerConfigResponse(**server.model_dump()) for name, server in reloaded_config.mcp_servers.items()})
 
     except Exception as e:

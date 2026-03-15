@@ -254,11 +254,11 @@ def _write_extensions_config_file(config_path: Path, cfg: ExtensionsConfig) -> N
 
 
 def _resolve_extensions_config_path() -> Path:
-    config_path = ExtensionsConfig.resolve_config_path()
-    if config_path is not None:
-        return config_path
-    config_path = Path.cwd().parent / "extensions_config.json"
-    return config_path
+    # Persist extensions config under the Nion data dir by default so CLI state
+    # survives restarts and does not depend on current working directory.
+    if env_path := os.getenv("NION_EXTENSIONS_CONFIG_PATH"):
+        return Path(env_path).expanduser().resolve()
+    return ExtensionsConfig.default_config_path()
 
 
 @router.get("/cli/config", response_model=CliConfigResponse, summary="Get CLI config")
@@ -285,7 +285,7 @@ async def update_cli_config(request: CliConfigUpdateRequest) -> CliConfigRespons
 
     cfg.clis = next_clis
     _write_extensions_config_file(config_path, cfg)
-    reloaded = reload_extensions_config()
+    reloaded = reload_extensions_config(str(config_path))
     return CliConfigResponse(clis={name: CliStateConfigResponse(**item.model_dump()) for name, item in reloaded.clis.items()})
 
 

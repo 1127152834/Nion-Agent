@@ -606,7 +606,7 @@ class TestMcpConfig:
         assert "github" in result["mcp_servers"]
         assert result["mcp_servers"]["github"]["enabled"] is True
 
-    def test_update_mcp_config(self, client):
+    def test_update_mcp_config(self, client, monkeypatch):
         # Set up current config with skills
         current_config = MagicMock()
         current_config.skills = {}
@@ -623,9 +623,9 @@ class TestMcpConfig:
         try:
             # Pre-set agent to verify it gets invalidated
             client._agent = MagicMock()
+            monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(tmp_path))
 
             with (
-                patch("src.client.ExtensionsConfig.resolve_config_path", return_value=tmp_path),
                 patch("src.client.get_extensions_config", return_value=current_config),
                 patch("src.client.reload_extensions_config", return_value=reloaded_config),
             ):
@@ -669,7 +669,7 @@ class TestSkillsManagement:
             result = client.get_skill("nonexistent")
         assert result is None
 
-    def test_update_skill(self, client):
+    def test_update_skill(self, client, monkeypatch):
         skill = self._make_skill(enabled=True)
         updated_skill = self._make_skill(enabled=False)
 
@@ -684,10 +684,10 @@ class TestSkillsManagement:
         try:
             # Pre-set agent to verify it gets invalidated
             client._agent = MagicMock()
+            monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(tmp_path))
 
             with (
                 patch("src.skills.loader.load_skills", side_effect=[[skill], [updated_skill]]),
-                patch("src.client.ExtensionsConfig.resolve_config_path", return_value=tmp_path),
                 patch("src.client.get_extensions_config", return_value=ext_config),
                 patch("src.client.reload_extensions_config"),
             ):
@@ -1160,11 +1160,12 @@ class TestScenarioConfigManagement:
         assert detail is not None
         assert detail["enabled"] is True
 
-    def test_mcp_update_then_skill_toggle(self, client):
+    def test_mcp_update_then_skill_toggle(self, client, monkeypatch):
         """Update MCP config → toggle skill → verify both invalidate agent."""
         with tempfile.TemporaryDirectory() as tmp:
             config_file = Path(tmp) / "extensions_config.json"
             config_file.write_text("{}")
+            monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(config_file))
 
             # --- MCP update ---
             current_config = MagicMock()
@@ -1177,7 +1178,6 @@ class TestScenarioConfigManagement:
 
             client._agent = MagicMock()  # Simulate existing agent
             with (
-                patch("src.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
                 patch("src.client.get_extensions_config", return_value=current_config),
                 patch("src.client.reload_extensions_config", return_value=reloaded_config),
             ):
@@ -1207,7 +1207,6 @@ class TestScenarioConfigManagement:
             client._agent = MagicMock()  # Simulate re-created agent
             with (
                 patch("src.skills.loader.load_skills", side_effect=[[skill], [toggled]]),
-                patch("src.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
                 patch("src.client.get_extensions_config", return_value=ext_config),
                 patch("src.client.reload_extensions_config"),
             ):
@@ -1456,7 +1455,7 @@ class TestScenarioMemoryWorkflow:
 class TestScenarioSkillInstallAndUse:
     """Scenario: Install a skill → verify it appears → toggle it."""
 
-    def test_install_then_toggle(self, client):
+    def test_install_then_toggle(self, client, monkeypatch):
         """Install .skill archive → list to verify → disable → verify disabled."""
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -1509,10 +1508,10 @@ class TestScenarioSkillInstallAndUse:
 
             config_file = tmp_path / "extensions_config.json"
             config_file.write_text("{}")
+            monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(config_file))
 
             with (
                 patch("src.skills.loader.load_skills", side_effect=[[installed_skill], [disabled_skill]]),
-                patch("src.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
                 patch("src.client.get_extensions_config", return_value=ext_config),
                 patch("src.client.reload_extensions_config"),
             ):
@@ -1735,7 +1734,7 @@ class TestGatewayConformance:
         parsed = McpConfigResponse(**result)
         assert "test" in parsed.mcp_servers
 
-    def test_update_mcp_config(self, client, tmp_path):
+    def test_update_mcp_config(self, client, tmp_path, monkeypatch):
         server = MagicMock()
         server.model_dump.return_value = {
             "enabled": True,
@@ -1753,10 +1752,10 @@ class TestGatewayConformance:
 
         config_file = tmp_path / "extensions_config.json"
         config_file.write_text("{}")
+        monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(config_file))
 
         with (
             patch("src.client.get_extensions_config", return_value=ext_config),
-            patch("src.client.ExtensionsConfig.resolve_config_path", return_value=config_file),
             patch("src.client.reload_extensions_config", return_value=ext_config),
         ):
             result = client.update_mcp_config({"srv": server.model_dump.return_value})

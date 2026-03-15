@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import mimetypes
+import os
 import re
 import shutil
 import tempfile
@@ -668,12 +669,14 @@ class NionClient:
         Raises:
             OSError: If the config file cannot be written.
         """
-        config_path = ExtensionsConfig.resolve_config_path()
-        if config_path is None:
-            raise FileNotFoundError(
-                "Cannot locate extensions_config.json. "
-                "Set NION_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root."
-            )
+        # Persist extensions state under the Nion data dir (NION_HOME / $HOME/.nion) so it survives
+        # restarts and does not depend on current working directory.
+        config_path = (
+            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
+            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
+            else ExtensionsConfig.default_config_path()
+        )
+        config_path.parent.mkdir(parents=True, exist_ok=True)
 
         current_config = get_extensions_config()
 
@@ -686,7 +689,7 @@ class NionClient:
         self._atomic_write_json(config_path, config_data)
 
         self._agent = None
-        reloaded = reload_extensions_config()
+        reloaded = reload_extensions_config(str(config_path))
         return {"mcp_servers": {name: server.model_dump() for name, server in reloaded.mcp_servers.items()}}
 
     # ------------------------------------------------------------------
@@ -736,12 +739,14 @@ class NionClient:
         if skill is None:
             raise ValueError(f"Skill '{name}' not found")
 
-        config_path = ExtensionsConfig.resolve_config_path()
-        if config_path is None:
-            raise FileNotFoundError(
-                "Cannot locate extensions_config.json. "
-                "Set NION_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root."
-            )
+        # Persist extensions state under the Nion data dir (NION_HOME / $HOME/.nion) so it survives
+        # restarts and does not depend on current working directory.
+        config_path = (
+            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
+            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
+            else ExtensionsConfig.default_config_path()
+        )
+        config_path.parent.mkdir(parents=True, exist_ok=True)
 
         extensions_config = get_extensions_config()
         extensions_config.skills[name] = SkillStateConfig(enabled=enabled)
@@ -755,7 +760,7 @@ class NionClient:
         self._atomic_write_json(config_path, config_data)
 
         self._agent = None
-        reload_extensions_config()
+        reload_extensions_config(str(config_path))
 
         updated = next((s for s in load_skills(enabled_only=False) if s.name == name), None)
         if updated is None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import queue
 import threading
 import time
@@ -113,10 +114,11 @@ def _cleanup_jobs_locked(now: float | None = None) -> None:
 
 
 def _resolve_extensions_config_path() -> Path:
-    config_path = ExtensionsConfig.resolve_config_path()
-    if config_path is not None:
-        return config_path
-    return (Path.cwd().parent / "extensions_config.json").resolve()
+    # Persist extensions config under the Nion data dir by default so managed CLI
+    # installs survive restarts and do not depend on current working directory.
+    if env_path := os.getenv("NION_EXTENSIONS_CONFIG_PATH"):
+        return Path(env_path).expanduser().resolve()
+    return ExtensionsConfig.default_config_path()
 
 
 def _write_extensions_config_file(config_path: Path, cfg: ExtensionsConfig) -> None:
@@ -228,7 +230,7 @@ def _run_cli_install_job_thread(job_id: str, tool: CliMarketplaceTool, platform:
             config_path = _resolve_extensions_config_path()
             config_path.parent.mkdir(parents=True, exist_ok=True)
             _write_extensions_config_file(config_path, cfg)
-            reload_extensions_config()
+            reload_extensions_config(str(config_path))
 
         _append("安装完成。")
         with _lock:

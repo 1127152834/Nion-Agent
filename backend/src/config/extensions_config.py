@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.config.paths import get_paths
+
 
 class McpOAuthConfig(BaseModel):
     """OAuth configuration for an MCP server (HTTP/SSE transports)."""
@@ -86,15 +88,33 @@ class ExtensionsConfig(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     @classmethod
+    def default_config_path(cls) -> Path:
+        """Return the canonical extensions config path under the Nion data directory.
+
+        We intentionally store extensions state (MCP servers / skills state / CLI state)
+        under the application data dir resolved by ``NION_HOME`` (or ``$HOME/.nion``),
+        instead of the repository working directory.
+
+        Rationale:
+        - Desktop runtime frequently restarts processes and may run from different CWDs.
+        - The repository checkout can be replaced (re-clone, branch switch, history rewrite),
+          which would otherwise drop untracked configs and make installed MCP servers
+          "disappear" after restart.
+        - This config may contain secrets and must not be committed.
+        """
+        return (get_paths().base_dir / "extensions_config.json").resolve()
+
+    @classmethod
     def resolve_config_path(cls, config_path: str | None = None) -> Path | None:
         """Resolve the extensions config file path.
 
         Priority:
         1. If provided `config_path` argument, use it.
         2. If provided `NION_EXTENSIONS_CONFIG_PATH` environment variable, use it.
-        3. Otherwise, check for `extensions_config.json` in the current directory, then in the parent directory.
-        4. For backward compatibility, also check for `mcp_config.json` if `extensions_config.json` is not found.
-        5. If not found, return None (extensions are optional).
+        3. Otherwise, check the canonical path under Nion data dir: `{NION_HOME}/extensions_config.json`.
+        4. Otherwise, check for `extensions_config.json` in the current directory, then in the parent directory.
+        5. For backward compatibility, also check for `mcp_config.json` in the same locations.
+        6. If not found, return None (extensions are optional).
 
         Args:
             config_path: Optional path to extensions config file.
@@ -107,33 +127,36 @@ class ExtensionsConfig(BaseModel):
             if not path.exists():
                 raise FileNotFoundError(f"Extensions config file specified by param `config_path` not found at {path}")
             return path
-        elif os.getenv("NION_EXTENSIONS_CONFIG_PATH"):
-            path = Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH"))
-            if not path.exists():
-                raise FileNotFoundError(f"Extensions config file specified by environment variable `NION_EXTENSIONS_CONFIG_PATH` not found at {path}")
+
+        if env_path := os.getenv("NION_EXTENSIONS_CONFIG_PATH"):
+            # Allow the target file to not exist yet (first run); callers that read should
+            # treat missing files as "empty config", and callers that write will create it.
+            return Path(env_path)
+
+        # Canonical location (stable across restarts and independent of CWD).
+        path = cls.default_config_path()
+        if path.exists():
             return path
-        else:
-            # Check if the extensions_config.json is in the current directory
-            path = Path(os.getcwd()) / "extensions_config.json"
-            if path.exists():
-                return path
 
-            # Check if the extensions_config.json is in the parent directory of CWD
-            path = Path(os.getcwd()).parent / "extensions_config.json"
-            if path.exists():
-                return path
+        # Backward compatibility for older configs that only used `mcp_config.json`
+        # in the canonical app data dir.
+        legacy_in_data_dir = path.with_name("mcp_config.json")
+        if legacy_in_data_dir.exists():
+            return legacy_in_data_dir
 
-            # Backward compatibility: check for mcp_config.json
-            path = Path(os.getcwd()) / "mcp_config.json"
-            if path.exists():
-                return path
+        # Legacy search: current working directory & parent (dev workflows).
+        cwd = Path(os.getcwd())
+        for candidate in (
+            cwd / "extensions_config.json",
+            cwd.parent / "extensions_config.json",
+            cwd / "mcp_config.json",
+            cwd.parent / "mcp_config.json",
+        ):
+            if candidate.exists():
+                return candidate
 
-            path = Path(os.getcwd()).parent / "mcp_config.json"
-            if path.exists():
-                return path
-
-            # Extensions are optional, so return None if not found
-            return None
+        # Extensions are optional, so return None if not found.
+        return None
 
     @classmethod
     def from_file(cls, config_path: str | None = None) -> "ExtensionsConfig":
@@ -148,7 +171,7 @@ class ExtensionsConfig(BaseModel):
             ExtensionsConfig: The loaded config, or empty config if file not found.
         """
         resolved_path = cls.resolve_config_path(config_path)
-        if resolved_path is None:
+        if resolved_path is None or not resolved_path.exists():
             # Return empty config if extensions config file is not found
             return cls(mcp_servers={}, skills={}, clis={})
 

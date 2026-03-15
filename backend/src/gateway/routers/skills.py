@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import shutil
 import tempfile
@@ -281,12 +282,14 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest) -> SkillRes
         if skill is None:
             raise HTTPException(status_code=404, detail=f"Skill '{skill_name}' not found")
 
-        # Get or create config path
-        config_path = ExtensionsConfig.resolve_config_path()
-        if config_path is None:
-            # Create new config file in parent directory (project root)
-            config_path = Path.cwd().parent / "extensions_config.json"
-            logger.info(f"No existing extensions config found. Creating new config at: {config_path}")
+        # Persist extensions state in the Nion data dir (NION_HOME / $HOME/.nion) so it survives
+        # desktop restarts and repository checkout replacement.
+        config_path = (
+            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
+            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
+            else ExtensionsConfig.default_config_path()
+        )
+        config_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load current configuration
         extensions_config = get_extensions_config()
@@ -301,14 +304,15 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest) -> SkillRes
             "clis": {name: cli.model_dump() for name, cli in extensions_config.clis.items()},
         }
 
-        # Write the configuration to file
-        with open(config_path, "w") as f:
-            json.dump(config_data, f, indent=2)
+        # Write atomically to avoid partial writes.
+        temp_path = config_path.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(config_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        temp_path.replace(config_path)
 
         logger.info(f"Skills configuration updated and saved to: {config_path}")
 
         # Reload the extensions config to update the global cache
-        reload_extensions_config()
+        reload_extensions_config(str(config_path))
 
         # Reload the skills to get the updated status (for API response)
         skills = load_skills(enabled_only=False)
