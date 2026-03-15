@@ -121,8 +121,14 @@ def task_tool(
         if isinstance(value, str) and value.strip():
             runtime_agent_name = value.strip()
 
-    # Subagents should not have subagent tools enabled (prevent recursive nesting)
-    tools = get_available_tools(model_name=parent_model, subagent_enabled=False, agent_name=runtime_agent_name)
+    # Subagents should not have subagent tools enabled (prevent recursive nesting).
+    #
+    # Only forward agent_name when it is explicitly set; passing agent_name=None
+    # pollutes mocks in tests and is semantically equivalent to "unset".
+    tools_kwargs: dict = {"model_name": parent_model, "subagent_enabled": False}
+    if runtime_agent_name is not None:
+        tools_kwargs["agent_name"] = runtime_agent_name
+    tools = get_available_tools(**tools_kwargs)
 
     # Create executor
     executor = SubagentExecutor(

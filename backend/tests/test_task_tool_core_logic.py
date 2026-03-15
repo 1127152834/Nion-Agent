@@ -236,7 +236,7 @@ def test_task_tool_polling_safety_timeout(monkeypatch):
         tool_call_id="tc-safety-timeout",
     )
 
-    assert output.startswith("Task timed out after 0 minutes")
+    assert output.startswith("Task polling timed out after 0 minutes")
     assert events[0]["type"] == "task_started"
     assert events[-1]["type"] == "task_timed_out"
 
@@ -404,6 +404,6 @@ def test_cleanup_not_called_on_polling_safety_timeout(monkeypatch):
         tool_call_id="tc-no-cleanup-safety-timeout",
     )
 
-    assert output.startswith("Task timed out after 0 minutes")
+    assert output.startswith("Task polling timed out after 0 minutes")
     # cleanup should NOT be called because the task is still RUNNING
     assert cleanup_calls == []
