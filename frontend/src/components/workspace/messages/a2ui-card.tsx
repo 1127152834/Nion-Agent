@@ -33,12 +33,32 @@ function parseJSONIfString(value: unknown): unknown {
   if (!text) {
     return value;
   }
-  try {
-    return JSON.parse(text);
-  } catch {
-    const repaired = tryParseJSON(text);
-    return repaired ?? value;
+
+  const parseOnce = (input: string): unknown => {
+    try {
+      return JSON.parse(input);
+    } catch {
+      const repaired = tryParseJSON(input);
+      return repaired ?? value;
+    }
+  };
+
+  const parsed = parseOnce(text);
+
+  // Some models double-encode JSON (a JSON string literal containing the real payload).
+  // Example: "\"[{\\\"surfaceUpdate\\\":{...}}]\""
+  if (typeof parsed === "string") {
+    const inner = parsed.trim();
+    if (
+      inner &&
+      inner !== text &&
+      (inner.startsWith("[") || inner.startsWith("{"))
+    ) {
+      return parseOnce(inner);
+    }
   }
+
+  return parsed;
 }
 
 type DataEntry = {

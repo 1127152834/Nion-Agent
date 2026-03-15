@@ -39,6 +39,16 @@ _A2UI_ALLOWED_OP_KEYS = (
     "deleteSurface",
 )
 
+# When a model accidentally emits multiple operations in a single JSON object
+# (e.g. { surfaceUpdate: {...}, dataModelUpdate: {...} }), split it deterministically.
+# Keep the recommended v0.8 ordering to make rendering/debugging stable.
+_A2UI_SPLIT_OP_KEYS = (
+    "surfaceUpdate",
+    "dataModelUpdate",
+    "beginRendering",
+    "deleteSurface",
+)
+
 # Some models may emit camelCase tool args even when the tool schema uses snake_case.
 # Keep this list small and intentional to avoid accidentally parsing unrelated args.
 _A2UI_ARGS_CANDIDATE_KEYS = (
@@ -87,6 +97,23 @@ def _has_surface_update(operations: list[dict[str, Any]]) -> bool:
     return False
 
 
+def _split_operation_envelope(operation: dict[str, Any]) -> list[dict[str, Any]]:
+    """Split a multi-op envelope into a list of single-op objects.
+
+    Example input:
+      { "surfaceUpdate": {...}, "dataModelUpdate": {...} }
+
+    Output:
+      [ { "surfaceUpdate": {...} }, { "dataModelUpdate": {...} } ]
+    """
+    extracted: list[dict[str, Any]] = []
+    for key in _A2UI_SPLIT_OP_KEYS:
+        payload = operation.get(key)
+        if isinstance(payload, dict):
+            extracted.append({key: payload})
+    return extracted or [operation]
+
+
 def _parse_a2ui_operations(raw: object) -> list[dict[str, Any]] | None:
     """Parse tool argument payload into a list of A2UI operations.
 
@@ -99,13 +126,25 @@ def _parse_a2ui_operations(raw: object) -> list[dict[str, Any]] | None:
         text = value.strip()
         if not text:
             return None
-        try:
-            value = json.loads(text)
-        except Exception:  # noqa: BLE001
-            return None
+        # Some models double-encode JSON, producing a JSON string literal that
+        # itself contains the operations array (e.g. "\"[ {...} ]\"").
+        # Decode at most twice to keep behavior predictable and avoid "parsing forever".
+        for _ in range(2):
+            try:
+                value = json.loads(text)
+            except Exception:  # noqa: BLE001
+                return None
+            if isinstance(value, str):
+                text = value.strip()
+                if not text:
+                    return None
+                continue
+            break
 
     if isinstance(value, dict):
-        return [value]
+        operations: list[dict[str, Any]] = []
+        operations.extend(_split_operation_envelope(value))
+        return operations or None
 
     if not isinstance(value, list):
         return None
@@ -113,7 +152,7 @@ def _parse_a2ui_operations(raw: object) -> list[dict[str, Any]] | None:
     operations: list[dict[str, Any]] = []
     for item in value:
         if isinstance(item, dict):
-            operations.append(item)
+            operations.extend(_split_operation_envelope(item))
     return operations or None
 
 
