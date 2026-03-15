@@ -40,11 +40,10 @@ This document provides a comprehensive overview of the Nion backend architecture
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                         Shared Configuration                              │
 │  ┌─────────────────────────┐  ┌────────────────────────────────────────┐ │
-│  │      config.yaml        │  │      extensions_config.json            │ │
-│  │  - Models               │  │  - MCP Servers                         │ │
-│  │  - Tools                │  │  - Skills State                        │ │
-│  │  - Sandbox              │  │                                        │ │
-│  │  - Summarization        │  │                                        │ │
+│  │  Config Store (SQLite)  │  │      extensions_config.json            │ │
+│  │  - Models/Tools/Sandbox │  │  - MCP Servers                         │ │
+│  │  - Title/Suggestions/...│  │  - Skills/CLIs State                   │ │
+│  │  - UI + /api/config     │  │  - Optional file-based extensions      │ │
 │  └─────────────────────────┘  └────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -178,9 +177,9 @@ class ThreadState(AgentState):
 
 | Virtual Path | Physical Path |
 |-------------|---------------|
-| `/mnt/user-data/workspace` | `backend/.nion/threads/{thread_id}/user-data/workspace` |
-| `/mnt/user-data/uploads` | `backend/.nion/threads/{thread_id}/user-data/uploads` |
-| `/mnt/user-data/outputs` | `backend/.nion/threads/{thread_id}/user-data/outputs` |
+| `/mnt/user-data/workspace` | `{base_dir}/threads/{thread_id}/user-data/workspace` |
+| `/mnt/user-data/uploads` | `{base_dir}/threads/{thread_id}/user-data/uploads` |
+| `/mnt/user-data/outputs` | `{base_dir}/threads/{thread_id}/user-data/outputs` |
 | `/mnt/skills` | `nion/skills/` |
 
 ### Tool System
@@ -192,7 +191,7 @@ class ThreadState(AgentState):
 
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
 │   Built-in Tools    │  │  Configured Tools   │  │     MCP Tools       │
-│  (src/tools/)       │  │  (config.yaml)      │  │  (extensions.json)  │
+│  (src/tools/)       │  │  (Config Store)     │  │(extensions_config.json)│
 ├─────────────────────┤  ├─────────────────────┤  ├─────────────────────┤
 │ - present_file      │  │ - web_search        │  │ - github            │
 │ - ask_clarification │  │ - web_fetch         │  │ - filesystem        │
@@ -220,7 +219,7 @@ class ThreadState(AgentState):
 │                     (src/models/factory.py)                              │
 └─────────────────────────────────────────────────────────────────────────┘
 
-config.yaml:
+Config payload (stored in SQLite Config Store):
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ models:                                                                  │
 │   - name: gpt-4                                                         │
@@ -385,16 +384,16 @@ SKILL.md Format:
 
 2. Gateway receives file
    - Validates file
-   - Stores in .nion/threads/{thread_id}/user-data/uploads/
+   - Stores in `{base_dir}/threads/{thread_id}/user-data/uploads/` (default `{base_dir}=$HOME/.nion`)
    - If document: converts to Markdown via markitdown
 
 3. Returns response
    {
      "files": [{
        "filename": "doc.pdf",
-       "path": ".nion/.../uploads/doc.pdf",
+       "path": "{base_dir}/threads/{thread_id}/user-data/uploads/doc.pdf",
        "virtual_path": "/mnt/user-data/uploads/doc.pdf",
-       "artifact_url": "/api/threads/.../artifacts/mnt/.../doc.pdf"
+       "artifact_url": "/api/threads/{thread_id}/artifacts/mnt/user-data/uploads/doc.pdf"
      }]
    }
 
@@ -448,7 +447,7 @@ SKILL.md Format:
 ### Caching
 
 - MCP tools cached with file mtime invalidation
-- Configuration loaded once, reloaded on file change
+- Configuration loaded from Config Store (SQLite) and can be reloaded when store version changes
 - Skills parsed once at startup, cached in memory
 
 ### Streaming

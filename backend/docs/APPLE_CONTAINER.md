@@ -130,7 +130,7 @@ make setup-sandbox
 ```
 
 This command will:
-1. Read the configured image from `config.yaml` (or use default)
+1. Read the configured image from Config Store payload (`sandbox.image`, or use default)
 2. Detect available runtime (Apple Container or Docker)
 3. Pull the image with progress indication
 4. Verify the image is ready for use

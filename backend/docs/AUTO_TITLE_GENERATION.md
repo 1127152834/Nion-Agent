@@ -58,7 +58,7 @@ checkpointer = PostgresSaver.from_conn_string(
 
 ## 配置
 
-在 `config.yaml` 中添加（可选）：
+在 Config Store（SQLite）的配置 payload 中添加（可选，`title` 区块）。通常通过前端“配置中心”或 `GET/PUT /api/config` 编辑：
 
 ```yaml
 title:
@@ -246,7 +246,7 @@ def after_agent(self, state: TitleMiddlewareState, runtime: Runtime) -> dict | N
 - [`src/agents/thread_state.py`](../src/agents/thread_state.py) - ThreadState 定义
 - [`src/agents/title_middleware.py`](../src/agents/title_middleware.py) - TitleMiddleware 实现
 - [`src/config/title_config.py`](../src/config/title_config.py) - 配置管理
-- [`config.yaml`](../config.yaml) - 配置文件
+- [`docs/CONFIGURATION.md`](./CONFIGURATION.md) - 配置中心与 Config Store 说明
 - [`src/agents/lead_agent/agent.py`](../src/agents/lead_agent/agent.py) - Middleware 注册
 
 ## 参考资料

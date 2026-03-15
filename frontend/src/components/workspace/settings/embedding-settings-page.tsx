@@ -16,8 +16,10 @@ import {
   loadEmbeddingPresets,
   setActiveEmbeddingModel,
   testEmbedding,
+  type EmbeddingStatusResult,
   type EmbeddingProvider,
   type PresetModel,
+  type SetActiveModelPayload,
 } from "@/core/embedding-models/api";
 
 import { SettingsSection } from "./settings-section";
@@ -40,7 +42,7 @@ export function EmbeddingSettingsPage() {
 
   const [localPresets, setLocalPresets] = useState<PresetModel[]>([]);
   const [openaiPresets, setOpenaiPresets] = useState<PresetModel[]>([]);
-  const [currentStatus, setCurrentStatus] = useState<any>(null);
+  const [currentStatus, setCurrentStatus] = useState<EmbeddingStatusResult | null>(null);
 
   useEffect(() => {
     loadStatus();
@@ -67,7 +69,7 @@ export function EmbeddingSettingsPage() {
         if (response.result.device) {
           setLocalDevice(response.result.device);
         }
-        if (response.result.dimension) {
+        if (typeof response.result.dimension === "number") {
           if (response.result.provider === "openai") {
             setOpenaiDimension(response.result.dimension);
           } else if (response.result.provider === "custom") {
@@ -122,7 +124,7 @@ export function EmbeddingSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload: any = {
+      const payload: SetActiveModelPayload = {
         provider,
         model: provider === "local" ? localModel : provider === "openai" ? openaiModel : customModel,
       };

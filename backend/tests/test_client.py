@@ -363,12 +363,11 @@ class TestStream:
             "memory_read": True,
             "memory_write": False,
         }
-        assert captured["context"] == {
-            "thread_id": "t3",
-            "session_mode": "temporary_chat",
-            "memory_read": True,
-            "memory_write": False,
-        }
+        assert captured["context"]["thread_id"] == "t3"
+        assert isinstance(captured["context"].get("trace_id"), str)
+        assert captured["context"]["session_mode"] == "temporary_chat"
+        assert captured["context"]["memory_read"] is True
+        assert captured["context"]["memory_write"] is False
 
     def test_stream_passes_model_override_to_agent_run_config(self, client):
         captured = {}
@@ -528,7 +527,7 @@ class TestEnsureAgent:
         """_ensure_agent does not recreate if config key unchanged."""
         mock_agent = MagicMock()
         client._agent = mock_agent
-        client._agent_config_key = (None, True, False, False, None, None, None)
+        client._agent_config_key = (None, None, True, False, False, None, None, None)
 
         config = client._get_runnable_config("t1")
         client._ensure_agent(config)

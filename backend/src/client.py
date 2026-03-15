@@ -145,7 +145,10 @@ class NionClient:
         Loads configuration but defers agent creation to first use.
 
         Args:
-            config_path: Path to config.yaml. Uses default resolution if None.
+            config_path: Optional path to legacy `config.yaml` used only during first-time bootstrap
+                (one-time import/migration into Config Store) or YAML fallback when the store is not
+                initialized. Prefer using the Config Center UI or the Config Center API (/api/config)
+                to manage runtime configuration.
             checkpointer: LangGraph checkpointer instance for state persistence.
                 Required for multi-turn conversations on the same thread_id.
                 Without a checkpointer, each call is stateless.
@@ -252,15 +255,17 @@ class NionClient:
 
     def _get_runnable_config(self, thread_id: str, **overrides) -> RunnableConfig:
         """Build a RunnableConfig for agent invocation."""
-        configurable = {
+        configurable: dict[str, Any] = {
             "thread_id": thread_id,
-            "agent_name": overrides.get("agent_name"),
             "model_name": overrides.get("model_name", self._model_name),
             "thinking_enabled": overrides.get("thinking_enabled", self._thinking_enabled),
             "is_plan_mode": overrides.get("plan_mode", self._plan_mode),
             "subagent_enabled": overrides.get("subagent_enabled", self._subagent_enabled),
             **self._resolve_memory_session_fields(thread_id, overrides),
         }
+        agent_name = overrides.get("agent_name")
+        if isinstance(agent_name, str) and agent_name.strip():
+            configurable["agent_name"] = agent_name.strip()
         return RunnableConfig(
             configurable=configurable,
             recursion_limit=overrides.get("recursion_limit", 100),
@@ -319,7 +324,13 @@ class NionClient:
         """Lazy import to avoid circular dependency at module level."""
         from src.tools import get_available_tools
 
-        return get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled, agent_name=agent_name)
+        kwargs: dict[str, Any] = {
+            "model_name": model_name,
+            "subagent_enabled": subagent_enabled,
+        }
+        if isinstance(agent_name, str) and agent_name.strip():
+            kwargs["agent_name"] = agent_name.strip()
+        return get_available_tools(**kwargs)
 
     @staticmethod
     def _serialize_message(msg) -> dict:

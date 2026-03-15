@@ -169,7 +169,7 @@ class MemoryMiddleware:
 
 ## 配置选项
 
-在 `config.yaml` 中可以调整：
+在 Config Store（SQLite）的配置 payload 中可以调整（`memory` 区块，通常通过前端“配置中心”或 `GET/PUT /api/config` 编辑）：
 
 ```yaml
 memory:

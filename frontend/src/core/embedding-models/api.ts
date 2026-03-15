@@ -1,13 +1,23 @@
 import { getBackendBaseURL } from "@/core/config";
 
-export type EmbeddingOperationResponse = {
+export type EmbeddingOperationResponse<T = Record<string, unknown>> = {
   status: "ok" | "degraded" | "disabled";
   latency_ms: number;
   error_code: string | null;
-  result: Record<string, unknown> | null;
+  result: T | null;
 };
 
 export type EmbeddingProvider = "local" | "openai" | "custom";
+
+export type EmbeddingStatusResult = {
+  enabled?: boolean;
+  provider?: EmbeddingProvider;
+  model?: string;
+  device?: string;
+  dimension?: number;
+  api_base?: string;
+  message?: string;
+};
 
 export type PresetModel = {
   id: string;
@@ -28,6 +38,22 @@ export type SetActiveModelPayload = {
   device?: string;
 };
 
+export type EmbeddingPresetsResult = {
+  local?: PresetModel[];
+  openai?: PresetModel[];
+  message?: string;
+};
+
+export type EmbeddingTestResult = {
+  model?: string;
+  dimension?: number;
+  message?: string;
+};
+
+export type EmbeddingSetActiveResult = {
+  message?: string;
+};
+
 export class EmbeddingApiError extends Error {
   status: number;
   detail?: string;
@@ -40,8 +66,8 @@ export class EmbeddingApiError extends Error {
   }
 }
 
-async function parseResponse(response: Response): Promise<EmbeddingOperationResponse> {
-  const data = (await response.json()) as EmbeddingOperationResponse | { detail?: string };
+async function parseResponse<T>(response: Response): Promise<EmbeddingOperationResponse<T>> {
+  const data = (await response.json()) as EmbeddingOperationResponse<T> | { detail?: string };
   if (!response.ok) {
     const detail = typeof data === "object" && data && "detail" in data
       ? data.detail
@@ -52,20 +78,20 @@ async function parseResponse(response: Response): Promise<EmbeddingOperationResp
       detail,
     );
   }
-  return data as EmbeddingOperationResponse;
+  return data as EmbeddingOperationResponse<T>;
 }
 
-export async function loadEmbeddingModelsStatus(): Promise<EmbeddingOperationResponse> {
+export async function loadEmbeddingModelsStatus(): Promise<EmbeddingOperationResponse<EmbeddingStatusResult>> {
   const response = await fetch(`${getBackendBaseURL()}/api/embedding-models/status`);
-  return parseResponse(response);
+  return parseResponse<EmbeddingStatusResult>(response);
 }
 
-export async function loadEmbeddingPresets(): Promise<EmbeddingOperationResponse> {
+export async function loadEmbeddingPresets(): Promise<EmbeddingOperationResponse<EmbeddingPresetsResult>> {
   const response = await fetch(`${getBackendBaseURL()}/api/embedding-models/presets`);
-  return parseResponse(response);
+  return parseResponse<EmbeddingPresetsResult>(response);
 }
 
-export async function setActiveEmbeddingModel(payload: SetActiveModelPayload): Promise<EmbeddingOperationResponse> {
+export async function setActiveEmbeddingModel(payload: SetActiveModelPayload): Promise<EmbeddingOperationResponse<EmbeddingSetActiveResult>> {
   const response = await fetch(`${getBackendBaseURL()}/api/embedding-models/set-active`, {
     method: "POST",
     headers: {
@@ -73,12 +99,12 @@ export async function setActiveEmbeddingModel(payload: SetActiveModelPayload): P
     },
     body: JSON.stringify(payload),
   });
-  return parseResponse(response);
+  return parseResponse<EmbeddingSetActiveResult>(response);
 }
 
 export async function testEmbedding(
   text: string = "test embedding",
-): Promise<EmbeddingOperationResponse> {
+): Promise<EmbeddingOperationResponse<EmbeddingTestResult>> {
   const response = await fetch(`${getBackendBaseURL()}/api/embedding-models/test`, {
     method: "POST",
     headers: {
@@ -86,5 +112,5 @@ export async function testEmbedding(
     },
     body: JSON.stringify({ text }),
   });
-  return parseResponse(response);
+  return parseResponse<EmbeddingTestResult>(response);
 }

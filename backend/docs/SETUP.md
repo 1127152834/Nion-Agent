@@ -1,92 +1,51 @@
 # Setup Guide
 
-Quick setup instructions for Nion.
+面向本地开发与自托管环境的快速启动说明。
 
-## Configuration Setup
+> Nion 的运行时配置以 **Config Store（SQLite）** 为真源，通过前端“配置中心”（或 `GET/PUT /api/config`）读写。不要把仓库内的 YAML 文件当作长期运行时配置入口。
 
-Nion uses a YAML configuration file that should be placed in the **project root directory**.
+## 1) 准备环境
 
-### Steps
-
-1. **Navigate to project root**:
-   ```bash
-   cd /path/to/nion
-   ```
-
-2. **Copy example configuration**:
-   ```bash
-   cp config.example.yaml config.yaml
-   ```
-
-3. **Edit configuration**:
-   ```bash
-   # Option A: Set environment variables (recommended)
-   export OPENAI_API_KEY="your-key-here"
-
-   # Option B: Edit config.yaml directly
-   vim config.yaml  # or your preferred editor
-   ```
-
-4. **Verify configuration**:
-   ```bash
-   cd backend
-   python -c "from src.config import get_app_config; print('✓ Config loaded:', get_app_config().models[0].name)"
-   ```
-
-## Important Notes
-
-- **Location**: `config.yaml` should be in `nion/` (project root), not `nion/backend/`
-- **Git**: `config.yaml` is automatically ignored by git (contains secrets)
-- **Priority**: If both `backend/config.yaml` and `../config.yaml` exist, backend version takes precedence
-
-## Configuration File Locations
-
-The backend searches for `config.yaml` in this order:
-
-1. `NION_CONFIG_PATH` environment variable (if set)
-2. `backend/config.yaml` (current directory when running from backend/)
-3. `nion/config.yaml` (parent directory - **recommended location**)
-
-**Recommended**: Place `config.yaml` in project root (`nion/config.yaml`).
-
-## Sandbox Setup (Optional but Recommended)
-
-If you plan to use Docker/Container-based sandbox (configured in `config.yaml` under `sandbox.use: src.community.aio_sandbox:AioSandboxProvider`), it's highly recommended to pre-pull the container image:
+推荐从仓库根目录按统一脚手架启动（见根目录 `README.md`）：
 
 ```bash
-# From project root
-make setup-sandbox
+make check
+make install
+make dev
 ```
 
-**Why pre-pull?**
-- The sandbox image (~500MB+) is pulled on first use, causing a long wait
-- Pre-pulling provides clear progress indication
-- Avoids confusion when first using the agent
+## 2) 设置密钥（环境变量）
 
-If you skip this step, the image will be automatically pulled on first agent execution, which may take several minutes depending on your network speed.
-
-## Troubleshooting
-
-### Config file not found
+模型与工具密钥通常通过环境变量注入，例如：
 
 ```bash
-# Check where the backend is looking
-cd nion/backend
-python -c "from src.config.app_config import AppConfig; print(AppConfig.resolve_config_path())"
+export OPENAI_API_KEY="your-key-here"
+export ANTHROPIC_API_KEY="your-key-here"
 ```
 
-If it can't find the config:
-1. Ensure you've copied `config.example.yaml` to `config.yaml`
-2. Verify you're in the correct directory
-3. Check the file exists: `ls -la ../config.yaml`
+## 3) 在配置中心完成运行时配置
 
-### Permission denied
+1. 启动后打开 Web/Electron 工作台。
+2. 进入“配置中心 / Settings”，完成 Models、Tools、Sandbox 等配置。
+3. 如需自动化或调试，可使用 Config Center API：
+   - `GET /api/config`
+   - `PUT /api/config`
+   - `POST /api/config/validate`
+   - `GET /api/config/runtime-status`
 
-```bash
-chmod 600 ../config.yaml  # Protect sensitive configuration
-```
+Config Store 默认存储在：
+- `$HOME/.nion/config.db`
+
+可通过环境变量覆盖：
+- `NION_CONFIG_DB_PATH=/path/to/config.db`
+- `NION_HOME=/path/to/nion-home`（会使用 `/path/to/nion-home/config.db`）
+
+## 4) 容器沙箱（可选）
+
+如果启用容器沙箱（`sandbox.use` 指向 `AioSandboxProvider`），建议在首次使用前预拉取镜像以避免“首次执行卡住无反馈”的体验。具体见：
+- `./APPLE_CONTAINER.md`
 
 ## See Also
 
-- [Configuration Guide](docs/CONFIGURATION.md) - Detailed configuration options
-- [Architecture Overview](CLAUDE.md) - System architecture
+- [Configuration Guide](./CONFIGURATION.md)
+- [Architecture](./ARCHITECTURE.md)

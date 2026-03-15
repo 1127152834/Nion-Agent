@@ -1,4 +1,10 @@
-"""Configuration for the subagent system loaded from config.yaml."""
+"""Configuration for the subagent system loaded from the runtime config payload.
+
+Notes:
+- The payload may come from Config Store (SQLite) or a legacy YAML import during
+  first-time bootstrap. Config Store remains the source of truth for ongoing
+  runtime changes.
+"""
 
 import logging
 

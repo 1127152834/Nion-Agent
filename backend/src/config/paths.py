@@ -35,8 +35,7 @@ class Paths:
     BaseDir resolution (in priority order):
         1. Constructor argument `base_dir`
         2. NION_HOME environment variable
-        3. Local dev fallback: cwd/.nion  (when cwd is the backend/ dir)
-        4. Default: $HOME/.nion
+        3. Default: $HOME/.nion
     """
 
     def __init__(self, base_dir: str | Path | None = None) -> None:
@@ -50,10 +49,6 @@ class Paths:
 
         if env_home := os.getenv("NION_HOME"):
             return Path(env_home).resolve()
-
-        cwd = Path.cwd()
-        if cwd.name == "backend" or (cwd / "pyproject.toml").exists():
-            return cwd / ".nion"
 
         return Path.home() / ".nion"
 

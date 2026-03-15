@@ -33,7 +33,7 @@ class RemoteSandboxBackend(SandboxBackend):
     All Pod creation, destruction, and discovery are handled by the
     provisioner.  This backend is a thin HTTP client.
 
-    Typical config.yaml::
+    Typical Config Store payload::
 
         sandbox:
           use: src.community.aio_sandbox:AioSandboxProvider

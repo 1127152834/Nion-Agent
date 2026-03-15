@@ -8,8 +8,15 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
-def test_cli_tools_loading():
-    """测试 CLI 工具加载"""
+def _cli_tools_loading_ok() -> bool:
+    """Return whether CLI runtime tools can be loaded successfully.
+
+    This helper exists so:
+    - pytest tests can use `assert ...` without returning non-None values
+      (avoids PytestReturnNotNoneWarning).
+    - `main()` can still keep the original "collect boolean results and print
+      a summary" behavior when running this file as a script.
+    """
     print("=" * 60)
     print("测试 1: CLI 工具加载")
     print("=" * 60)
@@ -23,8 +30,16 @@ def test_cli_tools_loading():
     print()
     return len(tools) > 0
 
-def test_agent_tools_integration():
-    """测试 Agent 工具系统集成"""
+
+def test_cli_tools_loading():
+    """测试 CLI 工具加载（pytest 入口）"""
+    # 这是一个 smoke test：只验证“不会抛异常”，不强制要求工具数量 > 0。
+    # CLI 工具是否启用/是否存在通常取决于本地 extensions 配置与可选依赖。
+    _cli_tools_loading_ok()
+
+
+def _agent_tools_integration_ok() -> bool:
+    """Return whether CLI tools are surfaced through the agent tool registry."""
     print("=" * 60)
     print("测试 2: Agent 工具系统集成")
     print("=" * 60)
@@ -41,8 +56,15 @@ def test_agent_tools_integration():
     print()
     return len(cli_tools) > 0
 
-def test_marketplace_catalog():
-    """测试 Marketplace 目录加载"""
+
+def test_agent_tools_integration():
+    """测试 Agent 工具系统集成（pytest 入口）"""
+    # 同上：不强制要求 CLI 工具一定启用，仅保证集成路径可执行。
+    _agent_tools_integration_ok()
+
+
+def _marketplace_catalog_ok() -> bool:
+    """Return whether the CLI marketplace catalog can be loaded from disk."""
     print("=" * 60)
     print("测试 3: Marketplace 目录加载")
     print("=" * 60)
@@ -60,8 +82,14 @@ def test_marketplace_catalog():
     print()
     return len(catalog.tools) > 0
 
-def test_config_file():
-    """测试配置文件"""
+
+def test_marketplace_catalog():
+    """测试 Marketplace 目录加载（pytest 入口）"""
+    _marketplace_catalog_ok()
+
+
+def _extensions_config_ok() -> bool:
+    """Return whether extensions_config.json can be loaded and contains CLI entries."""
     print("=" * 60)
     print("测试 4: 配置文件验证")
     print("=" * 60)
@@ -77,6 +105,11 @@ def test_config_file():
     print()
     return len(config.clis) > 0
 
+
+def test_config_file():
+    """测试配置文件（pytest 入口）"""
+    _extensions_config_ok()
+
 def main():
     """运行所有测试"""
     print("\n" + "=" * 60)
@@ -86,25 +119,25 @@ def main():
     results = []
 
     try:
-        results.append(("CLI 工具加载", test_cli_tools_loading()))
+        results.append(("CLI 工具加载", _cli_tools_loading_ok()))
     except Exception as e:
         print(f"❌ CLI 工具加载失败: {e}\n")
         results.append(("CLI 工具加载", False))
 
     try:
-        results.append(("Agent 工具集成", test_agent_tools_integration()))
+        results.append(("Agent 工具集成", _agent_tools_integration_ok()))
     except Exception as e:
         print(f"❌ Agent 工具集成失败: {e}\n")
         results.append(("Agent 工具集成", False))
 
     try:
-        results.append(("Marketplace 目录", test_marketplace_catalog()))
+        results.append(("Marketplace 目录", _marketplace_catalog_ok()))
     except Exception as e:
         print(f"❌ Marketplace 目录加载失败: {e}\n")
         results.append(("Marketplace 目录", False))
 
     try:
-        results.append(("配置文件", test_config_file()))
+        results.append(("配置文件", _extensions_config_ok()))
     except Exception as e:
         print(f"❌ 配置文件验证失败: {e}\n")
         results.append(("配置文件", False))

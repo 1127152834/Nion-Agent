@@ -14,7 +14,9 @@ The summarization feature uses LangChain's `SummarizationMiddleware` to monitor 
 
 ## Configuration
 
-Summarization is configured in `config.yaml` under the `summarization` key:
+Summarization is configured in the **Config Store (SQLite)** payload under the `summarization` key. You can edit it via:
+- Frontend Settings / Config Center
+- Config Center API (`GET/PUT /api/config`)
 
 ```yaml
 summarization:

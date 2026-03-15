@@ -44,7 +44,7 @@ cp .env.example .env
 cp frontend/.env.example frontend/.env
 ```
 
-运行时配置由应用内“配置中心”统一管理并持久化到 SQLite（默认路径 `backend/.nion/config.db`）。
+运行时配置由应用内“配置中心”统一管理并持久化到 SQLite（默认路径 `$HOME/.nion/config.db`；可通过 `NION_HOME` 或 `NION_CONFIG_DB_PATH` 覆盖）。
 
 可选（自定义数据库位置）：
 
@@ -69,16 +69,6 @@ make dev
 - 应用入口：`http://localhost:2026`
 - Gateway API：`http://localhost:2026/api/*`
 - LangGraph：`http://localhost:2026/api/langgraph/*`
-
-### 5)（可选）清理旧 memory 历史数据
-
-```bash
-# 默认 dry-run，仅预览将被清理的路径
-scripts/cleanup-legacy-memory-data.sh --app-data-dir ~/.localnion
-
-# 确认后执行实际清理（不会触碰 openviking 数据）
-scripts/cleanup-legacy-memory-data.sh --app-data-dir ~/.localnion --execute --yes
-```
 
 ---
 
