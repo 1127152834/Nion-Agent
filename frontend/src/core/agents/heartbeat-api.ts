@@ -12,6 +12,26 @@ export interface HeartbeatLogRecord {
   user_visible: boolean;
 }
 
+export interface HeartbeatTemplate {
+  template_id: string;
+  name: string;
+  description: string;
+  category: string;
+  default_enabled: boolean;
+  default_cron: string;
+  default_timezone: string;
+  result_type: string;
+  memory_scope: string;
+  soul_scope: string;
+  estimated_duration_seconds: number;
+}
+
+export interface HeartbeatStatus {
+  enabled: boolean;
+  next_runs: Record<string, string | null>;
+  recent_logs: HeartbeatLogRecord[];
+}
+
 export interface HeartbeatLogsParams {
   agentName: string;
   templateId?: string;
@@ -51,6 +71,41 @@ export async function getHeartbeatLog(
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { detail?: string };
     throw new Error(err.detail ?? `Failed to load heartbeat log: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getHeartbeatStatus(agentName: string): Promise<HeartbeatStatus> {
+  const res = await fetch(
+    `${getBackendBaseURL()}/api/heartbeat/status?agent_name=${encodeURIComponent(agentName)}`
+  );
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(err.detail ?? `Failed to load heartbeat status: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function getHeartbeatTemplates(): Promise<HeartbeatTemplate[]> {
+  const res = await fetch(`${getBackendBaseURL()}/api/heartbeat/templates`);
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(err.detail ?? `Failed to load heartbeat templates: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function executeHeartbeat(
+  agentName: string,
+  templateId: string
+): Promise<{ status: string; run_id: string }> {
+  const res = await fetch(
+    `${getBackendBaseURL()}/api/heartbeat/execute/${encodeURIComponent(templateId)}?agent_name=${encodeURIComponent(agentName)}`,
+    { method: "POST" }
+  );
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(err.detail ?? `Failed to execute heartbeat: ${res.statusText}`);
   }
   return res.json();
 }

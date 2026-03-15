@@ -81,8 +81,8 @@ async def execute_heartbeat(template_id: str, agent_name: str = "_default") -> d
     """Execute Heartbeat manually for an agent."""
     service = get_heartbeat_service()
     try:
-        task_id = service.execute_heartbeat(template_id, agent_name)
-        return {"status": "started", "task_id": task_id}
+        run_id = service.execute_heartbeat(template_id, agent_name)
+        return {"status": "started", "run_id": run_id}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

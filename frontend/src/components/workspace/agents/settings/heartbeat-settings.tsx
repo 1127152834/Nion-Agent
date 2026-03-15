@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useExecuteHeartbeat, useHeartbeatStatus, useHeartbeatTemplates } from "@/core/agents/heartbeat-hooks";
 import { useHeartbeatSettings, useUpdateHeartbeatSettings } from "@/core/agents/settings-hooks";
 import type { HeartbeatSettings, TemplateConfig } from "@/core/agents/settings-types";
 import { useI18n } from "@/core/i18n/hooks";
@@ -58,19 +59,40 @@ function ensureGovernanceTemplate(
 }
 
 export function HeartbeatSettingsComponent({ agentName }: HeartbeatSettingsProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const copy = t.agents.settings;
   const heartbeatCopy = copy.heartbeat;
   const { settings, isLoading } = useHeartbeatSettings(agentName);
   const updateMutation = useUpdateHeartbeatSettings(agentName);
+  const { data: status, isLoading: statusLoading, error: statusError } = useHeartbeatStatus(agentName);
+  const { data: templates, isLoading: templatesLoading, error: templatesError } = useHeartbeatTemplates();
+  const executeMutation = useExecuteHeartbeat(agentName);
 
   const [formData, setFormData] = useState<HeartbeatSettings | null>(null);
+  const [executingTemplateId, setExecutingTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) {
       setFormData(settings);
     }
   }, [settings]);
+
+  const formatNextRun = (nextRun: string | null | undefined) => {
+    if (!nextRun) {
+      return "-";
+    }
+    const parsed = new Date(nextRun);
+    if (Number.isNaN(parsed.getTime())) {
+      return nextRun;
+    }
+    return parsed.toLocaleString(locale, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   const governanceIntervalHours = useMemo(
     () => parseGovernanceIntervalHours(formData?.templates),
@@ -95,6 +117,8 @@ export function HeartbeatSettingsComponent({ agentName }: HeartbeatSettingsProps
     return <div className="text-muted-foreground text-sm">{copy.loadFailed}</div>;
   }
 
+  const heartbeatEnabled = status?.enabled ?? formData.enabled;
+
   return (
     <div className="space-y-4">
       <Alert>
@@ -105,6 +129,55 @@ export function HeartbeatSettingsComponent({ agentName }: HeartbeatSettingsProps
           <p className="mt-1">{heartbeatCopy.conceptHint}</p>
         </AlertDescription>
       </Alert>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{heartbeatCopy.statusTitle}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {statusLoading || templatesLoading ? (
+            <div className="text-muted-foreground text-sm">{copy.loading}</div>
+          ) : statusError || templatesError ? (
+            <div className="text-destructive text-sm">{copy.loadFailed}</div>
+          ) : !templates ? (
+            <div className="text-muted-foreground text-sm">{copy.loadFailed}</div>
+          ) : (
+            <div className="space-y-3">
+              {templates.map((template) => {
+                const templateId = template.template_id;
+                const nextRun = status?.next_runs?.[templateId];
+                const isRunning = executeMutation.isPending && executingTemplateId === templateId;
+                return (
+                  <div
+                    key={templateId}
+                    className="flex flex-col gap-2 rounded-xl border p-3 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-sm truncate">{template.name || templateId}</div>
+                      <div className="text-muted-foreground text-xs mt-1">
+                        {heartbeatCopy.nextRunLabel}: {formatNextRun(nextRun)}
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="shrink-0"
+                      disabled={!heartbeatEnabled || executeMutation.isPending}
+                      onClick={() => {
+                        setExecutingTemplateId(templateId);
+                        executeMutation.mutate(templateId, {
+                          onSettled: () => setExecutingTemplateId(null),
+                        });
+                      }}
+                    >
+                      {isRunning ? heartbeatCopy.runningLabel : heartbeatCopy.runNowLabel}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

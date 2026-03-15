@@ -358,6 +358,10 @@ export interface Translations {
         scopeDescription: string;
         templatesLabel: string;
         templatesComingSoon: string;
+        statusTitle: string;
+        nextRunLabel: string;
+        runNowLabel: string;
+        runningLabel: string;
         saveSettings: string;
       };
       evolution: {
@@ -423,6 +427,7 @@ export interface Translations {
         soulSaved: string;
         identitySaved: string;
         heartbeatSaved: string;
+        heartbeatRunTriggered: string;
         evolutionSaved: string;
         evolutionRunTriggered: string;
         suggestionDismissed: string;

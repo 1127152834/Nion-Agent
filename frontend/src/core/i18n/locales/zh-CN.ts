@@ -434,6 +434,10 @@ export const zhCN: Translations = {
         scopeDescription: "当前配置影响该智能体的心跳调度与记忆治理执行。",
         templatesLabel: "模板配置",
         templatesComingSoon: "模板配置功能将在后续版本中添加",
+        statusTitle: "心跳状态",
+        nextRunLabel: "下次运行",
+        runNowLabel: "立即执行一次",
+        runningLabel: "执行中...",
         saveSettings: "保存设置",
       },
       evolution: {
@@ -499,6 +503,7 @@ export const zhCN: Translations = {
         soulSaved: "SOUL.md 已保存",
         identitySaved: "IDENTITY.md 已保存",
         heartbeatSaved: "心跳设置已保存",
+        heartbeatRunTriggered: "已开始执行一次心跳任务",
         evolutionSaved: "自我进化设置已保存",
         evolutionRunTriggered: "已开始执行一次自我进化分析",
         suggestionDismissed: "建议已拒绝",
