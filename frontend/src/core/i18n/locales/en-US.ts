@@ -306,6 +306,16 @@ export const enUS: Translations = {
     nameStepCheckError: "Could not verify name availability — please try again",
     nameStepBootstrapMessage:
       "/bootstrap Bootstrapping “{displayName}” (ID: {name}): I will generate SOUL.md + IDENTITY.md, and optionally update USER.md (user profile).",
+    bootstrap: {
+      tooltip: "Onboarding",
+      pageTitle: "Bootstrap Default Agent",
+      pageSubtitle:
+        "Describe how you want the default agent to work — I'll update SOUL/IDENTITY, and optionally USER.md.",
+      startMessage:
+        "/bootstrap Goal: update the default agent (_default) SOUL.md + IDENTITY.md, and optionally USER.md (user profile). Start by asking me 1-3 questions to clarify responsibilities and communication style, then propose drafts for my confirmation.",
+      completedTitle: "Default agent updated",
+      reviewSoul: "Review SOUL/Identity",
+    },
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
     backToGallery: "Back to Gallery",

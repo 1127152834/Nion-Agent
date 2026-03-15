@@ -220,6 +220,14 @@ export interface Translations {
     nameStepAlreadyExistsError: string;
     nameStepCheckError: string;
     nameStepBootstrapMessage: string;
+    bootstrap: {
+      tooltip: string;
+      pageTitle: string;
+      pageSubtitle: string;
+      startMessage: string;
+      completedTitle: string;
+      reviewSoul: string;
+    };
     agentCreated: string;
     startChatting: string;
     backToGallery: string;
