@@ -282,12 +282,36 @@ Use `send_a2ui_json_to_client(a2ui_json=...)` and follow these rules (A2UI v0.8)
 
 Renderer constraints (IMPORTANT):
 - The client renderer uses `@a2ui-sdk/react/0.8` standard catalog. Only use these component type names:
-  `Text`, `Row`, `Column`, `Card`, `List`, `Tabs`, `Modal`, `Divider`, `Icon`, `Image`,
+  `Text`, `Row`, `Column`, `Card`, `List`, `Tabs`, `Modal`, `Divider`, `Icon`, `Image`, `TempRangeChart`,
   `Button`, `CheckBox`, `TextField`, `DateTimeInput`, `MultipleChoice`, `Slider`,
   `AudioPlayer`, `Video`.
 - Do NOT invent component types like `CheckboxGroup` / `Checkbox` (they will be treated as unknown and won't render).
 - For checkboxes, use **`CheckBox`** with props: `label` (ValueSource) and `value` (ValueSource).
   Example: `label.literalString=\"Foo\"` and `value.path=\"/checklist/foo\"`
+
+Component property cheat-sheet (use EXACT prop names):
+- `Card`: use prop `child` (string component id). DO NOT use `children`.
+- `Button`: props: `child` (string component id), `primary` (boolean), `action.name` (string), optional `action.context` (ActionContextItem[]).
+- `Modal`: props: `entryPointChild` + `contentChild` (both are component ids).
+- `Tabs`: prop `tabItems` is an array of items. Each item: `title` (ValueSource) + `child` (component id).
+- `TextField`: for INPUT only. Use `label` (ValueSource) and `text.path="/..."` (path binding). Pick `textFieldType` deliberately.
+
+Display-only rule (CRITICAL):
+- If the user wants a visualization / dashboard / report (no input needed), DO NOT use input components
+  like `TextField` / `MultipleChoice` / `Slider` as display placeholders (they often render as blank fields).
+  Use `Text` + `Row`/`Column`/`List`/`Card` to display values.
+
+Charts / visualization:
+- The client supports a product-specific component `TempRangeChart` for small line charts (e.g. 7-day forecast).
+- Use it when the user explicitly asks for a chart/graph visualization.
+- Props (recommended literals):
+  - `title`: ValueSource (literalString)
+  - `labels`: ValueSource (literalArray of strings, e.g. [\"Mon\",\"Tue\",...])
+  - `high`: ValueSource (literalArray of strings, numbers encoded as strings, e.g. [\"17\",\"16\",...])
+  - `low`:  ValueSource (literalArray of strings, numbers encoded as strings)
+  - `unit`: ValueSource (literalString, e.g. \"°C\")
+  Example:
+  `{{\"TempRangeChart\": {{\"title\": {{\"literalString\": \"武汉·7天\"}}, \"labels\": {{\"literalArray\": [\"Mon\",\"Tue\"]}}, \"high\": {{\"literalArray\": [\"17\",\"16\"]}}, \"low\": {{\"literalArray\": [\"8\",\"9\"]}}, \"unit\": {{\"literalString\": \"°C\"}}}}}}`
 
 User actions:
 - When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.

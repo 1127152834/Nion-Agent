@@ -35,6 +35,8 @@ const A2UI_CLIENT_CAPABILITIES = {
     "Video",
     "AudioPlayer",
     "Divider",
+    // Product-specific visualization
+    "TempRangeChart",
     // Layout
     "Row",
     "Column",

@@ -9,6 +9,7 @@ import type { Message } from "@langchain/langgraph-sdk";
 import React, { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
+import { nionA2UICatalog } from "@/core/a2ui/catalog";
 import type { A2UIUserAction } from "@/core/a2ui/types";
 import { extractA2UISurfacePayload } from "@/core/messages/utils";
 import { tryParseJSON } from "@/core/utils/json";
@@ -215,6 +216,54 @@ function normalizeComponentDefinition(definition: Record<string, unknown>): Reco
         },
       },
     };
+  }
+
+  // Common model mistake: `Card` uses `child` (single component id), but models often emit `children`.
+  // Salvage the first explicit child to avoid rendering an empty Card.
+  if (rawType === "Card") {
+    const child = coerceString(props.child);
+    if (child) {
+      return {
+        ...definition,
+        id,
+        component: {
+          Card: {
+            ...props,
+            child,
+          },
+        },
+      };
+    }
+
+    const children = props.children;
+    if (typeof children === "string" && children.trim()) {
+      return {
+        ...definition,
+        id,
+        component: {
+          Card: {
+            ...props,
+            child: children.trim(),
+          },
+        },
+      };
+    }
+
+    if (isRecord(children) && Array.isArray(children.explicitList) && children.explicitList.length > 0) {
+      const firstChild = coerceString(children.explicitList[0]);
+      if (firstChild) {
+        return {
+          ...definition,
+          id,
+          component: {
+            Card: {
+              ...props,
+              child: firstChild,
+            },
+          },
+        };
+      }
+    }
   }
 
   if (rawType === "CheckBox") {
@@ -655,7 +704,7 @@ export function A2UICard({
     >
       {a2uiMessages ? (
         <div className={cn("bg-background/60 w-full rounded-xl border p-4", className)}>
-          <A2UIProvider messages={a2uiMessages}>
+          <A2UIProvider messages={a2uiMessages} catalog={nionA2UICatalog}>
             <A2UIRenderer
               onAction={(action) => {
                 if (isLoading) {

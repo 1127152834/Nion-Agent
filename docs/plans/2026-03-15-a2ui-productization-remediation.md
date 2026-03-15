@@ -46,6 +46,7 @@
 ### 3.1 协议栈策略：内部以 v0.8 为 Canonical，外部输入做最大化兼容
 
 - 前端渲染基座锁定：`@a2ui-sdk/react/0.8`（standard catalog + shadcn 风格，产品一致性更好）。
+- 在不引入重型依赖的前提下，额外扩展少量产品组件以覆盖“图表可视化”类诉求（见 `TempRangeChart`）。
 - 后端做“协议正确性兜底”：解析 string/list/dict，拆分 multi-op envelope，过滤/丢弃危险或会导致崩溃的形态（例如 `dataModelUpdate.contents` 非数组）。
 - 前端做“渲染与 UX 兜底”：渲染异常不炸页面，有可操作的恢复路径。
 
@@ -83,6 +84,14 @@
 
 后端透传并合并进 `log_a2ui_event` args，提示词要求模型参考这些元数据生成可渲染 payload，并尽量保留用户输入。
 
+### 3.5 图表可视化（补齐“可视化”预期）
+
+标准 catalog 本身不包含图表组件，导致模型在“想画图”的情况下容易退化成空白容器或错误使用输入组件作为展示占位。
+
+因此我们在 catalog 上增加了一个轻量级的产品组件：
+
+- `TempRangeChart`：用于小数据量折线图（典型是 7 天温度趋势），输入推荐使用 `literalArray`（数字用字符串编码），客户端用 SVG 绘制，不依赖外部图表库。
+
 ### 3.5 前端产品化失败态：不露底，一键重试/文字回退
 
 - 普通用户默认只看到“界面无法显示/渲染失败”的可理解提示 + 两个按钮：
@@ -109,6 +118,9 @@
 
 - A2UI 卡片渲染与产品化失败态（按钮、debug gating）：
   - `frontend/src/components/workspace/messages/a2ui-card.tsx`
+- Nion 自定义 catalog（基于 standardCatalog 扩展）与图表组件：
+  - `frontend/src/core/a2ui/catalog.ts`
+  - `frontend/src/core/a2ui/components/temp-range-chart.tsx`
 - A2UI action 提交时附带 `client_capabilities`/`data_model_snapshot`：
   - `frontend/src/core/threads/hooks.ts`
 - BaseURL 自检与纠错（`.../api` -> `.../api/langgraph`）：
@@ -178,4 +190,3 @@ make dev
 - **成本控制**：repair loop 上限固定为 2，避免死循环与成本失控。
 - **可观测性**：建议后续把 `a2ui_validation_error.kind/attempt/surface_id` 纳入结构化日志与指标。
 - **更强兼容层**：后续可逐步把常见 v0.9 字段差异做 deterministic 适配（当前以“可修复反馈/降级”为主）。
-
