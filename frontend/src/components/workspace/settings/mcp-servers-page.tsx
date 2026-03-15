@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -339,65 +340,70 @@ function MarketplaceDetailDialog({
   const { data: detail, isLoading } = useMcpMarketplaceServerDetail(open ? serverId : null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent
+        className="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-3xl"
+        aria-describedby={undefined}
+      >
         <DialogHeader className="gap-1">
           <DialogTitle>{copy.details}</DialogTitle>
         </DialogHeader>
-        {isLoading ? (
-          <div className="text-muted-foreground text-sm">{copy.statusTesting}</div>
-        ) : detail ? (
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+        <ScrollArea className="min-h-0 flex-1">
+          {isLoading ? (
+            <div className="text-muted-foreground pr-1 text-sm">{copy.statusTesting}</div>
+          ) : detail ? (
+            <div className="space-y-3 pr-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-base font-semibold">{detail.name}</div>
+                    <span className="text-muted-foreground text-xs">v{detail.version}</span>
+                    <MarketplaceBadges item={{ ...detail, detailUrl: "" }} copy={copy} />
+                  </div>
+                  <div className="text-muted-foreground text-xs">
+                    {[detail.author, detail.category].filter(Boolean).join(" · ") || "-"}
+                  </div>
+                  <div className="text-muted-foreground mt-1 text-sm">{detail.description}</div>
+                </div>
                 <div className="flex items-center gap-2">
-                  <div className="truncate text-base font-semibold">{detail.name}</div>
-                  <span className="text-muted-foreground text-xs">v{detail.version}</span>
-                  <MarketplaceBadges item={{ ...detail, detailUrl: "" }} copy={copy} />
-                </div>
-                <div className="text-muted-foreground text-xs">
-                  {[detail.author, detail.category].filter(Boolean).join(" · ") || "-"}
-                </div>
-                <div className="text-muted-foreground mt-1 text-sm">{detail.description}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                {detail.docsUrl ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => window.open(detail.docsUrl ?? "", "_blank", "noopener,noreferrer")}
-                  >
-                    <ExternalLinkIcon className="size-4" />
-                    {copy.viewDocs}
+                  {detail.docsUrl ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(detail.docsUrl ?? "", "_blank", "noopener,noreferrer")}
+                    >
+                      <ExternalLinkIcon className="size-4" />
+                      {copy.viewDocs}
+                    </Button>
+                  ) : null}
+                  <Button size="sm" onClick={() => onInstall(detail.id)} disabled={installed}>
+                    {installed ? copy.installedAction : copy.install}
                   </Button>
-                ) : null}
-                <Button size="sm" onClick={() => onInstall(detail.id)} disabled={installed}>
-                  {installed ? copy.installedAction : copy.install}
-                </Button>
+                </div>
               </div>
+
+              {detail.demoImageUrls.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {detail.demoImageUrls.map((url) => (
+                    <img
+                      key={url}
+                      src={url}
+                      alt={detail.name}
+                      className="h-auto w-full rounded border"
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              <article className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {detail.readmeMarkdown}
+                </ReactMarkdown>
+              </article>
             </div>
-
-            {detail.demoImageUrls.length > 0 ? (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {detail.demoImageUrls.map((url) => (
-                  <img
-                    key={url}
-                    src={url}
-                    alt={detail.name}
-                    className="h-auto w-full rounded border"
-                  />
-                ))}
-              </div>
-            ) : null}
-
-            <article className="prose prose-sm max-w-none dark:prose-invert">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {detail.readmeMarkdown}
-              </ReactMarkdown>
-            </article>
-          </div>
-        ) : (
-          <div className="text-muted-foreground text-sm">{copy.loadFailed}</div>
-        )}
+          ) : (
+            <div className="text-muted-foreground pr-1 text-sm">{copy.loadFailed}</div>
+          )}
+        </ScrollArea>
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>
             {copy.close}
@@ -644,132 +650,137 @@ function InstallMcpServerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent
+        className="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-2xl"
+        aria-describedby={undefined}
+      >
         <DialogHeader className="gap-1">
           <DialogTitle>{copy.installDialogTitle}</DialogTitle>
         </DialogHeader>
-        {isLoading ? (
-          <div className="text-muted-foreground text-sm">{copy.statusTesting}</div>
-        ) : detail ? (
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <div className="truncate text-base font-semibold">{detail.name}</div>
-                  <MarketplaceBadges item={{ ...detail, detailUrl: "" }} copy={copy} />
-                </div>
-                <div className="text-muted-foreground text-xs">
-                  {[detail.author, detail.category].filter(Boolean).join(" · ") || "-"}
-                </div>
-                <div className="text-muted-foreground mt-1 text-sm">{detail.description}</div>
-              </div>
-              {detail.docsUrl ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(detail.docsUrl ?? "", "_blank", "noopener,noreferrer")}
-                >
-                  <ExternalLinkIcon className="size-4" />
-                  {copy.viewDocs}
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-1.5 md:col-span-2">
-                <div className="text-xs font-medium">{copy.serverKeyFromMarketplace}</div>
-                <Input
-                  value={serverKey}
-                  onChange={(e) => setServerKey(e.target.value)}
-                  disabled={disabled}
-                />
-              </div>
-              <div className="space-y-1.5 md:col-span-2">
-                <div className="text-xs font-medium">{copy.installMethod}</div>
-                <Select
-                  value={optionId}
-                  onValueChange={(value) => setOptionId(value)}
-                >
-                  <SelectTrigger disabled={disabled}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {detail.installOptions.map((opt) => (
-                      <SelectItem key={opt.id} value={opt.id}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {option && option.prerequisites.length > 0 ? (
-              <div className="space-y-2">
-                <div className="text-xs font-medium">{copy.prerequisites}</div>
-                <div className="flex flex-wrap gap-1">
-                  {option.prerequisites.map((item) => (
-                    <span
-                      key={item}
-                      className={`inline-flex rounded px-2 py-0.5 text-xs ${
-                        prereqStatuses[item]?.available === false
-                          ? "bg-rose-50 text-rose-700"
-                          : prereqStatuses[item]?.available === true
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-muted text-foreground"
-                      }`}
-                    >
-                      {item}
-                    </span>
-                  ))}
-                </div>
-                {missingPrereqs.map((item) => (
-                  <div key={`missing-${item}`} className="text-rose-600 text-xs">
-                    {copy.prerequisitesMissing.replaceAll("{name}", item)}
+        <ScrollArea className="min-h-0 flex-1">
+          {isLoading ? (
+            <div className="text-muted-foreground pr-1 text-sm">{copy.statusTesting}</div>
+          ) : detail ? (
+            <div className="space-y-4 pr-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-base font-semibold">{detail.name}</div>
+                    <MarketplaceBadges item={{ ...detail, detailUrl: "" }} copy={copy} />
                   </div>
-                ))}
-                {missingNodeToolchain ? (
-                  <div className="pt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => void handleEnsureNodeToolchain()}
-                      disabled={disabled || ensureNodeMutation.isPending}
-                    >
-                      {ensureNodeMutation.isPending ? (
-                        <Loader2Icon className="size-4 animate-spin" />
-                      ) : (
-                        <ArrowDownToLineIcon className="size-4" />
-                      )}
-                      {ensureNodeMutation.isPending ? copy.installingPrereqs : copy.installNodeToolchain}
-                    </Button>
+                  <div className="text-muted-foreground text-xs">
+                    {[detail.author, detail.category].filter(Boolean).join(" · ") || "-"}
                   </div>
+                  <div className="text-muted-foreground mt-1 text-sm">{detail.description}</div>
+                </div>
+                {detail.docsUrl ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open(detail.docsUrl ?? "", "_blank", "noopener,noreferrer")}
+                  >
+                    <ExternalLinkIcon className="size-4" />
+                    {copy.viewDocs}
+                  </Button>
                 ) : null}
               </div>
-            ) : null}
 
-            {option && option.inputs.length > 0 ? (
-              <div className="space-y-2">
-                <div className="text-xs font-medium">{copy.inputs}</div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {option.inputs.map((input) => (
-                    <InstallInputField
-                      key={input.id}
-                      input={input}
-                      value={values[input.id]}
-                      disabled={disabled}
-                      onChange={(next) =>
-                        setValues((prev) => ({ ...prev, [input.id]: next }))
-                      }
-                    />
-                  ))}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5 md:col-span-2">
+                  <div className="text-xs font-medium">{copy.serverKeyFromMarketplace}</div>
+                  <Input
+                    value={serverKey}
+                    onChange={(e) => setServerKey(e.target.value)}
+                    disabled={disabled}
+                  />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <div className="text-xs font-medium">{copy.installMethod}</div>
+                  <Select
+                    value={optionId}
+                    onValueChange={(value) => setOptionId(value)}
+                  >
+                    <SelectTrigger disabled={disabled}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {detail.installOptions.map((opt) => (
+                        <SelectItem key={opt.id} value={opt.id}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="text-muted-foreground text-sm">{copy.loadFailed}</div>
-        )}
+
+              {option && option.prerequisites.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium">{copy.prerequisites}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {option.prerequisites.map((item) => (
+                      <span
+                        key={item}
+                        className={`inline-flex rounded px-2 py-0.5 text-xs ${
+                          prereqStatuses[item]?.available === false
+                            ? "bg-rose-50 text-rose-700"
+                            : prereqStatuses[item]?.available === true
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-muted text-foreground"
+                        }`}
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                  {missingPrereqs.map((item) => (
+                    <div key={`missing-${item}`} className="text-rose-600 text-xs">
+                      {copy.prerequisitesMissing.replaceAll("{name}", item)}
+                    </div>
+                  ))}
+                  {missingNodeToolchain ? (
+                    <div className="pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void handleEnsureNodeToolchain()}
+                        disabled={disabled || ensureNodeMutation.isPending}
+                      >
+                        {ensureNodeMutation.isPending ? (
+                          <Loader2Icon className="size-4 animate-spin" />
+                        ) : (
+                          <ArrowDownToLineIcon className="size-4" />
+                        )}
+                        {ensureNodeMutation.isPending ? copy.installingPrereqs : copy.installNodeToolchain}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {option && option.inputs.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium">{copy.inputs}</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {option.inputs.map((input) => (
+                      <InstallInputField
+                        key={input.id}
+                        input={input}
+                        value={values[input.id]}
+                        disabled={disabled}
+                        onChange={(next) =>
+                          setValues((prev) => ({ ...prev, [input.id]: next }))
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="text-muted-foreground pr-1 text-sm">{copy.loadFailed}</div>
+          )}
+        </ScrollArea>
 
         {confirmPayload ? (
           <div className="bg-amber-50 text-amber-800 rounded-md border border-amber-200 p-3 text-xs">
@@ -975,139 +986,144 @@ function McpServerEditorDialog({
   const title = mode === "add" ? copy.editorAddTitle : copy.editorEditTitle;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent
+        className="flex h-[60vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-2xl"
+        aria-describedby={undefined}
+      >
         <DialogHeader className="gap-1">
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs text-muted-foreground">
-              {copy.serverKey} / {copy.transportType}
-            </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => void handleClipboardImport()}
-              disabled={disabled}
-            >
-              {copy.clipboardImport}
-            </Button>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium">{copy.serverKey}</div>
-              <Input
-                value={serverKey}
-                placeholder={copy.serverKeyPlaceholder}
-                onChange={(e) => setServerKey(e.target.value)}
-                disabled={disabled || mode === "edit"}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium">{copy.displayName}</div>
-              <Input
-                value={displayName}
-                placeholder={copy.displayNamePlaceholder}
-                onChange={(e) => setDisplayName(e.target.value)}
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-4 pr-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-muted-foreground">
+                {copy.serverKey} / {copy.transportType}
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void handleClipboardImport()}
                 disabled={disabled}
-              />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <div className="text-xs font-medium">{copy.descriptionLabel}</div>
-              <Input
-                value={description}
-                placeholder={copy.descriptionPlaceholder}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={disabled}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium">{copy.transportType}</div>
-              <Select
-                value={type}
-                onValueChange={(value) => setType(value as MCPServerType)}
               >
-                <SelectTrigger disabled={disabled}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="stdio">{copy.stdio}</SelectItem>
-                  <SelectItem value="http">{copy.http}</SelectItem>
-                  <SelectItem value="sse">{copy.sse}</SelectItem>
-                </SelectContent>
-              </Select>
+                {copy.clipboardImport}
+              </Button>
             </div>
 
-            <label className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
-              <div className="text-xs font-medium">{copy.enabled}</div>
-              <Switch checked={enabled} onCheckedChange={setEnabled} disabled={disabled} />
-            </label>
-
-            {type === "stdio" ? (
-              <>
-                <div className="space-y-1.5 md:col-span-2">
-                  <div className="text-xs font-medium">{copy.command}</div>
-                  <Input
-                    value={command}
-                    placeholder={copy.commandPlaceholder}
-                    onChange={(e) => setCommand(e.target.value)}
-                    disabled={disabled}
-                  />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <div className="text-xs font-medium">{copy.args}</div>
-                  <Textarea
-                    value={argsText}
-                    onChange={(e) => setArgsText(e.target.value)}
-                    disabled={disabled}
-                    className="min-h-24"
-                  />
-                </div>
-              </>
-            ) : (
-              <div className="space-y-1.5 md:col-span-2">
-                <div className="text-xs font-medium">{copy.url}</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{copy.serverKey}</div>
                 <Input
-                  value={url}
-                  placeholder={copy.urlPlaceholder}
-                  onChange={(e) => setUrl(e.target.value)}
+                  value={serverKey}
+                  placeholder={copy.serverKeyPlaceholder}
+                  onChange={(e) => setServerKey(e.target.value)}
+                  disabled={disabled || mode === "edit"}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{copy.displayName}</div>
+                <Input
+                  value={displayName}
+                  placeholder={copy.displayNamePlaceholder}
+                  onChange={(e) => setDisplayName(e.target.value)}
                   disabled={disabled}
                 />
               </div>
-            )}
+              <div className="space-y-1.5 md:col-span-2">
+                <div className="text-xs font-medium">{copy.descriptionLabel}</div>
+                <Input
+                  value={description}
+                  placeholder={copy.descriptionPlaceholder}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={disabled}
+                />
+              </div>
 
-            <div className="space-y-1.5 md:col-span-2">
-              <div className="text-xs font-medium">{copy.env}</div>
-              <Textarea
-                value={envText}
-                onChange={(e) => setEnvText(e.target.value)}
-                disabled={disabled}
-                className="min-h-24 font-mono text-xs"
-              />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <div className="text-xs font-medium">{copy.headers}</div>
-              <Textarea
-                value={headersText}
-                onChange={(e) => setHeadersText(e.target.value)}
-                disabled={disabled}
-                className="min-h-24 font-mono text-xs"
-              />
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <div className="text-xs font-medium">{copy.oauthJson}</div>
-              <Textarea
-                value={oauthText}
-                onChange={(e) => setOauthText(e.target.value)}
-                disabled={disabled}
-                className="min-h-24 font-mono text-xs"
-              />
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium">{copy.transportType}</div>
+                <Select
+                  value={type}
+                  onValueChange={(value) => setType(value as MCPServerType)}
+                >
+                  <SelectTrigger disabled={disabled}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="stdio">{copy.stdio}</SelectItem>
+                    <SelectItem value="http">{copy.http}</SelectItem>
+                    <SelectItem value="sse">{copy.sse}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <label className="flex items-center justify-between gap-2 rounded-md border px-3 py-2">
+                <div className="text-xs font-medium">{copy.enabled}</div>
+                <Switch checked={enabled} onCheckedChange={setEnabled} disabled={disabled} />
+              </label>
+
+              {type === "stdio" ? (
+                <>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <div className="text-xs font-medium">{copy.command}</div>
+                    <Input
+                      value={command}
+                      placeholder={copy.commandPlaceholder}
+                      onChange={(e) => setCommand(e.target.value)}
+                      disabled={disabled}
+                    />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <div className="text-xs font-medium">{copy.args}</div>
+                    <Textarea
+                      value={argsText}
+                      onChange={(e) => setArgsText(e.target.value)}
+                      disabled={disabled}
+                      className="min-h-24"
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1.5 md:col-span-2">
+                  <div className="text-xs font-medium">{copy.url}</div>
+                  <Input
+                    value={url}
+                    placeholder={copy.urlPlaceholder}
+                    onChange={(e) => setUrl(e.target.value)}
+                    disabled={disabled}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5 md:col-span-2">
+                <div className="text-xs font-medium">{copy.env}</div>
+                <Textarea
+                  value={envText}
+                  onChange={(e) => setEnvText(e.target.value)}
+                  disabled={disabled}
+                  className="min-h-24 font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <div className="text-xs font-medium">{copy.headers}</div>
+                <Textarea
+                  value={headersText}
+                  onChange={(e) => setHeadersText(e.target.value)}
+                  disabled={disabled}
+                  className="min-h-24 font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <div className="text-xs font-medium">{copy.oauthJson}</div>
+                <Textarea
+                  value={oauthText}
+                  onChange={(e) => setOauthText(e.target.value)}
+                  disabled={disabled}
+                  className="min-h-24 font-mono text-xs"
+                />
+              </div>
             </div>
           </div>
-        </div>
+        </ScrollArea>
 
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>
