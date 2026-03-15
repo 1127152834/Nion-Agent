@@ -81,7 +81,7 @@ def test_memory_middleware_writes_filtered_messages_via_graph_provider():
         result = middleware.after_agent(state, runtime)
 
     assert result is None
-    provider.write_conversation_update.assert_called_once()
-    kwargs = provider.write_conversation_update.call_args.kwargs
-    assert kwargs["thread_id"] == "thread-1"
-    assert any(getattr(msg, "type", None) == "human" for msg in kwargs["messages"])
+    provider.queue_conversation_update.assert_called_once()
+    request = provider.queue_conversation_update.call_args.args[0]
+    assert request.thread_id == "thread-1"
+    assert any(getattr(msg, "type", None) == "human" for msg in request.messages)
