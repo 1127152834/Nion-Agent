@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from src.agents.memory.policy import resolve_memory_policy
+from src.agents.memory.scope import resolve_agent_for_memory_scope
 from src.agents.memory.registry import get_default_memory_provider
 
 MemoryScope = Literal["global", "agent", "auto"]
@@ -14,13 +15,8 @@ def resolve_agent_for_scope(
     requested_agent_name: str | None = None,
     runtime_agent_name: str | None = None,
 ) -> str | None:
-    normalized_scope = (scope or "auto").strip().lower()
     candidate = (requested_agent_name or "").strip() or (runtime_agent_name or "").strip() or None
-    if normalized_scope == "global":
-        return None
-    if normalized_scope in {"agent", "auto"}:
-        return candidate
-    return candidate
+    return resolve_agent_for_memory_scope(scope=scope, agent_name=candidate)
 
 
 def query_memory_action(
