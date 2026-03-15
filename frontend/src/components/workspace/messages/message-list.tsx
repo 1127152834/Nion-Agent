@@ -165,6 +165,58 @@ export function MessageList({
     );
   }, [messages, showStreamErrorNotice, thread.isLoading]);
 
+  const groupedMessages = useMemo(
+    () => groupMessages(messages, (group) => group),
+    [messages],
+  );
+
+  const a2uiSupplement = useMemo(() => {
+    const suppressedAssistantGroups = new Set<number>();
+	    const supplementaryContentByGroupId = new Map<string | undefined, string>();
+
+	    for (let index = 0; index < groupedMessages.length; index += 1) {
+	      const group = groupedMessages[index];
+	      if (group?.type !== "assistant:a2ui") {
+	        continue;
+	      }
+
+      const supplementaryBlocks: string[] = [];
+      for (let j = index + 1; j < groupedMessages.length; j += 1) {
+        const nextGroup = groupedMessages[j];
+        if (!nextGroup) {
+          continue;
+        }
+        if (nextGroup.type === "human") {
+          break;
+        }
+        if (nextGroup.type === "assistant") {
+          suppressedAssistantGroups.add(j);
+          const nextMessage = nextGroup.messages[0];
+          if (nextMessage) {
+            const text = extractContentFromMessage(nextMessage).trim();
+            if (text) {
+              supplementaryBlocks.push(text);
+            }
+          }
+          continue;
+        }
+        // Keep scanning across processing groups so we can still capture the final assistant text.
+        if (nextGroup.type === "assistant:processing") {
+          continue;
+        }
+        // Stop at other UI cards / file cards / clarification cards, etc.
+        break;
+      }
+
+      supplementaryContentByGroupId.set(group.id, supplementaryBlocks.join("\n\n"));
+    }
+
+    return {
+      suppressedAssistantGroups,
+      supplementaryContentByGroupId,
+    };
+  }, [groupedMessages]);
+
   if (thread.isThreadLoading && messages.length === 0) {
     return <MessageListSkeleton />;
   }
@@ -173,7 +225,11 @@ export function MessageList({
       className={cn("flex size-full flex-col", className)}
     >
       <ConversationContent className="mx-auto w-full max-w-(--container-width-md) gap-8 pt-12">
-        {groupMessages(messages, (group) => {
+        {groupedMessages.map((group, index) => {
+          if (!group || a2uiSupplement.suppressedAssistantGroups.has(index)) {
+            return null;
+          }
+
           if (group.type === "human" || group.type === "assistant") {
             return (
               <MessageListItem
@@ -268,12 +324,16 @@ export function MessageList({
           } else if (group.type === "assistant:a2ui") {
             const message = group.messages[0];
             if (!message) return null;
+            const supplementaryContent =
+              a2uiSupplement.supplementaryContentByGroupId.get(group.id) ?? "";
             return (
               <A2UICard
                 key={group.id}
                 message={message}
                 isLoading={thread.isLoading}
                 onAction={onA2UIAction}
+                supplementaryContent={supplementaryContent}
+                rehypePlugins={rehypePlugins}
               />
             );
           } else if (group.type === "assistant:present-files") {

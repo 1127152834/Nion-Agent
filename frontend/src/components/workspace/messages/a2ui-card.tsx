@@ -6,14 +6,18 @@ import {
   type A2UIMessage,
 } from "@a2ui-sdk/react/0.8";
 import type { Message } from "@langchain/langgraph-sdk";
-import React, { useMemo } from "react";
+import { ChevronDownIcon, FileTextIcon } from "lucide-react";
+import React, { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { nionA2UICatalog } from "@/core/a2ui/catalog";
 import type { A2UIUserAction } from "@/core/a2ui/types";
 import { extractA2UISurfacePayload } from "@/core/messages/utils";
 import { tryParseJSON } from "@/core/utils/json";
 import { cn } from "@/lib/utils";
+
+import { MarkdownContent, type MarkdownContentProps } from "./markdown-content";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -696,16 +700,72 @@ class A2UIRenderErrorBoundary extends React.Component<
   }
 }
 
+function A2UISupplementaryText({
+  content,
+  isLoading,
+  rehypePlugins,
+}: {
+  content: string;
+  isLoading: boolean;
+  rehypePlugins: MarkdownContentProps["rehypePlugins"];
+}) {
+  const normalized = content.trim();
+  const [open, setOpen] = useState(false);
+
+  if (!normalized) {
+    return null;
+  }
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="mt-3 w-full"
+    >
+      <CollapsibleTrigger asChild>
+        <Button
+          type="button"
+          variant="link"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground h-auto p-0 text-xs"
+          disabled={isLoading}
+        >
+          <FileTextIcon className="mr-1 size-3.5" />
+          {open ? "收起文字说明" : "查看文字说明"}
+          <ChevronDownIcon
+            className={cn(
+              "ml-1 size-3.5 transition-transform",
+              open ? "rotate-180" : "rotate-0",
+            )}
+          />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2 overflow-hidden rounded-lg border bg-muted/20 p-3">
+        <MarkdownContent
+          content={normalized}
+          isLoading={isLoading}
+          rehypePlugins={rehypePlugins}
+          className="my-0"
+        />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export function A2UICard({
   className,
   message,
   isLoading,
   onAction,
+  supplementaryContent,
+  rehypePlugins,
 }: {
   className?: string;
   message: Message;
   isLoading: boolean;
   onAction?: (action: A2UIUserAction) => void;
+  supplementaryContent?: string;
+  rehypePlugins: MarkdownContentProps["rehypePlugins"];
 }) {
   const payload = useMemo(() => extractA2UISurfacePayload(message), [message]);
   const operations = payload?.operations ?? null;
@@ -748,6 +808,13 @@ export function A2UICard({
           isLoading={isLoading}
           onAction={onAction}
         />
+        {supplementaryContent ? (
+          <A2UISupplementaryText
+            content={supplementaryContent}
+            isLoading={isLoading}
+            rehypePlugins={rehypePlugins}
+          />
+        ) : null}
       </div>
     );
   }
@@ -780,6 +847,13 @@ export function A2UICard({
             isLoading={isLoading}
             onAction={onAction}
           />
+          {supplementaryContent ? (
+            <A2UISupplementaryText
+              content={supplementaryContent}
+              isLoading={isLoading}
+              rehypePlugins={rehypePlugins}
+            />
+          ) : null}
         </div>
       ) : (
         <div className={cn("bg-background/60 w-full rounded-xl border p-4", className)}>
@@ -800,6 +874,13 @@ export function A2UICard({
             isLoading={isLoading}
             onAction={onAction}
           />
+          {supplementaryContent ? (
+            <A2UISupplementaryText
+              content={supplementaryContent}
+              isLoading={isLoading}
+              rehypePlugins={rehypePlugins}
+            />
+          ) : null}
           {debugEnabled ? (
             <details className="mt-3 text-xs">
               <summary className="cursor-pointer select-none text-xs">
