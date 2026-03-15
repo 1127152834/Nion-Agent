@@ -189,6 +189,11 @@ export default function ChatPage() {
     },
   });
 
+  // Keep MessageList bottom padding and the composer mask in sync.
+  // The composer is translucent and floats above the message list; without a mask, users can
+  // scroll content into the "gap" under the composer and still see it.
+  const messageListBottomPaddingPx = 232;
+
   useEffect(() => {
     if (!chatThreadVisibilityOverrides) {
       return;
@@ -897,13 +902,18 @@ export default function ChatPage() {
                     className={cn("size-full", !isNewThread && "pt-10")}
                     threadId={threadId}
                     thread={thread}
-                    paddingBottom={232}
+                    paddingBottom={messageListBottomPaddingPx}
                     onClarificationSelect={handleClarificationSelect}
                     onRetryLastMessage={handleRetryLastMessage}
                     onSubmitMessage={handleCLIInteractiveSubmit}
                     onA2UIAction={handleA2UIAction}
                   />
                 </div>
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute right-0 bottom-0 left-0 z-20 bg-gradient-to-t from-background to-transparent"
+                  style={{ height: messageListBottomPaddingPx }}
+                />
                 <div className="pointer-events-none absolute right-0 bottom-4 left-0 z-30 flex justify-center px-4 sm:bottom-6 sm:px-6">
                   <div className="pointer-events-auto relative w-full max-w-(--container-width-md)">
                     <div className="absolute -top-4 right-0 left-0 z-0">
