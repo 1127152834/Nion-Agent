@@ -992,6 +992,12 @@ export const zhCN: Translations = {
         maxWords: "最大词数",
         advanced: "高级设置",
       }),
+      a2ui: withFallbackLabels({
+        title: "A2UI（交互式界面）",
+        subtitle: "控制智能体是否使用交互式表单/按钮等 UI 进行问答。",
+        enabled: "启用 A2UI",
+        hint: "关闭后：所有聊天将以纯文本交互，不再渲染 A2UI 卡片，也不会触发 A2UI 交互事件。",
+      }),
       suggestions: withFallbackLabels({
         title: "追问建议",
         subtitle: "配置聊天页追问建议的生成模型。",

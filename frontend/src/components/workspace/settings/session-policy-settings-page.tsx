@@ -4,6 +4,7 @@ import { useI18n } from "@/core/i18n/hooks";
 
 import { ConfigValidationErrors } from "./config-validation-errors";
 import { ConfigSaveBar } from "./configuration/config-save-bar";
+import { A2UISection } from "./configuration/sections/a2ui-section";
 import { SubagentsSection } from "./configuration/sections/subagents-section";
 import { SuggestionsSection } from "./configuration/sections/suggestions-section";
 import { SummarizationSection } from "./configuration/sections/summarization-section";
@@ -40,6 +41,11 @@ export function SessionPolicySettingsPage() {
       ) : (
         <div className="space-y-4">
           <SuggestionsSection
+            config={draftConfig}
+            onChange={onConfigChange}
+            disabled={disabled}
+          />
+          <A2UISection
             config={draftConfig}
             onChange={onConfigChange}
             disabled={disabled}

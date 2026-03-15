@@ -1014,6 +1014,12 @@ export const enUS: Translations = {
         maxWords: "Max words",
         advanced: "Advanced",
       }),
+      a2ui: withFallbackLabels({
+        title: "A2UI",
+        subtitle: "Control whether the assistant renders interactive UI surfaces (forms/buttons).",
+        enabled: "Enable A2UI",
+        hint: "When disabled, all chats run in plain-text mode and A2UI cards are not rendered.",
+      }),
       suggestions: withFallbackLabels({
         title: "Follow-up suggestions",
         subtitle: "Configure the model used for follow-up question suggestions.",
