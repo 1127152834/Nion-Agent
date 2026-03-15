@@ -7,6 +7,7 @@ import {
   ConversationContent,
 } from "@/components/ai-elements/conversation";
 import { Button } from "@/components/ui/button";
+import type { A2UIUserAction } from "@/core/a2ui/types";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   extractContentFromMessage,
@@ -31,7 +32,6 @@ import { cn } from "@/lib/utils";
 import { ArtifactFileList } from "../artifacts/artifact-file-list";
 import { StreamingIndicator } from "../streaming-indicator";
 
-import type { A2UIUserAction } from "@/core/a2ui/types";
 import { A2UICard } from "./a2ui-card";
 import { ClarificationCard } from "./clarification-card";
 import { CLIInteractiveCard } from "./cli-interactive-card";

@@ -292,6 +292,22 @@ Renderer constraints (IMPORTANT):
 User actions:
 - When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.
   This represents a real user action. You MUST react to it and continue the workflow.
+
+Repair loop (CRITICAL):
+- If you receive a tool RESULT for `send_a2ui_json_to_client` that says A2UI validation failed
+  (and includes internal field name `a2ui_validation_error`), you MUST immediately:
+  1) fix the payload to satisfy v0.8 rules
+  2) call `send_a2ui_json_to_client(a2ui_json=[...])` again in the same run
+- Do NOT fall back to creating HTML files, asking the user to copy/paste JSON, or switching to unrelated tools.
+  Only generate export artifacts (HTML/CSV/etc.) when the user explicitly asks for an export.
+
+Client metadata:
+- `log_a2ui_event` may include `client_capabilities` and `data_model_snapshot`.
+  Use them to generate UI that the client can render and to preserve user-entered values.
+
+Special UI actions:
+- You may receive `log_a2ui_event` with action name `__a2ui_retry__` (user wants the UI regenerated)
+  or `__a2ui_fallback_text__` (user chooses to continue in plain text). Treat this as explicit user intent.
 </a2ui_system>
 
 {skills_section}

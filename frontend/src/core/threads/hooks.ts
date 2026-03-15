@@ -8,8 +8,8 @@ import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 
-import { getAPIClient } from "../api";
 import type { A2UIUserAction } from "../a2ui/types";
+import { getAPIClient } from "../api";
 import { useI18n } from "../i18n/hooks";
 import type { FileInMessage } from "../messages/utils";
 import type { LocalSettings } from "../settings";
@@ -23,6 +23,34 @@ export type ToolEndEvent = {
   name: string;
   data: unknown;
 };
+
+const A2UI_CLIENT_CAPABILITIES = {
+  a2ui_version: "0.8",
+  catalog_id: "standard",
+  components: [
+    // Display
+    "Text",
+    "Image",
+    "Icon",
+    "Video",
+    "AudioPlayer",
+    "Divider",
+    // Layout
+    "Row",
+    "Column",
+    "List",
+    "Card",
+    "Tabs",
+    "Modal",
+    // Interactive
+    "Button",
+    "CheckBox",
+    "TextField",
+    "DateTimeInput",
+    "MultipleChoice",
+    "Slider",
+  ],
+} as const;
 
 function normalizeErrorMessage(error: unknown): string {
   if (typeof error === "string") {
@@ -456,6 +484,10 @@ export function useThreadStream({
         thread_id: threadId,
         a2ui_action: {
           user_action: action,
+          client_capabilities: A2UI_CLIENT_CAPABILITIES,
+          // Best-effort snapshot: the A2UI renderer already resolves action.context against the
+          // latest client-side data model, so this is a compact and reliable signal for the model.
+          data_model_snapshot: action.context,
         },
         ...(extraContext ?? {}),
       };

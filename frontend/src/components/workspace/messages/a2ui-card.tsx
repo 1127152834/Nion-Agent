@@ -1,13 +1,14 @@
 "use client";
 
-import type { Message } from "@langchain/langgraph-sdk";
 import {
   A2UIProvider,
   A2UIRenderer,
   type A2UIMessage,
 } from "@a2ui-sdk/react/0.8";
+import type { Message } from "@langchain/langgraph-sdk";
 import React, { useMemo } from "react";
 
+import { Button } from "@/components/ui/button";
 import type { A2UIUserAction } from "@/core/a2ui/types";
 import { extractA2UISurfacePayload } from "@/core/messages/utils";
 import { tryParseJSON } from "@/core/utils/json";
@@ -59,6 +60,10 @@ function parseJSONIfString(value: unknown): unknown {
   }
 
   return parsed;
+}
+
+function isA2UIDebugEnabled() {
+  return process.env.NODE_ENV !== "production";
 }
 
 type DataEntry = {
@@ -240,8 +245,9 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
   // If backend couldn't parse the tool argument, it returns a diagnostic wrapper:
   //   [{ _raw_a2ui_json: "...", _a2ui_error: "..." }]
   // Try to salvage the original operations with a best-effort parser to keep UX stable.
-  if (rawOperations.length === 1 && isRecord(rawOperations[0])) {
-    const raw = rawOperations[0] as Record<string, unknown>;
+  const first = rawOperations[0];
+  if (rawOperations.length === 1 && isRecord(first)) {
+    const raw = first;
     const rawA2UIJSON = raw._raw_a2ui_json;
     if (typeof rawA2UIJSON === "string" && rawA2UIJSON.trim()) {
       const parsed = parseJSONIfString(rawA2UIJSON);
@@ -268,7 +274,7 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
 
   for (const operation of flattenedOperations) {
     if (isRecord(operation.beginRendering)) {
-      const payload = operation.beginRendering as Record<string, unknown>;
+      const payload = operation.beginRendering;
       const surfaceId =
         coerceString(payload.surfaceId) ?? coerceString(payload.surface_id);
       const root = coerceString(payload.root);
@@ -284,7 +290,7 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
           surfaceId,
           root,
           ...(catalogId ? { catalogId } : {}),
-          ...(styles ? { styles: styles as Record<string, unknown> } : {}),
+          ...(styles ? { styles } : {}),
         },
       });
       hasBeginRendering = true;
@@ -292,7 +298,7 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
     }
 
     if (isRecord(operation.surfaceUpdate)) {
-      const payload = operation.surfaceUpdate as Record<string, unknown>;
+      const payload = operation.surfaceUpdate;
       const surfaceId =
         coerceString(payload.surfaceId) ?? coerceString(payload.surface_id);
       if (!surfaceId) {
@@ -340,7 +346,7 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
     }
 
     if (isRecord(operation.dataModelUpdate)) {
-      const payload = operation.dataModelUpdate as Record<string, unknown>;
+      const payload = operation.dataModelUpdate;
       const surfaceId =
         coerceString(payload.surfaceId) ?? coerceString(payload.surface_id);
       if (!surfaceId) {
@@ -370,7 +376,7 @@ function normalizeA2UIMessages(operations: unknown[]): A2UIMessage[] | null {
     }
 
     if (isRecord(operation.deleteSurface)) {
-      const payload = operation.deleteSurface as Record<string, unknown>;
+      const payload = operation.deleteSurface;
       const surfaceId =
         coerceString(payload.surfaceId) ?? coerceString(payload.surface_id);
       if (!surfaceId) {
@@ -399,8 +405,138 @@ function safeJSONStringify(value: unknown) {
   }
 }
 
+function safeJSONStringifyCompact(value: unknown) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function truncateText(value: string, maxChars: number) {
+  if (value.length <= maxChars) {
+    return value;
+  }
+  return `${value.slice(0, maxChars)}\n... (truncated, original length: ${value.length})`;
+}
+
+function deriveSurfaceId(
+  payloadSurfaceId: unknown,
+  operations: unknown[] | null,
+) {
+  const fromPayload = coerceString(payloadSurfaceId);
+  if (fromPayload) {
+    return fromPayload;
+  }
+
+  if (Array.isArray(operations)) {
+    for (const op of operations) {
+      if (!isRecord(op)) continue;
+      const begin = op.beginRendering;
+      if (isRecord(begin)) {
+        const surfaceId =
+          coerceString(begin.surfaceId) ?? coerceString(begin.surface_id);
+        if (surfaceId) return surfaceId;
+      }
+      const surfaceUpdate = op.surfaceUpdate;
+      if (isRecord(surfaceUpdate)) {
+        const surfaceId =
+          coerceString(surfaceUpdate.surfaceId)
+          ?? coerceString(surfaceUpdate.surface_id);
+        if (surfaceId) return surfaceId;
+      }
+      const dataModelUpdate = op.dataModelUpdate;
+      if (isRecord(dataModelUpdate)) {
+        const surfaceId =
+          coerceString(dataModelUpdate.surfaceId)
+          ?? coerceString(dataModelUpdate.surface_id);
+        if (surfaceId) return surfaceId;
+      }
+    }
+  }
+
+  return "unknown_surface";
+}
+
+function buildSystemAction(params: {
+  surfaceId: string;
+  name: "__a2ui_retry__" | "__a2ui_fallback_text__";
+  context: Record<string, unknown>;
+}): A2UIUserAction {
+  return {
+    surfaceId: params.surfaceId,
+    name: params.name,
+    context: params.context,
+    sourceComponentId: "a2ui_card",
+  };
+}
+
+function A2UIRecoveryActions({
+  surfaceId,
+  operations,
+  errorMessage,
+  isLoading,
+  onAction,
+}: {
+  surfaceId: string;
+  operations: unknown[] | null;
+  errorMessage: string | null;
+  isLoading: boolean;
+  onAction?: (action: A2UIUserAction) => void;
+}) {
+  const payloadText = operations ? safeJSONStringifyCompact(operations) : "";
+  const truncatedPayload = payloadText ? truncateText(payloadText, 8000) : "";
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <Button
+        size="sm"
+        disabled={isLoading}
+        onClick={() => {
+          onAction?.(buildSystemAction({
+            surfaceId,
+            name: "__a2ui_retry__",
+            context: {
+              reason: "a2ui_client_render_failed",
+              error: errorMessage ?? undefined,
+              last_payload: truncatedPayload || undefined,
+            },
+          }));
+        }}
+      >
+        重试生成界面
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={isLoading}
+        onClick={() => {
+          onAction?.(buildSystemAction({
+            surfaceId,
+            name: "__a2ui_fallback_text__",
+            context: {
+              reason: "a2ui_client_render_failed",
+              error: errorMessage ?? undefined,
+            },
+          }));
+        }}
+      >
+        改用文字继续
+      </Button>
+    </div>
+  );
+}
+
 class A2UIRenderErrorBoundary extends React.Component<
-  React.PropsWithChildren<{ rawOperations: unknown[]; className?: string }>,
+  React.PropsWithChildren<{
+    rawOperations: unknown[];
+    className?: string;
+    surfaceId: string;
+    isLoading: boolean;
+    onAction?: (action: A2UIUserAction) => void;
+    debugEnabled: boolean;
+    payloadErrorMessage: string | null;
+  }>,
   { error: Error | null }
 > {
   state: { error: Error | null } = { error: null };
@@ -411,6 +547,10 @@ class A2UIRenderErrorBoundary extends React.Component<
 
   render() {
     if (this.state.error) {
+      const boundaryMessage = this.state.error.message?.trim();
+      const errorMessage = (boundaryMessage ? boundaryMessage : null)
+        ?? this.props.payloadErrorMessage
+        ?? "Unknown error";
       return (
         <div
           className={cn(
@@ -418,18 +558,27 @@ class A2UIRenderErrorBoundary extends React.Component<
             this.props.className,
           )}
         >
-          <div className="text-sm font-medium">A2UI 渲染失败</div>
+          <div className="text-sm font-medium">界面渲染失败</div>
           <div className="text-muted-foreground mt-1 text-xs leading-5">
-            {this.state.error.message || "Unknown error"}
+            {errorMessage}
           </div>
-          <details className="mt-3 text-xs">
-            <summary className="cursor-pointer select-none text-xs">
-              查看 A2UI payload
-            </summary>
-            <pre className="bg-background mt-2 max-h-72 overflow-auto rounded border p-3 whitespace-pre-wrap">
-              {safeJSONStringify(this.props.rawOperations)}
-            </pre>
-          </details>
+          <A2UIRecoveryActions
+            surfaceId={this.props.surfaceId}
+            operations={this.props.rawOperations}
+            errorMessage={errorMessage}
+            isLoading={this.props.isLoading}
+            onAction={this.props.onAction}
+          />
+          {this.props.debugEnabled ? (
+            <details className="mt-3 text-xs">
+              <summary className="cursor-pointer select-none text-xs">
+                查看技术详情
+              </summary>
+              <pre className="bg-background mt-2 max-h-72 overflow-auto rounded border p-3 whitespace-pre-wrap">
+                {safeJSONStringify(this.props.rawOperations)}
+              </pre>
+            </details>
+          ) : null}
         </div>
       );
     }
@@ -451,11 +600,16 @@ export function A2UICard({
 }) {
   const payload = useMemo(() => extractA2UISurfacePayload(message), [message]);
   const operations = payload?.operations ?? null;
+  const surfaceId = useMemo(
+    () => deriveSurfaceId(payload?.surface_id, Array.isArray(operations) ? operations : null),
+    [operations, payload?.surface_id],
+  );
   const errorMessage = useMemo(() => {
     if (!payload) return null;
     const error = typeof payload.error === "string" ? payload.error.trim() : "";
     return error ? error : null;
   }, [payload]);
+  const debugEnabled = useMemo(() => isA2UIDebugEnabled(), []);
 
   const a2uiMessages = useMemo(() => {
     if (!Array.isArray(operations) || operations.length === 0) {
@@ -478,12 +632,27 @@ export function A2UICard({
             {errorMessage}
           </div>
         )}
+        <A2UIRecoveryActions
+          surfaceId={surfaceId}
+          operations={Array.isArray(operations) ? operations : null}
+          errorMessage={errorMessage}
+          isLoading={isLoading}
+          onAction={onAction}
+        />
       </div>
     );
   }
 
   return (
-    <A2UIRenderErrorBoundary rawOperations={operations} className={className}>
+    <A2UIRenderErrorBoundary
+      rawOperations={operations}
+      className={className}
+      surfaceId={surfaceId}
+      isLoading={isLoading}
+      onAction={onAction}
+      debugEnabled={debugEnabled}
+      payloadErrorMessage={errorMessage}
+    >
       {a2uiMessages ? (
         <div className={cn("bg-background/60 w-full rounded-xl border p-4", className)}>
           <A2UIProvider messages={a2uiMessages}>
@@ -499,24 +668,33 @@ export function A2UICard({
         </div>
       ) : (
         <div className={cn("bg-background/60 w-full rounded-xl border p-4", className)}>
-          <div className="text-sm font-medium">A2UI payload 不可渲染</div>
+          <div className="text-sm font-medium">界面暂时无法显示</div>
           <div className="text-muted-foreground mt-1 text-xs leading-5">
-            A2UI operations 不符合 v0.8 协议（常见原因：dataModelUpdate.contents 不是数组）。
-            已降级展示 raw payload，方便排查并让模型重试生成。
+            这通常是因为 A2UI payload 与客户端协议不兼容（例如字段缺失或数据模型格式不正确）。
+            你可以重试生成界面，或改用文字继续。
           </div>
           {errorMessage && (
             <div className="text-destructive mt-2 text-xs leading-5">
               {errorMessage}
             </div>
           )}
-          <details className="mt-3 text-xs">
-            <summary className="cursor-pointer select-none text-xs">
-              查看 A2UI payload
-            </summary>
-            <pre className="bg-background mt-2 max-h-72 overflow-auto rounded border p-3 whitespace-pre-wrap">
-              {safeJSONStringify(operations)}
-            </pre>
-          </details>
+          <A2UIRecoveryActions
+            surfaceId={surfaceId}
+            operations={operations}
+            errorMessage={errorMessage}
+            isLoading={isLoading}
+            onAction={onAction}
+          />
+          {debugEnabled ? (
+            <details className="mt-3 text-xs">
+              <summary className="cursor-pointer select-none text-xs">
+                查看技术详情
+              </summary>
+              <pre className="bg-background mt-2 max-h-72 overflow-auto rounded border p-3 whitespace-pre-wrap">
+                {safeJSONStringify(operations)}
+              </pre>
+            </details>
+          ) : null}
         </div>
       )}
     </A2UIRenderErrorBoundary>

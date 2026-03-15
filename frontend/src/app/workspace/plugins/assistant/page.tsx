@@ -35,8 +35,8 @@ import { WorkbenchPluginIframe } from "@/components/workspace/artifacts/workbenc
 import { InputBox } from "@/components/workspace/input-box";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
-import { getAPIClient } from "@/core/api";
 import type { A2UIUserAction } from "@/core/a2ui/types";
+import { getAPIClient } from "@/core/api";
 import { useI18n } from "@/core/i18n/hooks";
 import { findLastRetryableUserMessage } from "@/core/messages/retry";
 import { useAppRouter as useRouter } from "@/core/navigation";

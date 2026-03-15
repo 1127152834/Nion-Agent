@@ -609,6 +609,18 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         if not isinstance(user_action, dict):
             return None
 
+        # Optional metadata provided by the client (productization):
+        # - client_capabilities: supported protocol/catalog/components on the client side
+        # - data_model_snapshot: best-effort snapshot of the client-side data model at action time
+        client_capabilities = raw.get("client_capabilities") or raw.get("clientCapabilities")
+        data_model_snapshot = raw.get("data_model_snapshot") or raw.get("dataModelSnapshot")
+
+        event: dict[str, Any] = dict(user_action)
+        if isinstance(client_capabilities, dict):
+            event["client_capabilities"] = client_capabilities
+        if data_model_snapshot is not None:
+            event["data_model_snapshot"] = data_model_snapshot
+
         tool_call_id = str(uuid.uuid4())
 
         assistant_msg = AIMessage(
@@ -617,22 +629,22 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
                 {
                     "id": tool_call_id,
                     "name": _A2UI_EVENT_TOOL_NAME,
-                    "args": user_action,
+                    "args": event,
                 }
             ],
             additional_kwargs={
                 "internal": True,
-                "a2ui_event": user_action,
+                "a2ui_event": event,
             },
         )
 
         tool_msg = ToolMessage(
-            content=_format_user_action_result(user_action),
+            content=_format_user_action_result(event),
             tool_call_id=tool_call_id,
             name=_A2UI_EVENT_TOOL_NAME,
             additional_kwargs={
                 "internal": True,
-                "a2ui_event": user_action,
+                "a2ui_event": event,
             },
         )
 
