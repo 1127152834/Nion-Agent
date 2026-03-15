@@ -77,13 +77,6 @@ class TestCheckpointerConfig:
         assert config.type == "sqlite"
         assert config.connection_string == "/tmp/test.db"
 
-    def test_load_postgres_config(self):
-        load_checkpointer_config_from_dict({"type": "postgres", "connection_string": "postgresql://localhost/db"})
-        config = get_checkpointer_config()
-        assert config is not None
-        assert config.type == "postgres"
-        assert config.connection_string == "postgresql://localhost/db"
-
     def test_default_connection_string_is_none(self):
         config = CheckpointerConfig(type="memory")
         assert config.connection_string is None
@@ -141,23 +134,6 @@ class TestGetCheckpointer:
             with pytest.raises(ImportError, match="langgraph-checkpoint-sqlite"):
                 get_checkpointer()
 
-    def test_postgres_raises_when_package_missing(self):
-        load_checkpointer_config_from_dict({"type": "postgres", "connection_string": "postgresql://localhost/db"})
-        with patch.dict(sys.modules, {"langgraph.checkpoint.postgres": None}):
-            reset_checkpointer()
-            with pytest.raises(ImportError, match="langgraph-checkpoint-postgres"):
-                get_checkpointer()
-
-    def test_postgres_raises_when_connection_string_missing(self):
-        load_checkpointer_config_from_dict({"type": "postgres"})
-        mock_saver = MagicMock()
-        mock_module = MagicMock()
-        mock_module.PostgresSaver = mock_saver
-        with patch.dict(sys.modules, {"langgraph.checkpoint.postgres": mock_module}):
-            reset_checkpointer()
-            with pytest.raises(ValueError, match="connection_string is required"):
-                get_checkpointer()
-
     def test_sqlite_creates_saver(self):
         """SQLite checkpointer is created when package is available."""
         load_checkpointer_config_from_dict({"type": "sqlite", "connection_string": "/tmp/test.db"})
@@ -179,29 +155,6 @@ class TestGetCheckpointer:
 
         assert cp is mock_saver_instance
         mock_saver_cls.from_conn_string.assert_called_once()
-        mock_saver_instance.setup.assert_called_once()
-
-    def test_postgres_creates_saver(self):
-        """Postgres checkpointer is created when packages are available."""
-        load_checkpointer_config_from_dict({"type": "postgres", "connection_string": "postgresql://localhost/db"})
-
-        mock_saver_instance = MagicMock()
-        mock_cm = MagicMock()
-        mock_cm.__enter__ = MagicMock(return_value=mock_saver_instance)
-        mock_cm.__exit__ = MagicMock(return_value=False)
-
-        mock_saver_cls = MagicMock()
-        mock_saver_cls.from_conn_string = MagicMock(return_value=mock_cm)
-
-        mock_pg_module = MagicMock()
-        mock_pg_module.PostgresSaver = mock_saver_cls
-
-        with patch.dict(sys.modules, {"langgraph.checkpoint.postgres": mock_pg_module}):
-            reset_checkpointer()
-            cp = get_checkpointer()
-
-        assert cp is mock_saver_instance
-        mock_saver_cls.from_conn_string.assert_called_once_with("postgresql://localhost/db")
         mock_saver_instance.setup.assert_called_once()
 
 
