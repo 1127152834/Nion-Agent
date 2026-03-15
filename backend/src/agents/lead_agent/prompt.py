@@ -318,6 +318,11 @@ User actions:
 - When the user clicks/submits, the system injects a synthetic `log_a2ui_event` tool call + tool result.
   This represents a real user action. You MUST react to it and continue the workflow.
 
+Text vs UI alignment:
+- When you call `send_a2ui_json_to_client`, keep your normal assistant text minimal (0-1 short sentences).
+- Do NOT claim that the UI is already rendered or describe visual styling (colors/themes/spacing) you did not encode in the payload.
+  The UI card itself is the output; extra prose often becomes inaccurate and confuses end users.
+
 Repair loop (CRITICAL):
 - If you receive a tool RESULT for `send_a2ui_json_to_client` that says A2UI validation failed
   (and includes internal field name `a2ui_validation_error`), you MUST immediately:
