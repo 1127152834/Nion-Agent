@@ -32,6 +32,16 @@ _A2UI_SEND_TOOL_NAME = "send_a2ui_json_to_client"
 _A2UI_EVENT_TOOL_NAME = "log_a2ui_event"
 _A2UI_CONTEXT_KEY = "a2ui_action"
 
+# When the model generates invalid A2UI, we want an in-run repair loop:
+# 1) return an INTERNAL tool result describing the validation failure
+# 2) allow the model to retry generating A2UI in the same run
+# 3) after a small number of failures, stop and fall back to a human-friendly clarification
+#
+# This mirrors the product behavior used by mature A2UI stacks: users should not see raw protocol
+# errors; the model should repair automatically.
+_A2UI_VALIDATION_CONTEXT_KEY = "_a2ui_validation"
+_A2UI_MAX_REPAIR_ATTEMPTS = 2
+
 _A2UI_ALLOWED_OP_KEYS = (
     "beginRendering",
     "surfaceUpdate",
@@ -422,6 +432,124 @@ def _safe_json_value(value: object) -> object:
         return str(value)
 
 
+def _get_validation_bucket(request: ToolCallRequest) -> dict[str, Any] | None:
+    runtime = request.runtime
+    if runtime is None:
+        return None
+    ctx = runtime.context
+    if not isinstance(ctx, dict):
+        return None
+    bucket = ctx.get(_A2UI_VALIDATION_CONTEXT_KEY)
+    if bucket is None:
+        bucket = {}
+        ctx[_A2UI_VALIDATION_CONTEXT_KEY] = bucket
+    if not isinstance(bucket, dict):
+        return None
+    return cast(dict[str, Any], bucket)
+
+
+def _bump_validation_attempt(request: ToolCallRequest) -> int:
+    bucket = _get_validation_bucket(request)
+    if bucket is None:
+        return 1
+    raw = bucket.get("repair_attempts")
+    attempts = int(raw) if isinstance(raw, int) or (isinstance(raw, str) and raw.isdigit()) else 0
+    attempts += 1
+    bucket["repair_attempts"] = attempts
+    return attempts
+
+
+def _reset_validation_attempts(request: ToolCallRequest) -> None:
+    bucket = _get_validation_bucket(request)
+    if bucket is None:
+        return
+    bucket["repair_attempts"] = 0
+
+
+def _build_internal_validation_error_tool_message(
+    *,
+    tool_call_id: str | None,
+    raw_a2ui_json: object,
+    error: str,
+    repair_attempt: int,
+) -> ToolMessage:
+    """Return an INTERNAL tool result that instructs the model to repair and retry A2UI.
+
+    Notes:
+    - This is a tool RESULT (name=send_a2ui_json_to_client), so the model can react in the same run.
+    - It is marked as internal so the frontend will not render an error card for end users.
+    """
+    debug_payload = _safe_json_value(raw_a2ui_json)
+    details = {
+        "kind": "a2ui_validation_failed",
+        "repair_attempt": repair_attempt,
+        "max_repair_attempts": _A2UI_MAX_REPAIR_ATTEMPTS,
+        "error": error,
+        "raw_a2ui_json": debug_payload,
+        "expected": [
+            "a2ui_json must be a JSON array",
+            "operations must include surfaceUpdate and beginRendering in the same array",
+            "surfaceUpdate must include surfaceId + components (array)",
+            "beginRendering must include surfaceId + root",
+        ],
+        "next_action": (
+            "Repair the A2UI payload and call send_a2ui_json_to_client again immediately. "
+            "If you cannot repair it, simplify the UI and omit optional fields."
+        ),
+    }
+
+    return ToolMessage(
+        content=(
+            "A2UI validation failed. Please repair the payload and retry "
+            f"(attempt {repair_attempt}/{_A2UI_MAX_REPAIR_ATTEMPTS}). "
+            f"Reason: {error}"
+        ),
+        tool_call_id=tool_call_id or "",
+        name=_A2UI_SEND_TOOL_NAME,
+        additional_kwargs={
+            "internal": True,
+            "a2ui_validation_error": details,
+        },
+    )
+
+
+def _build_a2ui_fallback_clarification_command(
+    *,
+    tool_call_id: str | None,
+    error: str,
+) -> Command:
+    asked_at = _now_iso()
+    question = "界面生成失败了，你希望我怎么继续？"
+    options = ["重试生成界面", "改用文字继续"]
+    clarification_payload = {
+        "status": "awaiting_user",
+        "question": question,
+        "clarification_type": "approach_choice",
+        "context": f"A2UI 校验连续失败，已自动降级为文字交互。失败原因：{error}",
+        "options": options,
+        "requires_choice": True,
+        "tool_call_id": tool_call_id,
+        "asked_at": asked_at,
+        "resolved_at": None,
+        "resolved_by_message_id": None,
+    }
+
+    tool_message = ToolMessage(
+        content=question,
+        tool_call_id=tool_call_id or "",
+        name="ask_clarification",
+        additional_kwargs={"clarification": clarification_payload},
+    )
+
+    return Command(
+        update={
+            "messages": [tool_message],
+            "clarification": clarification_payload,
+        },
+        goto=END,
+    )
+
+
 def _build_error_tool_message(
     *,
     tool_call_id: str | None,
@@ -522,26 +650,39 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
 
         operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
-            # Never execute the real tool for malformed calls: missing args/type
-            # mismatches can raise validation errors and break the whole run.
-            return _build_error_tool_message(
+            repair_attempt = _bump_validation_attempt(request)
+            error = (
+                "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
+                "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
+            )
+            if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
+                return _build_internal_validation_error_tool_message(
+                    tool_call_id=tool_call_id,
+                    raw_a2ui_json=raw_a2ui_json,
+                    error=error,
+                    repair_attempt=repair_attempt,
+                )
+            return _build_a2ui_fallback_clarification_command(
                 tool_call_id=tool_call_id,
-                raw_a2ui_json=raw_a2ui_json,
-                error=(
-                    "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
-                    "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
-                ),
+                error=error,
             )
 
         normalized_operations = _normalize_a2ui_operations(operations)
         if not normalized_operations:
-            return _build_error_tool_message(
+            repair_attempt = _bump_validation_attempt(request)
+            error = (
+                "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
+            )
+            if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
+                return _build_internal_validation_error_tool_message(
+                    tool_call_id=tool_call_id,
+                    raw_a2ui_json=operations,
+                    error=error,
+                    repair_attempt=repair_attempt,
+                )
+            return _build_a2ui_fallback_clarification_command(
                 tool_call_id=tool_call_id,
-                raw_a2ui_json=operations,
-                error=(
-                    "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
-                    "已降级展示 raw payload，便于你修正后重新发送。"
-                ),
+                error=error,
             )
 
         # Compute a best-effort primary surfaceId (for debugging / client-side grouping).
@@ -550,6 +691,8 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
             surface_id = _get_operation_surface_id(op)
             if surface_id:
                 break
+
+        _reset_validation_attempts(request)
 
         payload = {
             "status": "awaiting_user",
@@ -583,24 +726,39 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
 
         operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
-            return _build_error_tool_message(
+            repair_attempt = _bump_validation_attempt(request)
+            error = (
+                "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
+                "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
+            )
+            if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
+                return _build_internal_validation_error_tool_message(
+                    tool_call_id=tool_call_id,
+                    raw_a2ui_json=raw_a2ui_json,
+                    error=error,
+                    repair_attempt=repair_attempt,
+                )
+            return _build_a2ui_fallback_clarification_command(
                 tool_call_id=tool_call_id,
-                raw_a2ui_json=raw_a2ui_json,
-                error=(
-                    "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
-                    "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
-                ),
+                error=error,
             )
 
         normalized_operations = _normalize_a2ui_operations(operations)
         if not normalized_operations:
-            return _build_error_tool_message(
+            repair_attempt = _bump_validation_attempt(request)
+            error = (
+                "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
+            )
+            if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
+                return _build_internal_validation_error_tool_message(
+                    tool_call_id=tool_call_id,
+                    raw_a2ui_json=operations,
+                    error=error,
+                    repair_attempt=repair_attempt,
+                )
+            return _build_a2ui_fallback_clarification_command(
                 tool_call_id=tool_call_id,
-                raw_a2ui_json=operations,
-                error=(
-                    "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
-                    "已降级展示 raw payload，便于你修正后重新发送。"
-                ),
+                error=error,
             )
 
         surface_id = None
@@ -608,6 +766,8 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
             surface_id = _get_operation_surface_id(op)
             if surface_id:
                 break
+
+        _reset_validation_attempts(request)
 
         payload = {
             "status": "awaiting_user",
