@@ -497,7 +497,6 @@ export function SchedulerTaskEditorForm({
 export function SchedulerSettingsPanel({
   agentName,
   timezone,
-  timezoneSettingsHref,
   tasks,
   selectedTask,
   selectedTaskId,

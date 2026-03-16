@@ -222,7 +222,7 @@ export async function downloadRetrievalModelWithProgress(
       }
     };
 
-    eventSource.onerror = (err) => {
+    eventSource.onerror = (_err) => {
       eventSource.close();
       reject(new RetrievalApiError("SSE connection failed", 500));
     };
