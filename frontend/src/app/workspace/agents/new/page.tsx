@@ -123,12 +123,21 @@ export default function NewAgentPage() {
     setAgentName(normalizedSlug);
     setAgentDisplayName(displayName);
     setStep("chat");
-    await sendMessage(threadId, {
-      text: t.agents.nameStepBootstrapMessage
-        .replace("{displayName}", displayName)
-        .replace("{name}", normalizedSlug),
-      files: [],
-    }, { agent_name: normalizedSlug, agent_display_name: displayName });
+    await sendMessage(
+      threadId,
+      {
+        text: t.agents.nameStepBootstrapMessage
+          .replace("{displayName}", displayName)
+          .replace("{name}", normalizedSlug),
+        files: [],
+        // Force bootstrap skill selection so the server-side requested_skills
+        // gate triggers and the model must load the skill before responding.
+        implicitMentions: [
+          { kind: "skill", value: "bootstrap", mention: "bootstrap" },
+        ],
+      },
+      { agent_name: normalizedSlug, agent_display_name: displayName },
+    );
   }, [
     displayNameInput,
     sendMessage,

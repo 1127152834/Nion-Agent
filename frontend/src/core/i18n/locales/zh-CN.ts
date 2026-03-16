@@ -300,14 +300,14 @@ export const zhCN: Translations = {
     nameStepAlreadyExistsError: "英文 ID 已被占用",
     nameStepCheckError: "无法验证名称可用性，请稍后重试",
     nameStepBootstrapMessage:
-      "/bootstrap 新智能体「{displayName}」（ID: {name}）创建引导：我会生成 SOUL.md + IDENTITY.md，并可选把你的偏好沉淀到 USER.md（用户画像）。",
+      "/bootstrap 新智能体「{displayName}」（ID: {name}）创建引导：我会生成 SOUL.md（人格）+ IDENTITY.md（角色），并可选初始化记忆（profile/preference）与同步 USER.md（用户画像）。",
     bootstrap: {
       tooltip: "入门引导",
       pageTitle: "默认助手入门引导",
       pageSubtitle:
-        "描述你希望默认助手如何工作，我会通过对话更新 SOUL/IDENTITY，并可选补齐 USER.md。",
+        "描述你希望默认助手如何工作，我会通过对话更新 SOUL/IDENTITY，并可选初始化记忆与补齐 USER.md。",
       startMessage:
-        "/bootstrap 目标：更新默认助手（_default）的 SOUL.md + IDENTITY.md，并可选更新 USER.md（用户画像）。请先问我 1-3 个问题来明确职责范围与沟通方式，然后给出草稿让我确认。",
+        "/bootstrap 目标：更新默认助手（_default）的 SOUL.md（人格）+ IDENTITY.md（角色），并可选初始化记忆（profile/preference）与更新 USER.md（用户画像）。请先问我 1-3 个问题来明确角色职责、人格风格与记忆点，然后给出草稿让我确认。",
       completedTitle: "默认助手设定已更新",
       reviewSoul: "去复核 SOUL/IDENTITY",
     },

@@ -310,14 +310,14 @@ export const enUS: Translations = {
     nameStepAlreadyExistsError: "This Agent ID is already taken",
     nameStepCheckError: "Could not verify name availability — please try again",
     nameStepBootstrapMessage:
-      "/bootstrap Bootstrapping “{displayName}” (ID: {name}): I will generate SOUL.md + IDENTITY.md, and optionally update USER.md (user profile).",
+      "/bootstrap Bootstrapping “{displayName}” (ID: {name}): I will generate SOUL.md (personality) + IDENTITY.md (role), optionally seed memory (profile/preference), and update USER.md (user profile).",
     bootstrap: {
       tooltip: "Onboarding",
       pageTitle: "Bootstrap Default Agent",
       pageSubtitle:
-        "Describe how you want the default agent to work — I'll update SOUL/IDENTITY, and optionally USER.md.",
+        "Describe how you want the default agent to work — I'll update SOUL/IDENTITY, optionally seed memory, and update USER.md.",
       startMessage:
-        "/bootstrap Goal: update the default agent (_default) SOUL.md + IDENTITY.md, and optionally USER.md (user profile). Start by asking me 1-3 questions to clarify responsibilities and communication style, then propose drafts for my confirmation.",
+        "/bootstrap Goal: update the default agent (_default) SOUL.md (personality) + IDENTITY.md (role), optionally seed memory (profile/preference), and update USER.md (user profile). Start by asking me 1-3 questions to clarify responsibilities, personality style, and memory seeds, then propose drafts for my confirmation.",
       completedTitle: "Default agent updated",
       reviewSoul: "Review SOUL/Identity",
     },

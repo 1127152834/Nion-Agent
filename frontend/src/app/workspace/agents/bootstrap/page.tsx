@@ -88,7 +88,13 @@ export default function AgentBootstrapPage() {
   useEffect(() => {
     if (firstMessageSentRef.current) return;
     firstMessageSentRef.current = true;
-    void sendMessage(threadId, { text: copy.startMessage, files: [] });
+    void sendMessage(threadId, {
+      text: copy.startMessage,
+      files: [],
+      // Force bootstrap skill selection so the server-side requested_skills
+      // gate triggers and the model must load the skill before responding.
+      implicitMentions: [{ kind: "skill", value: "bootstrap", mention: "bootstrap" }],
+    });
   }, [copy.startMessage, sendMessage, threadId]);
 
   const handleChatSubmit = useCallback(
