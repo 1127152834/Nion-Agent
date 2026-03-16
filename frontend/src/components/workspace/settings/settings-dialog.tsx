@@ -12,9 +12,10 @@ import {
   WrenchIcon,
   SquareTerminalIcon,
   BotIcon,
-  BoxIcon,
-  ServerIcon,
   PlugIcon,
+  PuzzleIcon,
+  ServerIcon,
+  ShieldIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -77,10 +78,8 @@ type SettingsNavItem = {
 };
 
 function SettingsNavGroupTitle({
-  icon: Icon,
   title,
 }: {
-  icon: typeof PaletteIcon;
   title: string;
 }) {
   return (
@@ -88,11 +87,10 @@ function SettingsNavGroupTitle({
       <SidebarGroupLabel
         className={cn(
           // Intentionally subdued so group titles read as structure, not as clickable items.
-          "h-auto gap-2 rounded-none bg-transparent px-2 py-1",
+          "h-auto gap-0 rounded-none bg-transparent px-2 py-1",
           "text-[11px] font-semibold text-sidebar-foreground/60",
         )}
       >
-        <Icon className="size-3.5 shrink-0 opacity-70" />
         <span className="truncate">{title}</span>
       </SidebarGroupLabel>
       <div className="mx-2 h-px bg-sidebar-border/60" aria-hidden="true" />
@@ -136,40 +134,35 @@ export function SettingsDialog(props: SettingsDialogProps) {
       "workbench-plugins": {
         id: "workbench-plugins",
         label: t.settings.workbenchPlugins?.title ?? "Workbench plugins",
-        icon: BoxIcon,
+        icon: PuzzleIcon,
       },
-      sandbox: { id: "sandbox", label: t.settings.sandbox?.title ?? "Sandbox", icon: BoxIcon },
+      sandbox: { id: "sandbox", label: t.settings.sandbox?.title ?? "Sandbox", icon: ShieldIcon },
       "desktop-runtime": { id: "desktop-runtime", label: t.settings.sections.desktopRuntime, icon: ServerIcon },
     };
 
     const groups: {
       id: string;
       title: string;
-      icon: typeof PaletteIcon;
       items: SettingsNavItem[];
     }[] = [
       {
         id: "experience",
         title: t.settings.navGroups.experience,
-        icon: PaletteIcon,
         items: [items.appearance, items.notification],
       },
       {
         id: "conversation",
         title: t.settings.navGroups.conversation,
-        icon: SparklesIcon,
         items: [items.models, items.sessionPolicy],
       },
       {
         id: "memory",
         title: t.settings.navGroups.memory,
-        icon: BrainIcon,
         items: [items.memory, items.embedding, items.searchSettings],
       },
       {
         id: "tools",
         title: t.settings.navGroups.tools,
-        icon: WrenchIcon,
         items: [
           items.tools,
           items.cliTools,
@@ -182,7 +175,6 @@ export function SettingsDialog(props: SettingsDialogProps) {
       {
         id: "system",
         title: t.settings.navGroups.system,
-        icon: ServerIcon,
         items: [
           items.sandbox,
           items.diagnostics,
@@ -244,7 +236,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <div className="space-y-3 pr-1">
                 {navGroups.map((group) => (
                   <div key={group.id} className="space-y-2">
-                    <SettingsNavGroupTitle icon={group.icon} title={group.title} />
+                    <SettingsNavGroupTitle title={group.title} />
                     <ul className="space-y-1">
                       {group.items.map(({ id, label, icon: Icon }) => {
                         const active = activeSection === id;
