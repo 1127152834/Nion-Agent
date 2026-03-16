@@ -1,19 +1,11 @@
-"""Workbench runtime APIs: command sessions and plugin test execution."""
+"""Workbench Plugin Studio endpoints."""
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import io
 import json
-import logging
-import os
-import re
 import shutil
-import signal
-import subprocess
-import threading
-import time
 import uuid
 import zipfile
 from datetime import UTC, datetime
@@ -21,1372 +13,66 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-import httpx
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 
 from src.config.paths import get_paths
-from src.gateway.langgraph_client import build_langgraph_upstream_url
 from src.gateway.path_utils import resolve_thread_virtual_path
-
-router = APIRouter(prefix="/api/threads/{thread_id}/workbench", tags=["workbench"])
-plugin_router = APIRouter(prefix="/api/workbench/plugins", tags=["workbench"])
-marketplace_router = APIRouter(prefix="/api/workbench/marketplace", tags=["workbench"])
-plugin_studio_router = APIRouter(prefix="/api/workbench/plugin-studio", tags=["workbench"])
-
-logger = logging.getLogger(__name__)
-
-DEFAULT_CWD = "/mnt/user-data/workspace"
-DEFAULT_COMMAND_TIMEOUT_SECONDS = 600
-MAX_COMMAND_TIMEOUT_SECONDS = 1800
-SESSION_TTL_SECONDS = 60 * 60
-MAX_SESSIONS = 64
-_SAFE_PLUGIN_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,63}$")
-_SAFE_SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
-_SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
-_PLUGIN_STUDIO_WORKSPACE_SOURCE_ROOT = "/mnt/user-data/workspace/plugin-src"
-_PLUGIN_STUDIO_WORKSPACE_TEST_ROOT = "/mnt/user-data/workspace/fixtures"
-_TEXT_FILE_EXTENSIONS = {
-    ".css",
-    ".env",
-    ".gif",
-    ".html",
-    ".htm",
-    ".ini",
-    ".jpeg",
-    ".jpg",
-    ".js",
-    ".json",
-    ".jsx",
-    ".md",
-    ".mjs",
-    ".png",
-    ".scss",
-    ".svg",
-    ".toml",
-    ".ts",
-    ".tsx",
-    ".txt",
-    ".vue",
-    ".xml",
-    ".yaml",
-    ".yml",
-}
-
-
-def _utcnow_iso() -> str:
-    return datetime.now(UTC).isoformat()
-
-
-def _sse(event: str, data: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-class WorkbenchSessionCreateRequest(BaseModel):
-    command: str = Field(..., min_length=1, max_length=4000)
-    cwd: str = Field(default=DEFAULT_CWD, min_length=1, max_length=1024)
-    timeout_seconds: int = Field(default=DEFAULT_COMMAND_TIMEOUT_SECONDS, ge=1, le=MAX_COMMAND_TIMEOUT_SECONDS)
-
-
-class WorkbenchSessionCreateResponse(BaseModel):
-    session_id: str
-    status: Literal["running", "finished", "failed", "stopped", "timeout"]
-    thread_id: str
-    command: str
-    cwd: str
-    created_at: str
-
-
-class WorkbenchSessionStopResponse(BaseModel):
-    success: bool
-    session_id: str
-    status: Literal["running", "finished", "failed", "stopped", "timeout"]
-
-
-class PluginTestCommandStep(BaseModel):
-    id: str | None = None
-    command: str = Field(..., min_length=1, max_length=4000)
-    cwd: str = Field(default=DEFAULT_CWD, min_length=1, max_length=1024)
-    timeout_seconds: int = Field(default=120, ge=1, le=MAX_COMMAND_TIMEOUT_SECONDS)
-    expect_contains: list[str] = Field(default_factory=list)
-
-
-class PluginTestRequest(BaseModel):
-    thread_id: str = Field(..., min_length=1)
-    command_steps: list[PluginTestCommandStep] = Field(default_factory=list)
-
-
-class PluginTestStepResult(BaseModel):
-    id: str
-    passed: bool
-    command: str
-    cwd: str
-    exit_code: int | None = None
-    duration_ms: int
-    output_excerpt: str
-    message: str | None = None
-
-
-class PluginTestResponse(BaseModel):
-    plugin_id: str
-    passed: bool
-    executed_at: str
-    summary: str
-    steps: list[PluginTestStepResult]
-
-
-class PluginTestThreadResponse(BaseModel):
-    thread_id: str
-    created_at: str
-    workspace_root: str
-
-
-class MarketplacePluginListItem(BaseModel):
-    id: str
-    name: str
-    description: str
-    version: str
-    maintainer: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    updated_at: str | None = None
-    download_url: str
-    detail_url: str
-    docs_summary: str | None = None
-
-
-class MarketplacePluginListResponse(BaseModel):
-    plugins: list[MarketplacePluginListItem]
-
-
-class MarketplacePluginDetailResponse(BaseModel):
-    id: str
-    name: str
-    description: str
-    version: str
-    maintainer: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    updated_at: str | None = None
-    download_url: str
-    readme_markdown: str
-    demo_image_urls: list[str] = Field(default_factory=list)
-
-
-class PluginStudioSessionCreateRequest(BaseModel):
-    plugin_name: str = Field(..., min_length=2, max_length=80)
-    plugin_id: str | None = Field(default=None, min_length=2, max_length=64)
-    description: str = Field(default="", max_length=400)
-    chat_thread_id: str | None = Field(default=None, min_length=1, max_length=200)
-
-
-class PluginStudioGenerateRequest(BaseModel):
-    description: str | None = Field(default=None, max_length=2000)
-
-
-class PluginStudioImportSourceRequest(BaseModel):
-    package_base64: str = Field(..., min_length=8)
-    filename: str | None = Field(default=None, max_length=240)
-    linked_plugin_id: str | None = Field(default=None, min_length=2, max_length=64)
-    plugin_name: str | None = Field(default=None, min_length=2, max_length=80)
-    description: str | None = Field(default=None, max_length=2000)
-    thread_id: str | None = Field(default=None, min_length=1, max_length=200)
-
-
-class PluginStudioManualVerifyRequest(BaseModel):
-    passed: bool = Field(default=True)
-    note: str | None = Field(default=None, max_length=1000)
-
-
-class PluginStudioStepReport(BaseModel):
-    id: str
-    passed: bool
-    message: str
-
-
-class PluginStudioAutoVerifyResponse(BaseModel):
-    session_id: str
-    passed: bool
-    executed_at: str
-    summary: str
-    steps: list[PluginStudioStepReport]
-
-
-class PluginStudioPublishRequest(BaseModel):
-    version: str = Field(..., min_length=5, max_length=32)
-    release_notes: str = Field(..., min_length=1, max_length=8000)
-    description: str = Field(..., min_length=1, max_length=4000)
-    conversation_snapshot: str = Field(default="", max_length=20000)
-    auto_download: bool = Field(default=False)
-
-
-class PluginStudioDraftRequest(BaseModel):
-    description: str | None = Field(default=None, max_length=4000)
-    draft_version: str | None = Field(default=None, min_length=5, max_length=32)
-    chat_thread_id: str | None = Field(default=None, min_length=1, max_length=200)
-    match_rules: dict[str, Any] | None = None
-    workflow_state: dict[str, Any] | None = None
-    workflow_stage: Literal["requirements", "interaction", "ui_design", "generate"] | None = None
-    selected_test_material_path: str | None = Field(default=None, max_length=2048)
-
-
-class PluginStudioTestMaterialEntry(BaseModel):
-    path: str = Field(..., min_length=1, max_length=512)
-    content_base64: str = Field(..., min_length=4)
-    source: Literal["upload", "zip"] = "upload"
-
-
-class PluginStudioTestMaterialImportRequest(BaseModel):
-    thread_id: str | None = Field(default=None, min_length=1, max_length=200)
-    entries: list[PluginStudioTestMaterialEntry] = Field(default_factory=list, min_length=1, max_length=500)
-    selected_path: str | None = Field(default=None, max_length=512)
-
-
-class PluginStudioTestMaterialDeleteRequest(BaseModel):
-    thread_id: str | None = Field(default=None, min_length=1, max_length=200)
-    path: str = Field(..., min_length=1, max_length=2048)
-
-
-class PluginStudioTestMaterialsResponse(BaseModel):
-    session_id: str
-    test_materials: list[dict[str, str]]
-    selected_test_material_path: str | None = None
-
-
-class PluginStudioSessionResponse(BaseModel):
-    session_id: str
-    plugin_id: str
-    plugin_name: str
-    chat_thread_id: str | None = None
-    preview_thread_id: str | None = None
-    description: str
-    state: Literal["draft", "generated", "auto_verified", "manual_verified", "packaged"]
-    auto_verified: bool
-    manual_verified: bool
-    current_version: str
-    release_notes: str | None = None
-    source_mode: Literal["scratch", "imported"] = "scratch"
-    linked_plugin_id: str | None = None
-    published_at: str | None = None
-    created_at: str
-    updated_at: str
-    readme_url: str | None = None
-    demo_image_urls: list[str] = Field(default_factory=list)
-    package_download_url: str | None = None
-    workflow_stage: Literal["requirements", "interaction", "ui_design", "generate"] = "requirements"
-    workflow_state: dict[str, Any] = Field(default_factory=dict)
-    draft_version: str | None = None
-    match_rules: dict[str, Any] = Field(default_factory=dict)
-    test_materials: list[dict[str, str]] = Field(default_factory=list)
-    selected_test_material_path: str | None = None
-
-
-class PluginStudioPackageResponse(BaseModel):
-    session_id: str
-    plugin_id: str
-    filename: str
-    package_download_url: str
-    packaged_at: str
-
-
-class PluginStudioWorkspaceSyncRequest(BaseModel):
-    thread_id: str = Field(..., min_length=1, max_length=200)
-    include_test_materials: bool = Field(default=True)
-
-
-class PluginStudioWorkspaceSeedResponse(BaseModel):
-    session_id: str
-    thread_id: str
-    source_root: str
-    test_materials_root: str | None = None
-
-
-class PluginStudioSourceFileResponse(BaseModel):
-    encoding: Literal["text", "base64"]
-    content: str
-
-
-class PluginStudioSourcePackageResponse(BaseModel):
-    session_id: str
-    manifest: dict[str, Any]
-    files: dict[str, PluginStudioSourceFileResponse]
-
-
-class PluginStudioPublishResponse(BaseModel):
-    session: PluginStudioSessionResponse
-    plugin_id: str
-    version: str
-    filename: str
-    package_download_url: str
-    packaged_at: str
-    verify_report: PluginStudioAutoVerifyResponse
-
-
-class _SessionState:
-    def __init__(self, *, thread_id: str, command: str, cwd_virtual: str, cwd_actual: Path):
-        self.id = uuid.uuid4().hex
-        self.thread_id = thread_id
-        self.command = command
-        self.cwd_virtual = cwd_virtual
-        self.cwd_actual = cwd_actual
-        self.created_at = _utcnow_iso()
-        self.status: Literal["running", "finished", "failed", "stopped", "timeout"] = "running"
-        self.return_code: int | None = None
-        self.finished_at: str | None = None
-        self.events: list[dict[str, Any]] = []
-        self._event_lock = threading.Lock()
-        self._process: subprocess.Popen[str] | None = None
-        self._reader_thread: threading.Thread | None = None
-        self._killer_timer: threading.Timer | None = None
-
-    def append_event(self, event: str, data: dict[str, Any]) -> None:
-        payload = {"event": event, "timestamp": _utcnow_iso(), **data}
-        with self._event_lock:
-            self.events.append(payload)
-
-    def read_events_since(self, index: int) -> tuple[list[dict[str, Any]], int]:
-        with self._event_lock:
-            if index < 0:
-                index = 0
-            if index >= len(self.events):
-                return [], len(self.events)
-            next_events = self.events[index:]
-            return next_events, len(self.events)
-
-    def mark_finished(self, status: Literal["finished", "failed", "stopped", "timeout"], return_code: int | None) -> None:
-        if self.status != "running":
-            return
-        self.status = status
-        self.return_code = return_code
-        self.finished_at = _utcnow_iso()
-
-    def stop(self) -> None:
-        if self._process is None or self.status != "running":
-            return
-        try:
-            os.killpg(os.getpgid(self._process.pid), signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        except Exception:
-            self._process.terminate()
-        self.mark_finished("stopped", self._process.poll())
-        self.append_event("exit", {"status": self.status, "return_code": self.return_code})
-
-    def enforce_timeout(self) -> None:
-        if self.status != "running":
-            return
-        self.append_event("stderr", {"text": "Command timed out and was terminated."})
-        if self._process is not None:
-            try:
-                os.killpg(os.getpgid(self._process.pid), signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except Exception:
-                self._process.kill()
-        self.mark_finished("timeout", self._process.poll() if self._process else None)
-        self.append_event("exit", {"status": self.status, "return_code": self.return_code})
-
-
-_SESSIONS: dict[str, _SessionState] = {}
-_SESSIONS_LOCK = threading.Lock()
-
-
-def _cleanup_expired_sessions() -> None:
-    now = time.time()
-    with _SESSIONS_LOCK:
-        stale_ids: list[str] = []
-        for sid, session in _SESSIONS.items():
-            if session.status == "running":
-                continue
-            finished_at = session.finished_at or session.created_at
-            try:
-                finished_ts = datetime.fromisoformat(finished_at).timestamp()
-            except ValueError:
-                finished_ts = now
-            if now - finished_ts > SESSION_TTL_SECONDS:
-                stale_ids.append(sid)
-        for sid in stale_ids:
-            _SESSIONS.pop(sid, None)
-
-
-def _resolve_cwd(thread_id: str, cwd: str) -> tuple[str, Path]:
-    virtual_cwd = cwd.strip() or DEFAULT_CWD
-    if not virtual_cwd.startswith("/"):
-        virtual_cwd = f"/{virtual_cwd}"
-    actual_cwd = resolve_thread_virtual_path(thread_id, virtual_cwd)
-    if not actual_cwd.exists():
-        raise HTTPException(status_code=404, detail=f"Workbench cwd not found: {virtual_cwd}")
-    if not actual_cwd.is_dir():
-        raise HTTPException(status_code=400, detail=f"Workbench cwd is not a directory: {virtual_cwd}")
-    return virtual_cwd, actual_cwd
-
-
-def _start_session_process(session: _SessionState, timeout_seconds: int) -> None:
-    process = subprocess.Popen(
-        ["/bin/zsh", "-lc", session.command],
-        cwd=str(session.cwd_actual),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        preexec_fn=os.setsid,
-    )
-    session._process = process
-    session.append_event(
-        "start",
-        {
-            "session_id": session.id,
-            "command": session.command,
-            "cwd": session.cwd_virtual,
-            "status": session.status,
-        },
-    )
-
-    def reader() -> None:
-        assert process.stdout is not None
-        try:
-            for line in process.stdout:
-                session.append_event("stdout", {"text": line.rstrip("\n")})
-        finally:
-            process.wait()
-            if session.status == "running":
-                final_status: Literal["finished", "failed"] = "finished" if process.returncode == 0 else "failed"
-                session.mark_finished(final_status, process.returncode)
-                session.append_event(
-                    "exit",
-                    {
-                        "status": session.status,
-                        "return_code": session.return_code,
-                    },
-                )
-
-    session._reader_thread = threading.Thread(target=reader, daemon=True)
-    session._reader_thread.start()
-
-    timer = threading.Timer(timeout_seconds, session.enforce_timeout)
-    timer.daemon = True
-    timer.start()
-    session._killer_timer = timer
-
-
-@router.post(
-    "/sessions",
-    response_model=WorkbenchSessionCreateResponse,
-    summary="Create workbench command session",
+from src.gateway.routers.workbench._helpers import (
+    _PLUGIN_STUDIO_LOCK,
+    _PLUGIN_STUDIO_WORKSPACE_SOURCE_ROOT,
+    _PLUGIN_STUDIO_WORKSPACE_TEST_ROOT,
+    _TEXT_FILE_EXTENSIONS,
+    _build_targets_from_match_rules,
+    _compute_workflow_stage,
+    _default_workflow_state,
+    _ensure_langgraph_thread_for_plugin_test,
+    _ensure_plugin_studio_preview_thread,
+    _increment_patch,
+    _is_semver_greater,
+    _match_rules_from_manifest,
+    _normalize_match_rules,
+    _normalize_material_relative_path,
+    _normalize_semver,
+    _normalize_workflow_state,
+    _parse_semver,
+    _plugin_studio_session_dir,
+    _plugin_studio_sessions_dir,
+    _read_plugin_studio_session,
+    _safe_plugin_id,
+    _safe_relative_material_path,
+    _save_plugin_studio_session,
+    _plugin_studio_test_materials_virtual_root,
+    _to_clean_string_list,
+    _to_non_empty_string,
+    _utcnow_iso,
+    _write_json,
 )
-async def create_workbench_session(thread_id: str, payload: WorkbenchSessionCreateRequest) -> WorkbenchSessionCreateResponse:
-    _cleanup_expired_sessions()
-    virtual_cwd, actual_cwd = _resolve_cwd(thread_id, payload.cwd)
-
-    with _SESSIONS_LOCK:
-        if len(_SESSIONS) >= MAX_SESSIONS:
-            raise HTTPException(status_code=429, detail="Too many active workbench sessions")
-        session = _SessionState(
-            thread_id=thread_id,
-            command=payload.command,
-            cwd_virtual=virtual_cwd,
-            cwd_actual=actual_cwd,
-        )
-        _SESSIONS[session.id] = session
-
-    try:
-        _start_session_process(session, payload.timeout_seconds)
-    except Exception as exc:
-        with _SESSIONS_LOCK:
-            _SESSIONS.pop(session.id, None)
-        raise HTTPException(status_code=500, detail=f"Failed to start workbench session: {exc}") from exc
-
-    return WorkbenchSessionCreateResponse(
-        session_id=session.id,
-        status=session.status,
-        thread_id=thread_id,
-        command=session.command,
-        cwd=session.cwd_virtual,
-        created_at=session.created_at,
-    )
-
-
-def _get_session_or_404(thread_id: str, session_id: str) -> _SessionState:
-    with _SESSIONS_LOCK:
-        session = _SESSIONS.get(session_id)
-    if session is None or session.thread_id != thread_id:
-        raise HTTPException(status_code=404, detail=f"Workbench session not found: {session_id}")
-    return session
-
-
-@router.post(
-    "/sessions/{session_id}/stop",
-    response_model=WorkbenchSessionStopResponse,
-    summary="Stop workbench command session",
+from src.gateway.routers.workbench.models import (
+    PluginStudioAutoVerifyResponse,
+    PluginStudioDraftRequest,
+    PluginStudioGenerateRequest,
+    PluginStudioImportSourceRequest,
+    PluginStudioManualVerifyRequest,
+    PluginStudioPackageResponse,
+    PluginStudioPublishRequest,
+    PluginStudioPublishResponse,
+    PluginStudioSessionCreateRequest,
+    PluginStudioSessionResponse,
+    PluginStudioSourceFileResponse,
+    PluginStudioSourcePackageResponse,
+    PluginStudioStepReport,
+    PluginStudioTestMaterialDeleteRequest,
+    PluginStudioTestMaterialImportRequest,
+    PluginStudioTestMaterialsResponse,
+    PluginStudioWorkspaceSeedResponse,
+    PluginStudioWorkspaceSyncRequest,
 )
-async def stop_workbench_session(thread_id: str, session_id: str) -> WorkbenchSessionStopResponse:
-    session = _get_session_or_404(thread_id, session_id)
-    session.stop()
-    return WorkbenchSessionStopResponse(success=True, session_id=session.id, status=session.status)
 
+router = APIRouter(prefix="/api/workbench/plugin-studio", tags=["workbench"])
 
-@router.get(
-    "/sessions/{session_id}/stream",
-    summary="Stream workbench session output",
-)
-async def stream_workbench_session(thread_id: str, session_id: str, request: Request) -> StreamingResponse:
-    session = _get_session_or_404(thread_id, session_id)
 
-    async def event_stream() -> Any:
-        cursor = 0
-        yield _sse(
-            "ready",
-            {
-                "session_id": session.id,
-                "status": session.status,
-                "timestamp": _utcnow_iso(),
-            },
-        )
-        while True:
-            if await request.is_disconnected():
-                break
-            next_events, cursor = session.read_events_since(cursor)
-            if next_events:
-                for event in next_events:
-                    yield _sse(event.get("event", "output"), event)
-            elif session.status != "running":
-                break
-            else:
-                yield _sse("heartbeat", {"session_id": session.id, "timestamp": _utcnow_iso()})
-                await asyncio.sleep(1.0)
-
-    headers = {
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-    }
-    return StreamingResponse(event_stream(), media_type="text/event-stream", headers=headers)
-
-
-async def _ensure_langgraph_thread_for_plugin_test(thread_id: str, *, best_effort: bool = False) -> None:
-    payload = {
-        "thread_id": thread_id,
-        "metadata": {
-            "source": "workbench_test",
-        },
-    }
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                build_langgraph_upstream_url("threads"),
-                json=payload,
-            )
-    except httpx.RequestError as exc:
-        if best_effort:
-            logger.warning("LangGraph upstream unavailable for workbench test thread '%s': %s", thread_id, exc)
-            return
-        raise HTTPException(status_code=502, detail=f"LangGraph upstream unavailable: {exc}") from exc
-
-    if response.status_code in {200, 201, 409}:
-        return
-
-    detail = response.text.strip()
-    if best_effort:
-        logger.warning(
-            "Failed to create LangGraph thread '%s' for workbench test (status=%s, detail=%s)",
-            thread_id,
-            response.status_code,
-            detail,
-        )
-        return
-    raise HTTPException(status_code=502, detail=detail or f"Failed to create LangGraph thread ({response.status_code})")
-
-
-@plugin_router.post(
-    "/test-thread",
-    response_model=PluginTestThreadResponse,
-    summary="Create hidden workbench test thread",
-)
-async def create_workbench_test_thread() -> PluginTestThreadResponse:
-    """Create a sandbox-only thread directory for workbench plugin tests.
-
-    This avoids coupling plugin tests to any existing chat thread while still
-    providing a valid /mnt/user-data workspace for commandSteps execution.
-    """
-    thread_id = str(uuid.uuid4())
-    await _ensure_langgraph_thread_for_plugin_test(thread_id, best_effort=True)
-    paths = get_paths()
-    paths.ensure_thread_dirs(thread_id)
-    return PluginTestThreadResponse(
-        thread_id=thread_id,
-        created_at=_utcnow_iso(),
-        workspace_root=str(paths.sandbox_work_dir(thread_id)),
-    )
-
-
-async def _ensure_plugin_studio_preview_thread(
-    session_payload: dict[str, Any],
-    *,
-    preferred_thread_id: str | None = None,
-) -> str:
-    resolved_thread_id = _to_non_empty_string(preferred_thread_id) or _to_non_empty_string(
-        session_payload.get("preview_thread_id"),
-    )
-    if resolved_thread_id:
-        get_paths().ensure_thread_dirs(resolved_thread_id)
-        session_payload["preview_thread_id"] = resolved_thread_id
-        return resolved_thread_id
-
-    created_thread_id = str(uuid.uuid4())
-    await _ensure_langgraph_thread_for_plugin_test(created_thread_id, best_effort=True)
-    get_paths().ensure_thread_dirs(created_thread_id)
-    session_payload["preview_thread_id"] = created_thread_id
-    return created_thread_id
-
-
-@plugin_router.post(
-    "/{plugin_id}/test",
-    response_model=PluginTestResponse,
-    summary="Run plugin compatibility test",
-)
-async def test_workbench_plugin(plugin_id: str, payload: PluginTestRequest) -> PluginTestResponse:
-    step_results: list[PluginTestStepResult] = []
-    all_passed = True
-
-    for index, step in enumerate(payload.command_steps):
-        started_at = time.time()
-        step_id = step.id or f"command-{index + 1}"
-        try:
-            virtual_cwd, actual_cwd = _resolve_cwd(payload.thread_id, step.cwd)
-        except HTTPException as exc:
-            duration_ms = int((time.time() - started_at) * 1000)
-            step_results.append(
-                PluginTestStepResult(
-                    id=step_id,
-                    passed=False,
-                    command=step.command,
-                    cwd=step.cwd,
-                    exit_code=None,
-                    duration_ms=duration_ms,
-                    output_excerpt="",
-                    message=str(exc.detail),
-                ),
-            )
-            all_passed = False
-            continue
-
-        output_excerpt = ""
-        exit_code: int | None = None
-        passed = False
-        message: str | None = None
-
-        try:
-            process = subprocess.run(
-                ["/bin/zsh", "-lc", step.command],
-                cwd=str(actual_cwd),
-                capture_output=True,
-                text=True,
-                timeout=step.timeout_seconds,
-            )
-            exit_code = process.returncode
-            combined_output = (process.stdout or "") + ("\n" + process.stderr if process.stderr else "")
-            output_excerpt = combined_output[:4000]
-            passed = process.returncode == 0
-            if passed and step.expect_contains:
-                for expected in step.expect_contains:
-                    if expected in combined_output:
-                        continue
-
-                    # Allow virtual /mnt/user-data paths to match their resolved host paths.
-                    # Workbench command steps run on the host, so `pwd` will emit host paths.
-                    alternate_match = False
-                    if expected.startswith("/mnt/user-data"):
-                        try:
-                            resolved = resolve_thread_virtual_path(payload.thread_id, expected)
-                            if str(resolved) in combined_output:
-                                alternate_match = True
-                        except HTTPException:
-                            alternate_match = False
-
-                    if not alternate_match:
-                        passed = False
-                        message = f"Missing expected output fragment: {expected}"
-                        break
-            if not passed and message is None and process.returncode != 0:
-                message = f"Command exited with code {process.returncode}"
-        except subprocess.TimeoutExpired as exc:
-            timeout_output = (exc.stdout or "") + ("\n" + exc.stderr if exc.stderr else "")
-            output_excerpt = timeout_output[:4000]
-            passed = False
-            message = f"Command timed out after {step.timeout_seconds}s"
-        except Exception as exc:
-            passed = False
-            message = f"Command execution failed: {exc}"
-
-        duration_ms = int((time.time() - started_at) * 1000)
-        step_results.append(
-            PluginTestStepResult(
-                id=step_id,
-                passed=passed,
-                command=step.command,
-                cwd=virtual_cwd,
-                exit_code=exit_code,
-                duration_ms=duration_ms,
-                output_excerpt=output_excerpt,
-                message=message,
-            ),
-        )
-        all_passed = all_passed and passed
-
-    if not payload.command_steps:
-        summary = "No command steps provided; plugin test accepted."
-    elif all_passed:
-        summary = f"All {len(payload.command_steps)} command steps passed."
-    else:
-        summary = f"{sum(1 for r in step_results if r.passed)}/{len(payload.command_steps)} command steps passed."
-
-    return PluginTestResponse(
-        plugin_id=plugin_id,
-        passed=all_passed,
-        executed_at=_utcnow_iso(),
-        summary=summary,
-        steps=step_results,
-    )
-
-
-def _repo_root_dir() -> Path:
-    return Path(__file__).resolve().parents[4]
-
-
-def _marketplace_catalog_file() -> Path:
-    if env_value := os.getenv("NION_WORKBENCH_MARKETPLACE_CATALOG"):
-        return Path(env_value).expanduser().resolve()
-    return (_repo_root_dir() / "backend" / "data" / "workbench_marketplace" / "catalog.json").resolve()
-
-
-def _marketplace_assets_dir() -> Path:
-    return (_repo_root_dir() / "backend" / "data" / "workbench_marketplace" / "assets").resolve()
-
-
-def _safe_repo_relative_path(raw_path: str) -> Path:
-    if not raw_path:
-        raise HTTPException(status_code=400, detail="Empty relative path is not allowed")
-    repo_root = _repo_root_dir().resolve()
-    candidate = (repo_root / raw_path).resolve()
-    try:
-        candidate.relative_to(repo_root)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"Path escapes repository root: {raw_path}") from exc
-    return candidate
-
-
-def _load_marketplace_catalog() -> list[dict[str, Any]]:
-    catalog_file = _marketplace_catalog_file()
-    if not catalog_file.exists():
-        return []
-    try:
-        payload = json.loads(catalog_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail=f"Invalid marketplace catalog JSON: {exc}") from exc
-    plugins = payload.get("plugins")
-    if not isinstance(plugins, list):
-        raise HTTPException(status_code=500, detail="Marketplace catalog missing `plugins` list")
-    normalized: list[dict[str, Any]] = []
-    for item in plugins:
-        if isinstance(item, dict):
-            normalized.append(item)
-    return normalized
-
-
-def _find_marketplace_entry(plugin_id: str) -> dict[str, Any]:
-    for item in _load_marketplace_catalog():
-        if str(item.get("id", "")).strip() == plugin_id:
-            return item
-    raise HTTPException(status_code=404, detail=f"Marketplace plugin not found: {plugin_id}")
-
-
-def _entry_package_path(entry: dict[str, Any]) -> Path:
-    path_value = str(entry.get("package_path", "")).strip()
-    if not path_value:
-        raise HTTPException(status_code=500, detail=f"Marketplace plugin `{entry.get('id')}` has no package_path")
-    package_path = _safe_repo_relative_path(path_value)
-    if not package_path.exists() or not package_path.is_file():
-        raise HTTPException(status_code=404, detail=f"Marketplace package missing: {path_value}")
-    return package_path
-
-
-def _entry_readme_text(entry: dict[str, Any]) -> str:
-    path_value = str(entry.get("readme_path", "")).strip()
-    if not path_value:
-        return ""
-    readme_file = _safe_repo_relative_path(path_value)
-    if not readme_file.exists() or not readme_file.is_file():
-        return ""
-    return readme_file.read_text(encoding="utf-8")
-
-
-def _entry_demo_image_urls(entry: dict[str, Any]) -> list[str]:
-    demo_images_raw = entry.get("demo_images")
-    if not isinstance(demo_images_raw, list):
-        return []
-    urls: list[str] = []
-    for raw in demo_images_raw:
-        asset_rel = str(raw or "").strip().lstrip("/")
-        if not asset_rel:
-            continue
-        candidate = (_marketplace_assets_dir() / asset_rel).resolve()
-        try:
-            candidate.relative_to(_marketplace_assets_dir())
-        except ValueError:
-            continue
-        if not candidate.exists() or not candidate.is_file():
-            continue
-        encoded = quote(asset_rel)
-        urls.append(f"/api/workbench/marketplace/assets/{encoded}")
-    return urls
-
-
-def _marketplace_list_item(entry: dict[str, Any]) -> MarketplacePluginListItem:
-    plugin_id = str(entry.get("id", "")).strip()
-    if not plugin_id:
-        raise HTTPException(status_code=500, detail="Marketplace catalog contains plugin with empty id")
-    # Resolve package path ahead of time so list only shows installable entries.
-    _entry_package_path(entry)
-
-    readme = _entry_readme_text(entry)
-    docs_summary = None
-    if readme:
-        first_line = next((line.strip() for line in readme.splitlines() if line.strip()), "")
-        docs_summary = first_line[:180] if first_line else None
-
-    return MarketplacePluginListItem(
-        id=plugin_id,
-        name=str(entry.get("name") or plugin_id),
-        description=str(entry.get("description") or "No description"),
-        version=str(entry.get("version") or "0.0.0"),
-        maintainer=str(entry.get("maintainer") or "") or None,
-        tags=[str(tag) for tag in entry.get("tags", []) if str(tag).strip()],
-        updated_at=str(entry.get("updated_at") or "") or None,
-        download_url=f"/api/workbench/marketplace/plugins/{plugin_id}/download",
-        detail_url=f"/api/workbench/marketplace/plugins/{plugin_id}",
-        docs_summary=docs_summary,
-    )
-
-
-@marketplace_router.get(
-    "/plugins",
-    response_model=MarketplacePluginListResponse,
-    summary="List available workbench marketplace plugins",
-)
-async def list_workbench_marketplace_plugins() -> MarketplacePluginListResponse:
-    items: list[MarketplacePluginListItem] = []
-    for entry in _load_marketplace_catalog():
-        try:
-            items.append(_marketplace_list_item(entry))
-        except HTTPException:
-            # Keep the list resilient: malformed entries are skipped instead of
-            # breaking the whole marketplace page.
-            continue
-    return MarketplacePluginListResponse(plugins=items)
-
-
-@marketplace_router.get(
-    "/plugins/{plugin_id}",
-    response_model=MarketplacePluginDetailResponse,
-    summary="Get workbench marketplace plugin detail",
-)
-async def get_workbench_marketplace_plugin_detail(plugin_id: str) -> MarketplacePluginDetailResponse:
-    entry = _find_marketplace_entry(plugin_id)
-    list_item = _marketplace_list_item(entry)
-    readme_markdown = _entry_readme_text(entry)
-    if not readme_markdown:
-        readme_markdown = f"# {list_item.name}\n\n{list_item.description}\n"
-    return MarketplacePluginDetailResponse(
-        id=list_item.id,
-        name=list_item.name,
-        description=list_item.description,
-        version=list_item.version,
-        maintainer=list_item.maintainer,
-        tags=list_item.tags,
-        updated_at=list_item.updated_at,
-        download_url=list_item.download_url,
-        readme_markdown=readme_markdown,
-        demo_image_urls=_entry_demo_image_urls(entry),
-    )
-
-
-@marketplace_router.get(
-    "/plugins/{plugin_id}/download",
-    summary="Download marketplace plugin package",
-)
-async def download_workbench_marketplace_plugin(plugin_id: str) -> FileResponse:
-    entry = _find_marketplace_entry(plugin_id)
-    package_file = _entry_package_path(entry)
-    filename = f"{plugin_id}.nwp"
-    return FileResponse(path=package_file, filename=filename, media_type="application/zip")
-
-
-@marketplace_router.get(
-    "/assets/{asset_path:path}",
-    summary="Read marketplace documentation/demo asset",
-)
-async def read_workbench_marketplace_asset(asset_path: str) -> FileResponse:
-    normalized = asset_path.lstrip("/")
-    if not normalized:
-        raise HTTPException(status_code=404, detail="Asset path is empty")
-    candidate = (_marketplace_assets_dir() / normalized).resolve()
-    try:
-        candidate.relative_to(_marketplace_assets_dir())
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid marketplace asset path") from exc
-    if not candidate.exists() or not candidate.is_file():
-        raise HTTPException(status_code=404, detail=f"Marketplace asset not found: {asset_path}")
-    return FileResponse(path=candidate)
-
-
-_PLUGIN_STUDIO_LOCK = threading.Lock()
-
-
-def _plugin_studio_sessions_dir() -> Path:
-    sessions_dir = get_paths().base_dir / "workbench-plugin-studio" / "sessions"
-    sessions_dir.mkdir(parents=True, exist_ok=True)
-    return sessions_dir
-
-
-def _plugin_studio_session_dir(session_id: str) -> Path:
-    if not _SAFE_SESSION_ID_RE.match(session_id):
-        raise HTTPException(status_code=400, detail=f"Invalid plugin studio session id: {session_id}")
-    return _plugin_studio_sessions_dir() / session_id
-
-
-def _plugin_studio_session_file(session_id: str) -> Path:
-    return _plugin_studio_session_dir(session_id) / "session.json"
-
-
-def _safe_plugin_id(raw: str) -> str:
-    normalized = raw.strip().lower()
-    normalized = re.sub(r"[^a-z0-9-]+", "-", normalized)
-    normalized = re.sub(r"-{2,}", "-", normalized).strip("-")
-    if len(normalized) < 2:
-        normalized = f"plugin-{normalized or 'custom'}"
-    if len(normalized) > 64:
-        normalized = normalized[:64].rstrip("-")
-    if not _SAFE_PLUGIN_ID_RE.match(normalized):
-        raise HTTPException(status_code=400, detail=f"Invalid plugin id: {raw}")
-    return normalized
-
-
-def _parse_semver(value: str | None) -> tuple[int, int, int] | None:
-    if not value:
-        return None
-    match = _SEMVER_RE.match(value.strip())
-    if not match:
-        return None
-    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
-
-
-def _normalize_semver(value: str | None, *, fallback: str = "0.1.0") -> str:
-    parsed = _parse_semver(value)
-    if not parsed:
-        return fallback
-    return f"{parsed[0]}.{parsed[1]}.{parsed[2]}"
-
-
-def _is_semver_greater(new_version: str, current_version: str) -> bool:
-    parsed_new = _parse_semver(new_version)
-    parsed_current = _parse_semver(current_version)
-    if not parsed_new or not parsed_current:
-        return False
-    return parsed_new > parsed_current
-
-
-def _increment_patch(version: str, *, fallback: str = "0.1.1") -> str:
-    parsed = _parse_semver(version)
-    if not parsed:
-        return fallback
-    return f"{parsed[0]}.{parsed[1]}.{parsed[2] + 1}"
-
-
-def _default_workflow_state() -> dict[str, Any]:
-    return {
-        "goal": "",
-        "target_user": "",
-        "plugin_scope": "",
-        "entry_points": [],
-        "core_actions": [],
-        "file_match_mode": "",
-        "layout_template": "",
-        "visual_style": "",
-        "responsive_rules": "",
-    }
-
-
-def _to_non_empty_string(value: Any) -> str:
-    if not isinstance(value, str):
-        return ""
-    return value.strip()
-
-
-def _to_clean_string_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    result: list[str] = []
-    for item in value:
-        normalized = _to_non_empty_string(item)
-        if normalized and normalized not in result:
-            result.append(normalized)
-    return result
-
-
-def _normalize_workflow_state(raw: Any) -> dict[str, Any]:
-    baseline = _default_workflow_state()
-    if not isinstance(raw, dict):
-        return baseline
-    baseline["goal"] = _to_non_empty_string(raw.get("goal"))
-    baseline["target_user"] = _to_non_empty_string(raw.get("target_user"))
-    baseline["plugin_scope"] = _to_non_empty_string(raw.get("plugin_scope"))
-    baseline["entry_points"] = _to_clean_string_list(raw.get("entry_points"))
-    baseline["core_actions"] = _to_clean_string_list(raw.get("core_actions"))
-    baseline["file_match_mode"] = _to_non_empty_string(raw.get("file_match_mode"))
-    baseline["layout_template"] = _to_non_empty_string(raw.get("layout_template"))
-    baseline["visual_style"] = _to_non_empty_string(raw.get("visual_style"))
-    baseline["responsive_rules"] = _to_non_empty_string(raw.get("responsive_rules"))
-    return baseline
-
-
-def _normalize_match_rules(raw: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        return {
-            "allowAll": False,
-            "kind": "file",
-            "extensions": [],
-            "pathPattern": "",
-            "projectMarkers": [],
-        }
-    kind = _to_non_empty_string(raw.get("kind")).lower() or "file"
-    if kind not in {"file", "directory", "project"}:
-        kind = "file"
-    allow_all_raw = raw.get("allowAll")
-    allow_all = bool(allow_all_raw) if isinstance(allow_all_raw, bool) else False
-
-    extensions = _to_clean_string_list(raw.get("extensions"))
-    if isinstance(raw.get("extensions"), str):
-        extensions = _to_clean_string_list([part.strip() for part in str(raw.get("extensions", "")).split(",")])
-    normalized_extensions = []
-    for ext in extensions:
-        clean = ext.strip().lstrip(".").lower()
-        if clean and clean not in normalized_extensions:
-            normalized_extensions.append(clean)
-
-    project_markers = _to_clean_string_list(raw.get("projectMarkers"))
-    if isinstance(raw.get("projectMarkers"), str):
-        project_markers = _to_clean_string_list([part.strip() for part in str(raw.get("projectMarkers", "")).split(",")])
-
-    return {
-        "allowAll": allow_all,
-        "kind": kind,
-        "extensions": normalized_extensions,
-        "pathPattern": _to_non_empty_string(raw.get("pathPattern")),
-        "projectMarkers": project_markers,
-    }
-
-
-def _is_workflow_requirements_done(state: dict[str, Any]) -> bool:
-    return bool(_to_non_empty_string(state.get("goal")) and _to_non_empty_string(state.get("target_user")) and _to_non_empty_string(state.get("plugin_scope")))
-
-
-def _is_workflow_interaction_done(state: dict[str, Any]) -> bool:
-    entry_points = _to_clean_string_list(state.get("entry_points"))
-    core_actions = _to_clean_string_list(state.get("core_actions"))
-    return len(entry_points) >= 1 and len(core_actions) >= 2 and bool(_to_non_empty_string(state.get("file_match_mode")))
-
-
-def _is_workflow_ui_done(state: dict[str, Any]) -> bool:
-    return bool(_to_non_empty_string(state.get("layout_template")) and _to_non_empty_string(state.get("visual_style")) and _to_non_empty_string(state.get("responsive_rules")))
-
-
-def _compute_workflow_stage(state: dict[str, Any], session_state: str) -> Literal["requirements", "interaction", "ui_design", "generate"]:
-    if session_state == "packaged":
-        return "generate"
-    if not _is_workflow_requirements_done(state):
-        return "requirements"
-    if not _is_workflow_interaction_done(state):
-        return "interaction"
-    if not _is_workflow_ui_done(state):
-        return "ui_design"
-    # "生成插件" 阶段包含发布前与发布后，因此 UI 设计完成后进入 generate。
-    return "generate"
-
-
-def _sync_workflow_fields(session_payload: dict[str, Any]) -> None:
-    normalized_state = _normalize_workflow_state(session_payload.get("workflow_state"))
-    session_payload["workflow_state"] = normalized_state
-    session_payload["match_rules"] = _normalize_match_rules(session_payload.get("match_rules"))
-    computed_stage = _compute_workflow_stage(normalized_state, str(session_payload.get("state") or "draft"))
-    session_payload["workflow_stage"] = computed_stage
-
-
-def _safe_relative_material_path(name: str) -> str:
-    normalized = name.replace("\\", "/").strip().lstrip("/")
-    if not normalized:
-        raise HTTPException(status_code=422, detail={"stage": "test_materials", "message": "Material path is empty"})
-    parts = [part for part in normalized.split("/") if part and part != "."]
-    if not parts or any(part == ".." for part in parts):
-        raise HTTPException(status_code=422, detail={"stage": "test_materials", "message": f"Unsafe material path: {name}"})
-    return "/".join(parts)
-
-
-def _plugin_studio_test_materials_virtual_root(session_id: str) -> str:
-    # Keep test materials visible in workspace tree for easier debugging.
-    return _PLUGIN_STUDIO_WORKSPACE_TEST_ROOT
-
-
-def _normalize_material_relative_path(name: str) -> str:
-    relative = _safe_relative_material_path(name)
-    if relative == "fixtures":
-        return ""
-    prefix = "fixtures/"
-    if relative.startswith(prefix):
-        return relative[len(prefix) :]
-    return relative
-
-
-def _build_targets_from_match_rules(match_rules: dict[str, Any]) -> list[dict[str, Any]]:
-    normalized = _normalize_match_rules(match_rules)
-    if normalized.get("allowAll"):
-        # "全部内容"：允许文件与目录都进入候选列表，便于右键菜单完整展示。
-        return [{"kind": "file", "priority": 85}, {"kind": "directory", "priority": 85}]
-
-    target: dict[str, Any] = {
-        "kind": normalized.get("kind") or "file",
-        "priority": 85,
-    }
-    if normalized.get("extensions"):
-        target["extensions"] = normalized["extensions"]
-    if normalized.get("pathPattern"):
-        target["pathPattern"] = normalized["pathPattern"]
-    if normalized.get("projectMarkers"):
-        target["projectMarkers"] = normalized["projectMarkers"]
-
-    # 至少要有一个可用目标规则，避免空规则导致无法匹配。
-    if target["kind"] == "file" and not target.get("extensions") and not target.get("pathPattern") and not target.get("projectMarkers"):
-        return [{"kind": "file", "priority": 85}]
-    return [target]
-
-
-def _match_rules_from_manifest(manifest_payload: dict[str, Any]) -> dict[str, Any]:
-    targets = manifest_payload.get("targets")
-    if not isinstance(targets, list) or len(targets) == 0:
-        return _normalize_match_rules({})
-    first = targets[0] if isinstance(targets[0], dict) else {}
-    kind = _to_non_empty_string(first.get("kind")).lower() or "file"
-    extensions = _to_clean_string_list(first.get("extensions"))
-    path_pattern = _to_non_empty_string(first.get("pathPattern"))
-    project_markers = _to_clean_string_list(first.get("projectMarkers"))
-    allow_all = kind == "file" and not extensions and not path_pattern and not project_markers
-    return _normalize_match_rules(
-        {
-            "allowAll": allow_all,
-            "kind": kind,
-            "extensions": extensions,
-            "pathPattern": path_pattern,
-            "projectMarkers": project_markers,
-        }
-    )
-
-
-def _collect_test_material_records(
-    *,
-    root_dir: Path,
-    root_virtual_path: str,
-    source_map: dict[str, str],
-) -> list[dict[str, str]]:
-    file_entries: list[dict[str, str]] = []
-    directory_sources: dict[str, set[str]] = {}
-
-    for file_path in sorted(root_dir.rglob("*")):
-        if not file_path.is_file():
-            continue
-        relative = file_path.relative_to(root_dir).as_posix()
-        virtual_path = f"{root_virtual_path}/{relative}"
-        source = source_map.get(relative, "upload")
-        file_entries.append(
-            {
-                "path": virtual_path,
-                "kind": "file",
-                "source": source if source in {"upload", "zip"} else "upload",
-            }
-        )
-        parts = relative.split("/")
-        if len(parts) > 1:
-            for idx in range(1, len(parts)):
-                dir_key = "/".join(parts[:idx])
-                source_set = directory_sources.setdefault(dir_key, set())
-                source_set.add(source)
-
-    directory_entries: list[dict[str, str]] = []
-    for relative_dir in sorted(directory_sources.keys()):
-        source_set = directory_sources[relative_dir]
-        source = "zip" if "zip" in source_set else "upload"
-        directory_entries.append(
-            {
-                "path": f"{root_virtual_path}/{relative_dir}",
-                "kind": "directory",
-                "source": source,
-            }
-        )
-
-    return [*directory_entries, *file_entries]
-
-
-def _import_plugin_studio_test_materials(
-    *,
-    session_payload: dict[str, Any],
-    payload: PluginStudioTestMaterialImportRequest,
-    thread_id: str | None = None,
-) -> None:
-    session_id = str(session_payload["session_id"])
-    root_virtual = _plugin_studio_test_materials_virtual_root(session_id)
-    resolved_thread_id = (
-        _to_non_empty_string(thread_id)
-        or _to_non_empty_string(payload.thread_id)
-        or _to_non_empty_string(
-            session_payload.get("preview_thread_id"),
-        )
-    )
-    if not resolved_thread_id:
-        raise HTTPException(
-            status_code=422,
-            detail={"stage": "test_materials", "message": "Missing preview thread id"},
-        )
-    root_dir = resolve_thread_virtual_path(resolved_thread_id.strip(), root_virtual)
-    root_dir.mkdir(parents=True, exist_ok=True)
-
-    existing_source_map: dict[str, str] = {}
-    existing_materials = session_payload.get("test_materials")
-    if isinstance(existing_materials, list):
-        for item in existing_materials:
-            if not isinstance(item, dict):
-                continue
-            if item.get("kind") != "file":
-                continue
-            path = _to_non_empty_string(item.get("path"))
-            source = _to_non_empty_string(item.get("source")) or "upload"
-            prefix = f"{root_virtual}/"
-            if path.startswith(prefix):
-                relative = path[len(prefix) :]
-                if relative:
-                    existing_source_map[relative] = source
-
-    for entry in payload.entries:
-        relative_path = _normalize_material_relative_path(entry.path)
-        if not relative_path:
-            continue
-        target = (root_dir / relative_path).resolve()
-        try:
-            target.relative_to(root_dir.resolve())
-        except ValueError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail={"stage": "test_materials", "message": f"Unsafe target path: {entry.path}"},
-            ) from exc
-        try:
-            decoded = base64.b64decode(entry.content_base64, validate=True)
-        except Exception as exc:  # noqa: BLE001
-            raise HTTPException(
-                status_code=422,
-                detail={"stage": "test_materials", "message": f"Invalid base64 content for {entry.path}"},
-            ) from exc
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(decoded)
-        existing_source_map[relative_path] = entry.source
-
-    records = _collect_test_material_records(
-        root_dir=root_dir,
-        root_virtual_path=root_virtual,
-        source_map=existing_source_map,
-    )
-    session_payload["test_materials"] = records
-
-    selected_relative = _to_non_empty_string(payload.selected_path)
-    if selected_relative:
-        safe_selected = _normalize_material_relative_path(selected_relative)
-        if not safe_selected:
-            session_payload["selected_test_material_path"] = ""
-            return
-        session_payload["selected_test_material_path"] = f"{root_virtual}/{safe_selected}"
-    elif not _to_non_empty_string(session_payload.get("selected_test_material_path")):
-        first_file = next((item for item in records if item.get("kind") == "file"), None)
-        session_payload["selected_test_material_path"] = first_file.get("path") if first_file else ""
-
-
-def _delete_plugin_studio_test_material(
-    *,
-    session_payload: dict[str, Any],
-    payload: PluginStudioTestMaterialDeleteRequest,
-    thread_id: str | None = None,
-) -> None:
-    session_id = str(session_payload["session_id"])
-    root_virtual = _plugin_studio_test_materials_virtual_root(session_id)
-    resolved_thread_id = (
-        _to_non_empty_string(thread_id)
-        or _to_non_empty_string(payload.thread_id)
-        or _to_non_empty_string(
-            session_payload.get("preview_thread_id"),
-        )
-    )
-    if not resolved_thread_id:
-        raise HTTPException(
-            status_code=422,
-            detail={"stage": "test_materials", "message": "Missing preview thread id"},
-        )
-    root_dir = resolve_thread_virtual_path(resolved_thread_id.strip(), root_virtual)
-    root_dir.mkdir(parents=True, exist_ok=True)
-
-    target_path = _to_non_empty_string(payload.path)
-    prefix = f"{root_virtual}/"
-    if target_path.startswith(prefix):
-        relative = target_path[len(prefix) :]
-    else:
-        relative = _safe_relative_material_path(target_path)
-    relative = _safe_relative_material_path(relative)
-    candidate = (root_dir / relative).resolve()
-    try:
-        candidate.relative_to(root_dir.resolve())
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail={"stage": "test_materials", "message": f"Unsafe material path: {payload.path}"},
-        ) from exc
-    if candidate.is_file():
-        candidate.unlink()
-    elif candidate.is_dir():
-        shutil.rmtree(candidate, ignore_errors=True)
-    else:
-        raise HTTPException(
-            status_code=404,
-            detail={"stage": "test_materials", "message": "Test material not found"},
-        )
-
-    source_map: dict[str, str] = {}
-    raw_test_materials = session_payload.get("test_materials")
-    if isinstance(raw_test_materials, list):
-        for item in raw_test_materials:
-            if not isinstance(item, dict):
-                continue
-            if item.get("kind") != "file":
-                continue
-            file_path = _to_non_empty_string(item.get("path"))
-            source = _to_non_empty_string(item.get("source")) or "upload"
-            if file_path.startswith(prefix):
-                rel = file_path[len(prefix) :]
-                if rel and rel != relative:
-                    source_map[rel] = source
-
-    records = _collect_test_material_records(
-        root_dir=root_dir,
-        root_virtual_path=root_virtual,
-        source_map=source_map,
-    )
-    session_payload["test_materials"] = records
-    selected_path = _to_non_empty_string(session_payload.get("selected_test_material_path"))
-    if not selected_path or selected_path == f"{root_virtual}/{relative}" or not any(item.get("path") == selected_path for item in records):
-        first_file = next((item for item in records if item.get("kind") == "file"), None)
-        session_payload["selected_test_material_path"] = first_file.get("path") if first_file else ""
+# ── Internal helpers ─────────────────────────────────────────────────────────
 
 
 def _plugin_studio_scaffold_dir(session_id: str) -> Path:
@@ -1403,9 +89,8 @@ def _plugin_studio_package_dir(session_id: str) -> Path:
     return directory
 
 
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+def _plugin_studio_session_file(session_id: str) -> Path:
+    return _plugin_studio_session_dir(session_id) / "session.json"
 
 
 def _reset_directory(path: Path) -> None:
@@ -1577,26 +262,6 @@ def _read_plugin_studio_source_package(
         manifest=manifest_payload,
         files=files,
     )
-
-
-def _read_plugin_studio_session(session_id: str) -> dict[str, Any]:
-    session_file = _plugin_studio_session_file(session_id)
-    if not session_file.exists():
-        raise HTTPException(status_code=404, detail=f"Plugin studio session not found: {session_id}")
-    try:
-        payload = json.loads(session_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail=f"Plugin studio session data broken: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise HTTPException(status_code=500, detail="Plugin studio session payload is invalid")
-    return payload
-
-
-def _save_plugin_studio_session(session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-    _sync_workflow_fields(payload)
-    payload["updated_at"] = _utcnow_iso()
-    _write_json(_plugin_studio_session_file(session_id), payload)
-    return payload
 
 
 def _plugin_studio_response(payload: dict[str, Any]) -> PluginStudioSessionResponse:
@@ -1834,20 +499,20 @@ html, body {
 
 ## 使用说明
 
-1. 在插件市场或本地安装 `.nwp` 包。  
-2. 在聊天页右侧切换到“操作台”模式。  
-3. 选择该插件并开始调试。  
+1. 在插件市场或本地安装 `.nwp` 包。
+2. 在聊天页右侧切换到"操作台"模式。
+3. 选择该插件并开始调试。
 
 ## 发布前硬性检查项
 
-- 必须支持响应式自适应：在窄宽度容器下仍可用。  
-- 必须跟随系统主题：light/dark 均保持可读与层级一致。  
-- 禁止依赖固定绝对宽高；优先流式布局与断点策略。  
+- 必须支持响应式自适应：在窄宽度容器下仍可用。
+- 必须跟随系统主题：light/dark 均保持可读与层级一致。
+- 禁止依赖固定绝对宽高；优先流式布局与断点策略。
 
 ## 验证门禁
 
-- 自动验证：检查 manifest/入口/文档/演示图是否完整。  
-- 人工确认：手动体验通过后才能打包下载。  
+- 自动验证：检查 manifest/入口/文档/演示图是否完整。
+- 人工确认：手动体验通过后才能打包下载。
 
 ## 演示图
 
@@ -1980,6 +645,206 @@ def _safe_zip_member_path(name: str) -> str | None:
     if any(part == ".." for part in parts):
         raise HTTPException(status_code=400, detail=f"Unsafe path in package: {name}")
     return "/".join(parts)
+
+
+def _collect_test_material_records(
+    *,
+    root_dir: Path,
+    root_virtual_path: str,
+    source_map: dict[str, str],
+) -> list[dict[str, str]]:
+    file_entries: list[dict[str, str]] = []
+    directory_sources: dict[str, set[str]] = {}
+
+    for file_path in sorted(root_dir.rglob("*")):
+        if not file_path.is_file():
+            continue
+        relative = file_path.relative_to(root_dir).as_posix()
+        virtual_path = f"{root_virtual_path}/{relative}"
+        source = source_map.get(relative, "upload")
+        file_entries.append(
+            {
+                "path": virtual_path,
+                "kind": "file",
+                "source": source if source in {"upload", "zip"} else "upload",
+            }
+        )
+        parts = relative.split("/")
+        if len(parts) > 1:
+            for idx in range(1, len(parts)):
+                dir_key = "/".join(parts[:idx])
+                source_set = directory_sources.setdefault(dir_key, set())
+                source_set.add(source)
+
+    directory_entries: list[dict[str, str]] = []
+    for relative_dir in sorted(directory_sources.keys()):
+        source_set = directory_sources[relative_dir]
+        source = "zip" if "zip" in source_set else "upload"
+        directory_entries.append(
+            {
+                "path": f"{root_virtual_path}/{relative_dir}",
+                "kind": "directory",
+                "source": source,
+            }
+        )
+
+    return [*directory_entries, *file_entries]
+
+
+def _import_plugin_studio_test_materials(
+    *,
+    session_payload: dict[str, Any],
+    payload: PluginStudioTestMaterialImportRequest,
+    thread_id: str | None = None,
+) -> None:
+    session_id = str(session_payload["session_id"])
+    root_virtual = _plugin_studio_test_materials_virtual_root(session_id)
+    resolved_thread_id = (
+        _to_non_empty_string(thread_id)
+        or _to_non_empty_string(payload.thread_id)
+        or _to_non_empty_string(
+            session_payload.get("preview_thread_id"),
+        )
+    )
+    if not resolved_thread_id:
+        raise HTTPException(
+            status_code=422,
+            detail={"stage": "test_materials", "message": "Missing preview thread id"},
+        )
+    root_dir = resolve_thread_virtual_path(resolved_thread_id.strip(), root_virtual)
+    root_dir.mkdir(parents=True, exist_ok=True)
+
+    existing_source_map: dict[str, str] = {}
+    existing_materials = session_payload.get("test_materials")
+    if isinstance(existing_materials, list):
+        for item in existing_materials:
+            if not isinstance(item, dict):
+                continue
+            if item.get("kind") != "file":
+                continue
+            path = _to_non_empty_string(item.get("path"))
+            source = _to_non_empty_string(item.get("source")) or "upload"
+            prefix = f"{root_virtual}/"
+            if path.startswith(prefix):
+                relative = path[len(prefix) :]
+                if relative:
+                    existing_source_map[relative] = source
+
+    for entry in payload.entries:
+        relative_path = _normalize_material_relative_path(entry.path)
+        if not relative_path:
+            continue
+        target = (root_dir / relative_path).resolve()
+        try:
+            target.relative_to(root_dir.resolve())
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"stage": "test_materials", "message": f"Unsafe target path: {entry.path}"},
+            ) from exc
+        try:
+            decoded = base64.b64decode(entry.content_base64, validate=True)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(
+                status_code=422,
+                detail={"stage": "test_materials", "message": f"Invalid base64 content for {entry.path}"},
+            ) from exc
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(decoded)
+        existing_source_map[relative_path] = entry.source
+
+    records = _collect_test_material_records(
+        root_dir=root_dir,
+        root_virtual_path=root_virtual,
+        source_map=existing_source_map,
+    )
+    session_payload["test_materials"] = records
+
+    selected_relative = _to_non_empty_string(payload.selected_path)
+    if selected_relative:
+        safe_selected = _normalize_material_relative_path(selected_relative)
+        if not safe_selected:
+            session_payload["selected_test_material_path"] = ""
+            return
+        session_payload["selected_test_material_path"] = f"{root_virtual}/{safe_selected}"
+    elif not _to_non_empty_string(session_payload.get("selected_test_material_path")):
+        first_file = next((item for item in records if item.get("kind") == "file"), None)
+        session_payload["selected_test_material_path"] = first_file.get("path") if first_file else ""
+
+
+def _delete_plugin_studio_test_material(
+    *,
+    session_payload: dict[str, Any],
+    payload: PluginStudioTestMaterialDeleteRequest,
+    thread_id: str | None = None,
+) -> None:
+    session_id = str(session_payload["session_id"])
+    root_virtual = _plugin_studio_test_materials_virtual_root(session_id)
+    resolved_thread_id = (
+        _to_non_empty_string(thread_id)
+        or _to_non_empty_string(payload.thread_id)
+        or _to_non_empty_string(
+            session_payload.get("preview_thread_id"),
+        )
+    )
+    if not resolved_thread_id:
+        raise HTTPException(
+            status_code=422,
+            detail={"stage": "test_materials", "message": "Missing preview thread id"},
+        )
+    root_dir = resolve_thread_virtual_path(resolved_thread_id.strip(), root_virtual)
+    root_dir.mkdir(parents=True, exist_ok=True)
+
+    target_path = _to_non_empty_string(payload.path)
+    prefix = f"{root_virtual}/"
+    if target_path.startswith(prefix):
+        relative = target_path[len(prefix) :]
+    else:
+        relative = _safe_relative_material_path(target_path)
+    relative = _safe_relative_material_path(relative)
+    candidate = (root_dir / relative).resolve()
+    try:
+        candidate.relative_to(root_dir.resolve())
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"stage": "test_materials", "message": f"Unsafe material path: {payload.path}"},
+        ) from exc
+    if candidate.is_file():
+        candidate.unlink()
+    elif candidate.is_dir():
+        shutil.rmtree(candidate, ignore_errors=True)
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail={"stage": "test_materials", "message": "Test material not found"},
+        )
+
+    source_map: dict[str, str] = {}
+    raw_test_materials = session_payload.get("test_materials")
+    if isinstance(raw_test_materials, list):
+        for item in raw_test_materials:
+            if not isinstance(item, dict):
+                continue
+            if item.get("kind") != "file":
+                continue
+            file_path = _to_non_empty_string(item.get("path"))
+            source = _to_non_empty_string(item.get("source")) or "upload"
+            if file_path.startswith(prefix):
+                rel = file_path[len(prefix) :]
+                if rel and rel != relative:
+                    source_map[rel] = source
+
+    records = _collect_test_material_records(
+        root_dir=root_dir,
+        root_virtual_path=root_virtual,
+        source_map=source_map,
+    )
+    session_payload["test_materials"] = records
+    selected_path = _to_non_empty_string(session_payload.get("selected_test_material_path"))
+    if not selected_path or selected_path == f"{root_virtual}/{relative}" or not any(item.get("path") == selected_path for item in records):
+        first_file = next((item for item in records if item.get("kind") == "file"), None)
+        session_payload["selected_test_material_path"] = first_file.get("path") if first_file else ""
 
 
 def _collect_fixture_entries_from_scaffold(
@@ -2362,7 +1227,10 @@ def _apply_plugin_studio_publish_changes(
     _refresh_plugin_studio_artifact_refs(session_payload)
 
 
-@plugin_studio_router.post(
+# ── Endpoints ────────────────────────────────────────────────────────────────
+
+
+@router.post(
     "/sessions",
     response_model=PluginStudioSessionResponse,
     summary="Create plugin studio session",
@@ -2409,7 +1277,7 @@ async def create_plugin_studio_session(payload: PluginStudioSessionCreateRequest
     return _plugin_studio_response(session_payload)
 
 
-@plugin_studio_router.get(
+@router.get(
     "/sessions/{session_id}",
     response_model=PluginStudioSessionResponse,
     summary="Get plugin studio session",
@@ -2423,7 +1291,7 @@ async def get_plugin_studio_session(session_id: str) -> PluginStudioSessionRespo
     return _plugin_studio_response(session_payload)
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/generate",
     response_model=PluginStudioSessionResponse,
     summary="Generate plugin scaffold in session",
@@ -2457,7 +1325,7 @@ async def generate_plugin_studio_session(
     return _plugin_studio_response(session_payload)
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/source/import",
     response_model=PluginStudioSessionResponse,
     summary="Import plugin source package into plugin studio session",
@@ -2485,7 +1353,7 @@ async def import_plugin_studio_session_source(
     return _plugin_studio_response(session_payload)
 
 
-@plugin_studio_router.get(
+@router.get(
     "/sessions/{session_id}/source/package",
     response_model=PluginStudioSourcePackageResponse,
     summary="Read current plugin studio draft source package",
@@ -2495,7 +1363,7 @@ async def read_plugin_studio_source_package(session_id: str) -> PluginStudioSour
     return _read_plugin_studio_source_package(session_id)
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/workspace/seed",
     response_model=PluginStudioWorkspaceSeedResponse,
     summary="Seed plugin studio source into chat thread workspace",
@@ -2530,7 +1398,7 @@ async def seed_plugin_studio_workspace(
     )
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/workspace/pull",
     response_model=PluginStudioSessionResponse,
     summary="Pull chat thread workspace source back into plugin studio session",
@@ -2558,7 +1426,7 @@ async def pull_plugin_studio_workspace(
     return _plugin_studio_response(session_payload)
 
 
-@plugin_studio_router.patch(
+@router.patch(
     "/sessions/{session_id}/draft",
     response_model=PluginStudioSessionResponse,
     summary="Update plugin studio draft metadata",
@@ -2599,7 +1467,7 @@ async def update_plugin_studio_draft(
     return _plugin_studio_response(session_payload)
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/test-materials/import",
     response_model=PluginStudioTestMaterialsResponse,
     summary="Import test materials for plugin studio session",
@@ -2636,7 +1504,7 @@ async def import_plugin_studio_test_materials(
     )
 
 
-@plugin_studio_router.get(
+@router.get(
     "/sessions/{session_id}/test-materials",
     response_model=PluginStudioTestMaterialsResponse,
     summary="List plugin studio test materials",
@@ -2658,7 +1526,7 @@ async def list_plugin_studio_test_materials(session_id: str) -> PluginStudioTest
     )
 
 
-@plugin_studio_router.delete(
+@router.delete(
     "/sessions/{session_id}/test-materials",
     response_model=PluginStudioTestMaterialsResponse,
     summary="Delete plugin studio test material item",
@@ -2694,7 +1562,7 @@ async def delete_plugin_studio_test_materials(
     )
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/verify/auto",
     response_model=PluginStudioAutoVerifyResponse,
     summary="Run auto verification for plugin studio session",
@@ -2725,7 +1593,7 @@ async def auto_verify_plugin_studio_session(session_id: str) -> PluginStudioAuto
     )
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/publish",
     response_model=PluginStudioPublishResponse,
     summary="Publish plugin studio session with auto verify/package pipeline",
@@ -2805,7 +1673,7 @@ async def publish_plugin_studio_session(
     )
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/verify/manual",
     response_model=PluginStudioSessionResponse,
     summary="Mark manual verification result for plugin studio session",
@@ -2828,7 +1696,7 @@ async def manual_verify_plugin_studio_session(
     return _plugin_studio_response(session_payload)
 
 
-@plugin_studio_router.post(
+@router.post(
     "/sessions/{session_id}/package",
     response_model=PluginStudioPackageResponse,
     summary="Package plugin studio session as .nwp",
@@ -2856,7 +1724,7 @@ async def package_plugin_studio_session(session_id: str) -> PluginStudioPackageR
     )
 
 
-@plugin_studio_router.get(
+@router.get(
     "/sessions/{session_id}/package/download",
     summary="Download packaged plugin studio artifact",
 )
@@ -2875,7 +1743,7 @@ async def download_plugin_studio_package(session_id: str) -> FileResponse:
     return FileResponse(path=package_file, filename=package_file.name, media_type="application/zip")
 
 
-@plugin_studio_router.get(
+@router.get(
     "/sessions/{session_id}/readme",
     summary="Read plugin studio generated README",
 )
@@ -2894,7 +1762,7 @@ async def read_plugin_studio_readme(session_id: str) -> FileResponse:
     return FileResponse(path=readme_file, media_type="text/markdown")
 
 
-@plugin_studio_router.get(
+@router.get(
     "/sessions/{session_id}/assets/{asset_path:path}",
     summary="Read plugin studio generated demo asset",
 )
