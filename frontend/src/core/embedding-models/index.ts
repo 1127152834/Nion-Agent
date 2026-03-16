@@ -1,0 +1,15 @@
+export {
+  type EmbeddingOperationResponse,
+  type EmbeddingProvider,
+  type EmbeddingStatusResult,
+  type PresetModel,
+  type SetActiveModelPayload,
+  type EmbeddingPresetsResult,
+  type EmbeddingTestResult,
+  type EmbeddingSetActiveResult,
+  EmbeddingApiError,
+  loadEmbeddingModelsStatus,
+  loadEmbeddingPresets,
+  setActiveEmbeddingModel,
+  testEmbedding,
+} from "./api";
