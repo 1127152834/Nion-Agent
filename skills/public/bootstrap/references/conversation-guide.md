@@ -85,10 +85,14 @@ bootstrap 可能来自两种入口：
 
 当 Round 1–3 信息足够：
 1. 生成 `SOUL.md`、`IDENTITY.md`、`memory_items`（可选）、（可选）`USER.md` 与一句话 `description` 草稿。
-2. 明确说明：
+2. **Draft 自检（必须）**：在展示草稿前先检查并修正边界混写，避免把错误资产交给用户确认：
+   - SOUL.md 不得出现“主要任务/职责/交付物/典型输入输出/质量标准/边界与禁区”等结构化段落或标题（这些属于 IDENTITY）。
+   - IDENTITY.md 不得出现“气质/世界观/价值观/表达癖好”等人格段落或标题（这些属于 SOUL）。
+   - memory_items 只写稳定事实/偏好：3–8 条，每条 1 个信息点，tier 仅 `profile`/`preference`。
+3. 明确说明：
    - `SOUL.md/IDENTITY.md` 会落盘并在运行时注入系统提示词，因此要短、明确且边界清晰。
    - `memory_items` 会写入 OpenViking Memory，因此只写稳定且有用的信息。
-3. 让用户确认或修改，直到用户明确同意。
+4. 让用户确认或修改，直到用户明确同意。
 
 ## 落盘（必须调用工具）
 
