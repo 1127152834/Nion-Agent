@@ -444,6 +444,10 @@ export const enUS: Translations = {
         scopeDescription: "This setting affects heartbeat scheduling and memory governance execution for this agent.",
         templatesLabel: "Template Configuration",
         templatesComingSoon: "Template configuration will be available in a later release.",
+        statusTitle: "Heartbeat Status",
+        nextRunLabel: "Next run",
+        runNowLabel: "Run now",
+        runningLabel: "Running...",
         saveSettings: "Save Settings",
       },
       evolution: {
@@ -509,6 +513,7 @@ export const enUS: Translations = {
         soulSaved: "SOUL.md saved",
         identitySaved: "IDENTITY.md saved",
         heartbeatSaved: "Heartbeat settings saved",
+        heartbeatRunTriggered: "Heartbeat run triggered",
         evolutionSaved: "Evolution settings saved",
         evolutionRunTriggered: "Evolution analysis started",
         suggestionDismissed: "Suggestion dismissed",
@@ -773,7 +778,6 @@ export const enUS: Translations = {
       description:
         "Tasks are bound to this agent and execute under the agent's persona, memory, and tool policy context.",
       timezoneBadge: "Timezone: {timezone}",
-      heartbeatLink: "Timezone",
       createTask: "New task",
       taskListTitle: "Tasks",
       taskListDescription: "Enable/disable, run now, edit, and delete tasks here.",

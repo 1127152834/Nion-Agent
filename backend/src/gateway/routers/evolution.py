@@ -17,7 +17,10 @@ async def run_evolution(agent_name: str = "_default") -> dict:
     if not settings.enabled:
         raise HTTPException(status_code=403, detail="Evolution is disabled")
 
-    report = await service.run(agent_name)
+    try:
+        report = await service.run(agent_name)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"status": "completed", "report_id": report.report_id}
 
 

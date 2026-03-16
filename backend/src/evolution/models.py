@@ -76,5 +76,5 @@ class EvolutionSettings(BaseModel):
     """Evolution settings."""
 
     enabled: bool = True
-    interval_hours: int = 24
+    interval_hours: int = Field(default=24, ge=1, le=168)
     auto_trigger: bool = False

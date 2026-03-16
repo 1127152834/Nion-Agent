@@ -28,7 +28,76 @@ class EvolutionService:
 
     def update_settings(self, settings: EvolutionSettings, agent_name: str = "_default") -> EvolutionSettings:
         """Update settings for an agent."""
+        current = load_settings(agent_name)
         save_settings(settings, agent_name)
+
+        from datetime import UTC, datetime
+
+        from src.scheduler.models import ScheduledTask, TaskMode, TriggerConfig, TriggerType
+        from src.scheduler.runner import TaskAlreadyRunningError
+        from src.scheduler.service import get_scheduler
+
+        scheduler = get_scheduler()
+        scheduler.start()
+
+        task_name = f"evolution:{agent_name}:auto_trigger"
+        existing: ScheduledTask | None = None
+        for task in scheduler.list_tasks():
+            if task.name == task_name:
+                existing = task
+                break
+
+        if (not settings.enabled) or (not settings.auto_trigger):
+            if existing is not None:
+                scheduler.remove_task(existing.id)
+            return settings
+
+        trigger = TriggerConfig(
+            type=TriggerType.INTERVAL,
+            interval_seconds=int(settings.interval_hours) * 3600,
+            timezone="UTC",
+        )
+
+        if existing is not None:
+            updated = ScheduledTask(
+                id=existing.id,
+                agent_name=agent_name,
+                name=task_name,
+                description="Evolution auto trigger",
+                mode=TaskMode.EVOLUTION,
+                trigger=trigger,
+                steps=[],
+                enabled=True,
+                created_by="evolution",
+                created_at=existing.created_at,
+                timeout_seconds=existing.timeout_seconds,
+                max_concurrent_steps=existing.max_concurrent_steps,
+            )
+            scheduler.update_task(existing.id, updated)
+            task_id = existing.id
+        else:
+            task = ScheduledTask(
+                agent_name=agent_name,
+                name=task_name,
+                description="Evolution auto trigger",
+                mode=TaskMode.EVOLUTION,
+                trigger=trigger,
+                steps=[],
+                enabled=True,
+                created_by="evolution",
+                created_at=datetime.now(UTC),
+                timeout_seconds=60,
+                max_concurrent_steps=1,
+            )
+            created = scheduler.add_task(task)
+            task_id = created.id
+
+        should_run_once = (not current.enabled) or (not current.auto_trigger)
+        if should_run_once:
+            try:
+                scheduler.run_task_now(task_id)
+            except TaskAlreadyRunningError:
+                pass
         return settings
 
     async def run(self, agent_name: str = "_default") -> EvolutionReport:

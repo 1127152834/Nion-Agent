@@ -32,9 +32,10 @@ function statusClass(status: string): string {
 }
 
 function priorityClass(priority: string): string {
-  if (priority === "HIGH") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-  if (priority === "MEDIUM") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
-  if (priority === "LOW") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+  const normalized = (priority || "").toLowerCase();
+  if (normalized === "high") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+  if (normalized === "medium") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+  if (normalized === "low") return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
   return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400";
 }
 
@@ -65,9 +66,10 @@ function priorityLabel(priority: string, labels: {
   medium: string;
   low: string;
 }): string {
-  if (priority === "HIGH") return labels.high;
-  if (priority === "MEDIUM") return labels.medium;
-  if (priority === "LOW") return labels.low;
+  const normalized = (priority || "").toLowerCase();
+  if (normalized === "high") return labels.high;
+  if (normalized === "medium") return labels.medium;
+  if (normalized === "low") return labels.low;
   return priority;
 }
 
@@ -152,6 +154,11 @@ export function EvolutionReportsViewer({ agentName }: EvolutionReportsViewerProp
                     <div className="text-muted-foreground text-xs mt-1">
                       {report.summary} • {report.suggestions.length} {copy.suggestionUnit}
                     </div>
+                    {report.status === "failed" && report.error_message ? (
+                      <div className="text-destructive text-xs mt-1 break-words">
+                        {copy.error}: {report.error_message}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="text-muted-foreground text-sm shrink-0 ml-4">
                     {formatDuration(report.duration_seconds)}

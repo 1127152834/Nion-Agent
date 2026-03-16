@@ -49,7 +49,7 @@ class TaskScheduler:
     def _should_emit_task_event(self, task: ScheduledTask | None) -> bool:
         if task is None:
             return False
-        return not (task.created_by == "heartbeat" or task.name.startswith("heartbeat:"))
+        return task.mode not in {TaskMode.HEARTBEAT, TaskMode.EVOLUTION}
 
     def _publish_event(self, event_type: str, data: dict[str, Any]) -> None:
         try:
@@ -850,6 +850,24 @@ class TaskScheduler:
             return fallback
 
     def _execute_workflow(self, task: ScheduledTask, *, trace_id: str, thread_id: str | None) -> dict[str, Any]:
+        if task.mode == TaskMode.EVOLUTION:
+            from src.evolution.service import get_evolution_service
+
+            report = asyncio.run(
+                asyncio.wait_for(
+                    get_evolution_service().run(task.agent_name),
+                    timeout=task.timeout_seconds,
+                )
+            )
+            payload = report.model_dump(mode="json") if hasattr(report, "model_dump") else report
+            return {
+                "success": True,
+                "mode": task.mode.value,
+                "evolution": payload,
+                "trace_id": trace_id,
+                "triggered_at": datetime.now(UTC).isoformat(),
+            }
+
         if task.mode == TaskMode.HEARTBEAT:
             if not task.name.startswith("heartbeat:"):
                 raise ValueError(f"Invalid heartbeat task name: {task.name}")

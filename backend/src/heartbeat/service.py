@@ -141,6 +141,14 @@ class HeartbeatService:
                 break
 
         if not task_id:
+            # Be tolerant to "not bootstrapped yet" state: ensure tasks exist, then retry.
+            self.bootstrap(agent_name)
+            for task in self._scheduler.list_tasks():
+                if task.name == task_name:
+                    task_id = task.id
+                    break
+
+        if not task_id:
             raise ValueError(f"Heartbeat task not found: {template_id}")
 
         # Run task now

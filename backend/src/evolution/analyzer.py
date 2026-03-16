@@ -8,45 +8,47 @@ from src.evolution.models import EvolutionSuggestion, SuggestionPriority, Sugges
 class EvolutionAnalyzer:
     """Evolution analyzer."""
 
-    async def analyze(self, report_id: str) -> list[EvolutionSuggestion]:
+    async def analyze(self, report_id: str, agent_name: str = "_default") -> list[EvolutionSuggestion]:
         """Analyze and generate suggestions."""
-        suggestions = []
+        suggestions: list[EvolutionSuggestion] = []
 
         # Analyze Memory
-        memory_suggestions = await self._analyze_memory(report_id)
+        memory_suggestions = await self._analyze_memory(report_id, agent_name)
         suggestions.extend(memory_suggestions)
 
         # Analyze Soul
-        soul_suggestions = await self._analyze_soul(report_id)
+        soul_suggestions = await self._analyze_soul(report_id, agent_name)
         suggestions.extend(soul_suggestions)
 
         # Analyze Agent
-        agent_suggestions = await self._analyze_agent(report_id)
+        agent_suggestions = await self._analyze_agent(report_id, agent_name)
         suggestions.extend(agent_suggestions)
 
         return suggestions
 
-    async def _analyze_memory(self, report_id: str) -> list[EvolutionSuggestion]:
+    async def _analyze_memory(self, report_id: str, agent_name: str) -> list[EvolutionSuggestion]:
         """Analyze Memory and generate suggestions."""
         from src.agents.memory.maintenance import get_usage_stats
         from src.agents.memory.registry import get_memory_registry
 
-        suggestions = []
+        suggestions: list[EvolutionSuggestion] = []
 
         try:
             registry = get_memory_registry()
             provider = registry.get_default()
-            usage = get_usage_stats(provider._runtime)
+            scope = "global" if agent_name == "_default" else "agent"
+            scope_agent_name = None if scope == "global" else agent_name
+            usage = get_usage_stats(provider._runtime, scope=scope, agent_name=scope_agent_name)
 
-            entry_count = usage.get("entry_count", 0)
+            entry_count = int(usage.get("active_entries", 0))
             if entry_count > 200:
                 suggestions.append(
                     EvolutionSuggestion(
                         report_id=report_id,
                         type=SuggestionType.MEMORY,
                         target_domain="memory",
-                        content=f"建议压缩长期记忆，当前有 {entry_count} 条记录",
-                        evidence_summary="基于 Memory 使用统计分析",
+                        content=f"建议压缩长期记忆，当前有 {entry_count} 条 active 记录",
+                        evidence_summary="基于 Memory usage 统计",
                         impact_scope="影响范围：记忆检索性能",
                         confidence=0.85,
                         priority=SuggestionPriority.MEDIUM,
@@ -57,16 +59,17 @@ class EvolutionAnalyzer:
 
         return suggestions
 
-    async def _analyze_soul(self, report_id: str) -> list[EvolutionSuggestion]:
+    async def _analyze_soul(self, report_id: str, agent_name: str) -> list[EvolutionSuggestion]:
         """Analyze Soul and generate suggestions."""
         from src.agents.soul.resolver import SoulResolver
 
-        suggestions = []
+        suggestions: list[EvolutionSuggestion] = []
 
         try:
             resolver = SoulResolver()
-            soul_asset = resolver.load_soul(agent_name=None)
-            identity_asset = resolver.load_identity(agent_name=None)
+            resolved = None if agent_name == "_default" else agent_name
+            soul_asset = resolver.load_soul(agent_name=resolved)
+            identity_asset = resolver.load_identity(agent_name=resolved)
 
             if not soul_asset:
                 suggestions.append(
@@ -100,15 +103,15 @@ class EvolutionAnalyzer:
 
         return suggestions
 
-    async def _analyze_agent(self, report_id: str) -> list[EvolutionSuggestion]:
+    async def _analyze_agent(self, report_id: str, agent_name: str) -> list[EvolutionSuggestion]:
         """Analyze Agent and generate suggestions."""
         from src.heartbeat.service import get_heartbeat_service
 
-        suggestions = []
+        suggestions: list[EvolutionSuggestion] = []
 
         try:
             heartbeat_service = get_heartbeat_service()
-            logs = heartbeat_service.get_logs(limit=20)
+            logs = heartbeat_service.get_logs(agent_name, limit=20)
 
             failed_count = sum(1 for log in logs if log.status == "failed")
             if failed_count > 5:
