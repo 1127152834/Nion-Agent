@@ -14,6 +14,7 @@ import re
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -112,6 +113,9 @@ class OpenVikingRuntime:
         self._sqlite_index = OpenVikingSQLiteIndex(self._paths.openviking_index_db)
         self._scope_locks: dict[str, threading.Lock] = {}
         self._scope_locks_guard = threading.Lock()
+        # OpenViking Python SDK resolves config via `OPENVIKING_CONFIG_FILE` env.
+        # That env var is process-global, so per-scope locks are insufficient.
+        self._ov_env_lock = threading.Lock()
         self._embedding_model_cache: dict[str, Any] = {}
         self._embedding_guard = threading.Lock()
         self._embedding_health_cache: dict[str, tuple[bool, str, float]] = {}
@@ -1073,17 +1077,16 @@ class OpenVikingRuntime:
 
         scope_lock = self._lock_for_scope(agent_name)
         with scope_lock:
-            client = None
             try:
-                client = self._build_openviking_client(agent_name)
-                for msg in normalized_messages:
-                    client.add_message(
-                        thread_id,
-                        msg["role"],
-                        content=msg["content"],
-                    )
-                result = client.commit_session(thread_id)
-                commit_result_payload = self._to_jsonable(result)
+                with self._openviking_client(agent_name) as client:
+                    for msg in normalized_messages:
+                        client.add_message(
+                            thread_id,
+                            msg["role"],
+                            content=msg["content"],
+                        )
+                    result = client.commit_session(thread_id)
+                    commit_result_payload = self._to_jsonable(result)
             except Exception as exc:  # noqa: BLE001
                 # Degrade to local ledger-only commit when OpenViking is unavailable.
                 commit_status = "committed_local_only"
@@ -1094,11 +1097,6 @@ class OpenVikingRuntime:
                     self._scope_name(agent_name),
                     exc,
                 )
-            finally:
-                if client is not None:
-                    close_fn = getattr(client, "close", None)
-                    if callable(close_fn):
-                        close_fn()
 
         try:
             self._upsert_runtime_indexes(
@@ -1840,6 +1838,38 @@ class OpenVikingRuntime:
                 self._scope_locks[scope] = lock
             return lock
 
+    @contextmanager
+    def _openviking_client(self, agent_name: str | None):
+        """Build an OpenViking client with a scope-specific config env.
+
+        OpenViking SDK resolves config via `OPENVIKING_CONFIG_FILE` env var.
+        That env is process-global, so we must:
+        1) serialize env mutation across all scopes/threads,
+        2) restore previous env after the client use,
+        3) ensure client is always closed.
+        """
+
+        # "_default" is a reserved runtime agent name and must share the global scope.
+        agent_name = self._normalize_agent_name(agent_name)
+        _, conf_file = self._ensure_openviking_scope(agent_name)
+
+        with self._ov_env_lock:
+            previous = os.environ.get("OPENVIKING_CONFIG_FILE")
+            os.environ["OPENVIKING_CONFIG_FILE"] = str(conf_file)
+            client = None
+            try:
+                client = self._build_openviking_client(agent_name)
+                yield client
+            finally:
+                if client is not None:
+                    close_fn = getattr(client, "close", None)
+                    if callable(close_fn):
+                        close_fn()
+                if previous is None:
+                    os.environ.pop("OPENVIKING_CONFIG_FILE", None)
+                else:
+                    os.environ["OPENVIKING_CONFIG_FILE"] = previous
+
     def _build_openviking_client(self, agent_name: str | None):
         agent_name = self._normalize_agent_name(agent_name)
         try:
@@ -1847,24 +1877,18 @@ class OpenVikingRuntime:
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"OpenViking import failed: {exc}") from exc
 
-        data_dir, conf_file = self._ensure_openviking_scope(agent_name)
-        # OpenViking Python SDK currently resolves config via env/default path.
-        os.environ["OPENVIKING_CONFIG_FILE"] = str(conf_file)
+        # NOTE: `OPENVIKING_CONFIG_FILE` must be set/restored by `_openviking_client`.
+        data_dir, _ = self._ensure_openviking_scope(agent_name)
         client = ov.SyncOpenViking(path=str(data_dir))
         client.initialize()
         return client
 
     def _openviking_rm(self, *, uri: str, agent_name: str | None) -> None:
-        client = self._build_openviking_client(agent_name)
-        try:
+        with self._openviking_client(agent_name) as client:
             rm_fn = getattr(client, "rm", None)
             if not callable(rm_fn):
                 raise RuntimeError("OpenViking client does not expose rm(uri)")
             rm_fn(uri)
-        finally:
-            close_fn = getattr(client, "close", None)
-            if callable(close_fn):
-                close_fn()
 
     def _ensure_openviking_scope(self, agent_name: str | None) -> tuple[Path, Path]:
         data_dir = self._paths.openviking_data_dir(agent_name)
@@ -1936,8 +1960,7 @@ class OpenVikingRuntime:
         return {}
 
     def _openviking_find(self, *, query: str, limit: int, agent_name: str | None) -> list[dict[str, Any]]:
-        client = self._build_openviking_client(agent_name)
-        try:
+        with self._openviking_client(agent_name) as client:
             results = client.find(query, limit=max(1, limit))
             resources = getattr(results, "resources", None) or []
             output: list[dict[str, Any]] = []
@@ -1959,10 +1982,6 @@ class OpenVikingRuntime:
                     }
                 )
             return output
-        finally:
-            close_fn = getattr(client, "close", None)
-            if callable(close_fn):
-                close_fn()
 
     def _normalize_messages(self, messages: list[Any]) -> list[dict[str, str]]:
         normalized: list[dict[str, str]] = []
