@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from src.agents.memory.core import MemoryPolicyRequest, MemoryReadRequest, MemoryWriteRequest
@@ -189,6 +190,22 @@ class OpenVikingMemoryProvider:
 
     def fs_stat(self, *, uri: str, agent_name: str | None = None) -> dict[str, Any]:
         return self._runtime.fs_stat(uri=uri, agent_name=agent_name)
+
+    def sync_managed_resource(
+        self,
+        *,
+        local_path: str | Path,
+        target_uri: str,
+        agent_name: str | None,
+        reason: str = "nion_asset_sync",
+    ) -> dict[str, Any]:
+        resolved = local_path if isinstance(local_path, Path) else Path(str(local_path))
+        return self._runtime.sync_managed_resource(
+            local_path=resolved,
+            target_uri=target_uri,
+            agent_name=agent_name,
+            reason=reason,
+        )
 
     def get_retrieval_status(self, *, agent_name: str | None = None) -> dict[str, Any]:
         return self._runtime.get_retrieval_status(agent_name=agent_name)

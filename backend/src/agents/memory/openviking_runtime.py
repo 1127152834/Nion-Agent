@@ -2124,6 +2124,63 @@ class OpenVikingRuntime:
             result = client.stat(target)
             return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
 
+    # ------------------------------------------------------------------
+    # Managed OpenViking resources sync (write, backend-controlled only)
+    # ------------------------------------------------------------------
+    def sync_managed_resource(
+        self,
+        *,
+        local_path: Path,
+        target_uri: str,
+        agent_name: str | None,
+        reason: str = "nion_asset_sync",
+    ) -> dict[str, Any]:
+        """Sync a local file into the managed OpenViking resources namespace.
+
+        Security model:
+        - Only backend code paths call this method.
+        - Target URI must be under the fixed managed prefix to prevent overwriting
+          user-owned resources.
+        """
+
+        managed_prefix = "viking://resources/nion/managed/"
+        normalized_target = (target_uri or "").strip()
+        if not normalized_target.startswith(managed_prefix):
+            raise ValueError(f"target_uri must start with managed prefix {managed_prefix!r}")
+
+        resolved_path = Path(local_path)
+        if not resolved_path.exists() or not resolved_path.is_file():
+            raise FileNotFoundError(f"local_path not found: {resolved_path}")
+
+        if "/" not in normalized_target.rstrip("/"):
+            raise ValueError("target_uri must include a file name")
+        target_dir = normalized_target.rstrip("/").rsplit("/", 1)[0]
+
+        with self._openviking_client(agent_name) as client:
+            # 1) mkdir (best-effort)
+            try:
+                client.mkdir(target_dir)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("OpenViking mkdir ignored (dir=%s): %s", target_dir, exc)
+
+            # 2) rm existing file (idempotent from caller perspective)
+            try:
+                client.rm(normalized_target)
+            except Exception as exc:  # noqa: BLE001
+                if not _is_not_found_error(exc):
+                    raise
+
+            # 3) add_resource into directory (non-blocking)
+            result = client.add_resource(
+                path=str(resolved_path),
+                target=target_dir,
+                reason=reason,
+                wait=False,
+            )
+            if isinstance(result, dict):
+                return self._to_jsonable(result)
+            return {"result": self._to_jsonable(result)}
+
     def _normalize_messages(self, messages: list[Any]) -> list[dict[str, str]]:
         normalized: list[dict[str, str]] = []
         for msg in messages:
