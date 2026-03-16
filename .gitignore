@@ -44,6 +44,8 @@ docs/*
 !docs/product-design/**
 !docs/plans/
 !docs/plans/**
+!docs/memoh/
+!docs/memoh/**
 !docs/优化记录/
 !docs/优化记录/**
 !docs/CLI_INTERACTIVE_MODE.md
