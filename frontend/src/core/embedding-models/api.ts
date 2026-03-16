@@ -103,7 +103,7 @@ export async function setActiveEmbeddingModel(payload: SetActiveModelPayload): P
 }
 
 export async function testEmbedding(
-  text: string = "test embedding",
+  text = "test embedding",
 ): Promise<EmbeddingOperationResponse<EmbeddingTestResult>> {
   const response = await fetch(`${getBackendBaseURL()}/api/embedding-models/test`, {
     method: "POST",

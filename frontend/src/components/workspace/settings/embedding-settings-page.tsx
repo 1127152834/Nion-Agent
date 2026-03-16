@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList } from "@/components/ui/tabs";
 import {
   loadEmbeddingModelsStatus,
   loadEmbeddingPresets,
@@ -45,8 +45,8 @@ export function EmbeddingSettingsPage() {
   const [currentStatus, setCurrentStatus] = useState<EmbeddingStatusResult | null>(null);
 
   useEffect(() => {
-    loadStatus();
-    loadPresets();
+    void loadStatus();
+    void loadPresets();
   }, []);
 
   const loadStatus = async () => {
@@ -91,8 +91,8 @@ export function EmbeddingSettingsPage() {
     try {
       const response = await loadEmbeddingPresets();
       if (response.result) {
-        setLocalPresets(response.result.local || []);
-        setOpenaiPresets(response.result.openai || []);
+        setLocalPresets(response.result.local ?? []);
+        setOpenaiPresets(response.result.openai ?? []);
       }
     } catch (error) {
       console.error("Failed to load presets:", error);
@@ -109,12 +109,13 @@ export function EmbeddingSettingsPage() {
         });
       } else {
         toast.error("测试失败", {
-          description: response.result?.message || "未知错误",
+          description: response.result?.message ?? "未知错误",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       toast.error("测试失败", {
-        description: error.message || "未知错误",
+        description: message ? message : "未知错误",
       });
     } finally {
       setTesting(false);
@@ -143,17 +144,18 @@ export function EmbeddingSettingsPage() {
       const response = await setActiveEmbeddingModel(payload);
       if (response.status === "ok") {
         toast.success("保存成功", {
-          description: response.result?.message || "配置已更新",
+          description: response.result?.message ?? "配置已更新",
         });
         await loadStatus();
       } else {
         toast.error("保存失败", {
-          description: response.result?.message || "未知错误",
+          description: response.result?.message ?? "未知错误",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       toast.error("保存失败", {
-        description: error.message || "未知错误",
+        description: message ? message : "未知错误",
       });
     } finally {
       setSaving(false);
@@ -252,7 +254,8 @@ export function EmbeddingSettingsPage() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  首次使用会自动下载模型（约 {localPresets.find(p => p.name === localModel)?.size_mb || 80}MB）
+                  首次使用会自动下载模型（约{" "}
+                  {localPresets.find((p) => p.name === localModel)?.size_mb ?? 80}MB）
                 </p>
               </div>
 
