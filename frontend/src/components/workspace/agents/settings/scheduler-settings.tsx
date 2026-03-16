@@ -813,7 +813,8 @@ export function SchedulerSettingsPanel({
             {isHistoryLoading ? (
               <p className="text-sm text-muted-foreground">{copy.loading}</p>
             ) : !selectedTask ? (
-              <p className="text-sm text-muted-foreground">{copy.historyEmptyHint}</p>
+              /* 空态提示已在 CardDescription 展示，避免重复渲染同一条文案。 */
+              null
             ) : selectedHistory.length === 0 ? (
               <p className="text-sm text-muted-foreground">{copy.noHistory}</p>
             ) : (
@@ -901,25 +902,7 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
   const timezone = heartbeatSettings?.timezone ?? "UTC";
   const timezoneSettingsHref = `/workspace/agents/${encodeURIComponent(agentName)}/settings?section=heartbeat`;
 
-  const { tasks: allTasks, isLoading } = useScheduledTasks(agentName);
-  const tasks = useMemo(
-    () =>
-      allTasks.filter((task) => {
-        if (task.trigger.type !== "once") {
-          return true;
-        }
-        // One-shot tasks: hide after a successful run (no next run), but keep visible
-        // if never executed, still scheduled, or failed (so users can retry/debug).
-        if (task.next_run_at) {
-          return true;
-        }
-        if (!task.last_run_at) {
-          return true;
-        }
-        return task.status !== "completed";
-      }),
-    [allTasks],
-  );
+  const { tasks, isLoading } = useScheduledTasks(agentName);
   const createMutation = useCreateScheduledTask(agentName);
   const updateMutation = useUpdateScheduledTask(agentName);
   const deleteMutation = useDeleteScheduledTask(agentName);
@@ -943,8 +926,8 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
       return;
     }
 
-    // Keep selection if the task still exists (even if hidden from the main list).
-    if (allTasks.some((task) => task.id === selectedTaskId)) {
+    // Keep selection if the task still exists.
+    if (tasks.some((task) => task.id === selectedTaskId)) {
       return;
     }
 
@@ -954,12 +937,12 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
     }
 
     setSelectedTaskId(tasks[0]?.id ?? null);
-  }, [allTasks, selectedTaskId, tasks]);
+  }, [selectedTaskId, tasks]);
 
   const taskBeingEdited = tasks.find((task) => task.id === editingTaskId) ?? null;
   const selectedTaskForPanel = useMemo(
-    () => allTasks.find((task) => task.id === selectedTaskId) ?? null,
-    [allTasks, selectedTaskId],
+    () => tasks.find((task) => task.id === selectedTaskId) ?? null,
+    [selectedTaskId, tasks],
   );
 
   const validateDraft = () => {
