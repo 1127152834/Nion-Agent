@@ -141,7 +141,6 @@ export function renderStartupLoadingHtml(context: StartupLoadingHtmlContext): st
         font-size: 24px;
         font-weight: 700;
         color: #ffffff;
-        background: linear-gradient(145deg, rgba(59, 130, 246, 0.8), rgba(59, 130, 246, 0.5));
       }
 
       .brand-title {
@@ -456,7 +455,7 @@ export function renderStartupLoadingHtml(context: StartupLoadingHtmlContext): st
             <div class="progress-glow" aria-hidden="true"></div>
           </div>
           <div class="progress-meta">
-            <span>${text.startupProgressLabel}</span>
+            <span>Loading</span>
             <span id="progressText">0%</span>
           </div>
         </div>
@@ -650,4 +649,3 @@ export function renderStartupLoadingHtml(context: StartupLoadingHtmlContext): st
   </body>
 </html>`;
 }
-
