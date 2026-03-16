@@ -25,6 +25,7 @@ from nion.tools.builtins._service_ops import (
     SkillUpdateRequest,
     get_mcp_configuration,
     install_skill,
+    rename_skill,
     test_model_connection,
     update_mcp_configuration,
     update_skill,
@@ -270,10 +271,84 @@ def nion_manage_tool(
         )
 
     if command == "skills":
-        # Task 4 will implement argv routing for skills (including custom-skill rename).
+        if len(normalized_argv) < 2 or normalized_argv[1] in {"help", "-h", "--help"}:
+            return build_management_response(
+                success=True,
+                message=(
+                    "Usage:\n"
+                    "  nion_manage skills list\n"
+                    "  nion_manage skills enable <skill>\n"
+                    "  nion_manage skills disable <skill> [--confirmation-token <token>]\n"
+                    "  nion_manage skills install --path <virtual .skill path> [--thread-id <id>]\n"
+                    "  nion_manage skills rename <old> <new> [--confirmation-token <token>]\n"
+                ),
+                data={"argv": normalized_argv},
+            )
+
+        subcommand = normalized_argv[1]
+        if subcommand == "rename":
+            if len(normalized_argv) < 4:
+                return build_management_response(
+                    success=False,
+                    message="rename 需要参数：<old> <new>",
+                    data={"argv": normalized_argv},
+                )
+            old_name = normalized_argv[2]
+            new_name = normalized_argv[3]
+            target = f"skills:{old_name}:rename:{new_name}"
+
+            if not confirmation_token:
+                token = issue_confirmation_token(action="rename", target=target)
+                return build_management_response(
+                    success=False,
+                    message=f"重命名技能 {old_name} -> {new_name} 需要二次确认。",
+                    data={"argv": normalized_argv, "old_name": old_name, "new_name": new_name},
+                    requires_confirmation=True,
+                    confirmation_token=token,
+                    ui_card=build_action_card(
+                        title="需要二次确认",
+                        description=f"确认将 custom skill 从 {old_name} 重命名为 {new_name}。",
+                        status="warning",
+                    ),
+                )
+
+            ok, reason = consume_confirmation_token(
+                token=confirmation_token,
+                action="rename",
+                target=target,
+            )
+            if not ok:
+                return build_management_response(
+                    success=False,
+                    message=reason,
+                    data={"argv": normalized_argv, "old_name": old_name, "new_name": new_name},
+                )
+
+            try:
+                renamed = rename_skill(old_name, new_name)
+            except Exception as exc:  # noqa: BLE001
+                return build_management_response(
+                    success=False,
+                    message=f"重命名技能失败：{exc}",
+                    data={"argv": normalized_argv, "old_name": old_name, "new_name": new_name},
+                )
+
+            return build_management_response(
+                success=True,
+                message=f"技能已重命名：{old_name} -> {renamed.name}。",
+                data={
+                    "argv": normalized_argv,
+                    "old_name": old_name,
+                    "new_name": renamed.name,
+                    "enabled": renamed.enabled,
+                    "category": renamed.category,
+                },
+            )
+
+        _ = runtime, thread_id  # explicitly reserved for future skills subcommands (list/enable/disable/install)
         return build_management_response(
             success=False,
-            message="skills 子命令暂未实现（等待后续任务）。",
+            message=f"未知 skills 子命令：{subcommand}。运行 nion_manage skills help 查看用法。",
             data={"argv": normalized_argv},
         )
 
