@@ -1,4 +1,12 @@
-# 仓库代码优化与治理（渐进式）方案与实施计划
+# Nion-Agent 代码优化治理（渐进式）Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** 在不牺牲稳定性的前提下，用可回滚的小步并发治理，持续降低无效代码与复杂度，建立统一质量门禁，提升可维护性并控制体量。
+
+**Architecture:** 以“门禁先行 + 证据链清理 + 热点小步重构”为主线，按风险分层和 workstream 并发推进；每个 workstream 用独立 worktree/分支隔离，所有变更必须携带验证证据与回滚点，并沉淀到 `docs/优化记录/`。
+
+**Tech Stack:** Root `make verify`、Backend `ruff/pytest/pytest-cov/vulture`（uv）、Frontend `eslint/tsc/vitest`（pnpm）、Desktop `tsc/node --test`（pnpm）、辅助 `rg/find/cloc/git`。
 
 **日期**：2026-03-16  
 **仓库**：Nion-Agent  
@@ -262,3 +270,126 @@
 
 若你确认该方案没有要补充/修改的地方，我将把它作为治理总纲，后续每个 Phase/Workstream 再拆出独立计划文档与实施 PR。
 
+---
+
+## 13. 总体 Checklist（详细且可直接复用）
+
+> 目标：避免工作重复、避免范围漂移、确保每次优化“可验证 + 可回滚 + 可追溯”。建议把本节作为 PR 模板或每个 workstream 的执行 SOP。
+
+### 13.1 启动前 Checklist（每个 workstream 必做一次）
+
+- 明确本 workstream 的边界：只动哪些目录/模块，不动哪些目录/模块（写进记录文件）。
+- 评估风险等级：A/B/C/D（A/B 必须先有针对性回归测试，且必须拆更小步）。
+- 明确交付物：对应 `docs/优化记录/YYYY-MM-DD-WS?-*.md` 文件必须存在并持续更新。
+- 明确“并发位”：当前是否已有 2-3 个并行 workstream 在跑；超过 WIP limit 则先收尾再开新流。
+- 创建独立工作区：使用独立 `git worktree` + 独立分支（分支名建议 `codex/wsX-<short-topic>`）。
+- 拉齐基线：从 `main` 拉最新代码，避免在旧基线做清理导致误判引用。
+- 基线验证：运行一次 `make verify`，记录结果摘要作为“变更前基线证据”。
+- 记录回滚策略：明确本 workstream 的回滚方式（通常是 `git revert <sha>`，必要时提供开关回退）。
+
+### 13.2 任务执行 Checklist（每个改动点都要走）
+
+- 写清楚“要解决的问题”与“非目标”，避免为了整洁引入不必要改动。
+- 先找证据再改：用 `rg`、路由/配置 key、注册表/扫描点定位真实引用链。
+- 对动态引用保持敬畏：出现“字符串拼接路径、目录扫描、插件注册表、配置驱动”的场景，默认不删，先冻结/隔离。
+- 变更粒度控制：一次 commit 只做一类事（例如只做“删除 1-3 个确定无引用文件”或只做“提取纯函数 + 加单测”）。
+- 每次改动必须能解释“行为是否变化”：不确定就先补测试把行为钉住。
+- 任何重构都应优先把“纯逻辑”从 IO 副作用中剥离，保证可单测。
+- 删除类变更必须补齐证据链（见 13.3），并在 `docs/优化记录/` 里逐条记录决策。
+
+### 13.3 删除/冻结/迁移 Checklist（证据链必须齐）
+
+- 静态引用扫描：`rg -n "<文件名/符号/路由/配置 key>" .`，记录搜索关键词与关键结果。
+- 入口扫描：确认未被 `__init__`、注册表、plugins、routes、settings 之类汇聚入口导入或暴露。
+- 动态加载排查：确认未被目录扫描、字符串拼接、反射、配置驱动加载。
+- 测试与验证：至少跑 `make verify`；涉及特定模块时额外跑该模块更聚焦的测试命令。
+- 决策结论：必须是 `DELETE` / `FREEZE` / `MIGRATE` / `KEEP` 之一，并写清理由与风险点。
+- 回滚点：写清楚回滚命令（通常 `git revert <sha>`），以及是否需要额外数据回滚步骤。
+
+### 13.4 提交（Commit）Checklist（强制）
+
+- `git status` 确认本次提交只包含当前任务相关文件，避免混入“顺手格式化/大范围改名”。
+- Commit message 必须包含下列信息（建议直接复制模板）：
+
+```text
+<type>(wsX): <一句话总结>
+
+背景/动机:
+- 为什么做这件事，它解决什么维护/稳定/体量问题
+
+修改内容:
+- 改动点 1（指明文件路径）
+- 改动点 2（指明文件路径）
+
+行为变化:
+- 是否有行为变化；若无，明确写“无行为变化”
+- 若有，写清楚旧行为 vs 新行为，以及兼容策略
+
+风险与缓解:
+- 主要风险点
+- 如何降低风险（测试/开关/分批/冻结）
+
+验证证据:
+- Run: <命令>
+  Result: <通过/失败摘要>
+
+记录与回滚:
+- 更新: docs/优化记录/YYYY-MM-DD-WS?-*.md
+- Rollback: git revert <sha>
+```
+
+### 13.5 合并（Merge）Checklist（每个 workstream 收尾）
+
+- 合并前再跑一次 `make verify`，保证证据新鲜。
+- 确认 `docs/优化记录/` 对应文件包含：变更清单、证据链、验证证据、回滚点、下一步。
+- 合并策略：优先“门禁/工具链”类变更先合并；清理类变更分批合并；核心域变更最后合并。
+- 冲突处理：若同目录并发导致冲突，优先保主干行为不变，冲突解决后再次全量验证。
+
+### 13.6 阶段复盘 Checklist（可选但强烈建议）
+
+- 记录体量变化：文件数/LOC（可用 `cloc` 或 `git diff --stat` 作为近似指标）。
+- 记录质量变化：lint 违规数、测试数量/覆盖率（如适用）。
+- 记录风险暴露：本阶段出现的“动态引用不确定点/历史包袱”，沉淀成下一阶段的专项 work item。
+
+### 13.7 并发执行模板（Worktree + Branch，推荐命令）
+
+> 目标：你要求的“并发优化、多任务执行”必须以隔离为前提，避免互相踩文件导致集成地狱。
+
+建议每个 workstream 使用独立 worktree（示例以 WS1 为例）：
+
+```bash
+# 1) 拉齐 main 基线
+git checkout main
+git pull --ff-only
+
+# 2) 创建 worktree + 分支（分支必须使用 codex/ 前缀）
+git worktree add ../nion-ws1-hygiene -b codex/ws1-hygiene
+
+# 3) 在 worktree 内执行
+cd ../nion-ws1-hygiene
+make verify   # 建议先跑一次基线
+```
+
+合并前同步主干（可选，但并发时间较长时建议做）：
+
+```bash
+git fetch origin
+git rebase origin/main
+make verify
+```
+
+### 13.8 模块梳理与风险排序 Checklist（一次性，但要持续更新）
+
+> 目标：把“当前系统有哪些模块”变成可执行的治理边界与风险地图，避免凭感觉重构。
+
+- 输出文件：`docs/plans/2026-03-16-module-map.md`（建议后续补齐）
+- 最小内容要求-模块清单：按 `backend/`、`frontend/`、`desktop/` 与支撑目录拆分到二级目录（例如 `backend/src/gateway`、`frontend/src/core`）。
+- 最小内容要求-关键入口：每个端至少列 3-5 个入口文件/主路由/主进程启动点。
+- 最小内容要求-风险分层：A/B/C/D，并注明“为何是这个等级”（爆炸半径、动态引用、数据/安全敏感度、跨端耦合、验证缺口）。
+- 推荐采集命令（辅助，不作为最终结论）：
+
+```bash
+find backend/src -maxdepth 2 -type d | sort
+find frontend/src -maxdepth 2 -type d | sort
+find desktop/electron/src -maxdepth 2 -type d | sort
+```
