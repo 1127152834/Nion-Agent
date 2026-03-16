@@ -24,6 +24,7 @@ from langgraph.runtime import Runtime
 
 from src.agents.memory.core import MemoryWriteRequest
 from src.agents.memory.registry import get_default_memory_provider
+from src.agents.memory.scope import normalize_agent_name_for_memory
 from src.config.memory_config import get_memory_config
 
 
@@ -124,7 +125,8 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
             agent_name: If provided, memory is stored per-agent. If None, uses global memory.
         """
         super().__init__()
-        self._agent_name = agent_name
+        # Default agent ("_default") shares global memory; do not create a separate scope.
+        self._agent_name = normalize_agent_name_for_memory(agent_name)
 
     @override
     def after_agent(self, state: MemoryMiddlewareState, runtime: Runtime) -> dict | None:

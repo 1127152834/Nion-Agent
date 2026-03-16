@@ -27,6 +27,8 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
   const router = useRouter();
   const copy = t.agents.settings.memory;
 
+  const isDefaultAgent = agentName === "_default";
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isForgetting, setIsForgetting] = useState(false);
@@ -35,7 +37,7 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
     items,
     isLoading: isItemsLoading,
     error: itemsError,
-  } = useMemoryItems("agent", agentName);
+  } = useMemoryItems(isDefaultAgent ? "global" : "agent", isDefaultAgent ? undefined : agentName);
 
   const statusOptions = useMemo(
     () =>
@@ -73,8 +75,8 @@ export function AgentMemorySection({ agentName }: AgentMemorySectionProps) {
     try {
       await openVikingActions.forget({
         memoryId: item.memory_id,
-        scope: "agent",
-        agentName,
+        scope: isDefaultAgent ? "global" : "agent",
+        agentName: isDefaultAgent ? undefined : agentName,
       });
       window.location.reload();
     } finally {

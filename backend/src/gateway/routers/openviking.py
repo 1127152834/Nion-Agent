@@ -14,6 +14,7 @@ from src.agents.memory.actions import (
     store_memory_action,
 )
 from src.agents.memory.registry import get_default_memory_provider
+from src.agents.memory.scope import resolve_agent_for_memory_scope
 from src.config.memory_config import get_memory_config
 
 router = APIRouter(prefix="/api/openviking", tags=["openviking"])
@@ -120,16 +121,10 @@ def _policy_dict(payload: MemoryPolicyPayload) -> dict[str, Any]:
 
 
 def _resolve_agent_by_scope(scope: str, agent_name: str | None) -> str | None:
-    normalized_scope = (scope or "auto").strip().lower()
-    if normalized_scope == "global":
-        return None
-    if normalized_scope == "agent":
-        if not agent_name:
-            raise HTTPException(status_code=422, detail="agent_name is required when scope=agent")
-        return agent_name
-    if normalized_scope == "auto":
-        return agent_name
-    raise HTTPException(status_code=422, detail=f"Unsupported scope: {scope}")
+    try:
+        return resolve_agent_for_memory_scope(scope=scope, agent_name=agent_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _get_openviking_provider():

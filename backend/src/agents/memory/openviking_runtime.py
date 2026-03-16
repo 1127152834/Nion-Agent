@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from src.agents.memory.core import MemoryReadRequest, MemoryWriteRequest
+from src.agents.memory.scope import normalize_agent_name_for_memory, resolve_agent_for_memory_scope
 from src.agents.memory.sqlite_index import OpenVikingSQLiteIndex
 from src.agents.memory.write_graph import MemoryWriteAction, MemoryWriteGraph
 from src.config.app_config import get_app_config
@@ -89,6 +90,18 @@ def _parse_iso(value: str | None) -> datetime | None:
         return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(UTC)
     except Exception:  # noqa: BLE001
         return None
+
+
+def _is_not_found_error(exc: Exception) -> bool:
+    """Best-effort classification for idempotent delete.
+
+    OpenViking rm/forget/compact is expected to be idempotent from the caller
+    perspective. When the remote resource is already missing, we still want to
+    continue cleaning up the local ledger.
+    """
+
+    text = str(exc).strip().lower()
+    return "not found" in text
 
 
 class OpenVikingRuntime:
@@ -257,6 +270,8 @@ class OpenVikingRuntime:
         return "\n".join(lines)
 
     def search_memory(self, *, query: str, limit: int = 8, agent_name: str | None = None) -> list[dict[str, Any]]:
+        # "_default" is a reserved runtime agent name and must share the global ledger/index.
+        agent_name = self._normalize_agent_name(agent_name)
         config = get_memory_config()
         mode = str(config.retrieval_mode or "find").strip().lower()
         if mode in {"vector_auto", "vector_forced"}:
@@ -551,7 +566,17 @@ class OpenVikingRuntime:
             uri = str(item.get("uri") or "").strip()
             if not uri:
                 raise RuntimeError(f"Missing uri for memory_id={item.get('memory_id')}")
-            self._openviking_rm(uri=uri, agent_name=resolved_agent)
+            try:
+                self._openviking_rm(uri=uri, agent_name=resolved_agent)
+            except Exception as exc:  # noqa: BLE001
+                if not _is_not_found_error(exc):
+                    raise
+                logger.debug(
+                    "OpenViking rm not-found tolerated during compact (scope=%s uri=%s): %s",
+                    self._scope_name(resolved_agent),
+                    uri,
+                    exc,
+                )
             removed_uris.append(uri)
 
         with self._sqlite_index.transaction() as conn:
@@ -585,7 +610,17 @@ class OpenVikingRuntime:
         if not uri:
             raise RuntimeError(f"memory_id {target_id} does not have a deletable uri")
 
-        self._openviking_rm(uri=uri, agent_name=resolved_agent)
+        try:
+            self._openviking_rm(uri=uri, agent_name=resolved_agent)
+        except Exception as exc:  # noqa: BLE001
+            if not _is_not_found_error(exc):
+                raise
+            logger.debug(
+                "OpenViking rm not-found tolerated during forget (scope=%s uri=%s): %s",
+                self._scope_name(resolved_agent),
+                uri,
+                exc,
+            )
 
         with self._sqlite_index.transaction() as conn:
             deleted = self._sqlite_index.delete_resource(
@@ -604,6 +639,8 @@ class OpenVikingRuntime:
         }
 
     def get_retrieval_status(self, *, agent_name: str | None = None) -> dict[str, Any]:
+        # "_default" is a reserved runtime agent name and must share the global ledger/index.
+        agent_name = self._normalize_agent_name(agent_name)
         config = get_memory_config()
         embedding_configured, embedding_model = self._resolve_local_embedding_model()
         health_ok = False
@@ -631,6 +668,8 @@ class OpenVikingRuntime:
         }
 
     def explain_query(self, *, query: str, limit: int = 8, agent_name: str | None = None) -> dict[str, Any]:
+        # "_default" is a reserved runtime agent name and must share the global ledger/index.
+        agent_name = self._normalize_agent_name(agent_name)
         normalized_query = query.strip()
         if not normalized_query:
             return {
@@ -1005,10 +1044,12 @@ class OpenVikingRuntime:
         trace_id: str | None = None,
         chat_id: str | None = None,
     ) -> dict[str, Any]:
+        # "_default" is a reserved runtime agent name and must share the global ledger/index.
+        resolved_agent = self._normalize_agent_name(agent_name)
         return self._write_graph.invoke(
             thread_id=thread_id,
             messages=messages,
-            agent_name=agent_name,
+            agent_name=resolved_agent,
             write_source="tool" if str(write_source).strip().lower() == "tool" else "auto",
             explicit_write=bool(explicit_write),
             trace_id=trace_id,
@@ -1041,6 +1082,9 @@ class OpenVikingRuntime:
         normalized_messages = self._normalize_messages(messages)
         if not normalized_messages:
             return {"status": "skipped", "reason": "no_text_messages"}
+
+        # "_default" is a reserved runtime agent name and must share the global OpenViking scope.
+        agent_name = self._normalize_agent_name(agent_name)
 
         commit_status = "committed"
         commit_result_payload: Any = None
@@ -1456,20 +1500,33 @@ class OpenVikingRuntime:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+    @staticmethod
+    def _normalize_agent_name(agent_name: str | None) -> str | None:
+        """Normalize runtime agent_name for memory scoping.
+
+        Contract:
+        - None/empty -> None
+        - Reserved default agent name ("_default") -> None (global)
+        - Otherwise keep trimmed name
+
+        This is intentionally aligned with src.agents.memory.scope to ensure the
+        default agent never creates an agent-scoped ledger/index.
+        """
+
+        return normalize_agent_name_for_memory(agent_name)
+
     def _scope_name(self, agent_name: str | None) -> str:
-        return f"agent:{agent_name}" if agent_name else "global"
+        normalized = self._normalize_agent_name(agent_name)
+        return f"agent:{normalized}" if normalized else "global"
 
     def _resolve_scope_agent(self, *, scope: str, agent_name: str | None) -> str | None:
-        normalized_scope = (scope or "global").strip().lower()
-        if normalized_scope == "global":
-            return None
-        if normalized_scope == "agent":
-            if not agent_name:
-                raise ValueError("agent_name is required when scope=agent")
-            return agent_name
-        if normalized_scope == "auto":
-            return agent_name
-        raise ValueError(f"Unsupported scope: {scope}")
+        # NOTE: keep backward-compatible behavior: empty/None scope means "global".
+        normalized_scope = (scope or "global").strip().lower() or "global"
+        try:
+            return resolve_agent_for_memory_scope(scope=normalized_scope, agent_name=agent_name)
+        except ValueError as exc:
+            # Preserve the older error shape for callers that bubble this up directly.
+            raise ValueError(str(exc)) from exc
 
     def _set_last_fallback_reason(self, *, agent_name: str | None, reason: str) -> None:
         self._last_fallback_reason[self._scope_name(agent_name)] = reason
@@ -1813,7 +1870,8 @@ class OpenVikingRuntime:
         threading.Thread(target=_runner, daemon=True).start()
 
     def _lock_for_scope(self, agent_name: str | None) -> threading.Lock:
-        scope = agent_name.lower() if agent_name else "global"
+        normalized_agent = self._normalize_agent_name(agent_name)
+        scope = normalized_agent.lower() if normalized_agent else "global"
         with self._scope_locks_guard:
             lock = self._scope_locks.get(scope)
             if lock is None:
@@ -1822,6 +1880,7 @@ class OpenVikingRuntime:
             return lock
 
     def _build_openviking_client(self, agent_name: str | None):
+        agent_name = self._normalize_agent_name(agent_name)
         try:
             import openviking as ov  # type: ignore
         except Exception as exc:  # noqa: BLE001
