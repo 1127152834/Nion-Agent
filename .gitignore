@@ -44,6 +44,8 @@ docs/*
 !docs/product-design/**
 !docs/plans/
 !docs/plans/**
+!docs/优化记录/
+!docs/优化记录/**
 !docs/CLI_INTERACTIVE_MODE.md
 docs/testing/
 scripts/testing/

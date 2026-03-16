@@ -77,6 +77,28 @@ description: Use when在 Nion-Agent 仓库做代码治理/重构/删除无效代
 2. 跑全栈门禁（推荐）：`make verify`
 3. 记录基线：在 commit message 里写“执行了哪些验证命令、结果是什么”。不要口头宣称。
 
+### 0.5) 优化记录（强制沉淀到 docs）
+
+目标：把“阶段与成果”落到仓库文档中，形成可审计的执行轨迹，避免只靠 commit message 追溯。
+
+规则：
+
+- 每条优化 workstream 必须在 `docs/优化记录/` 维护独立记录文件，避免并发冲突。
+- 每次合并到 `main` 前，必须更新对应记录文件，至少包含：本阶段范围、关键变更、验证证据、风险与回滚点、下一步。
+- `docs/plans/` 写“计划”，`docs/优化记录/` 写“实际执行与成果”；两者要互相引用。
+
+推荐命名：
+
+- `docs/优化记录/YYYY-MM-DD-WS0-guardrails.md`
+- `docs/优化记录/YYYY-MM-DD-WS1-hygiene.md`
+- `docs/优化记录/YYYY-MM-DD-WS2-frontend.md`
+- `docs/优化记录/YYYY-MM-DD-WS3-backend.md`
+- `docs/优化记录/YYYY-MM-DD-WS4-core-domains.md`
+
+模板：
+
+- 使用 `docs/优化记录/TEMPLATE.md`，不要自由发挥省略验证/回滚字段。
+
 ### 1) 切 Workstream（支持并发且减少冲突）
 
 并发原则：目录边界隔离，最多同时 2-3 条（WIP limit）。
