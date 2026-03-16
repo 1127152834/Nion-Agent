@@ -41,6 +41,9 @@ dependencies = [
     "onnxruntime>=1.20.1",
     "openviking==0.2.1",
     "sentence-transformers>=5.3.0",
+    # Harness layer is split into a workspace member (packages/harness) but must be importable as `nion.*`
+    # for gateway/runtime/desktop executions that do not manually inject PYTHONPATH.
+    "nion-harness",
 ]
 
 [dependency-groups]
