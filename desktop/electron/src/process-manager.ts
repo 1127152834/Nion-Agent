@@ -22,6 +22,8 @@ export interface DesktopStartupObserver {
   onStageStart?: (stage: string) => void;
   onStageSuccess?: (stage: string) => void;
   onStageFailure?: (stage: string, error: unknown) => void;
+  /** 前端 HTTP 层已可访问时触发，此时可提前导航，无需等待完整健康检查 */
+  onFrontendHttpReady?: (ports: DesktopRuntimePorts) => void;
 }
 
 export class DesktopProcessManager {
@@ -40,7 +42,7 @@ export class DesktopProcessManager {
       this.ports = await this.assignPorts();
       this.notifySuccess("runtime.assign-ports");
 
-      // 阶段 1.5：校验端口可用（避免误连旧进程导致前端配置错乱）
+      // 阶段 1.5：校验端口可用
       this.notifyStage("runtime.check-ports");
       await this.checkPortsAvailable();
       this.notifySuccess("runtime.check-ports");
@@ -50,27 +52,40 @@ export class DesktopProcessManager {
       await this.checkDependencies();
       this.notifySuccess("runtime.check-dependencies");
 
-      // 阶段 3：启动 LangGraph
+      // 阶段 3 + 5 并行：LangGraph 启动 & Frontend 编译同步开始
+      // Frontend 编译不依赖后端，提前 spawn 可节省 15-30s
       this.notifyStage("runtime.start.langgraph");
-      await this.startLangGraph();
+      this.notifyStage("runtime.start.frontend");
+      const frontendSpawnInfo = this.spawnFrontend();
+      await this.waitForLangGraph();
       this.notifySuccess("runtime.start.langgraph");
 
-      // 阶段 4：启动 Gateway
+      // 阶段 4：启动 Gateway（依赖 LangGraph 就绪）
       this.notifyStage("runtime.start.gateway");
       await this.startGateway();
       this.notifySuccess("runtime.start.gateway");
 
-      // 阶段 4.5：恢复上次异常遗留的 pending runs，避免队列被孤儿 run 堵死
+      // 阶段 4.5：恢复 pending runs
       this.notifyStage("runtime.recover.pending-runs");
       await this.recoverPendingRuns();
       this.notifySuccess("runtime.recover.pending-runs");
 
-      // 阶段 5：启动 Frontend
-      this.notifyStage("runtime.start.frontend");
-      await this.startFrontend();
+      // 阶段 5 续：等待 Frontend HTTP 就绪
+      await this.waitForFrontendReady();
       this.notifySuccess("runtime.start.frontend");
 
-      return this.ports;
+      // 通知主进程可以提前导航
+      this.observer?.onFrontendHttpReady?.(this.ports!);
+
+      // 健康检查异步执行，不阻塞启动流程
+      void this.verifyFrontendWorkspaceHealth(
+        frontendSpawnInfo.logPath,
+        frontendSpawnInfo.logStartOffset,
+      ).catch((err) => {
+        console.warn("[Frontend] Workspace health check failed (non-fatal):", err);
+      });
+
+      return this.ports!;
     } catch (error) {
       await this.shutdown();
       throw error;
@@ -162,7 +177,7 @@ export class DesktopProcessManager {
 
     console.warn(`[Runtime] Sending SIGTERM to PID(s): ${Array.from(pidSet).join(", ")}`);
     this.killPids(pidSet, "SIGTERM");
-    await this.sleep(900);
+    await this.sleep(500);
 
     const remainingAfterTerm = ports.filter((port) => this.isPortStillInUseSync(port));
     if (remainingAfterTerm.length === 0) {
@@ -173,7 +188,7 @@ export class DesktopProcessManager {
       `[Runtime] Port(s) still occupied after SIGTERM (${remainingAfterTerm.join(", ")}), sending SIGKILL`
     );
     this.killPids(pidSet, "SIGKILL");
-    await this.sleep(500);
+    await this.sleep(200);
   }
 
   private isPortStillInUseSync(port: number): boolean {
@@ -270,18 +285,22 @@ export class DesktopProcessManager {
   }
 
   private async startLangGraph(): Promise<void> {
+    this.spawnLangGraph();
+    await this.waitForLangGraph();
+  }
+
+  private spawnLangGraph(): void {
     const logPath = path.join(this.paths.logsDir, "langgraph.log");
     const logStream = createWriteStream(logPath, { flags: "a" });
 
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      NION_HOME: this.paths.appDataDir, // 关键：设置 NION_HOME
+      NION_HOME: this.paths.appDataDir,
       NION_DESKTOP_RUNTIME: "1",
       NION_APP_IS_PACKAGED: this.paths.frontendServerEntry ? "1" : "0",
       NO_COLOR: "1"
     };
 
-    // 如果有内置 Python，设置 NION_PYTHON_PATH 环境变量（用于 LocalSandbox 等场景）
     if (this.paths.pythonExecutable) {
       env.NION_PYTHON_PATH = this.paths.pythonExecutable;
       const venvBinDir = path.dirname(this.paths.pythonExecutable);
@@ -295,28 +314,20 @@ export class DesktopProcessManager {
       ? spawn(
           this.paths.pythonExecutable,
           ["-m", "langgraph_cli", "dev", "--no-browser", "--allow-blocking", "--no-reload"],
-          {
-            cwd: this.paths.backendCwd,
-            env,
-            stdio: ["ignore", "pipe", "pipe"]
-          }
+          { cwd: this.paths.backendCwd, env, stdio: ["ignore", "pipe", "pipe"] }
         )
       : spawn(
           "uv",
           ["run", "langgraph", "dev", "--no-browser", "--allow-blocking", "--no-reload"],
-          {
-            cwd: this.paths.backendCwd,
-            env,
-            stdio: ["ignore", "pipe", "pipe"]
-          }
+          { cwd: this.paths.backendCwd, env, stdio: ["ignore", "pipe", "pipe"] }
         );
 
     child.stdout?.pipe(logStream);
     child.stderr?.pipe(logStream);
-
     this.services.set("langgraph", { name: "langgraph", child, logStream, logPath });
+  }
 
-    // 等待服务启动
+  private async waitForLangGraph(): Promise<void> {
     await waitForPort(this.ports!.langgraphPort, 30000);
   }
 
@@ -399,7 +410,7 @@ export class DesktopProcessManager {
     }
   }
 
-  private async startFrontend(): Promise<void> {
+  private spawnFrontend(): { logPath: string; logStartOffset: number } {
     const logPath = path.join(this.paths.logsDir, "frontend.log");
     const logStartOffset = this.getLogStartOffset(logPath);
 
@@ -414,55 +425,40 @@ export class DesktopProcessManager {
       HOSTNAME: "127.0.0.1",
       PORT: String(this.ports!.frontendPort),
       NEXT_PUBLIC_IS_ELECTRON: "1",
-      // 关键：设置前端环境变量，LangGraph 统一走 Gateway 代理，避免浏览器直连 2024 的 CORS 问题
       NEXT_PUBLIC_LANGGRAPH_BASE_URL: `http://localhost:${this.ports!.gatewayPort}/api/langgraph`,
       NEXT_PUBLIC_BACKEND_BASE_URL: `http://localhost:${this.ports!.gatewayPort}`,
-      SKIP_ENV_VALIDATION: "1" // 跳过环境变量验证
+      SKIP_ENV_VALIDATION: "1"
     };
 
     let child: ChildProcess;
-
     if (this.paths.frontendServerEntry) {
       child = spawn(
         process.execPath,
         [this.paths.frontendServerEntry],
         {
           cwd: this.paths.frontendCwd,
-          env: {
-            ...env,
-            ELECTRON_RUN_AS_NODE: "1",
-            NODE_ENV: "production"
-          },
+          env: { ...env, ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production" },
           stdio: ["ignore", "pipe", "pipe"]
         }
       );
     } else {
-      child = spawn(
-        "pnpm",
-        ["run", "dev"],
-        {
-          cwd: this.paths.frontendCwd,
-          env,
-          stdio: ["ignore", "pipe", "pipe"]
-        }
-      );
+      child = spawn("pnpm", ["run", "dev"], {
+        cwd: this.paths.frontendCwd,
+        env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
     }
 
     child.stdout?.pipe(logStream);
     child.stderr?.pipe(logStream);
+    this.services.set("frontend", { name: "frontend", child, logStream, logPath, logStartOffset });
 
-    this.services.set("frontend", {
-      name: "frontend",
-      child,
-      logStream,
-      logPath,
-      logStartOffset,
-    });
+    return { logPath, logStartOffset };
+  }
 
-    // 等待服务启动（HTTP 层可访问）
+  private async waitForFrontendReady(): Promise<void> {
     await waitForPort(this.ports!.frontendPort, 60000);
     await waitForHttp(`http://localhost:${this.ports!.frontendPort}`, 30000);
-    await this.verifyFrontendWorkspaceHealth(logPath, logStartOffset);
   }
 
   private clearFrontendDevArtifacts(): void {
