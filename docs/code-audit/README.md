@@ -1,6 +1,6 @@
 # Nion-Agent 代码审计
 
-> 目标：清理 AI 生成代码的技术债，建立可维护的代码基线。
+> 目标：清理 AI 生成代码的技术债，建立可维护的代码基线，升级至生产级架构。
 
 ## 审计工作流
 
@@ -10,6 +10,7 @@
 | WS-2 | 重复与过度抽象 | 中 | 已完成 (-167 行重复, 19 文件) |
 | WS-3 | 架构健康度 | 中 | 已完成 (workbench 拆分, runtime 合并, barrel exports) |
 | WS-4 | 质量与可维护性 | 高 | 已完成 (大文件拆分, 日志规范化, 死依赖移除) |
+| **WS-5** | **架构升级** | **高** | **计划已就绪 — 3 人并行** |
 
 ## 代码规模基线（2026-03-16 审计后）
 
@@ -20,17 +21,17 @@
 | Desktop (Electron) | 26 | ~少量 |
 | **总计** | **676** | **~126,500** |
 
-> 文件数略增是因为大文件拆分为多个小文件（models-section 3020行→4文件，input-box 2496行→4文件，workbench 2912行→6文件）。
-
 ## 报告索引
+
+### 清理阶段（WS-1 ~ WS-4）
 
 - [WS-1 死代码审计](./WS1-dead-code.md)
 - [WS-2 & WS-3 实施计划](./WS2-WS3-plan.md)
 - [WS-4 实施计划](./WS4-plan.md)
 
-## 延后项（建议作为独立计划处理）
+### 架构升级阶段（WS-5）
 
-1. Settings 页面 useState 泛滥（5 个页面 17-28 个 useState）
-2. bridge_service.py 3345 行（channels 子系统核心）
-3. openviking_runtime.py 2214 行（记忆系统核心）
-4. plugin assistant page 2118 行/32 useState
+- [架构整改总方案](./ARCHITECTURE-UPGRADE.md) — 审计发现、分工策略、里程碑
+- [DEV1 后端核心层重构](./DEV1-backend-core.md) — API 响应标准化、Repository 层、测试
+- [DEV2 前端核心层重构](./DEV2-frontend-core.md) — Error Boundary、form state、虚拟化、测试
+- [DEV3 基础设施与安全](./DEV3-infra-security.md) — 认证、安全审计、大文件拆分、可观测性
