@@ -804,108 +804,54 @@ class DefaultAgentAssetUpdateRequest(BaseModel):
     content: str = Field(default="", description="Asset content")
 
 
-@router.get(
-    "/default-agent/soul",
-    response_model=DefaultAgentAssetResponse,
-    summary="Get Default Agent Soul",
-    description="Read the default agent SOUL.md file.",
-)
+def _read_default_agent_asset(asset_type: str) -> DefaultAgentAssetResponse:
+    """Read a default agent asset (SOUL.md or IDENTITY.md)."""
+    try:
+        paths = get_paths()
+        path = paths.agent_soul_file("_default") if asset_type == "soul" else paths.agent_identity_file("_default")
+        if not path.exists():
+            return DefaultAgentAssetResponse(content=None)
+        raw = path.read_text(encoding="utf-8").strip()
+        return DefaultAgentAssetResponse(content=raw or None)
+    except Exception as e:
+        logger.error(f"Failed to read default agent {asset_type}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to read default agent {asset_type}: {str(e)}")
+
+
+def _write_default_agent_asset(asset_type: str, content: str) -> DefaultAgentAssetResponse:
+    """Write a default agent asset (SOUL.md or IDENTITY.md)."""
+    try:
+        ensure_default_agent()
+        paths = get_paths()
+        path = paths.agent_soul_file("_default") if asset_type == "soul" else paths.agent_identity_file("_default")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        logger.info(f"Updated default agent {asset_type.upper()}.md at {path}")
+        _refresh_memory_catalog_safe()
+        return DefaultAgentAssetResponse(content=content or None)
+    except Exception as e:
+        logger.error(f"Failed to update default agent {asset_type}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update default agent {asset_type}: {str(e)}")
+
+
+@router.get("/default-agent/soul", response_model=DefaultAgentAssetResponse, summary="Get Default Agent Soul")
 async def get_default_agent_soul() -> DefaultAgentAssetResponse:
-    """Return the default agent SOUL.md content.
-
-    Returns:
-        DefaultAgentAssetResponse with content=None if SOUL.md does not exist yet.
-    """
-    try:
-        soul_path = get_paths().agent_soul_file("_default")
-        if not soul_path.exists():
-            return DefaultAgentAssetResponse(content=None)
-        raw = soul_path.read_text(encoding="utf-8").strip()
-        return DefaultAgentAssetResponse(content=raw or None)
-    except Exception as e:
-        logger.error(f"Failed to read default agent soul: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to read default agent soul: {str(e)}")
+    return _read_default_agent_asset("soul")
 
 
-@router.put(
-    "/default-agent/soul",
-    response_model=DefaultAgentAssetResponse,
-    summary="Update Default Agent Soul",
-    description="Write the default agent SOUL.md file.",
-)
+@router.put("/default-agent/soul", response_model=DefaultAgentAssetResponse, summary="Update Default Agent Soul")
 async def update_default_agent_soul(request: DefaultAgentAssetUpdateRequest) -> DefaultAgentAssetResponse:
-    """Create or overwrite the default agent SOUL.md.
-
-    Args:
-        request: The update request with the new SOUL.md content.
-
-    Returns:
-        DefaultAgentAssetResponse with the saved content.
-    """
-    try:
-        ensure_default_agent()
-        paths = get_paths()
-        soul_path = paths.agent_soul_file("_default")
-        soul_path.parent.mkdir(parents=True, exist_ok=True)
-        soul_path.write_text(request.content, encoding="utf-8")
-        logger.info(f"Updated default agent SOUL.md at {soul_path}")
-        _refresh_memory_catalog_safe()
-        return DefaultAgentAssetResponse(content=request.content or None)
-    except Exception as e:
-        logger.error(f"Failed to update default agent soul: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update default agent soul: {str(e)}")
+    return _write_default_agent_asset("soul", request.content)
 
 
-@router.get(
-    "/default-agent/identity",
-    response_model=DefaultAgentAssetResponse,
-    summary="Get Default Agent Identity",
-    description="Read the default agent IDENTITY.md file.",
-)
+@router.get("/default-agent/identity", response_model=DefaultAgentAssetResponse, summary="Get Default Agent Identity")
 async def get_default_agent_identity() -> DefaultAgentAssetResponse:
-    """Return the default agent IDENTITY.md content.
-
-    Returns:
-        DefaultAgentAssetResponse with content=None if IDENTITY.md does not exist yet.
-    """
-    try:
-        identity_path = get_paths().agent_identity_file("_default")
-        if not identity_path.exists():
-            return DefaultAgentAssetResponse(content=None)
-        raw = identity_path.read_text(encoding="utf-8").strip()
-        return DefaultAgentAssetResponse(content=raw or None)
-    except Exception as e:
-        logger.error(f"Failed to read default agent identity: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to read default agent identity: {str(e)}")
+    return _read_default_agent_asset("identity")
 
 
-@router.put(
-    "/default-agent/identity",
-    response_model=DefaultAgentAssetResponse,
-    summary="Update Default Agent Identity",
-    description="Write the default agent IDENTITY.md file.",
-)
+@router.put("/default-agent/identity", response_model=DefaultAgentAssetResponse, summary="Update Default Agent Identity")
 async def update_default_agent_identity(request: DefaultAgentAssetUpdateRequest) -> DefaultAgentAssetResponse:
-    """Create or overwrite the default agent IDENTITY.md.
-
-    Args:
-        request: The update request with the new IDENTITY.md content.
-
-    Returns:
-        DefaultAgentAssetResponse with the saved content.
-    """
-    try:
-        ensure_default_agent()
-        paths = get_paths()
-        identity_path = paths.agent_identity_file("_default")
-        identity_path.parent.mkdir(parents=True, exist_ok=True)
-        identity_path.write_text(request.content, encoding="utf-8")
-        logger.info(f"Updated default agent IDENTITY.md at {identity_path}")
-        _refresh_memory_catalog_safe()
-        return DefaultAgentAssetResponse(content=request.content or None)
-    except Exception as e:
-        logger.error(f"Failed to update default agent identity: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update default agent identity: {str(e)}")
+    return _write_default_agent_asset("identity", request.content)
 
 
 @router.get(
@@ -963,87 +909,58 @@ class AgentIdentityUpdateRequest(BaseModel):
     content: str = Field(default="", description="IDENTITY.md content")
 
 
-@router.get(
-    "/agents/{name}/identity",
-    response_model=AgentIdentityResponse,
-    summary="Get Agent Identity",
-    description="Read the agent's IDENTITY.md file.",
-)
-async def get_agent_identity(name: str) -> AgentIdentityResponse:
-    """Return the agent's IDENTITY.md content.
-
-    Args:
-        name: The agent name.
-
-    Returns:
-        AgentIdentityResponse with the IDENTITY.md content (empty string if not exists).
-
-    Raises:
-        HTTPException: 404 if agent not found.
-    """
+def _read_named_agent_asset(name: str, asset_type: str) -> str:
+    """Read a named agent's asset file. Returns empty string if not exists."""
     _validate_agent_name(name)
     name = _normalize_agent_name(name)
-
     try:
-        # Verify agent exists
         load_agent_config(name)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
-
-    try:
-        identity_path = get_paths().agent_identity_file(name)
-        if not identity_path.exists():
-            return AgentIdentityResponse(content="")
-        raw = identity_path.read_text(encoding="utf-8")
-        return AgentIdentityResponse(content=raw)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to read agent identity '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to read agent identity: {str(e)}")
-
-
-@router.put(
-    "/agents/{name}/identity",
-    response_model=AgentIdentityResponse,
-    summary="Update Agent Identity",
-    description="Write the agent's IDENTITY.md file.",
-)
-async def update_agent_identity(name: str, request: AgentIdentityUpdateRequest) -> AgentIdentityResponse:
-    """Create or overwrite the agent's IDENTITY.md.
-
-    Args:
-        name: The agent name.
-        request: The update request with the new IDENTITY.md content.
-
-    Returns:
-        AgentIdentityResponse with the saved content.
-
-    Raises:
-        HTTPException: 404 if agent not found.
-    """
-    _validate_agent_name(name)
-    name = _normalize_agent_name(name)
-
-    try:
-        # Verify agent exists
-        load_agent_config(name)
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
-
     try:
         paths = get_paths()
-        identity_path = paths.agent_identity_file(name)
-        identity_path.parent.mkdir(parents=True, exist_ok=True)
-        identity_path.write_text(request.content, encoding="utf-8")
-        logger.info(f"Updated agent '{name}' IDENTITY.md at {identity_path}")
-        _refresh_memory_catalog_safe()
-        return AgentIdentityResponse(content=request.content)
+        path = paths.agent_soul_file(name) if asset_type == "soul" else paths.agent_identity_file(name)
+        if not path.exists():
+            return ""
+        return path.read_text(encoding="utf-8")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update agent identity '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update agent identity: {str(e)}")
+        logger.error(f"Failed to read agent {asset_type} '{name}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to read agent {asset_type}: {str(e)}")
+
+
+def _write_named_agent_asset(name: str, asset_type: str, content: str) -> str:
+    """Write a named agent's asset file. Returns the saved content."""
+    _validate_agent_name(name)
+    name = _normalize_agent_name(name)
+    try:
+        load_agent_config(name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+    try:
+        paths = get_paths()
+        path = paths.agent_soul_file(name) if asset_type == "soul" else paths.agent_identity_file(name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        logger.info(f"Updated agent '{name}' {asset_type.upper()}.md at {path}")
+        _refresh_memory_catalog_safe()
+        return content
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update agent {asset_type} '{name}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update agent {asset_type}: {str(e)}")
+
+
+@router.get("/agents/{name}/identity", response_model=AgentIdentityResponse, summary="Get Agent Identity")
+async def get_agent_identity(name: str) -> AgentIdentityResponse:
+    return AgentIdentityResponse(content=_read_named_agent_asset(name, "identity"))
+
+
+@router.put("/agents/{name}/identity", response_model=AgentIdentityResponse, summary="Update Agent Identity")
+async def update_agent_identity(name: str, request: AgentIdentityUpdateRequest) -> AgentIdentityResponse:
+    return AgentIdentityResponse(content=_write_named_agent_asset(name, "identity", request.content))
 
 
 class SoulPreviewResponse(BaseModel):

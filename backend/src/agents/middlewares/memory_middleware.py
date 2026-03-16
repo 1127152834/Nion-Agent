@@ -3,26 +3,7 @@
 import re
 from typing import Any, NotRequired, override
 
-try:
-    from langchain.agents import AgentState
-except Exception:  # noqa: BLE001
-
-    class AgentState(dict):  # type: ignore[no-redef]
-        pass
-
-
-try:
-    from langchain.agents.middleware import AgentMiddleware
-except Exception:  # noqa: BLE001
-
-    class AgentMiddleware:  # type: ignore[no-redef]
-        @classmethod
-        def __class_getitem__(cls, item):
-            return cls
-
-        def __init__(self, *args, **kwargs):
-            _ = args, kwargs
-
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 
 from langgraph.runtime import Runtime
 

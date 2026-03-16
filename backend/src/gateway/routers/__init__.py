@@ -3,11 +3,16 @@ from __future__ import annotations
 from importlib import import_module
 
 _ROUTER_MODULES = {
+    "agents",
     "artifact_groups",
     "artifacts",
     "channels",
     "cli",
     "cli_interactive",
+    "config",
+    "embedding_models",
+    "evolution",
+    "heartbeat",
     "langgraph_proxy",
     "mcp",
     "openviking",

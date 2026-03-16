@@ -4,6 +4,16 @@ from typing import Any
 import httpx
 from langchain.tools import tool
 
+from src.community._search_utils import (
+    _as_dict,
+    _as_positive_int,
+    _as_string,
+    _dedupe,
+    _get_provider_cfg,
+    _get_search_settings_payload,
+    _safe_exc_message,
+    _split_items,
+)
 from src.community.jina_ai.jina_client import JinaClient
 from src.config import get_app_config
 from src.utils.readability import ReadabilityExtractor
@@ -14,66 +24,6 @@ DEFAULT_TIMEOUT_SECONDS = 10
 BUILTIN_WEB_FETCH_PROVIDER = "direct"
 
 readability_extractor = ReadabilityExtractor()
-
-
-def _as_string(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value.strip()
-    return str(value).strip()
-
-
-def _as_positive_int(value: Any, default: int) -> int:
-    if isinstance(value, int) and value > 0:
-        return value
-    if isinstance(value, str):
-        try:
-            parsed = int(value.strip())
-            if parsed > 0:
-                return parsed
-        except Exception:
-            pass
-    return default
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return value
-    return {}
-
-
-def _split_items(value: Any) -> list[str]:
-    if isinstance(value, list):
-        items = [item for item in value if isinstance(item, str)]
-    elif isinstance(value, str):
-        items = value.replace("\n", ",").split(",")
-    else:
-        return []
-    return [item.strip() for item in items if item.strip()]
-
-
-def _dedupe(items: list[str]) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for item in items:
-        if not item:
-            continue
-        if item in seen:
-            continue
-        seen.add(item)
-        result.append(item)
-    return result
-
-
-def _get_search_settings_payload() -> dict[str, Any] | None:
-    try:
-        settings = get_app_config().model_extra.get("search_settings")
-    except Exception:  # noqa: BLE001
-        return None
-    if isinstance(settings, dict):
-        return settings
-    return None
 
 
 def _fetch_direct_html(url: str, timeout_seconds: int) -> str:
@@ -138,19 +88,6 @@ def _build_web_fetch_chain_legacy() -> tuple[list[str], int, dict[str, Any]]:
     if api_key:
         provider_configs["jina"] = {"api_key": api_key}
     return _dedupe(["jina", BUILTIN_WEB_FETCH_PROVIDER]), timeout_seconds, provider_configs
-
-
-def _get_provider_cfg(provider_configs: dict[str, Any], key: str) -> dict[str, Any]:
-    raw = provider_configs.get(key)
-    return raw if isinstance(raw, dict) else {}
-
-
-def _safe_exc_message(exc: Exception) -> str:
-    if isinstance(exc, ValueError):
-        return str(exc)
-    if isinstance(exc, RuntimeError):
-        return str(exc)
-    return type(exc).__name__
 
 
 def _fetch_firecrawl_scrape(
