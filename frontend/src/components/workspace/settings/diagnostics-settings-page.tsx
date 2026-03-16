@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getBackendBaseURL, getLangGraphBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { isElectron } from "@/core/platform";
-import { useRuntimeInfo } from "@/core/runtime-info/hooks";
-import { useRuntimeTopology } from "@/core/runtime-topology/hooks";
+import { useRuntimeInfo, useRuntimeTopology } from "@/core/runtime";
 
 function formatBool(value: boolean, copy: { booleanTrue: string; booleanFalse: string }) {
   return value ? copy.booleanTrue : copy.booleanFalse;

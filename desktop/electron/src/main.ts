@@ -15,6 +15,7 @@ import {
   writeDesktopRuntimePortsConfig,
   type DesktopRuntimePortsConfig,
 } from "./runtime-ports-config";
+import { renderStartupLoadingHtml } from "./startup-screen";
 
 let mainWindow: BrowserWindow | null = null;
 let runtimePaths: DesktopRuntimePaths | null = null;
@@ -54,7 +55,7 @@ app.on("ready", async () => {
     }
 
     runtimePorts = await startupRuntime();
-    await loadMainWindowFrontend();
+    // 导航已由 onFrontendHttpReady 回调提前完成，此处无需重复调用
   } catch (error) {
     console.error("Startup failed:", error);
     app.quit();
@@ -111,7 +112,12 @@ async function startupRuntime(): Promise<DesktopRuntimePorts> {
       onStageFailure: (stage, error) => {
         console.error(`[Startup] ${stage} failed:`, error);
         mainWindow?.webContents.send("startup:stage", { stage, status: "failed", error: String(error) });
-      }
+      },
+      onFrontendHttpReady: (ports) => {
+        // 前端 HTTP 已就绪，立即导航（无需等待 workspace 健康检查）
+        runtimePorts = ports;
+        void loadMainWindowFrontend();
+      },
     });
 
     const ports = await processManager.startup();
@@ -249,8 +255,10 @@ function createMainWindow(): void {
       // 运行时已就绪时直接加载前端应用。
       void mainWindow.loadURL(`http://localhost:${runtimePorts.frontendPort}`);
     } else {
-      // 运行时尚未就绪时先展示空白页，避免提前访问默认端口导致 ERR_CONNECTION_REFUSED。
-      void mainWindow.loadURL("about:blank");
+      // 运行时尚未就绪时显示启动进度界面。
+      void mainWindow.loadURL(
+        `data:text/html;charset=utf-8,${encodeURIComponent(renderStartupLoadingHtml())}`
+      );
     }
 
     // 开发模式打开 DevTools

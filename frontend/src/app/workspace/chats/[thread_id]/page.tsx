@@ -41,7 +41,7 @@ import { useAppRouter as useRouter } from "@/core/navigation";
 import { useNotification } from "@/core/notification/hooks";
 import { platform } from "@/core/platform";
 import { useDesktopRuntime } from "@/core/platform/hooks";
-import { type RuntimeProfile, fetchRuntimeProfile, updateRuntimeProfile } from "@/core/runtime-profile/api";
+import { type RuntimeProfile, fetchRuntimeProfile, updateRuntimeProfile } from "@/core/runtime";
 import { useLocalSettings } from "@/core/settings";
 import { fetchSandboxPolicy } from "@/core/system/api";
 import type { AgentThreadState } from "@/core/threads";
