@@ -1,82 +1,95 @@
-# Conversation Guide
+# Bootstrap Conversation Guide
 
-Detailed strategies for each onboarding phase. Read this before your first response.
+本指南用于运行 `bootstrap` 技能的对话流程。它的目标不是“陪聊塑造人设”，而是稳定生成并落盘 2–3 份资产：`SOUL.md`、`IDENTITY.md`、（可选）全局 `USER.md`。
 
-## Phase 1 — Hello
+## 入口分流（非常关键）
 
-**Goal:** Establish preferred language. That's it. Keep it light.
+bootstrap 可能来自两种入口：
 
-Open with a brief multilingual greeting (3–5 languages), then ask one question: what language should we use? Don't add anything else — let the user settle in.
+1. **新建自定义智能体（custom）**
+   - `runtime.context` 通常会包含 `agent_name` / `agent_display_name`
+   - 目标：创建 `agents/{agent_name}/SOUL.md + IDENTITY.md + agent.json(description)`，可选更新 `USER.md`
 
-Once they choose, switch immediately and seamlessly. The chosen language becomes the default for the rest of the conversation and goes into SOUL.md.
+2. **默认助手入门引导（default）**
+   - `runtime.context` 不一定包含 `agent_name`
+   - 目标：更新 `agents/_default/SOUL.md + IDENTITY.md`，可选更新 `USER.md`
 
-**Extraction:** Preferred language.
+如果你能从上下文明确判断入口，就直接按对应目标推进；否则在 Round 1 明确问一句确认。
 
-## Phase 2 — You
+## Round 1：目标与职责（1–3 问）
 
-**Goal:** Learn who the user is, what they need, and what to call the AI.
+**目标：** 明确这次要创建自定义智能体还是更新默认助手，并把“它是做什么的”说清楚。
 
-This phase typically takes 2 rounds:
+建议提问组合（按需选 1–3 个）：
+- 这次你希望我：A) 创建一个新的自定义智能体，还是 B) 更新默认助手的设定？
+- 这个智能体的“主要职责”一句话怎么说？
+- 给我 2–3 个典型任务例子：你会给它什么输入，它应该输出什么？（最好含一个“高频任务”与一个“困难任务”）
 
-**Round A — Identity & Pain.** Ask who they are and what drains them. Use open-ended framing: "What do you do, and more importantly, what's the stuff you wish someone could just handle for you?" The pain points reveal what the AI should *do*. Their word choices reveal who they *are*.
+提取要点：
+- 主要职责（范围要收敛）
+- 典型输入输出（对 IDENTITY 的交付物形态很关键）
+- 初版成功标准（例如：输出要可直接复制、要带引用、要先澄清等）
 
-**Round B — Name & Relationship.** Based on Round A, reflect back what you heard (using *their* words, not yours), then ask two things:
-- What should the AI be called?
-- What is it to them — assistant, partner, co-pilot, second brain, digital twin, something else?
+## Round 2：边界与质量（1–3 问）
 
-The relationship framing is critical. "Assistant" and "partner" produce very different SOUL.md files. Pay attention to the emotional undertone.
+**目标：** 把“不做什么”与“怎么才算做好”写成可执行规则。
 
-**Merge opportunity:** If the user volunteers their role, pain points, and a name all at once, skip Round B and move to Phase 3.
+建议提问组合：
+- 明确说下它不做什么？有哪些禁区或雷区？
+- 什么时候必须先问清楚再做？什么时候可以先给草案再迭代？
+- 你对质量的最低标准是什么？（例如：必须给步骤、必须给结论+理由、必须标注不确定性、必须列风险与备选）
 
-**Extraction:** User's name, role, pain points, AI name, relationship framing.
+提取要点：
+- 禁止行为/拒绝条件
+- 必要澄清点（信息不足就必须追问的清单）
+- 质量门槛与验收方式（输出结构、验证策略等）
 
-## Phase 3 — Personality
+## Round 3：沟通风格与自主性（1–3 问）
 
-**Goal:** Define how the AI behaves and communicates.
+**目标：** 让输出的语言、格式、简洁度、pushback 强度、自主性与风险偏好一致。
 
-This is the meatiest phase. Typically 2 rounds:
+建议提问组合：
+- 默认用什么语言？是否需要固定输出格式（例如：先 TL;DR，再步骤，再风险）？
+- 你希望它有多“主动”？（只回答问题 / 主动提出更优方案 / 主动指出隐含风险）
+- 当你提出一个可能不合理的方向时，希望它如何 pushback？（直接指出 vs 委婉提醒；给反例/证据 vs 只给建议）
 
-**Round A — Traits & Pushback.** By now you've observed the user's own style. Reflect it back as a personality sketch: "Here's what I'm picking up about you from how we've been talking: [observation]. Am I off?" Then ask the big question: should the AI ever disagree with them?
+提取要点：
+- 语言与格式约束
+- 简洁度与结构偏好
+- 自主性与 pushback 规则
+- 风险偏好（保守/激进；什么时候必须给风险提示）
 
-This is where you get:
-- Core personality traits (as behavioral rules)
-- Honesty / pushback preferences
-- Any "never do X" boundaries
+## Round 4（可选）：用户画像 → USER.md（1–3 问）
 
-**Round B — Voice & Language.** Propose a communication style based on everything so far: "I'd guess you'd want [Name] to be something like: [your best guess]." Let them correct. Also ask about language-switching rules — e.g., technical docs in English, casual chat in another language.
+**目标：** 把“关于用户的稳定信息”沉淀到全局 `USER.md`，用于所有智能体的长期个性化。
 
-**Merge opportunity:** Direct users often answer both in one shot. If they do, move on.
+注意事项：
+- USER.md 是全局资产，**不要**写入高度敏感、一次性的、或可能造成隐私风险的细节。
+- 只写稳定偏好与长期目标（沟通偏好、禁区、工作习惯、长期方向）。
+- 工具会用 marker 块幂等更新（不会全量覆盖 USER.md），但仍应提醒用户这是“会被写入全局”的信息。
 
-**Extraction:** Core traits, communication style, pushback preference, language rules, autonomy level.
+建议提问组合：
+- 你希望我长期如何与你协作？（节奏、结构、容忍的“啰嗦程度”）
+- 有哪些你明确不希望我做的事？（例如：不做情绪安抚、不做鸡汤、不做未经确认的外联/花钱操作）
+- 你现在的背景与长期目标（只说你愿意沉淀到全局 USER.md 的部分）
 
-## Phase 4 — Depth
+如果用户不想写入 USER.md：尊重，直接跳过，并在最终落盘时不传 `user_profile`。
 
-**Goal:** Aspirations, failure philosophy, and anything else.
+## 生成草稿与确认（必须）
 
-This phase is adaptive. Pick 1–2 questions from:
+当 Round 1–3 的信息已足够：
+1. 生成 `SOUL.md`、`IDENTITY.md`、（可选）`USER.md` 与一句话 `description` 草稿。
+2. 明确说明：这些内容将落盘，并被 Soul Core 在运行时注入系统提示词，因此要短、明确、可执行。
+3. 让用户确认或修改，直到用户明确同意。
 
-- **Autonomy & risk:** How much freedom should the AI have? Play safe or go big?
-- **Failure philosophy:** When it makes a mistake — fix quietly, explain what happened, or never repeat it?
-- **Big picture:** What are they building toward? Where does all this lead?
-- **Blind spots:** Any weakness they'd want the AI to quietly compensate for?
-- **Dealbreakers:** Any "if [Name] ever does this, we're done" moments?
-- **Personal layer:** Anything beyond work that the AI should know?
+## 落盘（必须调用工具）
 
-Don't ask all of these. Pick based on what's still missing from the extraction tracker and what feels natural in the flow.
+用户确认后，按目标调用 `setup_agent`：
+- custom：`target="custom"`，写入 `agents/{agent_name}` 并创建 `agent.json`
+- default：`target="default"`，更新 `agents/_default`，并可更新全局 `USER.md`
 
-**Extraction:** Failure philosophy, long-term vision, blind spots, boundaries.
+如果工具返回错误：
+- 直接解释错误原因（例如智能体 ID 已存在、缺少 agent_name 等）
+- 给出下一步（例如换一个 ID / 回到上一步补充信息）
+- 不要宣称已创建或已更新成功
 
-## Conversation Techniques
-
-**Mirroring.** Use the user's own words when reflecting back. If they say "energy black hole," you say "energy black hole" — not "significant energy expenditure."
-
-**Genuine reactions.** Don't just extract data. React: "That's interesting because..." / "I didn't expect that" / "So basically you want [Name] to be the person who..."
-
-**Observation-based proposals.** From Phase 3 onward, propose things rather than asking open-ended questions. "Based on how we've been talking, I'd say..." is more effective than "What personality do you want?"
-
-**Pacing signals.** Watch for:
-- Short answers → they want to move faster. Probe once, then advance.
-- Long, detailed answers → they're invested. Acknowledge the richness, distill the key points.
-- "I don't know" → offer 2–3 concrete options to choose from.
-
-**Graceful skipping.** If the user says "I don't care about that" or gives a minimal answer to a non-required field, move on without pressure.

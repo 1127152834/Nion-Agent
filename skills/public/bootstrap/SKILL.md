@@ -1,88 +1,99 @@
 ---
 name: bootstrap
-description: '{"en":"Generate a personalized SOUL.md via a warm, adaptive onboarding chat. Trigger when the user wants to create, set up, or update their AI partner identity/personality, or when SOUL.md is missing.","zh-CN":"通过温和的多轮引导对话生成个性化 SOUL.md。用于创建、初始化或更新 AI 伙伴的身份与性格设定，或在缺少 SOUL.md 时触发。"}'
+description: '{"en":"Nion bootstrap onboarding. Through a short multi-round chat, generate SOUL.md + IDENTITY.md (+ optional USER.md) aligned with Soul Core. Supports creating a custom agent (agent_name provided) or updating the default agent (_default).","zh-CN":"Nion 入门引导（bootstrap）：通过简短多轮对话生成 SOUL.md + IDENTITY.md（可选同步 USER.md 用户画像），对齐 Soul Core。支持创建自定义智能体（有 agent_name）或更新默认助手（_default）。"}'
 ---
 
-# Bootstrap Soul
+# Bootstrap（入门引导）
 
-A conversational onboarding skill. Through 5–8 adaptive rounds, extract who the user is and what they need, then generate a tight `SOUL.md` that defines their AI partner.
+这是一个“资产引导生成器”技能：通过 3–6 轮对话，生成并落盘当前智能体所需的核心资产：
+- `SOUL.md`：行为原则、沟通方式、自主性、风险偏好（短、可注入）
+- `IDENTITY.md`：角色/职责/边界/交付物形态（清晰可执行）
+- `USER.md`（可选）：用户画像（全局资产，用 marker 块幂等更新，尽量不破坏用户手写内容）
 
 ## Architecture
 
 ```
 bootstrap/
-├── SKILL.md                          ← You are here. Core logic and flow.
-├── templates/SOUL.template.md        ← Output template. Read before generating.
-└── references/conversation-guide.md  ← Detailed conversation strategies. Read at start.
+├── SKILL.md                               ← 你正在读：流程与规则
+├── templates/SOUL.template.md             ← SOUL.md 输出模板
+├── templates/IDENTITY.template.md         ← IDENTITY.md 输出模板
+├── templates/USER.template.md             ← USER.md（用户画像）输出模板
+└── references/conversation-guide.md       ← 对话分轮策略与提问指南
 ```
 
-**Before your first response**, read both:
-1. `references/conversation-guide.md` — how to run each phase
-2. `templates/SOUL.template.md` — what you're building toward
+**在你的第一条回复前**，先读：
+1. `references/conversation-guide.md`
+2. `templates/SOUL.template.md`
+3. `templates/IDENTITY.template.md`
+4. `templates/USER.template.md`
 
 ## Ground Rules
 
-- **One phase at a time.** 1–3 questions max per round. Never dump everything upfront.
-- **Converse, don't interrogate.** React genuinely — surprise, humor, curiosity, gentle pushback. Mirror their energy and vocabulary.
-- **Progressive warmth.** Each round should feel more informed than the last. By Phase 3, the user should feel understood.
-- **Adapt pacing.** Terse user → probe with warmth. Verbose user → acknowledge, distill, advance.
-- **Never expose the template.** The user is having a conversation, not filling out a form.
+- **一轮一轮来。** 每轮 1–3 个问题，永远不要一次性抛完整问卷。
+- **对话而非审讯。** 用用户的措辞复述与确认，必要时提出温和的 pushback。
+- **资产语言跟随对话语言。** 不要强制英文；除非用户明确要求双语或指定语言。
+- **不要暴露模板。** 用户在对话，不是在填表。
+- **不要用 bash 手动写文件。** 落盘必须通过 `setup_agent` 工具完成。
 
-## Conversation Phases
+## 对话分轮（建议 3–6 轮）
 
-The conversation has 4 phases. Each phase may span 1–3 rounds depending on how much the user shares. Skip or merge phases if the user volunteers information early.
+对话默认按 4 轮推进；用户信息足够时可合并/跳过，但必须在落盘前完成“职责范围 + 边界 + 沟通规则”三件事。
 
-| Phase | Goal | Key Extractions |
-|-------|------|-----------------|
-| **1. Hello** | Language + first impression | Preferred language |
-| **2. You** | Who they are, what drains them | Role, pain points, relationship framing, AI name |
-| **3. Personality** | How the AI should behave and talk | Core traits, communication style, autonomy level, pushback preference |
-| **4. Depth** | Aspirations, blind spots, dealbreakers | Long-term vision, failure philosophy, boundaries |
+| Round | 目标 | 关键抽取 |
+|------|------|----------|
+| **1. 目标与职责** | 确认这是“创建自定义智能体”还是“更新默认助手”；明确核心职责与典型输入输出 | `target`、职责/任务、输入输出样例、成功标准（初版） |
+| **2. 边界与质量** | 不做什么、何时必须提问/拒绝、质量标准 | 禁区、澄清触发条件、质量门槛 |
+| **3. 沟通风格与自主性** | 语言、格式、简洁度；主动性；pushback 强度；风险偏好 | 默认语言、输出格式、推回规则、自主性/风险 |
+| **4. 用户画像（可选）** | 需要时把用户信息归档到全局 `USER.md` | 背景/偏好/禁区/长期目标（仅写稳定信息） |
 
-Phase details and conversation strategies are in `references/conversation-guide.md`.
+细节与提问策略见 `references/conversation-guide.md`。
 
-## Extraction Tracker
+## 你必须最终产出的内容
 
-Mentally track these fields as the conversation progresses. You need **all required fields** before generating.
-
-| Field | Required | Source Phase |
-|-------|----------|-------------|
-| Preferred language | ✅ | 1 |
-| User's name | ✅ | 2 |
-| User's role / context | ✅ | 2 |
-| AI name | ✅ | 2 |
-| Relationship framing | ✅ | 2 |
-| Core traits (3–5 behavioral rules) | ✅ | 3 |
-| Communication style | ✅ | 3 |
-| Pushback / honesty preference | ✅ | 3 |
-| Autonomy level | ✅ | 3 |
-| Failure philosophy | ✅ | 4 |
-| Long-term vision | nice-to-have | 4 |
-| Blind spots / boundaries | nice-to-have | 4 |
-
-If the user is direct and thorough, you can reach generation in 5 rounds. If they're exploratory, take up to 8. Never exceed 8 — if you're still missing fields, make your best inference and confirm.
+在用户确认前，先生成并展示以下草稿：
+- `SOUL.md`（按 `templates/SOUL.template.md`）
+- `IDENTITY.md`（按 `templates/IDENTITY.template.md`）
+- `USER.md`（可选，按 `templates/USER.template.md`；如果用户不想写入，明确“将跳过 USER.md 更新”）
+- `agent.json` 的 `description`（一句话，**仅自定义智能体创建时**需要写入；默认助手更新时会被忽略）
 
 ## Generation
 
-Once you have enough information:
+当信息足够时：
+1. 读取 3 份模板（SOUL/IDENTITY/USER），按模板结构生成草稿。
+2. 把草稿展示给用户确认。展示时要明确：这些内容会落盘并在运行时被注入系统提示词，建议短、明确、可执行。
+3. 允许用户对草稿做 1–2 轮微调，直到用户明确确认。
+4. 用户确认后，调用 `setup_agent` 落盘（必须调用工具，不要手写文件）：
 
-1. Read `templates/SOUL.template.md` if you haven't already.
-2. Generate the SOUL.md following the template structure exactly.
-3. Present it warmly and ask for confirmation. Frame it as "here's [Name] on paper — does this feel right?"
-4. Iterate until the user confirms.
-5. Call the `setup_agent` tool with the confirmed SOUL.md content and a one-line description:
-   ```
-   setup_agent(soul="<full SOUL.md content>", description="<one-line description>")
-   ```
-   The tool will persist the SOUL.md and finalize the agent setup automatically.
-6. After the tool returns successfully, confirm: "✅ [Name] is officially real."
+### A. 创建自定义智能体（custom）
+前置条件：`runtime.context.agent_name` 已由前端在首条 bootstrap 消息里传入。
 
-**Generation rules:**
-- The final SOUL.md **must always be written in English**, regardless of the user's preferred language or conversation language.
-- Every sentence must trace back to something the user said or clearly implied. No generic filler.
-- Core Traits are **behavioral rules**, not adjectives. Write "argue position, push back, speak truth not comfort" — not "honest and brave."
-- Voice must match the user. Blunt user → blunt SOUL.md. Expressive user → let it breathe.
-- Total SOUL.md should be under 300 words. Density over length.
-- Growth section is mandatory and mostly fixed (see template).
-- You **must** call `setup_agent` — do not write the file manually with bash tools.
-- If `setup_agent` returns an error, report it to the user and do not claim success.
+```text
+setup_agent(
+  soul="<SOUL.md 完整内容>",
+  identity="<IDENTITY.md 完整内容>",
+  description="<一句话 description（会写入 agent.json）>",
+  user_profile="<USER.md 内容（可选）>",
+  target="custom",
+  user_profile_strategy="replace_generated_block",
+)
+```
+
+### B. 更新默认助手（default）
+说明：默认助手更新不会改写 `_default/agent.json` 的 description，但工具签名仍要求提供 `description` 参数，传任意占位即可。
+
+```text
+setup_agent(
+  soul="<SOUL.md 完整内容>",
+  identity="<IDENTITY.md 完整内容>",
+  description="(ignored)",
+  user_profile="<USER.md 内容（可选）>",
+  target="default",
+  user_profile_strategy="replace_generated_block",
+)
+```
+
+**生成规则（必须遵守）：**
+- **不强制英文。** 资产语言默认跟随对话语言；如果用户要求双语，明确双语策略并保持一致。
+- **只写可执行规则。** SOUL/IDENTITY 里尽量用“必须/禁止/默认/当...则...”的句式，避免空泛形容词堆砌。
+- **少即是多。** SOUL.md 要短（适合注入），IDENTITY.md 要清晰，USER.md 只记录稳定偏好与长期信息。
+- **工具失败不得宣称成功。** `setup_agent` 返回错误时，直接解释错误原因与下一步（例如更换 agent ID），不要假装已落盘。

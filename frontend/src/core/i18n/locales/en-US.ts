@@ -305,13 +305,22 @@ export const enUS: Translations = {
     nameStepAlreadyExistsError: "This Agent ID is already taken",
     nameStepCheckError: "Could not verify name availability — please try again",
     nameStepBootstrapMessage:
-      "The new custom agent display name is {displayName} (ID: {name}). Let's bootstrap its **SOUL**.",
+      "/bootstrap Bootstrapping “{displayName}” (ID: {name}): I will generate SOUL.md + IDENTITY.md, and optionally update USER.md (user profile).",
+    bootstrap: {
+      tooltip: "Onboarding",
+      pageTitle: "Bootstrap Default Agent",
+      pageSubtitle:
+        "Describe how you want the default agent to work — I'll update SOUL/IDENTITY, and optionally USER.md.",
+      startMessage:
+        "/bootstrap Goal: update the default agent (_default) SOUL.md + IDENTITY.md, and optionally USER.md (user profile). Start by asking me 1-3 questions to clarify responsibilities and communication style, then propose drafts for my confirmation.",
+      completedTitle: "Default agent updated",
+      reviewSoul: "Review SOUL/Identity",
+    },
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
     backToGallery: "Back to Gallery",
     searchPlaceholder: "Search by name, description, model, or catalog summary",
     totalCount: "{count} agents",
-    statusDotHint: "Status uses icon dots to stay unobtrusive",
     filterAll: "All agents",
     filterDefault: "Default only",
     filterHeartbeat: "Heartbeat enabled",
