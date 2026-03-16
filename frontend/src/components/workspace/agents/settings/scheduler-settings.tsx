@@ -14,7 +14,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -790,27 +790,26 @@ export function SchedulerSettingsPanel({
         </Card>
 
         <Card className="rounded-2xl border-border/80 shadow-sm">
-          <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2">
-                <HistoryIcon className="size-4 text-primary" />
-                {copy.historyTitle}
-              </CardTitle>
-              <CardDescription>
-                {selectedTask ? selectedTask.name : copy.historyEmptyHint}
-              </CardDescription>
-            </div>
-
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HistoryIcon className="size-4 text-primary" />
+              {copy.historyTitle}
+            </CardTitle>
+            <CardDescription>
+              {selectedTask ? selectedTask.name : copy.historyEmptyHint}
+            </CardDescription>
             {selectedTask && onClearHistory ? (
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0 rounded-xl"
-                disabled={isHistoryLoading || selectedHistory.length === 0}
-                onClick={() => onClearHistory(selectedTask)}
-              >
-                {copy.clearHistory}
-              </Button>
+              <CardAction>
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="h-auto px-0 py-0 text-xs font-medium text-muted-foreground hover:text-foreground motion-safe:transition-all motion-safe:hover:-translate-y-0.5"
+                  disabled={isHistoryLoading || selectedHistory.length === 0}
+                  onClick={() => onClearHistory(selectedTask)}
+                >
+                  {copy.clearHistory}
+                </Button>
+              </CardAction>
             ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
