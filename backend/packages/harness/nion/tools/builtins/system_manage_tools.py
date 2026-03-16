@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
+from pathlib import Path
 from typing import Literal
 
 from langgraph.typing import ContextT
@@ -13,6 +15,7 @@ from nion.agents.thread_state import ThreadState
 from nion.config import get_app_config
 from nion.config.config_repository import ConfigRepository
 from nion.config.extensions_config import get_extensions_config
+from nion.config.paths import get_paths
 from nion.skills import load_skills
 from nion.tools.builtins._service_ops import (
     McpConfigUpdateRequest,
@@ -86,6 +89,133 @@ def _nion_manage_usage() -> str:
     )
 
 
+def _parse_doctor_argv(argv: list[str]) -> tuple[int, bool, bool] | str:
+    """Parse `nion_manage doctor` argv flags.
+
+    Returns:
+        (tail_lines, include_logs, include_processlog) on success, or an error message string.
+    """
+    tail_lines = 80
+    include_logs_flag = False
+    include_processlog_flag = False
+    saw_include_flag = False
+
+    i = 1
+    while i < len(argv):
+        token = argv[i]
+        if token.startswith("--tail="):
+            raw = token.split("=", 1)[1].strip()
+            if not raw.isdigit():
+                return f"--tail 需要正整数，收到：{raw!r}"
+            tail_lines = max(1, int(raw))
+            i += 1
+            continue
+        if token == "--tail":
+            if i + 1 >= len(argv):
+                return "--tail 需要参数，例如：--tail 200"
+            raw = argv[i + 1].strip()
+            if not raw.isdigit():
+                return f"--tail 需要正整数，收到：{raw!r}"
+            tail_lines = max(1, int(raw))
+            i += 2
+            continue
+        if token == "--include-logs":
+            include_logs_flag = True
+            saw_include_flag = True
+            i += 1
+            continue
+        if token == "--include-processlog":
+            include_processlog_flag = True
+            saw_include_flag = True
+            i += 1
+            continue
+
+        return f"未知参数：{token!r}"
+
+    if not saw_include_flag:
+        return tail_lines, True, True
+    return tail_lines, include_logs_flag, include_processlog_flag
+
+
+def _safe_read_tail_lines(*, base_dir: Path, path: Path, tail_lines: int) -> list[str]:
+    """Read the last N lines from a file, but only if it is under `base_dir`.
+
+    Security contract:
+    - Never reads outside NION_HOME (base_dir).
+    - Best-effort: returns [] when file is missing/unreadable.
+    """
+    try:
+        resolved_base = base_dir.resolve()
+        resolved_path = path.resolve()
+        resolved_path.relative_to(resolved_base)
+    except Exception:  # noqa: BLE001
+        return []
+
+    if not resolved_path.exists() or not resolved_path.is_file():
+        return []
+
+    try:
+        lines = resolved_path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:  # noqa: BLE001
+        return []
+    return lines[-max(1, int(tail_lines)) :]
+
+
+def _collect_processlog_tail(*, base_dir: Path, tail_lines: int) -> list[dict[str, object]]:
+    """Collect recent warn/error processlog events from `{base_dir}/processlog/events.jsonl`."""
+    path = base_dir / "processlog" / "events.jsonl"
+    raw_lines = _safe_read_tail_lines(base_dir=base_dir, path=path, tail_lines=max(2000, tail_lines * 20))
+    if not raw_lines:
+        return []
+
+    try:
+        from nion.processlog.types import ProcessLogEvent
+    except Exception:  # noqa: BLE001
+        ProcessLogEvent = None  # type: ignore[assignment]
+
+    rows: list[dict[str, object]] = []
+    for line in reversed(raw_lines):
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+            if ProcessLogEvent is not None:
+                event = ProcessLogEvent.model_validate(payload)
+                if event.level not in {"warn", "error"}:
+                    continue
+                rows.append(
+                    {
+                        "id": event.id,
+                        "trace_id": event.trace_id,
+                        "chat_id": event.chat_id,
+                        "step": event.step,
+                        "level": event.level,
+                        "duration_ms": event.duration_ms,
+                        "created_at": event.created_at.isoformat(),
+                        "data": event.data,
+                    }
+                )
+            else:
+                level = str(payload.get("level") or "").strip()
+                if level not in {"warn", "error"}:
+                    continue
+                rows.append(payload)
+        except Exception:  # noqa: BLE001
+            continue
+        if len(rows) >= max(1, int(tail_lines)):
+            break
+
+    rows.reverse()
+    return rows
+
+
+def _collect_desktop_logs_tail(*, base_dir: Path, tail_lines: int) -> dict[str, list[str]]:
+    """Tail desktop runtime logs under `{base_dir}/logs/desktop` (best-effort)."""
+    logs_dir = base_dir / "logs" / "desktop"
+    allowed = ("gateway.log", "langgraph.log", "frontend.log")
+    return {name: _safe_read_tail_lines(base_dir=base_dir, path=logs_dir / name, tail_lines=tail_lines) for name in allowed}
+
+
 @tool("nion_manage")
 def nion_manage_tool(
     runtime: ToolRuntime[ContextT, ThreadState] | None = None,
@@ -105,11 +235,38 @@ def nion_manage_tool(
 
     command = normalized_argv[0]
     if command == "doctor":
-        # Task 3 will implement this. Keep a stable placeholder to avoid accidental silent failures.
+        parsed = _parse_doctor_argv(normalized_argv)
+        if isinstance(parsed, str):
+            return build_management_response(success=False, message=f"doctor 参数错误：{parsed}", data={"argv": normalized_argv})
+
+        tail_lines, include_logs, include_processlog = parsed
+        base_dir = get_paths().base_dir
+        runtime_mode = "desktop" if os.getenv("NION_DESKTOP_RUNTIME") == "1" else "web"
+
+        runtime_topology: dict[str, object] | None = None
+        try:
+            from nion.config.app_config import get_app_config_runtime_status
+
+            runtime_topology = get_app_config_runtime_status(process_name="gateway")
+        except Exception:  # noqa: BLE001
+            runtime_topology = None
+
+        data: dict[str, object] = {
+            "argv": normalized_argv,
+            "base_dir": str(base_dir),
+            "runtime_mode": runtime_mode,
+            "runtime_topology": runtime_topology,
+            "tail_lines": tail_lines,
+        }
+        if include_processlog:
+            data["processlog"] = _collect_processlog_tail(base_dir=base_dir, tail_lines=tail_lines)
+        if include_logs:
+            data["desktop_logs_tail"] = _collect_desktop_logs_tail(base_dir=base_dir, tail_lines=tail_lines)
+
         return build_management_response(
-            success=False,
-            message="doctor 暂未实现（等待 Task 3）。",
-            data={"argv": normalized_argv},
+            success=True,
+            message="doctor 诊断信息已采集（best-effort）。",
+            data=data,
         )
 
     if command == "skills":
