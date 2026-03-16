@@ -5,6 +5,31 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
+
+class _NoopProvider:
+    """A safe default memory provider stub for this test module.
+
+    Why: setup_agent performs a best-effort OpenViking managed resources sync
+    after writing assets. In unit tests we must not touch real OpenViking stores,
+    trigger embedding, or make any external network requests.
+
+    Tests that need to validate sync behavior explicitly patch
+    `get_default_memory_provider` with their own dummy openviking provider.
+    """
+
+    name = "noop"
+
+
+@pytest.fixture(autouse=True)
+def _disable_openviking_sync_by_default():
+    with patch(
+        "src.tools.builtins.setup_agent_tool.get_default_memory_provider",
+        return_value=_NoopProvider(),
+    ):
+        yield
+
 
 def _paths(base_dir: Path):
     from src.config.paths import Paths
