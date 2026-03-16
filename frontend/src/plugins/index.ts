@@ -96,5 +96,5 @@ export async function initializeBuiltInPlugins() {
     console.error("Failed to restore installed plugins:", err);
   }
 
-  console.log("Built-in workbench plugins initialized");
+  // Built-in workbench plugins initialized
 }

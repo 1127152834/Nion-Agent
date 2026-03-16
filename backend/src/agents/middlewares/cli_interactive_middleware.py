@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import override
+
+logger = logging.getLogger(__name__)
 
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.graph import END
@@ -119,7 +122,7 @@ class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):
             # Not an interactive command, should not reach here
             return Command()
 
-        print(f"[CLIInteractiveMiddleware] Intercepted interactive CLI: {tool_id} {' '.join(argv)}")
+        logger.info("Intercepted interactive CLI: %s %s", tool_id, " ".join(argv))
 
         # Build payload
         tool_call_id = request.tool_call.get("id")
@@ -186,7 +189,7 @@ class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):
         argv = cli_payload["command"]
         input_method = cli_payload["input_method"]
 
-        print(f"[CLIInteractiveMiddleware] Executing CLI with user input: {tool_id}")
+        logger.info("Executing CLI with user input: %s", tool_id)
 
         try:
             sandbox = ensure_sandbox_initialized(runtime)
@@ -232,7 +235,7 @@ class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):
             return {"messages": updated_messages}
 
         except Exception as e:
-            print(f"[CLIInteractiveMiddleware] Error executing CLI: {e}")
+            logger.error("Error executing CLI: %s", e)
             cli_payload["status"] = "error"
             cli_payload["error"] = str(e)
             return None

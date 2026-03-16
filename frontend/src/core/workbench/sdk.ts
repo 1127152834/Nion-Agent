@@ -277,7 +277,8 @@ export function createWorkbenchContext(
     },
 
     addAction(action: WorkbenchAction): void {
-      console.log("Add action:", action);
+      // TODO: implement action registration
+      void action;
     },
 
     storage: {

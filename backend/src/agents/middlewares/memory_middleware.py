@@ -1,5 +1,6 @@
 """Middleware for memory mechanism."""
 
+import logging
 import re
 from typing import Any, NotRequired, override
 
@@ -12,6 +13,8 @@ from src.agents.memory.queue import get_memory_queue
 from src.agents.memory.registry import get_default_memory_provider
 from src.agents.memory.scope import normalize_agent_name_for_memory
 from src.config.memory_config import get_memory_config
+
+logger = logging.getLogger(__name__)
 
 
 class MemoryMiddlewareState(AgentState):
@@ -128,19 +131,19 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
         # Get thread ID from runtime context
         thread_id = runtime.context.get("thread_id")
         if not thread_id:
-            print("MemoryMiddleware: No thread_id in context, skipping memory update")
+            logger.debug("No thread_id in context, skipping memory update")
             return None
 
         provider = get_default_memory_provider()
         policy = provider.resolve_policy(MemoryWriteRequest(thread_id=thread_id, messages=[], agent_name=self._agent_name, state=state, runtime_context=runtime.context))
         if not policy.allow_write:
-            print(f"MemoryMiddleware: Memory write disabled for thread {thread_id} (session_mode={policy.session_mode})")
+            logger.debug("Memory write disabled for thread %s (session_mode=%s)", thread_id, policy.session_mode)
             return None
 
         # Get messages from state
         messages = state.get("messages", [])
         if not messages:
-            print("MemoryMiddleware: No messages in state, skipping memory update")
+            logger.debug("No messages in state, skipping memory update")
             return None
 
         # Filter to only keep user inputs and final assistant responses
@@ -165,7 +168,7 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
                     agent_name=self._agent_name,
                 )
             except Exception as exc:  # noqa: BLE001
-                print(f"MemoryMiddleware: Failed to enqueue OpenViking session commit for {thread_id}: {exc}")
+                logger.warning("Failed to enqueue OpenViking session commit for %s: %s", thread_id, exc)
 
         # Always enqueue memory writes asynchronously so memory-side failures
         # never break the user-visible chat run.
