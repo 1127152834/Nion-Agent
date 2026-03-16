@@ -30,6 +30,7 @@ from src.gateway.routers import (
     openviking,
     processlog,
     retrieval_models,
+    runtime_info,
     runtime_profile,
     runtime_topology,
     scheduler,
@@ -285,6 +286,9 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
 
     # Runtime topology API is mounted at /api/runtime/topology
     app.include_router(runtime_topology.router)
+
+    # Runtime info API is mounted at /api/runtime/info (debug/diagnostics)
+    app.include_router(runtime_info.router)
 
     # Agents API is mounted at /api/agents
     app.include_router(agents.router)

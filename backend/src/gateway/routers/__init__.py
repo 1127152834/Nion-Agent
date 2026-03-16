@@ -15,6 +15,7 @@ _ROUTER_MODULES = {
     "models",
     "retrieval_models",
     "runtime_profile",
+    "runtime_info",
     "runtime_topology",
     "scheduler",
     "skills",
