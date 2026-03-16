@@ -175,7 +175,8 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
 
         # Optional: commit raw session to OpenViking as trace evidence.
         # This is intentionally debounced and isolated from the main chat flow.
-        if config.openviking_session_commit_enabled:
+        # Be defensive: some tests/legacy configs may not carry the field yet.
+        if getattr(config, "openviking_session_commit_enabled", False):
             try:
                 get_memory_queue().add(
                     thread_id=thread_id,
