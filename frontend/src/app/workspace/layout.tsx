@@ -1,7 +1,6 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Provider as JotaiProvider } from "jotai";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { Toaster } from "sonner";
 
@@ -53,7 +52,6 @@ export default function WorkspaceLayout({
     [setSettings],
   );
   return (
-    <JotaiProvider>
       <QueryClientProvider client={queryClient}>
         <RuntimeOnboardingOverlay />
         <SchedulerTaskWatcher />
@@ -76,6 +74,5 @@ export default function WorkspaceLayout({
         <Toaster id="scheduler" position="top-right" />
         <Toaster position="top-center" />
       </QueryClientProvider>
-    </JotaiProvider>
   );
 }

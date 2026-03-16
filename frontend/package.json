@@ -77,7 +77,6 @@
     "embla-carousel-react": "^8.6.0",
     "gsap": "^3.13.0",
     "hast": "^1.0.0",
-    "jotai": "^2.18.0",
     "jszip": "^3.10.1",
     "katex": "^0.16.28",
     "lucide-react": "^0.562.0",
