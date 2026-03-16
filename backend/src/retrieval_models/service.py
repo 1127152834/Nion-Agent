@@ -106,15 +106,9 @@ LOCAL_PACK_SPECS: tuple[LocalPackSpec, ...] = (
     ),
 )
 
-LOCAL_PACKS_BY_ID: dict[str, LocalPackSpec] = {
-    pack.pack_id: pack for pack in LOCAL_PACK_SPECS
-}
+LOCAL_PACKS_BY_ID: dict[str, LocalPackSpec] = {pack.pack_id: pack for pack in LOCAL_PACK_SPECS}
 
-LOCAL_MODEL_TO_PACK_ID: dict[str, str] = {
-    model_id: pack.pack_id
-    for pack in LOCAL_PACK_SPECS
-    for model_id in pack.model_ids
-}
+LOCAL_MODEL_TO_PACK_ID: dict[str, str] = {model_id: pack.pack_id for pack in LOCAL_PACK_SPECS for model_id in pack.model_ids}
 
 LOCAL_PACK_MODEL_BY_FAMILY: dict[str, dict[str, str]] = {}
 for _pack in LOCAL_PACK_SPECS:
@@ -259,11 +253,7 @@ class RetrievalModelsService:
 
     def _is_embedding_remote_available(self, config: RetrievalModelsConfig) -> bool:
         provider_cfg = config.providers.openai_embedding
-        return bool(
-            provider_cfg.enabled
-            and _strip_or_none(provider_cfg.api_base)
-            and _strip_or_none(provider_cfg.api_key)
-        )
+        return bool(provider_cfg.enabled and _strip_or_none(provider_cfg.api_base) and _strip_or_none(provider_cfg.api_key))
 
     def _is_rerank_remote_available(self, config: RetrievalModelsConfig) -> bool:
         provider_cfg = config.providers.rerank_api
@@ -415,15 +405,9 @@ class RetrievalModelsService:
             model_entry = registry_models.get(model_id) if isinstance(registry_models.get(model_id), dict) else {}
             is_configured_active = False
             if spec.family == "embedding":
-                is_configured_active = (
-                    active_embedding.get("provider") == "local_onnx"
-                    and active_embedding.get("model_id") == model_id
-                )
+                is_configured_active = active_embedding.get("provider") == "local_onnx" and active_embedding.get("model_id") == model_id
             if spec.family == "rerank":
-                is_configured_active = (
-                    active_rerank.get("provider") == "local_onnx"
-                    and active_rerank.get("model_id") == model_id
-                )
+                is_configured_active = active_rerank.get("provider") == "local_onnx" and active_rerank.get("model_id") == model_id
             is_active = bool(is_configured_active and ready)
 
             models_by_family[spec.family].append(
@@ -460,9 +444,8 @@ class RetrievalModelsService:
                 if ready:
                     installed_count += 1
                 model_entry = registry_models.get(model_id) if isinstance(registry_models.get(model_id), dict) else {}
-                is_configured_active = (
-                    (spec.family == "embedding" and active_embedding.get("provider") == "local_onnx" and active_embedding.get("model_id") == model_id)
-                    or (spec.family == "rerank" and active_rerank.get("provider") == "local_onnx" and active_rerank.get("model_id") == model_id)
+                is_configured_active = (spec.family == "embedding" and active_embedding.get("provider") == "local_onnx" and active_embedding.get("model_id") == model_id) or (
+                    spec.family == "rerank" and active_rerank.get("provider") == "local_onnx" and active_rerank.get("model_id") == model_id
                 )
                 is_active = bool(is_configured_active and ready)
                 items.append(
@@ -492,11 +475,7 @@ class RetrievalModelsService:
                     "installed": installed_count == len(pack.model_ids),
                     "installed_count": installed_count,
                     "total_count": len(pack.model_ids),
-                    "status": (
-                        "installed"
-                        if installed_count == len(pack.model_ids)
-                        else ("not_installed" if installed_count == 0 else "partial")
-                    ),
+                    "status": ("installed" if installed_count == len(pack.model_ids) else ("not_installed" if installed_count == 0 else "partial")),
                     "is_active_pack": active_pack_id == pack.pack_id,
                     "models": items,
                 }
@@ -923,8 +902,8 @@ class RetrievalModelsService:
 
         # Update memory config to enable hybrid search
         try:
-            from src.config.memory_config import get_memory_config, set_memory_config
             from src.config.config_repository import ConfigRepository
+            from src.config.memory_config import get_memory_config, set_memory_config
 
             memory_cfg = get_memory_config()
 
@@ -982,9 +961,7 @@ class RetrievalModelsService:
             repo.write(config_dict=config_dict, expected_version=version)
             set_memory_config(memory_cfg)
 
-            logger.info(
-                f"Memory migration complete: enabled hybrid search (vector_weight=0.5) with {memory_cfg.embedding_provider}/{memory_cfg.embedding_model}"
-            )
+            logger.info(f"Memory migration complete: enabled hybrid search (vector_weight=0.5) with {memory_cfg.embedding_provider}/{memory_cfg.embedding_model}")
 
             return {
                 "migrated": True,
@@ -1130,14 +1107,8 @@ class RetrievalModelsService:
 
         for model_id in pack.model_ids:
             spec = LOCAL_MODEL_SPECS[model_id]
-            is_active = (
-                spec.family == "embedding"
-                and retrieval_cfg.active.embedding.provider == "local_onnx"
-                and retrieval_cfg.active.embedding.model_id == model_id
-            ) or (
-                spec.family == "rerank"
-                and retrieval_cfg.active.rerank.provider == "local_onnx"
-                and retrieval_cfg.active.rerank.model_id == model_id
+            is_active = (spec.family == "embedding" and retrieval_cfg.active.embedding.provider == "local_onnx" and retrieval_cfg.active.embedding.model_id == model_id) or (
+                spec.family == "rerank" and retrieval_cfg.active.rerank.provider == "local_onnx" and retrieval_cfg.active.rerank.model_id == model_id
             )
             if is_active:
                 raise RetrievalModelsError(
@@ -1219,9 +1190,7 @@ class RetrievalModelsService:
                 "provider": normalized_provider,
                 "model_id": normalized_model_id,
             }
-            result["message"] = (
-                f"Local model activation is pack-based; pack {pack_id} activated."
-            )
+            result["message"] = f"Local model activation is pack-based; pack {pack_id} activated."
             return result
 
         repo = ConfigRepository()
@@ -1457,16 +1426,8 @@ class RetrievalModelsService:
         retrieval_payload = config_dict.get("retrieval_models", {})
         retrieval_cfg = RetrievalModelsConfig.model_validate(retrieval_payload)
 
-        is_active_local_embedding = (
-            spec.family == "embedding"
-            and retrieval_cfg.active.embedding.provider == "local_onnx"
-            and retrieval_cfg.active.embedding.model_id == model_id
-        )
-        is_active_local_rerank = (
-            spec.family == "rerank"
-            and retrieval_cfg.active.rerank.provider == "local_onnx"
-            and retrieval_cfg.active.rerank.model_id == model_id
-        )
+        is_active_local_embedding = spec.family == "embedding" and retrieval_cfg.active.embedding.provider == "local_onnx" and retrieval_cfg.active.embedding.model_id == model_id
+        is_active_local_rerank = spec.family == "rerank" and retrieval_cfg.active.rerank.provider == "local_onnx" and retrieval_cfg.active.rerank.model_id == model_id
 
         if is_active_local_embedding or is_active_local_rerank:
             raise RetrievalModelsError(

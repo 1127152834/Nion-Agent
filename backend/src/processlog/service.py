@@ -62,4 +62,3 @@ def get_processlog_service() -> ProcessLogService:
         if _SERVICE is None:
             _SERVICE = ProcessLogService()
     return _SERVICE
-

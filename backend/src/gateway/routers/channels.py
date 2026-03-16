@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Header, Query, Request, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.channels.bridge_service import ChannelAgentBridgeService
@@ -151,9 +151,7 @@ async def get_channel_runtime_status(
             platform=platform,
             enabled=bool(config.get("enabled")),
             mode=str(config.get("mode") or "webhook"),
-            proxy_mode=str(config.get("credentials", {}).get("proxy_mode") or "auto")
-            if platform == "dingtalk"
-            else None,
+            proxy_mode=str(config.get("credentials", {}).get("proxy_mode") or "auto") if platform == "dingtalk" else None,
             stream_health="down",
             running=False,
             connected=False,
@@ -257,15 +255,9 @@ async def approve_pair_request(
             text=None,
         )
         if platform == "dingtalk":
-            notify_text = DingTalkPairingCardRenderer().build_pairing_approved_notice(
-                workspace_label or None
-            )
+            notify_text = DingTalkPairingCardRenderer().build_pairing_approved_notice(workspace_label or None)
         else:
-            notify_text = (
-                "配对成功，已授权接入 Nion。现在可以直接发送消息开始聊天。"
-                if not workspace_label
-                else f"配对成功，已授权接入 Nion（工作空间：{workspace_label}）。现在可以直接发送消息开始聊天。"
-            )
+            notify_text = "配对成功，已授权接入 Nion。现在可以直接发送消息开始聊天。" if not workspace_label else f"配对成功，已授权接入 Nion（工作空间：{workspace_label}）。现在可以直接发送消息开始聊天。"
         notify_log = repository.create_message_log(
             platform,
             chat_id=incoming.chat_id or "",
@@ -468,9 +460,7 @@ def _handle_webhook(
         event_type: str,
         event_payload: dict[str, object],
     ) -> None:
-        normalized_platform: ChannelPlatform = (
-            event_platform if event_platform in {"lark", "dingtalk", "telegram"} else platform
-        )
+        normalized_platform: ChannelPlatform = event_platform if event_platform in {"lark", "dingtalk", "telegram"} else platform
         _publish_channel_event(
             request,
             normalized_platform,

@@ -4,13 +4,13 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import NotRequired, cast, override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from langchain_core.messages import HumanMessage
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
+
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 
 
 class ClarificationMiddlewareState(AgentState):

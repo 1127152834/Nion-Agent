@@ -64,4 +64,3 @@ def test_internal_tool_recall_middleware_dedupes_by_query_hash(monkeypatch):
         runtime,
     )
     assert second is None
-

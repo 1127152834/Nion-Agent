@@ -16,9 +16,7 @@ class ChannelEventBroker:
 
     def __init__(self, *, max_queue_size: int = 100):
         self._max_queue_size = max(10, max_queue_size)
-        self._subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {
-            platform: set() for platform in SUPPORTED_CHANNEL_PLATFORMS
-        }
+        self._subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = {platform: set() for platform in SUPPORTED_CHANNEL_PLATFORMS}
 
     def subscribe(self, platform: str) -> asyncio.Queue[dict[str, Any]]:
         normalized = platform.strip().lower()

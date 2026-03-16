@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from src.agents.memory.policy import resolve_memory_policy
-from src.agents.memory.scope import resolve_agent_for_memory_scope
 from src.agents.memory.registry import get_default_memory_provider
+from src.agents.memory.scope import resolve_agent_for_memory_scope
 
 MemoryScope = Literal["global", "agent", "auto"]
 
@@ -68,9 +68,7 @@ def store_memory_action(
 ) -> dict[str, Any]:
     policy = resolve_memory_policy(state=policy_state, runtime_context=policy_runtime_context)
     if not policy.allow_write:
-        raise PermissionError(
-            "Memory write is disabled for this session (temporary_chat or memory_write=false)."
-        )
+        raise PermissionError("Memory write is disabled for this session (temporary_chat or memory_write=false).")
 
     provider = get_default_memory_provider()
     if not hasattr(provider, "store_memory"):
@@ -102,9 +100,7 @@ def compact_memory_action(
 ) -> dict[str, Any]:
     policy = resolve_memory_policy(state=policy_state, runtime_context=policy_runtime_context)
     if not policy.allow_write:
-        raise PermissionError(
-            "Memory write is disabled for this session (temporary_chat or memory_write=false)."
-        )
+        raise PermissionError("Memory write is disabled for this session (temporary_chat or memory_write=false).")
 
     provider = get_default_memory_provider()
     if not hasattr(provider, "compact_memory"):
@@ -134,9 +130,7 @@ def forget_memory_action(
 ) -> dict[str, Any]:
     policy = resolve_memory_policy(state=policy_state, runtime_context=policy_runtime_context)
     if not policy.allow_write:
-        raise PermissionError(
-            "Memory write is disabled for this session (temporary_chat or memory_write=false)."
-        )
+        raise PermissionError("Memory write is disabled for this session (temporary_chat or memory_write=false).")
 
     provider = get_default_memory_provider()
     if not hasattr(provider, "forget_memory"):

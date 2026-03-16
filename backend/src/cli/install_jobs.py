@@ -18,7 +18,6 @@ from src.cli.installer import CliInstallError, install_cli_tool
 from src.config.extensions_config import CliStateConfig, ExtensionsConfig, reload_extensions_config
 from src.config.paths import get_paths
 
-
 CliInstallJobStatus = Literal["pending", "running", "succeeded", "failed"]
 
 _MAX_JOB_LOG_LINES = 200
@@ -45,7 +44,7 @@ class CliInstallJob:
             return
         self.logs.append(text)
         if len(self.logs) > _MAX_JOB_LOG_LINES:
-            self.logs = self.logs[-_MAX_JOB_LOG_LINES :]
+            self.logs = self.logs[-_MAX_JOB_LOG_LINES:]
         self.updated_at = time.time()
 
     def set_message(self, message: str) -> None:

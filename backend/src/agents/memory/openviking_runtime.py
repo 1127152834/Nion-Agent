@@ -223,9 +223,7 @@ class OpenVikingRuntime:
         for fact in facts:
             if not isinstance(fact, dict):
                 continue
-            memory_id = str(fact.get("id") or "").strip() or hashlib.sha1(
-                str(fact.get("content") or "").encode("utf-8")
-            ).hexdigest()[:20]
+            memory_id = str(fact.get("id") or "").strip() or hashlib.sha1(str(fact.get("content") or "").encode("utf-8")).hexdigest()[:20]
             summary = str(fact.get("content") or "").strip()
             if not summary:
                 continue
@@ -322,10 +320,7 @@ class OpenVikingRuntime:
         query_lower = normalized_query.lower()
         query_tokens = _tokenize(normalized_query)
         query_cjk_chars = {ch for ch in normalized_query if "\u4e00" <= ch <= "\u9fff"}
-        asks_for_name = any(
-            marker in query_lower
-            for marker in ("叫什么", "名字", "name", "who am i", "my name")
-        )
+        asks_for_name = any(marker in query_lower for marker in ("叫什么", "名字", "name", "who am i", "my name"))
         scored: list[tuple[float, dict[str, Any]]] = []
 
         for row in rows:
@@ -344,11 +339,7 @@ class OpenVikingRuntime:
             token_overlap = len(query_tokens & doc_tokens) / max(1, len(query_tokens))
             contains = 1.0 if query_lower in summary_lower else 0.0
             doc_cjk_chars = {ch for ch in summary if "\u4e00" <= ch <= "\u9fff"}
-            cjk_overlap = (
-                len(query_cjk_chars & doc_cjk_chars) / max(1, len(query_cjk_chars))
-                if query_cjk_chars
-                else 0.0
-            )
+            cjk_overlap = len(query_cjk_chars & doc_cjk_chars) / max(1, len(query_cjk_chars)) if query_cjk_chars else 0.0
             name_hint = 0.0
             if asks_for_name and any(marker in summary_lower for marker in ("我叫", "名字", "name", "我是")):
                 name_hint = 0.45
@@ -419,11 +410,7 @@ class OpenVikingRuntime:
 
         now = _utc_iso()
         applied_results = write_result.get("applied_results") or []
-        action_results = [
-            item
-            for item in applied_results
-            if str(item.get("action") or "").upper() in {"ADD", "UPDATE"}
-        ]
+        action_results = [item for item in applied_results if str(item.get("action") or "").upper() in {"ADD", "UPDATE"}]
         primary_result = action_results[0] if action_results else None
         fact_id = str((primary_result or {}).get("memory_id") or "")
         if not fact_id:
@@ -756,17 +743,11 @@ class OpenVikingRuntime:
                 decision_reason = str(evidence.get("decision_reason") or reason or "")
                 expires_at = str(evidence.get("expires_at") or "")
                 if ttl_seconds is not None and ttl_seconds > 0 and not expires_at:
-                    expires_at = (
-                        datetime.fromtimestamp(datetime.now(UTC).timestamp() + ttl_seconds, tz=UTC)
-                        .isoformat()
-                        .replace("+00:00", "Z")
-                    )
+                    expires_at = datetime.fromtimestamp(datetime.now(UTC).timestamp() + ttl_seconds, tz=UTC).isoformat().replace("+00:00", "Z")
 
                 if not memory_id:
                     if content:
-                        memory_id = hashlib.sha1(
-                            f"{agent_name or 'global'}:{thread_id}:{content}".encode("utf-8")
-                        ).hexdigest()[:20]
+                        memory_id = hashlib.sha1(f"{agent_name or 'global'}:{thread_id}:{content}".encode()).hexdigest()[:20]
                     else:
                         continue
 
@@ -1321,10 +1302,7 @@ class OpenVikingRuntime:
 
     def _cleanup_expired_items(self, *, agent_name: str | None = None) -> dict[str, int]:
         rows = self._sqlite_index.list_resources(agent_name=agent_name)
-        manifest_map = {
-            str(entry.get("memory_id") or ""): entry
-            for entry in self._sqlite_index.list_manifest_entries(agent_name=agent_name, status=None)
-        }
+        manifest_map = {str(entry.get("memory_id") or ""): entry for entry in self._sqlite_index.list_manifest_entries(agent_name=agent_name, status=None)}
         expired_ids: list[str] = []
         for row in rows:
             if str(row.get("status") or "").strip().lower() not in {"active", "pending", "contested"}:
@@ -1365,10 +1343,7 @@ class OpenVikingRuntime:
 
     def _semantic_compact_episodes(self, *, agent_name: str | None = None) -> dict[str, Any]:
         rows = self._sqlite_index.list_resources(agent_name=agent_name, status="active")
-        manifest_map = {
-            str(entry.get("memory_id") or ""): entry
-            for entry in self._sqlite_index.list_manifest_entries(agent_name=agent_name, status=None)
-        }
+        manifest_map = {str(entry.get("memory_id") or ""): entry for entry in self._sqlite_index.list_manifest_entries(agent_name=agent_name, status=None)}
         groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for row in rows:
             metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
@@ -1394,9 +1369,7 @@ class OpenVikingRuntime:
             if not merged_summary.strip():
                 continue
 
-            card_id = hashlib.sha1(
-                f"{agent_name or 'global'}:episode-card:{day_key}:{thread_key}:{merged_summary}".encode("utf-8")
-            ).hexdigest()[:20]
+            card_id = hashlib.sha1(f"{agent_name or 'global'}:episode-card:{day_key}:{thread_key}:{merged_summary}".encode()).hexdigest()[:20]
             refs = [str(item.get("memory_id") or "") for item in sorted_entries]
             self._sqlite_index.upsert_manifest_entry(
                 agent_name=agent_name,
@@ -1484,18 +1457,8 @@ class OpenVikingRuntime:
             if len(unique_entities) >= 8:
                 break
         entity_line = ", ".join(unique_entities) if unique_entities else "-"
-        issue_resolution = "contains_issue_resolution" if any(
-            keyword in merged_text.lower() for keyword in ("问题", "报错", "error", "失败", "冲突", "修复", "解决")
-        ) else "-"
-        return (
-            f"when: {day_key}\n"
-            f"task: merged_episode_story\n"
-            f"key_entities: {entity_line}\n"
-            f"actions: {merged_text[:360]}\n"
-            f"issue_resolution: {issue_resolution}\n"
-            f"outcome: compacted_story_card\n"
-            f"followup: -"
-        )
+        issue_resolution = "contains_issue_resolution" if any(keyword in merged_text.lower() for keyword in ("问题", "报错", "error", "失败", "冲突", "修复", "解决")) else "-"
+        return f"when: {day_key}\ntask: merged_episode_story\nkey_entities: {entity_line}\nactions: {merged_text[:360]}\nissue_resolution: {issue_resolution}\noutcome: compacted_story_card\nfollowup: -"
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -1635,11 +1598,15 @@ class OpenVikingRuntime:
 
     def _resolve_local_embedding_model(self) -> tuple[bool, str | None]:
         cfg = get_memory_config()
-        if cfg.embedding_provider.strip().lower() in {
-            "sentence-transformers",
-            "sentence_transformers",
-            "local",
-        } and cfg.embedding_model.strip():
+        if (
+            cfg.embedding_provider.strip().lower()
+            in {
+                "sentence-transformers",
+                "sentence_transformers",
+                "local",
+            }
+            and cfg.embedding_model.strip()
+        ):
             return True, cfg.embedding_model.strip()
 
         try:
@@ -1732,11 +1699,7 @@ class OpenVikingRuntime:
             return []
 
         rerank_mode = str(get_memory_config().rerank_mode or "auto").strip().lower()
-        should_rerank = rerank_mode == "forced" or (
-            rerank_mode == "auto"
-            and len(candidates) >= self._rerank_min_candidates
-            and _is_ambiguous_query(query)
-        )
+        should_rerank = rerank_mode == "forced" or (rerank_mode == "auto" and len(candidates) >= self._rerank_min_candidates and _is_ambiguous_query(query))
         if should_rerank:
             try:
                 candidates = self._rerank_candidates(query=query, candidates=candidates)
@@ -1808,9 +1771,7 @@ class OpenVikingRuntime:
             role = str(msg.get("role", "")).strip().lower() or "assistant"
             if not content:
                 continue
-            memory_id = hashlib.sha1(
-                f"{agent_name or 'global'}:{thread_id}:{role}:{content}".encode()
-            ).hexdigest()[:20]
+            memory_id = hashlib.sha1(f"{agent_name or 'global'}:{thread_id}:{role}:{content}".encode()).hexdigest()[:20]
             uri = f"viking://session/{thread_id}/{memory_id}"
             self._sqlite_index.upsert_resource(
                 agent_name=agent_name,

@@ -9,10 +9,11 @@ import re
 import sqlite3
 import threading
 from collections import deque
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 
 def _utc_iso() -> str:

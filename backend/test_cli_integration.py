@@ -8,6 +8,7 @@ from pathlib import Path
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
 
+
 def _cli_tools_loading_ok() -> bool:
     """Return whether CLI runtime tools can be loaded successfully.
 
@@ -23,7 +24,7 @@ def _cli_tools_loading_ok() -> bool:
 
     from src.cli.runtime_tools import get_cli_tools
 
-    tools = get_cli_tools(agent_name='lead')
+    tools = get_cli_tools(agent_name="lead")
     print(f"✅ 成功加载 {len(tools)} 个 CLI 工具:")
     for tool in tools:
         print(f"  - {tool.name}: {tool.description[:80]}...")
@@ -48,12 +49,12 @@ def _agent_tools_integration_ok() -> bool:
 
     # NOTE: MCP tools may require external servers / async event loops; this
     # integration smoke test should remain offline and deterministic.
-    tools = get_available_tools(agent_name='lead', include_mcp=False)
-    cli_tools = [t for t in tools if hasattr(t, 'name') and t.name.startswith('cli_')]
+    tools = get_available_tools(agent_name="lead", include_mcp=False)
+    cli_tools = [t for t in tools if hasattr(t, "name") and t.name.startswith("cli_")]
 
     print(f"✅ Agent 工具系统中找到 {len(cli_tools)} 个 CLI 工具:")
     for tool in cli_tools:
-        desc = tool.description[:60] + '...' if len(tool.description) > 60 else tool.description
+        desc = tool.description[:60] + "..." if len(tool.description) > 60 else tool.description
         print(f"  - {tool.name}: {desc}")
     print()
     return len(cli_tools) > 0
@@ -73,7 +74,7 @@ def _marketplace_catalog_ok() -> bool:
 
     from src.cli.catalog import load_cli_marketplace_catalog
 
-    catalog_path = backend_dir / 'data' / 'cli_marketplace' / 'catalog.json'
+    catalog_path = backend_dir / "data" / "cli_marketplace" / "catalog.json"
     catalog = load_cli_marketplace_catalog(catalog_path)
 
     print(f"✅ Marketplace 目录加载成功: {len(catalog.tools)} 个工具")
@@ -100,7 +101,7 @@ def _extensions_config_ok() -> bool:
 
     config = ExtensionsConfig.from_file()
 
-    print(f"✅ 配置文件加载成功")
+    print("✅ 配置文件加载成功")
     print(f"  CLI 工具配置: {len(config.clis)} 个")
     for tool_id, cfg in config.clis.items():
         print(f"  - {tool_id}: enabled={cfg.enabled}, source={cfg.source}")
@@ -111,6 +112,7 @@ def _extensions_config_ok() -> bool:
 def test_config_file():
     """测试配置文件（pytest 入口）"""
     _extensions_config_ok()
+
 
 def main():
     """运行所有测试"""
@@ -165,5 +167,6 @@ def main():
         print(f"\n⚠️  {total - passed} 个测试失败，需要修复。")
         return 1
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(main())

@@ -35,4 +35,3 @@ def test_BE_CORE_MEM_403_resolve_scope_agent_requires_name_except_default():
     assert resolve_agent_for_memory_scope(scope="agent", agent_name="bob") == "bob"
     assert resolve_agent_for_memory_scope(scope="auto", agent_name="bob") == "bob"
     assert resolve_agent_for_memory_scope(scope="global", agent_name="bob") is None
-

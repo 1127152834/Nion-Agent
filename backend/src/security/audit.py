@@ -27,6 +27,7 @@ def severity_at_least(current: Severity, threshold: Severity) -> bool:
         raise ValueError(f"Unknown severity threshold: {threshold}")
     return _SEVERITY_WEIGHT[current] >= _SEVERITY_WEIGHT[threshold]
 
+
 _RISKY_HOST_PATH_PREFIXES = [
     "/",
     "/Users",

@@ -5,8 +5,8 @@ from unittest.mock import Mock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agents.middlewares.memory_middleware import MemoryMiddleware
 from src.agents.memory.policy import resolve_memory_policy
+from src.agents.middlewares.memory_middleware import MemoryMiddleware
 
 
 def test_policy_defaults_to_normal_session_when_fields_missing() -> None:

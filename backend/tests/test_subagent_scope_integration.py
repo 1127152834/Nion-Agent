@@ -1,7 +1,5 @@
 """Test subagent scope integration."""
 
-import pytest
-
 from src.subagents import SubagentConfig, SubagentScopes, get_subagent_config
 
 

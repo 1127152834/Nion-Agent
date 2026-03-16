@@ -19,4 +19,3 @@ async def export_trace(trace_id: str, limit: int = Query(default=2000, ge=1, le=
 async def export_chat(chat_id: str, limit: int = Query(default=2000, ge=1, le=20000)) -> dict:
     service = get_processlog_service()
     return service.export_chat(chat_id, limit=limit)
-

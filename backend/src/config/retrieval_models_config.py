@@ -29,9 +29,7 @@ class RerankAPIProviderConfig(BaseModel):
 
 
 class RetrievalProvidersConfig(BaseModel):
-    openai_embedding: OpenAICompatibleEmbeddingProviderConfig = Field(
-        default_factory=OpenAICompatibleEmbeddingProviderConfig
-    )
+    openai_embedding: OpenAICompatibleEmbeddingProviderConfig = Field(default_factory=OpenAICompatibleEmbeddingProviderConfig)
     rerank_api: RerankAPIProviderConfig = Field(default_factory=RerankAPIProviderConfig)
 
 
@@ -104,9 +102,7 @@ def _default_active() -> RetrievalActiveConfig:
 class RetrievalModelsConfig(BaseModel):
     enabled: bool = Field(default=True)
     active: RetrievalActiveConfig = Field(default_factory=_default_active)
-    source_priority: list[Literal["modelscope", "manual_import"]] = Field(
-        default_factory=lambda: ["modelscope", "manual_import"]
-    )
+    source_priority: list[Literal["modelscope", "manual_import"]] = Field(default_factory=lambda: ["modelscope", "manual_import"])
     providers: RetrievalProvidersConfig = Field(default_factory=RetrievalProvidersConfig)
     local_models_dir: str | None = Field(default=None)
     registry_file: str | None = Field(default=None)

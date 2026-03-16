@@ -64,4 +64,3 @@ def test_resolve_config_path_falls_back_to_cwd(monkeypatch: pytest.MonkeyPatch, 
 
     resolved = ExtensionsConfig.resolve_config_path()
     assert resolved == legacy.resolve()
-

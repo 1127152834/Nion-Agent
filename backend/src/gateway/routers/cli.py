@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 import httpx
-
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,13 +23,13 @@ from src.cli.catalog import (
     load_cli_marketplace_catalog,
     repo_root_from_module,
 )
-from src.cli.installer import CliInstallError, install_cli_tool, uninstall_cli_tool
 from src.cli.install_jobs import (
     get_cli_install_job_snapshot,
     start_cli_install_job,
     subscribe_cli_install_job,
     unsubscribe_cli_install_job,
 )
+from src.cli.installer import CliInstallError, install_cli_tool, uninstall_cli_tool
 from src.cli.manifests import load_cli_install_manifest
 from src.config.extensions_config import CliStateConfig, ExtensionsConfig, get_extensions_config, reload_extensions_config
 from src.config.paths import get_paths
@@ -696,11 +695,7 @@ async def ensure_cli_uv_toolchain() -> CliToolchainEnsureResponse:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Failed to ensure uv toolchain: {exc}") from exc
 
-    message = (
-        f"Installed uv {toolchain.version} to {toolchain.root_dir}"
-        if installed_now
-        else f"uv toolchain ready ({toolchain.version})"
-    )
+    message = f"Installed uv {toolchain.version} to {toolchain.root_dir}" if installed_now else f"uv toolchain ready ({toolchain.version})"
     return CliToolchainEnsureResponse(
         installed=installed_now,
         message=message,

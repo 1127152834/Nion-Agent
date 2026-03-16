@@ -378,26 +378,24 @@ async def download_model_stream(model_id: str):
 
             # Progress callback that puts data into queue
             async def progress_callback(downloaded: int, total: int | None):
-                await progress_queue.put({
-                    "type": "progress",
-                    "downloaded": downloaded,
-                    "total": total,
-                    "percentage": round((downloaded / total * 100), 2) if total else None,
-                })
+                await progress_queue.put(
+                    {
+                        "type": "progress",
+                        "downloaded": downloaded,
+                        "total": total,
+                        "percentage": round((downloaded / total * 100), 2) if total else None,
+                    }
+                )
 
             # Start download in background task
-            download_task = asyncio.create_task(
-                service.download_model_with_progress(
-                    model_id=model_id, progress_callback=progress_callback
-                )
-            )
+            download_task = asyncio.create_task(service.download_model_with_progress(model_id=model_id, progress_callback=progress_callback))
 
             # Stream progress events
             while not download_task.done():
                 try:
                     progress_data = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
                     yield f"data: {json.dumps(progress_data)}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
 
             # Drain remaining progress events

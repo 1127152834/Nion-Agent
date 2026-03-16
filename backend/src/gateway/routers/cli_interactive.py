@@ -52,7 +52,6 @@ async def start_cli_session(req: StartSessionRequest) -> StartSessionResponse:
         Session information including WebSocket URL
     """
     session_id = str(uuid.uuid4())
-    manager = get_session_manager()
 
     # Try to restore previous session if requested
     if req.restore_session:

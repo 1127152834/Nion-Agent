@@ -5,17 +5,17 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Literal
 from urllib.parse import quote
 
 import httpx
-from src.tools.builtins.langchain_compat import ToolRuntime, tool
 from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
 from src.scheduler.models import AgentStep, ScheduledTask, TaskMode, TriggerConfig, WorkflowStep
 from src.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
+from src.tools.builtins.langchain_compat import ToolRuntime, tool
 from src.tools.builtins.management_response import build_action_card, build_management_response
 
 
@@ -365,10 +365,7 @@ def scheduler_operate_task_tool(
         )
         return build_management_response(
             success=False,
-            message=(
-                f"请先确认操作：{operation}。"
-                "确认后请在下一次工具调用中附带 confirmation_token。"
-            ),
+            message=(f"请先确认操作：{operation}。确认后请在下一次工具调用中附带 confirmation_token。"),
             data={"task_id": task_id, "operation": operation},
             requires_confirmation=True,
             confirmation_token=token,

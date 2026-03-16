@@ -492,18 +492,11 @@ def _build_internal_validation_error_tool_message(
             "surfaceUpdate must include surfaceId + components (array)",
             "beginRendering must include surfaceId + root",
         ],
-        "next_action": (
-            "Repair the A2UI payload and call send_a2ui_json_to_client again immediately. "
-            "If you cannot repair it, simplify the UI and omit optional fields."
-        ),
+        "next_action": ("Repair the A2UI payload and call send_a2ui_json_to_client again immediately. If you cannot repair it, simplify the UI and omit optional fields."),
     }
 
     return ToolMessage(
-        content=(
-            "A2UI validation failed. Please repair the payload and retry "
-            f"(attempt {repair_attempt}/{_A2UI_MAX_REPAIR_ATTEMPTS}). "
-            f"Reason: {error}"
-        ),
+        content=(f"A2UI validation failed. Please repair the payload and retry (attempt {repair_attempt}/{_A2UI_MAX_REPAIR_ATTEMPTS}). Reason: {error}"),
         tool_call_id=tool_call_id or "",
         name=_A2UI_SEND_TOOL_NAME,
         additional_kwargs={
@@ -663,10 +656,7 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
             repair_attempt = _bump_validation_attempt(request)
-            error = (
-                "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
-                "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
-            )
+            error = "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
             if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
                 return _build_internal_validation_error_tool_message(
                     tool_call_id=tool_call_id,
@@ -682,9 +672,7 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         normalized_operations = _normalize_a2ui_operations(operations)
         if not normalized_operations:
             repair_attempt = _bump_validation_attempt(request)
-            error = (
-                "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
-            )
+            error = "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
             if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
                 return _build_internal_validation_error_tool_message(
                     tool_call_id=tool_call_id,
@@ -739,10 +727,7 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         operations = _parse_a2ui_operations(raw_a2ui_json)
         if not operations:
             repair_attempt = _bump_validation_attempt(request)
-            error = (
-                "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，"
-                "并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
-            )
+            error = "A2UI payload 无法解析：请在 send_a2ui_json_to_client(a2ui_json=...) 中传入一个 JSON 数组，并确保包含 surfaceUpdate + beginRendering（同一数组内）。"
             if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
                 return _build_internal_validation_error_tool_message(
                     tool_call_id=tool_call_id,
@@ -758,9 +743,7 @@ class A2UIMiddleware(AgentMiddleware[AgentState]):
         normalized_operations = _normalize_a2ui_operations(operations)
         if not normalized_operations:
             repair_attempt = _bump_validation_attempt(request)
-            error = (
-                "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
-            )
+            error = "A2UI payload 不符合 v0.8 协议（必须包含 surfaceUpdate + beginRendering，且字段名需正确）。"
             if repair_attempt <= _A2UI_MAX_REPAIR_ATTEMPTS:
                 return _build_internal_validation_error_tool_message(
                     tool_call_id=tool_call_id,

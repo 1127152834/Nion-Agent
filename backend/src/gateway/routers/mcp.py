@@ -1,9 +1,9 @@
+import asyncio
 import json
 import logging
 import os
-import sys
 import shutil
-import asyncio
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -302,11 +302,7 @@ async def update_mcp_configuration(request: McpConfigUpdateRequest) -> McpConfig
         # not under the repository checkout. Desktop runtime can restart from different CWDs,
         # and the repo itself may be replaced (re-clone / history rewrite), which would make
         # installed MCP servers "disappear" if we write relative to CWD.
-        config_path = (
-            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
-            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
-            else ExtensionsConfig.default_config_path()
-        )
+        config_path = Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve() if os.getenv("NION_EXTENSIONS_CONFIG_PATH") else ExtensionsConfig.default_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load current config to preserve skills configuration
@@ -454,7 +450,7 @@ async def probe_mcp_server(server_name: str) -> McpServerProbeResponse:
                 client.get_tools(server_name=server_name),
                 timeout=timeout_seconds,
             )
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise HTTPException(
                 status_code=500,
                 detail=f"Probe timed out after {int(timeout_seconds)}s. Please check prerequisites and try again.",
@@ -621,11 +617,7 @@ async def ensure_mcp_node_toolchain() -> McpToolchainEnsureResponse:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"Failed to ensure Node toolchain: {exc}") from exc
 
-    message = (
-        f"Installed Node {toolchain.version} to {toolchain.root_dir}"
-        if installed_now
-        else f"Node toolchain ready ({toolchain.version})"
-    )
+    message = f"Installed Node {toolchain.version} to {toolchain.root_dir}" if installed_now else f"Node toolchain ready ({toolchain.version})"
 
     return McpToolchainEnsureResponse(
         installed=installed_now,

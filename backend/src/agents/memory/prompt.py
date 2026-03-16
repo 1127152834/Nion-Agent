@@ -222,13 +222,7 @@ def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2
     except Exception:
         fact_threshold = 0.7
 
-    facts = [
-        fact
-        for fact in memory_data.get("facts", [])
-        if isinstance(fact, dict)
-        and fact.get("content")
-        and float(fact.get("confidence", 0) or 0) >= fact_threshold
-    ]
+    facts = [fact for fact in memory_data.get("facts", []) if isinstance(fact, dict) and fact.get("content") and float(fact.get("confidence", 0) or 0) >= fact_threshold]
     if facts:
         facts = sorted(
             facts,
@@ -276,9 +270,7 @@ def format_conversation_for_update(messages: list[Any]) -> str:
         # ephemeral file path info into long-term memory.  Skip the turn entirely
         # when nothing remains after stripping (upload-only message).
         if role == "human":
-            content = re.sub(
-                r"<uploaded_files>[\s\S]*?</uploaded_files>\n*", "", str(content)
-            ).strip()
+            content = re.sub(r"<uploaded_files>[\s\S]*?</uploaded_files>\n*", "", str(content)).strip()
             if not content:
                 continue
 

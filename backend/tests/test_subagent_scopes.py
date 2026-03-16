@@ -1,7 +1,5 @@
 """Test subagent scopes and contracts."""
 
-import pytest
-
 from src.subagents import DelegationContract, DelegationResultEnvelope, SubagentConfig, SubagentScopes
 
 

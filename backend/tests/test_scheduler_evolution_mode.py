@@ -79,4 +79,3 @@ def test_scheduler_filters_out_evolution_system_tasks(tmp_path):
                     assert history[0]["status"] == "completed"
                 finally:
                     shutdown_scheduler()
-

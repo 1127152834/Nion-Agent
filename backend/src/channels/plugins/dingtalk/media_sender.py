@@ -179,10 +179,7 @@ class DingTalkMediaSender:
                 message=f"token failed: {exc}",
                 delivery_path=path_base,
             )
-        robot_code = _safe_text(self._credentials.get("robot_code")) or _safe_text(
-            self._credentials.get("client_id")
-            or self._credentials.get("app_key")
-        )
+        robot_code = _safe_text(self._credentials.get("robot_code")) or _safe_text(self._credentials.get("client_id") or self._credentials.get("app_key"))
         if not robot_code:
             return DingTalkMediaDeliveryResult(
                 delivered=False,

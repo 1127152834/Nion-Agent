@@ -27,4 +27,3 @@ def test_recommend_internal_tools_prefers_xhs_cli_for_xiaohongshu_login(
 
     hits = recommend_internal_tools("我要登录小红书", limit=3)
     assert any(h.tool_type == "cli" and h.tool_id == "xhs-cli" for h in hits)
-

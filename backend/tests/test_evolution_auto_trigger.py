@@ -48,4 +48,3 @@ def test_evolution_auto_trigger_creates_system_task_and_runs_once(tmp_path):
                     assert history[0].success is True
                 finally:
                     shutdown_scheduler()
-

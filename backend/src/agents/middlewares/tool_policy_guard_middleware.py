@@ -8,12 +8,15 @@ from typing import override
 try:
     from langchain.agents import AgentState
 except Exception:  # noqa: BLE001
+
     class AgentState(dict):  # type: ignore[no-redef]
         pass
+
 
 try:
     from langchain.agents.middleware import AgentMiddleware
 except Exception:  # noqa: BLE001
+
     class AgentMiddleware:  # type: ignore[no-redef]
         @classmethod
         def __class_getitem__(cls, item):
@@ -21,6 +24,7 @@ except Exception:  # noqa: BLE001
 
         def __init__(self, *args, **kwargs):
             _ = args, kwargs
+
 
 from langgraph.runtime import Runtime
 

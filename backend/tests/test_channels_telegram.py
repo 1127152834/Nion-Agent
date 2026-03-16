@@ -50,7 +50,7 @@ def test_telegram_connection_probe(monkeypatch) -> None:
         def __init__(self, *, timeout: float):
             self.timeout = timeout
 
-        def __enter__(self) -> "_FakeClient":
+        def __enter__(self) -> _FakeClient:
             return self
 
         def __exit__(self, exc_type, exc, tb) -> None:
@@ -86,7 +86,7 @@ def test_telegram_send_system_message(monkeypatch) -> None:
         def __init__(self, *, timeout: float):
             self.timeout = timeout
 
-        def __enter__(self) -> "_FakeClient":
+        def __enter__(self) -> _FakeClient:
             return self
 
         def __exit__(self, exc_type, exc, tb) -> None:
@@ -231,18 +231,11 @@ def test_init_schema_adds_session_columns_to_legacy_channel_tables() -> None:
         repo.init_schema()
 
         with db.connect() as conn:
-            integration_columns = {
-                str(row[1])
-                for row in conn.execute("PRAGMA table_info(channel_integrations)").fetchall()
-            }
-            authorized_user_columns = {
-                str(row[1])
-                for row in conn.execute("PRAGMA table_info(channel_authorized_users)").fetchall()
-            }
+            integration_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(channel_integrations)").fetchall()}
+            authorized_user_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(channel_authorized_users)").fetchall()}
 
         assert "session_json" in integration_columns
         assert "session_override_json" in authorized_user_columns
-
 
 
 def test_channel_repository_session_round_trip_and_clear_override() -> None:
@@ -321,7 +314,6 @@ def test_channel_repository_session_round_trip_and_clear_override() -> None:
             session_override=None,
         )
         assert cleared["session_override"] is None
-
 
 
 def test_channel_bridge_resolve_run_settings_prefers_user_override_then_channel_default() -> None:
@@ -423,7 +415,6 @@ def test_channel_bridge_resolve_run_settings_prefers_user_override_then_channel_
             "thinking_enabled": True,
             "is_plan_mode": False,
         }
-
 
 
 def test_channel_bridge_resolve_run_settings_only_sends_explicit_fields() -> None:

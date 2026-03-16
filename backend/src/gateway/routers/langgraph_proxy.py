@@ -48,19 +48,11 @@ def _build_target_url(path: str) -> str:
 
 
 def _forward_request_headers(request: Request) -> dict[str, str]:
-    return {
-        key: value
-        for key, value in request.headers.items()
-        if key.lower() not in _REQUEST_HEADER_BLOCKLIST
-    }
+    return {key: value for key, value in request.headers.items() if key.lower() not in _REQUEST_HEADER_BLOCKLIST}
 
 
 def _forward_response_headers(response: httpx.Response) -> dict[str, str]:
-    return {
-        key: value
-        for key, value in response.headers.items()
-        if key.lower() not in _HOP_BY_HOP_HEADERS
-    }
+    return {key: value for key, value in response.headers.items() if key.lower() not in _HOP_BY_HOP_HEADERS}
 
 
 def _is_stream_response(content_type: str | None) -> bool:

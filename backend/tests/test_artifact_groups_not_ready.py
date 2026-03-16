@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.gateway.routers import artifact_groups
 from src.gateway.langgraph_client import LangGraphThreadNotReadyError
+from src.gateway.routers import artifact_groups
 
 
 def _make_client() -> TestClient:

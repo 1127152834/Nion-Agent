@@ -126,4 +126,3 @@ def get_timezone_service() -> TimezoneService:
         if _SERVICE is None:
             _SERVICE = TimezoneService()
     return _SERVICE
-

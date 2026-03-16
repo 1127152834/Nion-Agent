@@ -143,4 +143,3 @@ def filter_tools_by_policy(agent_name: str | None, tools: list[object]) -> list[
 
 class AgentToolPolicyUpdateRequest(BaseModel):
     tools: list[AgentToolPolicy] = Field(default_factory=list)
-

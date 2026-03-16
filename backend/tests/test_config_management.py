@@ -13,10 +13,9 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config.config_store import SQLiteConfigStore, create_config_store
-from src.config.config_repository import ConfigRepository
-from src.config.migration import migrate_config_to_sqlite
 from src.config.app_config import AppConfig
+from src.config.config_repository import ConfigRepository
+from src.config.config_store import SQLiteConfigStore
 
 
 def _config_store_ok() -> bool:

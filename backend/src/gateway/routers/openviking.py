@@ -311,10 +311,7 @@ async def commit_openviking_session(payload: OpenVikingSessionCommitRequest) -> 
     _ = payload
     raise HTTPException(
         status_code=410,
-        detail=(
-            "session_commit has been removed. "
-            "Use POST /api/memory/write (Extract -> Decide -> Action hard-cut pipeline)."
-        ),
+        detail=("session_commit has been removed. Use POST /api/memory/write (Extract -> Decide -> Action hard-cut pipeline)."),
     )
 
 

@@ -191,10 +191,7 @@ class RuntimeProfileRepository:
         else:
             next_workdir = existing_workdir
 
-        if existing["locked"] and (
-            existing["execution_mode"] != next_mode
-            or _normalize_host_workdir(existing["host_workdir"]) != next_workdir
-        ):
+        if existing["locked"] and (existing["execution_mode"] != next_mode or _normalize_host_workdir(existing["host_workdir"]) != next_workdir):
             raise RuntimeProfileLockedError("Runtime profile is locked after first run")
 
         next_profile = RuntimeProfile(

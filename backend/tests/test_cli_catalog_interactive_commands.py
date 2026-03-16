@@ -13,4 +13,3 @@ def test_xhs_cli_login_marked_as_pty_interactive():
     login_cmd = next((c for c in interactive if c.get("pattern") == "login"), None)
     assert login_cmd is not None
     assert login_cmd.get("input_method") == "pty"
-

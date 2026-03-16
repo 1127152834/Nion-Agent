@@ -1,7 +1,5 @@
 """Test lead agent delegation contract and prompt."""
 
-import pytest
-
 from src.agents.lead_agent.prompt import _build_subagent_section
 
 

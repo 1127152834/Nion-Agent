@@ -10,7 +10,7 @@ Builtin tools should import these symbols from here to avoid ImportError at impo
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from langchain.tools import tool
 
@@ -26,10 +26,8 @@ except Exception:  # noqa: BLE001
 try:
     from langchain.tools import ToolRuntime  # type: ignore
 except Exception:  # noqa: BLE001
-    ContextT = TypeVar("ContextT")
-    StateT = TypeVar("StateT")
 
-    class ToolRuntime(Generic[ContextT, StateT]):  # type: ignore[no-redef]
+    class ToolRuntime[ContextT, StateT]:  # type: ignore[no-redef]
         """Minimal runtime shape used only for typing and safe imports in tests."""
 
         context: Any
@@ -38,4 +36,3 @@ except Exception:  # noqa: BLE001
 
 
 __all__ = ["InjectedToolCallId", "ToolRuntime", "tool"]
-

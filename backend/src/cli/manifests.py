@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -80,4 +79,3 @@ def save_cli_install_manifest(manifest: CliInstallManifest, *, paths=None) -> Pa
     temp_path.write_text(json.dumps(manifest.model_dump(mode="json"), indent=2, ensure_ascii=False), encoding="utf-8")
     temp_path.replace(file_path)
     return file_path
-

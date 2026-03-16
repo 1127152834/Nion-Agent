@@ -2,9 +2,9 @@
 
 from typing import NotRequired, override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
 
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from src.config.title_config import get_title_config
 from src.models import create_chat_model
 

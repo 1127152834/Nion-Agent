@@ -135,12 +135,12 @@ _INDEXES_DDL = """
       ON channel_message_logs(platform, created_at DESC);
 """
 
-_SCHEMA_DDL = f"""
+_SCHEMA_DDL = """
     CREATE TABLE IF NOT EXISTS channel_integrations (
         platform TEXT PRIMARY KEY CHECK(platform IN ('lark', 'dingtalk', 'telegram')),
         enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0, 1)),
         mode TEXT NOT NULL DEFAULT 'webhook' CHECK(mode IN ('webhook', 'stream')),
-        credentials_json TEXT NOT NULL DEFAULT '{{}}',
+        credentials_json TEXT NOT NULL DEFAULT '{}',
         default_workspace_id TEXT,
         session_json TEXT,
         created_at TEXT NOT NULL,
@@ -273,85 +273,43 @@ class ChannelDatabase:
 
             # Backward-compatible migration for existing databases created
             # before the `mode` column was introduced.
-            columns = {
-                str(row[1])
-                for row in conn.execute("PRAGMA table_info(channel_integrations)").fetchall()
-            }
+            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(channel_integrations)").fetchall()}
             if "mode" not in columns:
-                conn.execute(
-                    "ALTER TABLE channel_integrations ADD COLUMN mode TEXT NOT NULL DEFAULT 'webhook'"
-                )
+                conn.execute("ALTER TABLE channel_integrations ADD COLUMN mode TEXT NOT NULL DEFAULT 'webhook'")
             if "session_json" not in columns:
-                conn.execute(
-                    "ALTER TABLE channel_integrations ADD COLUMN session_json TEXT"
-                )
+                conn.execute("ALTER TABLE channel_integrations ADD COLUMN session_json TEXT")
 
-            authorized_user_columns = {
-                str(row[1])
-                for row in conn.execute("PRAGMA table_info(channel_authorized_users)").fetchall()
-            }
+            authorized_user_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(channel_authorized_users)").fetchall()}
             if "workspace_id" not in authorized_user_columns:
-                conn.execute(
-                    "ALTER TABLE channel_authorized_users ADD COLUMN workspace_id TEXT"
-                )
+                conn.execute("ALTER TABLE channel_authorized_users ADD COLUMN workspace_id TEXT")
             if "session_override_json" not in authorized_user_columns:
-                conn.execute(
-                    "ALTER TABLE channel_authorized_users ADD COLUMN session_override_json TEXT"
-                )
+                conn.execute("ALTER TABLE channel_authorized_users ADD COLUMN session_override_json TEXT")
 
-            message_log_columns = {
-                str(row[1])
-                for row in conn.execute("PRAGMA table_info(channel_message_logs)").fetchall()
-            }
+            message_log_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(channel_message_logs)").fetchall()}
             if "delivery_path" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN delivery_path TEXT"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN delivery_path TEXT")
             if "render_mode" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN render_mode TEXT"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN render_mode TEXT")
             if "fallback_reason" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN fallback_reason TEXT"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN fallback_reason TEXT")
             if "stream_chunk_count" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN stream_chunk_count INTEGER NOT NULL DEFAULT 0"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN stream_chunk_count INTEGER NOT NULL DEFAULT 0")
             if "media_attempted_count" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN media_attempted_count INTEGER NOT NULL DEFAULT 0"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN media_attempted_count INTEGER NOT NULL DEFAULT 0")
             if "media_sent_count" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN media_sent_count INTEGER NOT NULL DEFAULT 0"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN media_sent_count INTEGER NOT NULL DEFAULT 0")
             if "media_failed_count" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN media_failed_count INTEGER NOT NULL DEFAULT 0"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN media_failed_count INTEGER NOT NULL DEFAULT 0")
             if "media_manifest_json" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN media_manifest_json TEXT"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN media_manifest_json TEXT")
             if "media_fallback_reason" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN media_fallback_reason TEXT"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN media_fallback_reason TEXT")
             if "error_code" not in message_log_columns:
-                conn.execute(
-                    "ALTER TABLE channel_message_logs ADD COLUMN error_code TEXT"
-                )
+                conn.execute("ALTER TABLE channel_message_logs ADD COLUMN error_code TEXT")
 
-            pair_request_columns = {
-                str(row[1])
-                for row in conn.execute("PRAGMA table_info(channel_pair_requests)").fetchall()
-            }
+            pair_request_columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(channel_pair_requests)").fetchall()}
             if "session_webhook" not in pair_request_columns:
-                conn.execute(
-                    "ALTER TABLE channel_pair_requests ADD COLUMN session_webhook TEXT"
-                )
+                conn.execute("ALTER TABLE channel_pair_requests ADD COLUMN session_webhook TEXT")
 
             self._migrate_platform_check_constraints(conn)
             self._ensure_indexes(conn)
@@ -384,20 +342,13 @@ class ChannelDatabase:
         source_table: str,
         target_table: str,
     ) -> None:
-        source_columns = {
-            str(row[1]) for row in conn.execute(f"PRAGMA table_info({source_table})").fetchall()
-        }
-        target_columns = [
-            str(row[1]) for row in conn.execute(f"PRAGMA table_info({target_table})").fetchall()
-        ]
+        source_columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({source_table})").fetchall()}
+        target_columns = [str(row[1]) for row in conn.execute(f"PRAGMA table_info({target_table})").fetchall()]
         shared_columns = [column for column in target_columns if column in source_columns]
         if not shared_columns:
             return
         quoted_columns = ", ".join(f'"{column}"' for column in shared_columns)
-        conn.execute(
-            f'INSERT INTO "{target_table}" ({quoted_columns}) '
-            f'SELECT {quoted_columns} FROM "{source_table}"'
-        )
+        conn.execute(f'INSERT INTO "{target_table}" ({quoted_columns}) SELECT {quoted_columns} FROM "{source_table}"')
 
     def _recreate_table_with_current_constraint(
         self,

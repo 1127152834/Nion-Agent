@@ -42,4 +42,3 @@ def test_BE_CORE_MEM_407_default_agent_write_and_hit_use_global(monkeypatch, tmp
     hits = runtime.search_memory(query="我叫什么名字", limit=5, agent_name=None)
     assert hits, "should hit from local ledger"
     assert any("张天成" in str(hit.get("memory") or hit.get("abstract") or "") for hit in hits)
-

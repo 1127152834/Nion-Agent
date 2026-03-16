@@ -31,4 +31,3 @@ def test_evolution_run_creates_report_and_returns_202(tmp_path):
             reports = client.get("/api/evolution/reports?agent_name=_default").json()
             assert len(reports) >= 1
             assert reports[0]["report_id"] == payload["report_id"]
-

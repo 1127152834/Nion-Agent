@@ -7,8 +7,8 @@ from .executor import (
     list_persisted_tasks,
     patch_persisted_task,
 )
-from .run_models import SubagentRunRecord
 from .registry import get_subagent_config, list_subagents
+from .run_models import SubagentRunRecord
 from .scopes import SubagentScopes
 
 __all__ = [

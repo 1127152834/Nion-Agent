@@ -20,8 +20,8 @@ from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from src.processlog.service import get_processlog_service
-from src.scheduler.events import SchedulerEvent, get_scheduler_event_hub
 from src.scheduler import store
+from src.scheduler.events import SchedulerEvent, get_scheduler_event_hub
 from src.scheduler.models import ScheduledTask, TaskExecutionRecord, TaskMode, TaskStatus, TriggerType
 
 if TYPE_CHECKING:
@@ -252,14 +252,7 @@ class TaskScheduler:
         started_task_ids: list[str] = []
 
         with self._lock:
-            targets = [
-                task
-                for task in self._tasks.values()
-                if task.enabled
-                and task.trigger.type == TriggerType.EVENT
-                and task.trigger.event_type == event_type
-                and self._match_event_filters(task.trigger.event_filters, payload)
-            ]
+            targets = [task for task in self._tasks.values() if task.enabled and task.trigger.type == TriggerType.EVENT and task.trigger.event_type == event_type and self._match_event_filters(task.trigger.event_filters, payload)]
 
         for task in targets:
             self._execution_pool.submit(self._execute_task, task.id, True)
@@ -721,11 +714,7 @@ class TaskScheduler:
     def _build_execution_log_fallback(self, task: ScheduledTask, record: TaskExecutionRecord) -> str:
         started_at = record.started_at.isoformat() if record.started_at else "-"
         completed_at = record.completed_at.isoformat() if record.completed_at else "-"
-        duration_ms = (
-            int((record.completed_at - record.started_at).total_seconds() * 1000)
-            if record.completed_at and record.started_at
-            else 0
-        )
+        duration_ms = int((record.completed_at - record.started_at).total_seconds() * 1000) if record.completed_at and record.started_at else 0
 
         result = record.result if isinstance(record.result, dict) else {}
         artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), list) else []
@@ -785,11 +774,7 @@ class TaskScheduler:
         if task.mode != TaskMode.WORKFLOW or not record.thread_id:
             return fallback
 
-        duration_ms = (
-            int((record.completed_at - record.started_at).total_seconds() * 1000)
-            if record.completed_at and record.started_at
-            else 0
-        )
+        duration_ms = int((record.completed_at - record.started_at).total_seconds() * 1000) if record.completed_at and record.started_at else 0
         result = record.result if isinstance(record.result, dict) else {}
         artifacts = result.get("artifacts") if isinstance(result.get("artifacts"), list) else []
         artifacts = [item for item in artifacts if isinstance(item, str)]

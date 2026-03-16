@@ -1,8 +1,8 @@
 """Unit tests for checkpointer config and singleton factory."""
 
 import importlib
-import types
 import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest

@@ -6,12 +6,15 @@ from typing import Any, NotRequired, override
 try:
     from langchain.agents import AgentState
 except Exception:  # noqa: BLE001
+
     class AgentState(dict):  # type: ignore[no-redef]
         pass
+
 
 try:
     from langchain.agents.middleware import AgentMiddleware
 except Exception:  # noqa: BLE001
+
     class AgentMiddleware:  # type: ignore[no-redef]
         @classmethod
         def __class_getitem__(cls, item):
@@ -19,6 +22,7 @@ except Exception:  # noqa: BLE001
 
         def __init__(self, *args, **kwargs):
             _ = args, kwargs
+
 
 from langgraph.runtime import Runtime
 
@@ -59,9 +63,7 @@ def _filter_messages_for_memory(messages: list[Any]) -> list[Any]:
     Returns:
         Filtered list containing only user inputs and final assistant responses.
     """
-    _UPLOAD_BLOCK_RE = re.compile(
-        r"<uploaded_files>[\s\S]*?</uploaded_files>\n*", re.IGNORECASE
-    )
+    _UPLOAD_BLOCK_RE = re.compile(r"<uploaded_files>[\s\S]*?</uploaded_files>\n*", re.IGNORECASE)
 
     filtered = []
     skip_next_ai = False
@@ -71,9 +73,7 @@ def _filter_messages_for_memory(messages: list[Any]) -> list[Any]:
         if msg_type == "human":
             content = getattr(msg, "content", "")
             if isinstance(content, list):
-                content = " ".join(
-                    p.get("text", "") for p in content if isinstance(p, dict)
-                )
+                content = " ".join(p.get("text", "") for p in content if isinstance(p, dict))
             content_str = str(content)
             if "<uploaded_files>" in content_str:
                 # Strip the ephemeral upload block; keep the user's real question.
@@ -152,10 +152,7 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
         provider = get_default_memory_provider()
         policy = provider.resolve_policy(MemoryWriteRequest(thread_id=thread_id, messages=[], agent_name=self._agent_name, state=state, runtime_context=runtime.context))
         if not policy.allow_write:
-            print(
-                "MemoryMiddleware: Memory write disabled for thread "
-                f"{thread_id} (session_mode={policy.session_mode})"
-            )
+            print(f"MemoryMiddleware: Memory write disabled for thread {thread_id} (session_mode={policy.session_mode})")
             return None
 
         # Get messages from state

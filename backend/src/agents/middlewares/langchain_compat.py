@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar
-
 try:
     from langchain.agents import AgentState as AgentState  # type: ignore
 except Exception:  # noqa: BLE001
+
     class AgentState(dict):  # type: ignore[no-redef]
         pass
 
-_StateT = TypeVar("_StateT")
+
 try:
     from langchain.agents.middleware import AgentMiddleware as AgentMiddleware  # type: ignore
 except Exception:  # noqa: BLE001
-    class AgentMiddleware(Generic[_StateT]):  # type: ignore[no-redef]
+
+    class AgentMiddleware[StateT]:  # type: ignore[no-redef]
         state_schema = dict
 
         @classmethod
@@ -23,4 +23,3 @@ except Exception:  # noqa: BLE001
 
         def __init__(self, *args, **kwargs):
             _ = args, kwargs
-

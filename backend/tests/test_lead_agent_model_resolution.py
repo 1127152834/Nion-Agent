@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from src.agents import make_lead_agent as root_make_lead_agent
-from src.agents.lead_agent import make_lead_agent as package_make_lead_agent
 from src.agents.lead_agent import agent as lead_agent_module
+from src.agents.lead_agent import make_lead_agent as package_make_lead_agent
 from src.config.app_config import AppConfig
 from src.config.model_config import ModelConfig
 from src.config.sandbox_config import SandboxConfig

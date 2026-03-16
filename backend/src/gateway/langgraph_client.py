@@ -50,13 +50,7 @@ async def cancel_active_thread_runs(thread_id: str, *, timeout: float = 15.0) ->
         if not isinstance(payload, list):
             raise HTTPException(status_code=502, detail="Invalid runs payload from LangGraph")
 
-        active_run_ids = [
-            run.get("run_id")
-            for run in payload
-            if isinstance(run, dict)
-            and isinstance(run.get("run_id"), str)
-            and run.get("status") not in _TERMINAL_RUN_STATUSES
-        ]
+        active_run_ids = [run.get("run_id") for run in payload if isinstance(run, dict) and isinstance(run.get("run_id"), str) and run.get("status") not in _TERMINAL_RUN_STATUSES]
 
         if not active_run_ids:
             return

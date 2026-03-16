@@ -1,11 +1,8 @@
 """Test default agent initialization."""
 
 import json
-import shutil
 import tempfile
 from pathlib import Path
-
-import pytest
 
 from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
 from src.config.paths import Paths
@@ -18,6 +15,7 @@ def test_ensure_default_agent_creates_files():
 
         # Monkey patch get_paths to use temp directory
         import src.config.default_agent
+
         original_get_paths = src.config.default_agent.get_paths
         src.config.default_agent.get_paths = lambda: paths
 
@@ -60,6 +58,7 @@ def test_ensure_default_agent_idempotent():
         paths = Paths(base_dir=tmpdir)
 
         import src.config.default_agent
+
         original_get_paths = src.config.default_agent.get_paths
         src.config.default_agent.get_paths = lambda: paths
 

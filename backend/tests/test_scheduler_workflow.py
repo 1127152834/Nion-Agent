@@ -1,6 +1,5 @@
-from unittest.mock import MagicMock, patch
-
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from src.scheduler.models import AgentStep
 from src.scheduler.workflow import WorkflowExecutor

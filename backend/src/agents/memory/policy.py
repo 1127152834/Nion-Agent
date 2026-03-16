@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping
-
+from typing import Any, Literal
 
 SessionMode = Literal["normal", "temporary_chat"]
 
@@ -48,11 +48,7 @@ def _resolve_session_mode(
     state: Mapping[str, Any],
     runtime_context: Mapping[str, Any],
 ) -> SessionMode:
-    return (
-        _normalize_session_mode(state.get("session_mode"))
-        or _normalize_session_mode(runtime_context.get("session_mode"))
-        or "normal"
-    )
+    return _normalize_session_mode(state.get("session_mode")) or _normalize_session_mode(runtime_context.get("session_mode")) or "normal"
 
 
 def _resolve_explicit_bool(

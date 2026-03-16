@@ -33,8 +33,8 @@ from typing import Any, Literal
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from src.agents.memory.core import MemoryReadRequest
 from src.agents.lead_agent.prompt import apply_prompt_template
+from src.agents.memory.core import MemoryReadRequest
 from src.agents.thread_state import ThreadState
 from src.config.app_config import get_app_config, reload_app_config
 from src.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
@@ -52,10 +52,7 @@ def _load_create_agent():
     try:
         from langchain.agents import create_agent as _create_agent
     except Exception as exc:  # noqa: BLE001
-        raise ImportError(
-            "langchain.agents.create_agent is unavailable. "
-            "Please install/upgrade langchain to a compatible version."
-        ) from exc
+        raise ImportError("langchain.agents.create_agent is unavailable. Please install/upgrade langchain to a compatible version.") from exc
     return _create_agent
 
 
@@ -682,11 +679,7 @@ class NionClient:
         """
         # Persist extensions state under the Nion data dir (NION_HOME / $HOME/.nion) so it survives
         # restarts and does not depend on current working directory.
-        config_path = (
-            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
-            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
-            else ExtensionsConfig.default_config_path()
-        )
+        config_path = Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve() if os.getenv("NION_EXTENSIONS_CONFIG_PATH") else ExtensionsConfig.default_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         current_config = get_extensions_config()
@@ -752,11 +745,7 @@ class NionClient:
 
         # Persist extensions state under the Nion data dir (NION_HOME / $HOME/.nion) so it survives
         # restarts and does not depend on current working directory.
-        config_path = (
-            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
-            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
-            else ExtensionsConfig.default_config_path()
-        )
+        config_path = Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve() if os.getenv("NION_EXTENSIONS_CONFIG_PATH") else ExtensionsConfig.default_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         extensions_config = get_extensions_config()

@@ -4,10 +4,10 @@ import logging
 from pathlib import Path
 from typing import NotRequired, override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from src.config.paths import Paths, get_paths
 
 logger = logging.getLogger(__name__)

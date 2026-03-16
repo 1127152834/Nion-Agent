@@ -351,9 +351,7 @@ class _ThreadWorkspaceBindingRepository:
         if isinstance(current, dict):
             current_workspace_id = _safe_text(current.get("workspace_id"))
             if current_workspace_id and current_workspace_id != normalized_workspace_id and not allow_rebind:
-                raise RuntimeError(
-                    f"Thread {normalized_thread_id} already bound to workspace {current_workspace_id}"
-                )
+                raise RuntimeError(f"Thread {normalized_thread_id} already bound to workspace {current_workspace_id}")
 
         bindings[normalized_thread_id] = {
             "workspace_id": normalized_workspace_id,
@@ -701,11 +699,7 @@ class _LarkReplyRenderer(_BaseReplyRenderer):
                 self._report.delivered = True
                 self._report.delivery_path = finalize_result.delivery_path
                 self._report.render_mode = "editable_stream"
-                self._report.message = (
-                    "delivered via lark editable message"
-                    if not failed
-                    else "delivered via lark editable message (failed state)"
-                )
+                self._report.message = "delivered via lark editable message" if not failed else "delivered via lark editable message (failed state)"
             except Exception as exc:
                 self._mark_degraded(f"lark editable finalize failed: {exc}")
 
@@ -837,11 +831,7 @@ class _DingTalkReplyRenderer(_BaseReplyRenderer):
                 self._report.delivered = True
                 self._report.delivery_path = "dingtalk.ai_card"
                 self._report.render_mode = "card_stream"
-                self._report.message = (
-                    "delivered via dingtalk ai card"
-                    if not failed
-                    else "delivered via dingtalk ai card (failed state)"
-                )
+                self._report.message = "delivered via dingtalk ai card" if not failed else "delivered via dingtalk ai card (failed state)"
             except Exception as exc:
                 self._mark_degraded(f"ai card finalize failed: {exc}")
 
@@ -857,6 +847,7 @@ class _DingTalkReplyRenderer(_BaseReplyRenderer):
         self._report.stream_chunk_count = self._stream_chunk_count
         self._report.last_stream_chunk_at = self._last_stream_chunk_at
         return self._report
+
 
 class ChannelAgentBridgeService:
     def __init__(
@@ -963,9 +954,7 @@ class ChannelAgentBridgeService:
         timeout_seconds = min(10.0, self._run_timeout_seconds)
         try:
             with httpx.Client(timeout=timeout_seconds) as client:
-                response = client.get(
-                    f"{self._langgraph_base_url}/threads/{normalized_thread_id}/state"
-                )
+                response = client.get(f"{self._langgraph_base_url}/threads/{normalized_thread_id}/state")
         except Exception:
             return None
         if response.status_code >= 400:
@@ -1197,11 +1186,7 @@ class ChannelAgentBridgeService:
         for asset in selected_assets:
             report.attempted_count += 1
             manifest_item = next(
-                (
-                    item
-                    for item in manifest
-                    if item.get("path") == asset.virtual_path and item.get("status") == "queued"
-                ),
+                (item for item in manifest if item.get("path") == asset.virtual_path and item.get("status") == "queued"),
                 None,
             )
             try:
@@ -1322,11 +1307,7 @@ class ChannelAgentBridgeService:
         if not selected_assets:
             skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
             if skipped_count > 0:
-                fallback_text = (
-                    self._format_media_fallback_text(assets)
-                    if assets
-                    else self._format_media_fallback_text_from_paths(artifact_paths)
-                )
+                fallback_text = self._format_media_fallback_text(assets) if assets else self._format_media_fallback_text_from_paths(artifact_paths)
                 self._send_lark_text(
                     chat_id=chat_id,
                     text=fallback_text,
@@ -1347,9 +1328,7 @@ class ChannelAgentBridgeService:
         with httpx.Client(timeout=self._run_timeout_seconds) as client:
             for asset in selected_assets:
                 report.attempted_count += 1
-                mime_type = (
-                    mimetypes.guess_type(asset.file_name)[0] or "application/octet-stream"
-                )
+                mime_type = mimetypes.guess_type(asset.file_name)[0] or "application/octet-stream"
 
                 try:
                     with open(asset.local_path, "rb") as f:
@@ -1446,11 +1425,7 @@ class ChannelAgentBridgeService:
 
         skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
         if report.failed_count > 0 or skipped_count > 0:
-            fallback_text = (
-                self._format_media_fallback_text(assets)
-                if assets
-                else self._format_media_fallback_text_from_paths(artifact_paths)
-            )
+            fallback_text = self._format_media_fallback_text(assets) if assets else self._format_media_fallback_text_from_paths(artifact_paths)
             self._send_lark_text(
                 chat_id=chat_id,
                 text=fallback_text,
@@ -1526,11 +1501,7 @@ class ChannelAgentBridgeService:
         if not selected_assets:
             skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
             if skipped_count > 0:
-                fallback_text = (
-                    self._format_media_fallback_text(assets)
-                    if assets
-                    else self._format_media_fallback_text_from_paths(artifact_paths)
-                )
+                fallback_text = self._format_media_fallback_text(assets) if assets else self._format_media_fallback_text_from_paths(artifact_paths)
                 self._send_telegram_text(
                     chat_id=chat_id,
                     text=fallback_text,
@@ -1543,9 +1514,7 @@ class ChannelAgentBridgeService:
         with httpx.Client(timeout=self._run_timeout_seconds) as client:
             for asset in selected_assets:
                 report.attempted_count += 1
-                mime_type = (
-                    mimetypes.guess_type(asset.file_name)[0] or "application/octet-stream"
-                )
+                mime_type = mimetypes.guess_type(asset.file_name)[0] or "application/octet-stream"
 
                 try:
                     with open(asset.local_path, "rb") as f:
@@ -1608,11 +1577,7 @@ class ChannelAgentBridgeService:
 
         skipped_count = sum(1 for item in manifest if item.get("status") == "skipped")
         if report.failed_count > 0 or skipped_count > 0:
-            fallback_text = (
-                self._format_media_fallback_text(assets)
-                if assets
-                else self._format_media_fallback_text_from_paths(artifact_paths)
-            )
+            fallback_text = self._format_media_fallback_text(assets) if assets else self._format_media_fallback_text_from_paths(artifact_paths)
             self._send_telegram_text(
                 chat_id=chat_id,
                 text=fallback_text,
@@ -1624,7 +1589,6 @@ class ChannelAgentBridgeService:
         report.manifest_json = json.dumps(manifest, ensure_ascii=False)
         return report
 
-
     def _langgraph_thread_exists(self, thread_id: str) -> bool:
         if not thread_id:
             return False
@@ -1633,9 +1597,7 @@ class ChannelAgentBridgeService:
         if response.status_code == 404:
             return False
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"Failed to check LangGraph thread: HTTP {response.status_code} {response.text}"
-            )
+            raise RuntimeError(f"Failed to check LangGraph thread: HTTP {response.status_code} {response.text}")
         return True
 
     def _create_langgraph_thread(
@@ -1659,9 +1621,7 @@ class ChannelAgentBridgeService:
         with httpx.Client(timeout=10.0) as client:
             response = client.post(f"{self._langgraph_base_url}/threads", json=payload)
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"Failed to create LangGraph thread: HTTP {response.status_code} {response.text}"
-            )
+            raise RuntimeError(f"Failed to create LangGraph thread: HTTP {response.status_code} {response.text}")
 
     def _ensure_thread(
         self,
@@ -1895,11 +1855,7 @@ class ChannelAgentBridgeService:
                 if on_partial:
                     current_text = streamed_text.strip()
                     now = time.monotonic()
-                    should_emit = (
-                        current_text
-                        and current_text != last_emitted_text
-                        and now - last_emit_at >= emit_interval
-                    )
+                    should_emit = current_text and current_text != last_emitted_text and now - last_emit_at >= emit_interval
                     if should_emit:
                         on_partial(current_text)
                         last_emitted_text = current_text
@@ -1925,9 +1881,7 @@ class ChannelAgentBridgeService:
                         detail = response.read().decode("utf-8", errors="ignore")
                     except Exception:
                         detail = ""
-                    raise RuntimeError(
-                        f"LangGraph stream failed: HTTP {response.status_code} {detail}"
-                    )
+                    raise RuntimeError(f"LangGraph stream failed: HTTP {response.status_code} {detail}")
                 for line in response.iter_lines():
                     if line is None:
                         continue
@@ -1981,19 +1935,11 @@ class ChannelAgentBridgeService:
         return access_token
 
     def _resolve_dingtalk_card_template_id(self, credentials: dict[str, str]) -> str:
-        configured = _safe_text(
-            credentials.get("card_template_id")
-            or credentials.get("ai_card_template_id")
-            or credentials.get("template_id")
-        )
+        configured = _safe_text(credentials.get("card_template_id") or credentials.get("ai_card_template_id") or credentials.get("template_id"))
         return configured or _DINGTALK_AI_CARD_TEMPLATE_ID
 
     def _resolve_dingtalk_card_template_candidates(self, credentials: dict[str, str]) -> list[str]:
-        configured = _safe_text(
-            credentials.get("card_template_id")
-            or credentials.get("ai_card_template_id")
-            or credentials.get("template_id")
-        )
+        configured = _safe_text(credentials.get("card_template_id") or credentials.get("ai_card_template_id") or credentials.get("template_id"))
         custom_first = _env_flag(
             "NION_CHANNEL_CARD_TEMPLATE_CUSTOM_FIRST",
             default=False,
@@ -2030,9 +1976,7 @@ class ChannelAgentBridgeService:
             "markdown": normalized,
             "summary": normalized,
             "output": normalized,
-            "sys_full_json_obj": json.dumps(
-                {"order": ["msgContent", "content", "answer", "text", "markdown", "summary", "output"]}
-            ),
+            "sys_full_json_obj": json.dumps({"order": ["msgContent", "content", "answer", "text", "markdown", "summary", "output"]}),
         }
 
     def _dingtalk_api_request(
@@ -2100,11 +2044,7 @@ class ChannelAgentBridgeService:
                     card_template_id=card_template_id,
                 )
             except Exception as legacy_error:
-                raise RuntimeError(
-                    "createAndDeliver failed: "
-                    f"{create_and_deliver_error}; "
-                    f"legacy fallback failed: {legacy_error}"
-                ) from legacy_error
+                raise RuntimeError(f"createAndDeliver failed: {create_and_deliver_error}; legacy fallback failed: {legacy_error}") from legacy_error
 
     def _create_dingtalk_ai_card_create_and_deliver(
         self,
@@ -2115,9 +2055,7 @@ class ChannelAgentBridgeService:
     ) -> _DingTalkAICardSession:
         access_token = self._get_dingtalk_access_token(credentials=credentials)
         out_track_id = f"nion_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-        robot_code = _safe_text(credentials.get("robot_code")) or _safe_text(
-            credentials.get("client_id")
-        )
+        robot_code = _safe_text(credentials.get("robot_code")) or _safe_text(credentials.get("client_id"))
 
         payload: dict[str, Any] = {
             "cardTemplateId": card_template_id,
@@ -2201,9 +2139,7 @@ class ChannelAgentBridgeService:
             },
         )
 
-        robot_code = _safe_text(credentials.get("robot_code")) or _safe_text(
-            credentials.get("client_id")
-        )
+        robot_code = _safe_text(credentials.get("robot_code")) or _safe_text(credentials.get("client_id"))
         if _is_dingtalk_group_chat(incoming):
             chat_id = _safe_text(incoming.chat_id)
             if not chat_id:
@@ -2267,10 +2203,7 @@ class ChannelAgentBridgeService:
                     deliver_errors.append(f"IM_GROUP(chat fallback): {exc}")
 
             if not delivered:
-                raise RuntimeError(
-                    "private card delivery failed: "
-                    + "; ".join(deliver_errors or ["missing user id and chat id"])
-                )
+                raise RuntimeError("private card delivery failed: " + "; ".join(deliver_errors or ["missing user id and chat id"]))
 
         return _DingTalkAICardSession(
             out_track_id=out_track_id,
@@ -2455,9 +2388,7 @@ class ChannelAgentBridgeService:
             text=text,
         )
         if not fallback.fallback_reason:
-            fallback.fallback_reason = (
-                card_result.fallback_reason or "ai card notify failed; fallback text"
-            )
+            fallback.fallback_reason = card_result.fallback_reason or "ai card notify failed; fallback text"
         return fallback
 
     def _get_lark_tenant_access_token(
@@ -2537,11 +2468,7 @@ class ChannelAgentBridgeService:
                     ),
                     None,
                 )
-            message_id = _safe_text(
-                (message_payload.get("data") or {}).get("message_id")
-                if isinstance(message_payload.get("data"), dict)
-                else None
-            )
+            message_id = _safe_text((message_payload.get("data") or {}).get("message_id") if isinstance(message_payload.get("data"), dict) else None)
         return (
             ChannelDeliveryResult(
                 delivered=True,
@@ -2744,11 +2671,7 @@ class ChannelAgentBridgeService:
                         error_payload = send_resp.json()
                     except Exception:
                         error_payload = {}
-                    error_message = _safe_text(
-                        error_payload.get("errmsg")
-                        or error_payload.get("message")
-                        or send_resp.text
-                    )
+                    error_message = _safe_text(error_payload.get("errmsg") or error_payload.get("message") or send_resp.text)
                     if error_message:
                         return ChannelDeliveryResult(
                             delivered=False,
@@ -2830,16 +2753,11 @@ class ChannelAgentBridgeService:
                     "dingtalk.api.group-fallback",
                 )
                 if fallback_result.delivered:
-                    fallback_result.fallback_reason = (
-                        "oTo delivery failed; fallback to groupMessages/send"
-                    )
+                    fallback_result.fallback_reason = "oTo delivery failed; fallback to groupMessages/send"
                     return fallback_result
                 return ChannelDeliveryResult(
                     delivered=False,
-                    message=(
-                        f"{_safe_text(oto_result.message)}; "
-                        f"fallback group failed: {_safe_text(fallback_result.message)}"
-                    ),
+                    message=(f"{_safe_text(oto_result.message)}; fallback group failed: {_safe_text(fallback_result.message)}"),
                     delivery_path="dingtalk.api",
                     render_mode="text",
                     fallback_reason="oTo and group fallback both failed",
@@ -2884,16 +2802,11 @@ class ChannelAgentBridgeService:
                 path="dingtalk.static_webhook",
             )
             if webhook_result.delivered:
-                webhook_result.fallback_reason = (
-                    api_result.fallback_reason or "api delivery failed; fallback static webhook"
-                )
+                webhook_result.fallback_reason = api_result.fallback_reason or "api delivery failed; fallback static webhook"
                 return webhook_result
             return ChannelDeliveryResult(
                 delivered=False,
-                message=(
-                    f"{_safe_text(api_result.message)}; "
-                    f"fallback webhook failed: {_safe_text(webhook_result.message)}"
-                ),
+                message=(f"{_safe_text(api_result.message)}; fallback webhook failed: {_safe_text(webhook_result.message)}"),
                 delivery_path="dingtalk",
                 render_mode="text",
                 fallback_reason="api and static webhook both failed",
@@ -3153,9 +3066,7 @@ class ChannelAgentBridgeService:
         authorized_user = self._resolve_authorized_user(platform, incoming)
         if authorized_user is None:
             raise RuntimeError("user not authorized")
-        workspace_id = self._resolve_workspace_id(
-            authorized_user.get("workspace_id") or integration.get("default_workspace_id")
-        )
+        workspace_id = self._resolve_workspace_id(authorized_user.get("workspace_id") or integration.get("default_workspace_id"))
         thread_mapping = self._ensure_thread(
             platform,
             incoming,
@@ -3222,10 +3133,7 @@ class ChannelAgentBridgeService:
             def _emit_state_snapshot(source: str, force: bool = False) -> None:
                 nonlocal state_seq, last_state_emit_at
                 now = time.monotonic()
-                if (
-                    not force
-                    and now - last_state_emit_at < self._state_snapshot_emit_interval_seconds
-                ):
+                if not force and now - last_state_emit_at < self._state_snapshot_emit_interval_seconds:
                     return
                 values = self._fetch_thread_state_values(thread_id)
                 if not isinstance(values, dict):

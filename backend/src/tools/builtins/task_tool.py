@@ -115,6 +115,7 @@ def task_tool(
     # Get available tools (excluding task tool to prevent nesting)
     # Lazy import to avoid circular dependency
     from src.tools import get_available_tools
+
     runtime_agent_name = None
     if runtime is not None:
         value = runtime.context.get("agent_name")

@@ -215,9 +215,7 @@ class SQLiteConfigStore:
             ).fetchone()
             if table_row is None:
                 return False
-            state_row = conn.execute(
-                f"SELECT 1 FROM {self.TABLE_NAME} WHERE id = 1"
-            ).fetchone()
+            state_row = conn.execute(f"SELECT 1 FROM {self.TABLE_NAME} WHERE id = 1").fetchone()
             return state_row is not None
 
     def read_version(self) -> tuple[str, Path]:

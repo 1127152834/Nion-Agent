@@ -2,13 +2,13 @@
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
 
-class SuggestionType(str, Enum):
+class SuggestionType(StrEnum):
     """Suggestion type."""
 
     MEMORY = "memory_suggestion"
@@ -16,7 +16,7 @@ class SuggestionType(str, Enum):
     AGENT = "agent_suggestion"
 
 
-class SuggestionStatus(str, Enum):
+class SuggestionStatus(StrEnum):
     """Suggestion status."""
 
     PENDING = "pending"
@@ -24,7 +24,7 @@ class SuggestionStatus(str, Enum):
     DISMISSED = "dismissed"
 
 
-class SuggestionPriority(str, Enum):
+class SuggestionPriority(StrEnum):
     """Suggestion priority."""
 
     LOW = "low"
@@ -50,7 +50,7 @@ class EvolutionSuggestion(BaseModel):
     default_action: Literal["suggest_only"] = "suggest_only"
 
 
-class ReportStatus(str, Enum):
+class ReportStatus(StrEnum):
     """Report status."""
 
     PENDING = "pending"

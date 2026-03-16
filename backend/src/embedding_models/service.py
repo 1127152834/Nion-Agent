@@ -8,7 +8,7 @@ from typing import Any
 
 from src.config import get_app_config
 from src.config.config_repository import ConfigRepository
-from src.config.embedding_config import EmbeddingConfig, PRESET_LOCAL_MODELS, PRESET_OPENAI_MODELS
+from src.config.embedding_config import PRESET_LOCAL_MODELS, PRESET_OPENAI_MODELS, EmbeddingConfig
 
 logger = logging.getLogger(__name__)
 

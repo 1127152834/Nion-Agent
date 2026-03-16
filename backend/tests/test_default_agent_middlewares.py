@@ -16,4 +16,3 @@ def test_BE_CORE_MEM_404_memory_middleware_normalizes_default_agent_name():
 def test_BE_CORE_MEM_405_openviking_context_middleware_normalizes_default_agent_name():
     mw = OpenVikingContextMiddleware(agent_name="_default")
     assert mw._agent_name is None  # noqa: SLF001
-

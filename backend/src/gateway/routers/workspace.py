@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import shlex
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
@@ -129,13 +129,9 @@ def _sandbox_find_paths(
     for name in sorted(EXCLUDED_DIR_NAMES):
         prune_parts.append(f"-name {shlex.quote(name)}")
     prune_expr = " -o ".join(prune_parts)
-    command = (
-        f"find {quoted_root} -maxdepth {depth} -mindepth 1 "
-        f"\\( {prune_expr} \\) -prune -o -type {file_type} -print 2>/dev/null"
-    )
+    command = f"find {quoted_root} -maxdepth {depth} -mindepth 1 \\( {prune_expr} \\) -prune -o -type {file_type} -print 2>/dev/null"
     output = sandbox.execute_command(command)
     return _parse_sandbox_lines(output)
-
 
 
 def _ensure_workspace_tree_root(thread_id: str) -> None:
@@ -146,13 +142,11 @@ def _ensure_workspace_tree_root(thread_id: str) -> None:
     get_paths().ensure_thread_dirs(thread_id)
 
 
-
 def _to_virtual_path(root_virtual: str, root_actual: Path, target: Path) -> str:
     relative = target.relative_to(root_actual)
     if relative.as_posix() == ".":
         return root_virtual
     return f"{root_virtual.rstrip('/')}/{relative.as_posix()}"
-
 
 
 def _normalize_root(root: str) -> str:

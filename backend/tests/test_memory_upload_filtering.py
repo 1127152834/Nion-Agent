@@ -7,14 +7,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src.agents.middlewares.memory_middleware import MemoryMiddleware, _filter_messages_for_memory
 
-_UPLOAD_BLOCK = (
-    "<uploaded_files>\n"
-    "The following files have been uploaded and are available for use:\n\n"
-    "- filename: secret.txt\n"
-    "  path: /mnt/user-data/uploads/abc123/secret.txt\n"
-    "  size: 42 bytes\n"
-    "</uploaded_files>"
-)
+_UPLOAD_BLOCK = "<uploaded_files>\nThe following files have been uploaded and are available for use:\n\n- filename: secret.txt\n  path: /mnt/user-data/uploads/abc123/secret.txt\n  size: 42 bytes\n</uploaded_files>"
 
 
 def _human(text: str) -> HumanMessage:

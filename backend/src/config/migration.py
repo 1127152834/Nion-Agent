@@ -31,7 +31,7 @@ def load_yaml_config(config_path: Path) -> dict[str, Any] | None:
         return None
 
     try:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
             if not isinstance(config, dict):
                 logger.warning(f"Config file {config_path} does not contain a valid dictionary")

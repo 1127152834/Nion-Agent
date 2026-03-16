@@ -89,12 +89,7 @@ def _extract_lark(payload: dict[str, Any]) -> IncomingWebhookEvent:
     message = event_block.get("message") if isinstance(event_block.get("message"), dict) else {}
 
     event_id = header.get("event_id") or payload.get("event_id")
-    external_user_id = (
-        sender_id_block.get("open_id")
-        or sender_id_block.get("user_id")
-        or sender.get("id")
-        or payload.get("user_id")
-    )
+    external_user_id = sender_id_block.get("open_id") or sender_id_block.get("user_id") or sender.get("id") or payload.get("user_id")
     external_user_name = sender.get("sender_name") or sender.get("name")
     chat_id = message.get("chat_id") or payload.get("chat_id")
     conversation_type = message.get("chat_type") or payload.get("conversation_type")
@@ -115,36 +110,13 @@ def _extract_lark(payload: dict[str, Any]) -> IncomingWebhookEvent:
 def _extract_dingtalk(payload: dict[str, Any]) -> IncomingWebhookEvent:
     sender = payload.get("sender") if isinstance(payload.get("sender"), dict) else {}
     event_id = payload.get("event_id") or payload.get("msgId") or payload.get("messageId")
-    external_user_id = (
-        sender.get("staffId")
-        or sender.get("staff_id")
-        or payload.get("staffId")
-        or payload.get("staff_id")
-        or payload.get("senderStaffId")
-        or payload.get("sender_staff_id")
-        or payload.get("senderId")
-        or sender.get("id")
-    )
+    external_user_id = sender.get("staffId") or sender.get("staff_id") or payload.get("staffId") or payload.get("staff_id") or payload.get("senderStaffId") or payload.get("sender_staff_id") or payload.get("senderId") or sender.get("id")
     external_user_name = sender.get("name") or payload.get("senderNick") or payload.get("senderName")
     conversation = payload.get("conversation") if isinstance(payload.get("conversation"), dict) else {}
-    chat_id = (
-        payload.get("chat_id")
-        or payload.get("conversationId")
-        or payload.get("openConversationId")
-        or conversation.get("id")
-    )
-    conversation_type = (
-        payload.get("conversation_type")
-        or payload.get("conversationType")
-        or conversation.get("type")
-    )
+    chat_id = payload.get("chat_id") or payload.get("conversationId") or payload.get("openConversationId") or conversation.get("id")
+    conversation_type = payload.get("conversation_type") or payload.get("conversationType") or conversation.get("type")
     session_webhook = payload.get("sessionWebhook") or payload.get("session_webhook")
-    text = (
-        _extract_text(payload.get("text"))
-        or _extract_text(payload.get("content"))
-        or _extract_text(payload.get("input"))
-        or _extract_text(payload.get("query"))
-    )
+    text = _extract_text(payload.get("text")) or _extract_text(payload.get("content")) or _extract_text(payload.get("input")) or _extract_text(payload.get("query"))
 
     return IncomingWebhookEvent(
         platform="dingtalk",
@@ -179,24 +151,10 @@ def _extract_telegram(payload: dict[str, Any]) -> IncomingWebhookEvent:
         sender = callback_query["from"]
 
     chat = message.get("chat") if isinstance(message, dict) and isinstance(message.get("chat"), dict) else {}
-    text = (
-        _extract_text(message.get("text") if isinstance(message, dict) else None)
-        or _extract_text(message.get("caption") if isinstance(message, dict) else None)
-        or _extract_text(callback_query.get("data"))
-    )
+    text = _extract_text(message.get("text") if isinstance(message, dict) else None) or _extract_text(message.get("caption") if isinstance(message, dict) else None) or _extract_text(callback_query.get("data"))
 
-    external_user_name = (
-        sender.get("username")
-        or " ".join(
-            part for part in (str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip())
-            if part
-        )
-    )
-    event_id = (
-        update_id
-        or (message.get("message_id") if isinstance(message, dict) else None)
-        or callback_query.get("id")
-    )
+    external_user_name = sender.get("username") or " ".join(part for part in (str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip()) if part)
+    event_id = update_id or (message.get("message_id") if isinstance(message, dict) else None) or callback_query.get("id")
 
     return IncomingWebhookEvent(
         platform="telegram",

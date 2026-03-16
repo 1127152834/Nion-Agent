@@ -96,7 +96,7 @@ def test_awrap_tool_call_matches_sync_behavior(monkeypatch) -> None:
     )
 
     async def handler(_request):
-        raise AssertionError('dangerous host call should be intercepted before execution')
+        raise AssertionError("dangerous host call should be intercepted before execution")
 
     result = asyncio.run(middleware.awrap_tool_call(request, handler))
 

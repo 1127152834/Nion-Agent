@@ -67,13 +67,7 @@ def _upsert_user_profile_block(*, user_md_path: Path, content: str) -> None:
         end += len(USER_PROFILE_MARKER_END)
         before = raw[:start].rstrip("\n")
         after = raw[end:].lstrip("\n")
-        merged = (
-            before
-            + ("\n\n" if before else "")
-            + block.strip("\n")
-            + ("\n\n" if after else "\n")
-            + after
-        )
+        merged = before + ("\n\n" if before else "") + block.strip("\n") + ("\n\n" if after else "\n") + after
         user_md_path.write_text(merged, encoding="utf-8")
         return
 
@@ -152,25 +146,18 @@ def setup_agent(
     agent_name: str | None = runtime.context.get("agent_name")
     agent_display_name: str | None = None
     if isinstance(runtime.context, dict):
-        agent_display_name = (
-            runtime.context.get("agent_display_name")
-            or runtime.context.get("agentDisplayName")
-            or runtime.context.get("display_name")
-            or runtime.context.get("displayName")
-        )
+        agent_display_name = runtime.context.get("agent_display_name") or runtime.context.get("agentDisplayName") or runtime.context.get("display_name") or runtime.context.get("displayName")
 
     if not agent_name or not str(agent_name).strip():
         return _tool_error(
-            "Error: missing required runtime context 'agent_name'. "
-            "Please pass agent_name in the first bootstrap message context before calling setup_agent.",
+            "Error: missing required runtime context 'agent_name'. Please pass agent_name in the first bootstrap message context before calling setup_agent.",
             runtime,
         )
 
     normalized_agent_name = str(agent_name).strip().lower()
     if not AGENT_NAME_PATTERN.match(normalized_agent_name):
         return _tool_error(
-            f"Error: invalid agent_name '{normalized_agent_name}'. "
-            "Must match ^[A-Za-z0-9-]+$ (letters, digits, and hyphens only).",
+            f"Error: invalid agent_name '{normalized_agent_name}'. Must match ^[A-Za-z0-9-]+$ (letters, digits, and hyphens only).",
             runtime,
         )
 

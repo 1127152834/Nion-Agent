@@ -66,4 +66,3 @@ _HUB = SchedulerEventHub()
 
 def get_scheduler_event_hub() -> SchedulerEventHub:
     return _HUB
-

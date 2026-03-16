@@ -6,17 +6,18 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, NotRequired, TypedDict, cast, override
+from typing import Any, NotRequired, TypedDict, cast, override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from src.config.app_config import ensure_latest_app_config
 
 DEFAULT_DANGEROUS_PATTERNS = [

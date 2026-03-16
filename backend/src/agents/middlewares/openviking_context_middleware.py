@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Generic, NotRequired, TypeVar, override
+from typing import Any, NotRequired, override
 
 from langchain_core.messages import SystemMessage
 from langgraph.runtime import Runtime
@@ -17,18 +17,21 @@ from src.config.memory_config import get_memory_config
 try:
     from langchain.agents import AgentState
 except Exception:  # noqa: BLE001
+
     class AgentState(dict):  # type: ignore[no-redef]
         pass
 
-_StateT = TypeVar("_StateT")
+
 try:
     from langchain.agents.middleware import AgentMiddleware
 except Exception:  # noqa: BLE001
-    class AgentMiddleware(Generic[_StateT]):  # type: ignore[no-redef]
+
+    class AgentMiddleware[StateT]:  # type: ignore[no-redef]
         state_schema = dict
 
         def __init__(self, *args, **kwargs):
             _ = args, kwargs
+
 
 _OV_CONTEXT_MARKER_PREFIX = "<openviking_context "
 
@@ -168,10 +171,7 @@ class OpenVikingContextMiddleware(AgentMiddleware[OpenVikingContextState]):
         if not context_text.strip():
             return None
 
-        marker = (
-            f'{_OV_CONTEXT_MARKER_PREFIX}query_hash="{query_hash}" '
-            f'agent="{self._agent_name or "global"}">'
-        )
+        marker = f'{_OV_CONTEXT_MARKER_PREFIX}query_hash="{query_hash}" agent="{self._agent_name or "global"}">'
         payload = f"{marker}\n{context_text.strip()}\n</openviking_context>"
         return {"messages": [SystemMessage(content=payload)]}
 

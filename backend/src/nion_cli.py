@@ -32,10 +32,7 @@ def _print_human_report(report_dict: dict) -> None:
     print("Nion Security Audit")
     print(f"generated_at: {report_dict['generated_at']}")
     counts = report_dict["counts"]
-    print(
-        "counts: "
-        f"info={counts['info']} low={counts['low']} medium={counts['medium']} high={counts['high']}"
-    )
+    print(f"counts: info={counts['info']} low={counts['low']} medium={counts['medium']} high={counts['high']}")
     print(f"highest_severity: {report_dict['highest_severity']}")
     print()
 
@@ -58,10 +55,7 @@ def _run_security_audit(*, as_json: bool, fail_on: Severity) -> int:
     else:
         _print_human_report(report_dict)
 
-    should_fail = any(
-        severity_at_least(finding.severity, fail_on)
-        for finding in report.findings
-    )
+    should_fail = any(severity_at_least(finding.severity, fail_on) for finding in report.findings)
     return 2 if should_fail else 0
 
 

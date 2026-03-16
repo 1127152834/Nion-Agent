@@ -1,7 +1,5 @@
 """Test Heartbeat models and templates."""
 
-import pytest
-
 from src.heartbeat.models import (
     HeartbeatCategory,
     HeartbeatLogRecord,

@@ -69,17 +69,11 @@ def save_tasks(tasks: dict[str, ScheduledTask]) -> None:
 def load_history() -> dict[str, list[TaskExecutionRecord]]:
     with _LOCK:
         raw = _read_json(_history_file(), {})
-    return {
-        task_id: [TaskExecutionRecord.model_validate(item) for item in records]
-        for task_id, records in raw.items()
-    }
+    return {task_id: [TaskExecutionRecord.model_validate(item) for item in records] for task_id, records in raw.items()}
 
 
 def save_history(history: dict[str, list[TaskExecutionRecord]]) -> None:
-    payload = {
-        task_id: [record.model_dump(mode="json") for record in records]
-        for task_id, records in history.items()
-    }
+    payload = {task_id: [record.model_dump(mode="json") for record in records] for task_id, records in history.items()}
     with _LOCK:
         _write_json(_history_file(), payload)
 

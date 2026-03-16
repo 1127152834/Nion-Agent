@@ -67,4 +67,3 @@ def test_resolve_managed_cli_command_raises_when_manifest_missing(
 
     with pytest.raises(RuntimeError):
         resolve_managed_cli_command("missing-cli", ["--version"])
-

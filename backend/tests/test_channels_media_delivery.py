@@ -45,7 +45,7 @@ def test_lark_media_delivery_success(monkeypatch) -> None:
         def __init__(self, *, timeout: float):
             self.timeout = timeout
 
-        def __enter__(self) -> "_FakeClient":
+        def __enter__(self) -> _FakeClient:
             return self
 
         def __exit__(self, exc_type, exc, tb) -> None:
@@ -95,11 +95,7 @@ def test_lark_media_delivery_success(monkeypatch) -> None:
     manifest = json.loads(report.manifest_json or "[]")
     assert any(item.get("status") == "sent" for item in manifest)
 
-    message_calls = [
-        kwargs["json"]
-        for url, kwargs in calls
-        if "/im/v1/messages" in url and isinstance(kwargs.get("json"), dict)
-    ]
+    message_calls = [kwargs["json"] for url, kwargs in calls if "/im/v1/messages" in url and isinstance(kwargs.get("json"), dict)]
     assert all(payload.get("msg_type") != "text" for payload in message_calls)
 
 
@@ -110,7 +106,7 @@ def test_lark_media_delivery_skip_large_file_sends_fallback(monkeypatch) -> None
         def __init__(self, *, timeout: float):
             self.timeout = timeout
 
-        def __enter__(self) -> "_FakeClient":
+        def __enter__(self) -> _FakeClient:
             return self
 
         def __exit__(self, exc_type, exc, tb) -> None:
@@ -154,11 +150,7 @@ def test_lark_media_delivery_skip_large_file_sends_fallback(monkeypatch) -> None
     assert report.sent_count == 0
     assert report.failed_count == 0
     assert report.fallback_reason == "media_skipped"
-    message_calls = [
-        kwargs["json"]
-        for url, kwargs in calls
-        if "/im/v1/messages" in url and isinstance(kwargs.get("json"), dict)
-    ]
+    message_calls = [kwargs["json"] for url, kwargs in calls if "/im/v1/messages" in url and isinstance(kwargs.get("json"), dict)]
     assert any(payload.get("msg_type") == "text" for payload in message_calls)
 
 
@@ -169,7 +161,7 @@ def test_telegram_media_delivery_success(monkeypatch) -> None:
         def __init__(self, *, timeout: float):
             self.timeout = timeout
 
-        def __enter__(self) -> "_FakeClient":
+        def __enter__(self) -> _FakeClient:
             return self
 
         def __exit__(self, exc_type, exc, tb) -> None:

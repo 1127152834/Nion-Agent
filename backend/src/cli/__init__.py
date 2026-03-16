@@ -9,8 +9,8 @@ from .catalog import (
 from .installer import install_cli_tool, uninstall_cli_tool
 from .manifests import (
     CliInstallManifest,
-    load_cli_install_manifest,
     list_cli_install_manifests,
+    load_cli_install_manifest,
 )
 from .runtime_tools import get_cli_tools
 
@@ -26,4 +26,3 @@ __all__ = [
     "uninstall_cli_tool",
     "get_cli_tools",
 ]
-

@@ -23,4 +23,3 @@ class SubagentRunRecord(BaseModel):
     completed_at: datetime | None = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-

@@ -2,13 +2,13 @@
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class HeartbeatCategory(str, Enum):
+class HeartbeatCategory(StrEnum):
     """Heartbeat category."""
 
     REVIEW = "review"
@@ -16,7 +16,7 @@ class HeartbeatCategory(str, Enum):
     CHECK = "check"
 
 
-class HeartbeatResultType(str, Enum):
+class HeartbeatResultType(StrEnum):
     """Heartbeat result type."""
 
     SUMMARY = "summary"

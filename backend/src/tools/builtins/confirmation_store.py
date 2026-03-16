@@ -71,4 +71,3 @@ def consume_confirmation_token(
             return False, "Confirmation token does not match requested operation."
         _TOKENS.pop(token, None)
     return True, "ok"
-

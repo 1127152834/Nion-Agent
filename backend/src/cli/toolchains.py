@@ -27,7 +27,6 @@ import httpx
 from src.cli.catalog import normalize_cli_arch, normalize_cli_os
 from src.config.paths import get_paths
 
-
 DEFAULT_UV_VERSION = "0.10.8"
 UV_REPO = "astral-sh/uv"
 UV_RELEASE_BASE_URL = f"https://github.com/{UV_REPO}/releases/download"
@@ -399,4 +398,3 @@ async def ensure_pipx_toolchain() -> tuple[ManagedPipxToolchain, bool]:
         tmp_pointer.replace(pointer_file)
 
         return toolchain, True
-

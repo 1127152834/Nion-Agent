@@ -89,9 +89,7 @@ class ConfigRuntimeStatusResponse(BaseModel):
     loaded_tools: list[str] = Field(default_factory=list, description="Loaded tools summary")
     last_loaded_at: str | None = Field(default=None, description="Current process last loaded timestamp")
     last_error: str | None = Field(default=None, description="Current process last load error")
-    runtime_processes: dict[str, RuntimeProcessConfigStatus] = Field(
-        default_factory=dict, description="All process runtime versions"
-    )
+    runtime_processes: dict[str, RuntimeProcessConfigStatus] = Field(default_factory=dict, description="All process runtime versions")
     is_in_sync: bool = Field(default=False, description="Whether current process is in sync with store version")
     warnings: list[str] = Field(default_factory=list, description="Runtime-level non-blocking warnings")
 

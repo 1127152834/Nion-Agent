@@ -88,4 +88,3 @@ def patch_run(run_id: str, fields: dict[str, Any]) -> SubagentRunRecord | None:
         return None
     merged = current.model_copy(update=fields)
     return upsert_run(merged)
-

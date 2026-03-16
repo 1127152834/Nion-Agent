@@ -24,17 +24,10 @@ if not _real_e2e_enabled:
     pytest.skip("Set NION_REAL_E2E=1 to run real-environment E2E tests", allow_module_level=True)
 _config_store = create_config_store()
 if not _config_store.exists():
-    raise RuntimeError(
-        "NION_REAL_E2E=1 but Config Store is not initialized; "
-        f"expected db at: {resolve_config_db_path()}. "
-        "Configure in Settings page first, or inject Config Store before running real E2E."
-    )
+    raise RuntimeError(f"NION_REAL_E2E=1 but Config Store is not initialized; expected db at: {resolve_config_db_path()}. Configure in Settings page first, or inject Config Store before running real E2E.")
 _runtime_config = AppConfig.from_store_or_file(strict_env=False)
 if len(_runtime_config.models) == 0:
-    raise RuntimeError(
-        "NION_REAL_E2E=1 but Config Store has no models configured; "
-        "configure at least one model in Settings page before running real E2E."
-    )
+    raise RuntimeError("NION_REAL_E2E=1 but Config Store has no models configured; configure at least one model in Settings page before running real E2E.")
 
 # ---------------------------------------------------------------------------
 # Fixtures

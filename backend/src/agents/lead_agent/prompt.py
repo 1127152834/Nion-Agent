@@ -1,13 +1,12 @@
 import json
 import re
 from datetime import datetime
-from typing import Any
 
 from src.agents.memory.core import MemoryReadRequest
 from src.agents.memory.registry import get_default_memory_provider
+from src.config.extensions_config import ExtensionsConfig
 from src.config.paths import get_paths
 from src.skills import load_skills
-from src.config.extensions_config import ExtensionsConfig
 
 _SAFE_PLUGIN_STUDIO_SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 
@@ -452,18 +451,13 @@ def get_cli_tools_prompt_section() -> str:
     """
     try:
         config = ExtensionsConfig.from_file()
-        enabled_clis = {
-            tool_id: cfg
-            for tool_id, cfg in config.clis.items()
-            if cfg.enabled
-        }
+        enabled_clis = {tool_id: cfg for tool_id, cfg in config.clis.items() if cfg.enabled}
 
         if not enabled_clis:
             return ""
 
         cli_items = "\n".join(
-            f"    <cli_tool>\n        <name>{tool_id}</name>\n        <source>{cfg.source}</source>\n        <description>CLI tool available via cli_{tool_id} tool</description>\n    </cli_tool>"
-            for tool_id, cfg in enabled_clis.items()
+            f"    <cli_tool>\n        <name>{tool_id}</name>\n        <source>{cfg.source}</source>\n        <description>CLI tool available via cli_{tool_id} tool</description>\n    </cli_tool>" for tool_id, cfg in enabled_clis.items()
         )
         cli_list = f"<available_cli_tools>\n{cli_items}\n</available_cli_tools>"
 
@@ -526,7 +520,8 @@ def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
 You have access to skills that provide optimized workflows for specific tasks. Each skill contains best practices, frameworks, and references to additional resources.
 
 **Explicit Skill Invocation:**
-- If the user message contains `/<skill-name>` and `<skill-name>` matches one of the `<available_skills>` `<name>` entries, you MUST treat it as an explicit instruction to use that skill for this turn. Do NOT treat it as a suggestion or guess.
+- If the user message contains `/<skill-name>` and `<skill-name>` matches one of the `<available_skills>` `<name>` entries, you MUST treat it as an explicit instruction to use that skill for this turn.
+  Do NOT treat it as a suggestion or guess.
 
 **Progressive Loading Pattern:**
 1. When a user query matches a skill's use case, immediately call `read_file` on the skill's main file using the path attribute provided in the skill tag below
@@ -694,8 +689,8 @@ def _build_memory_policy_section(
         f"- session_mode: {policy.session_mode}\n"
         f"- memory_read: {'enabled' if policy.allow_read else 'disabled'}\n"
         f"- memory_write: {'enabled' if policy.allow_write else 'disabled'}\n"
-        "- You MUST NOT claim \"I have no long-term memory\" as a generic statement.\n"
-        "- If you claim \"I remembered this\", you MUST make a verifiable memory write (memory_store) and report the result ID.\n"
+        '- You MUST NOT claim "I have no long-term memory" as a generic statement.\n'
+        '- If you claim "I remembered this", you MUST make a verifiable memory write (memory_store) and report the result ID.\n'
         "- If memory write is disabled or fails, explicitly tell the user the memory was not persisted.\n"
         "- If asked about memory, explain current session policy precisely using the flags above.\n"
         "</memory_policy>\n"

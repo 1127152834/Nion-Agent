@@ -48,4 +48,3 @@ async def update_agent_tools(agent_name: str, payload: AgentToolPolicyUpdateRequ
     _resolve_agent_groups(normalized)
     saved = save_agent_tool_policy(normalized, payload.tools)
     return AgentToolsResponse(agent=normalized, tools=saved)
-

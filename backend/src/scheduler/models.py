@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -12,7 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 from pydantic import BaseModel, Field, model_validator
 
 
-class TriggerType(str, Enum):
+class TriggerType(StrEnum):
     """Supported trigger types."""
 
     CRON = "cron"
@@ -22,7 +22,7 @@ class TriggerType(str, Enum):
     WEBHOOK = "webhook"
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """Task runtime status."""
 
     PENDING = "pending"
@@ -32,7 +32,7 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class TaskMode(str, Enum):
+class TaskMode(StrEnum):
     """Task execution mode."""
 
     WORKFLOW = "workflow"
@@ -41,7 +41,7 @@ class TaskMode(str, Enum):
     EVOLUTION = "evolution"
 
 
-class CompletionCriteriaType(str, Enum):
+class CompletionCriteriaType(StrEnum):
     """Step completion policy."""
 
     OUTPUT_CONTAINS = "output_contains"

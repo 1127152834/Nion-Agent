@@ -55,4 +55,3 @@ def load_events(*, trace_id: str | None = None, chat_id: str | None = None, limi
             break
     rows.reverse()
     return rows
-

@@ -70,9 +70,7 @@ def test_search_settings_provider_chain_falls_back_to_builtin(monkeypatch):
     monkeypatch.setattr(
         web_search_tools,
         "_search_searxng",
-        lambda query, max_results, candidates, timeout_seconds, engines: [
-            {"title": "Example", "url": "https://example.com", "snippet": "demo"}
-        ],
+        lambda query, max_results, candidates, timeout_seconds, engines: [{"title": "Example", "url": "https://example.com", "snippet": "demo"}],
     )
 
     result = web_search_tools.web_search_tool.func("test")

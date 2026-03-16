@@ -2,7 +2,6 @@
 
 import json
 import logging
-from pathlib import Path
 
 from src.config.paths import get_paths
 
@@ -113,5 +112,6 @@ def ensure_default_agent() -> None:
         # Clean up on failure
         if agent_dir.exists():
             import shutil
+
             shutil.rmtree(agent_dir)
         raise

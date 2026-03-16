@@ -8,11 +8,14 @@ import pytest
 from src.sandbox.local.local_sandbox import LocalSandbox
 
 
-@pytest.mark.parametrize("method_name, content", [
-    ("read_file", None),
-    ("write_file", "hello"),
-    ("update_file", b"hello"),
-])
+@pytest.mark.parametrize(
+    "method_name, content",
+    [
+        ("read_file", None),
+        ("write_file", "hello"),
+        ("update_file", b"hello"),
+    ],
+)
 def test_local_sandbox_file_errors_keep_requested_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

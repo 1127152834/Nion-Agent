@@ -39,9 +39,7 @@ def _write_agent(base_dir: Path, name: str, config: dict, soul: str = "You are h
 
 def _tiny_png_bytes() -> bytes:
     """Return a valid 1x1 PNG used by avatar upload tests."""
-    return base64.b64decode(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/6mQAAAAASUVORK5CYII="
-    )
+    return base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/6mQAAAAASUVORK5CYII=")
 
 
 # ===========================================================================

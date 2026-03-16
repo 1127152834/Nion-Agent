@@ -150,9 +150,7 @@ class ChannelInboundService:
         if platform == "telegram":
             integration = self._repo.get_integration("telegram")
             credentials = integration.get("credentials", {})
-            allowed_users = _parse_telegram_allowed_users(
-                str(credentials.get("allowed_users") or "")
-            )
+            allowed_users = _parse_telegram_allowed_users(str(credentials.get("allowed_users") or ""))
             external_user_id = (incoming.external_user_id or "").strip()
             if allowed_users and external_user_id and external_user_id not in allowed_users:
                 return ChannelInboundResult(

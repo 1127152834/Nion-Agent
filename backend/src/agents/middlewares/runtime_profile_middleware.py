@@ -1,11 +1,11 @@
 import os
 from typing import Literal, NotRequired, override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
 
-from src.config.app_config import ensure_latest_app_config
 from src.agents.memory.policy import resolve_memory_policy
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from src.config.app_config import ensure_latest_app_config
 from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
 
 

@@ -3,9 +3,9 @@
 import logging
 from typing import override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
 
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from src.subagents.executor import MAX_CONCURRENT_SUBAGENTS
 
 logger = logging.getLogger(__name__)

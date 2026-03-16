@@ -123,18 +123,12 @@ class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):
 
         # Build payload
         tool_call_id = request.tool_call.get("id")
-        cli_interactive_payload = self._build_cli_interactive_payload(
-            tool_id, argv, interactive_config, tool_call_id
-        )
+        cli_interactive_payload = self._build_cli_interactive_payload(tool_id, argv, interactive_config, tool_call_id)
 
         # Format message
         prompt = interactive_config.get("prompt", "请输入内容")
         if interactive_config.get("input_method") == "pty":
-            formatted_message = (
-                "🧪 CLI 工具需要交互终端\n\n"
-                f"工具: {tool_id}\n命令: {' '.join(argv)}\n\n"
-                f"{prompt}"
-            )
+            formatted_message = f"🧪 CLI 工具需要交互终端\n\n工具: {tool_id}\n命令: {' '.join(argv)}\n\n{prompt}"
         else:
             formatted_message = f"🔐 CLI 工具需要交互输入\n\n工具: {tool_id}\n命令: {' '.join(argv)}\n\n{prompt}"
 
@@ -209,7 +203,7 @@ class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):
                 # Append as argument
                 command = f'{tool_id} {" ".join(argv)} "{user_input}"'
             else:
-                command = f'{tool_id} {" ".join(argv)}'
+                command = f"{tool_id} {' '.join(argv)}"
 
             # Execute command
             result = sandbox.execute_command(command)

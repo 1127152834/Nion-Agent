@@ -22,4 +22,3 @@ def resolve_managed_cli_command(tool_id: str, argv: list[str]) -> list[str]:
     shim_abs = (get_paths().clis_root_dir / rel).resolve()
 
     return [str(shim_abs), *argv]
-

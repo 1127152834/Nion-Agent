@@ -10,8 +10,8 @@ import select
 import signal
 import struct
 import termios
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from src.cli.managed_cli_exec import resolve_managed_cli_command
 from src.config.paths import get_paths

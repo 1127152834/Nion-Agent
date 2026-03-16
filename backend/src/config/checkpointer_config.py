@@ -10,17 +10,10 @@ CheckpointerType = Literal["memory", "sqlite"]
 class CheckpointerConfig(BaseModel):
     """Configuration for LangGraph state persistence checkpointer."""
 
-    type: CheckpointerType = Field(
-        description="Checkpointer backend type. "
-        "'memory' is in-process only (lost on restart). "
-        "'sqlite' persists to a local file (requires langgraph-checkpoint-sqlite)."
-    )
+    type: CheckpointerType = Field(description="Checkpointer backend type. 'memory' is in-process only (lost on restart). 'sqlite' persists to a local file (requires langgraph-checkpoint-sqlite).")
     connection_string: str | None = Field(
         default=None,
-        description="Connection string for sqlite (file path). "
-        "Required for sqlite type. "
-        "For sqlite, use a file path like '.deer-flow/checkpoints.db' or ':memory:' for in-memory. "
-        "For in-process only, set type to 'memory'.",
+        description="Connection string for sqlite (file path). Required for sqlite type. For sqlite, use a file path like '.deer-flow/checkpoints.db' or ':memory:' for in-memory. For in-process only, set type to 'memory'.",
     )
 
 

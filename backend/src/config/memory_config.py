@@ -38,10 +38,7 @@ class MemoryConfig(BaseModel):
     )
     vector_store_path: str = Field(
         default="",
-        description=(
-            "Path to vector storage. "
-            "This field is retained for compatibility with retrieval settings."
-        ),
+        description=("Path to vector storage. This field is retained for compatibility with retrieval settings."),
     )
     vector_weight: float = Field(
         default=0.5,

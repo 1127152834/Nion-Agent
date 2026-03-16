@@ -33,4 +33,3 @@ class A2UIConfig(BaseModel):
     )
 
     model_config = ConfigDict(extra="allow")
-

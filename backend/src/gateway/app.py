@@ -5,10 +5,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
 from src.channels.event_broker import ChannelEventBroker
 from src.channels.repository import ChannelRepository
 from src.channels.runtime_manager import ChannelRuntimeManager
-from src.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
 from src.config.app_config import get_app_config
 from src.config.default_agent import ensure_default_agent
 from src.config.paths import get_paths
@@ -300,7 +300,6 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
 
     # Evolution API is mounted at /api/evolution
     app.include_router(evolution.router)
-
 
     # Tools API is mounted at /api/tools
     app.include_router(tools.router)

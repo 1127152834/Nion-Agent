@@ -91,9 +91,13 @@ class DingTalkInboundPlugin:
                 "message": "missing user_id or chat_id",
             }
         normalized_text = self._adapter.normalized_text(incoming)
-        if incoming.event_id and normalized_text and not self._repo.mark_event_processed(
-            "dingtalk",
-            incoming.event_id,
+        if (
+            incoming.event_id
+            and normalized_text
+            and not self._repo.mark_event_processed(
+                "dingtalk",
+                incoming.event_id,
+            )
         ):
             return {
                 "accepted": True,
@@ -187,9 +191,7 @@ class DingTalkInboundPlugin:
 
         action_message = "pair request created"
         if not prompt_delivery.delivered:
-            action_message = (
-                f"pair request created; prompt delivery failed: {prompt_delivery.message or 'unknown'}"
-            )
+            action_message = f"pair request created; prompt delivery failed: {prompt_delivery.message or 'unknown'}"
 
         return {
             "accepted": True,

@@ -142,12 +142,7 @@ class HeartbeatExecutor:
             "timestamp": datetime.now().isoformat(),
             "heartbeat_type": "memory_governance",
             "result": {
-                "summary": (
-                    f"治理完成：promoted={result.get('promoted', 0)}, "
-                    f"rejected={result.get('rejected', 0)}, "
-                    f"pending={result.get('pending_count', 0)}, "
-                    f"contested={result.get('contested_count', 0)}"
-                ),
+                "summary": (f"治理完成：promoted={result.get('promoted', 0)}, rejected={result.get('rejected', 0)}, pending={result.get('pending_count', 0)}, contested={result.get('contested_count', 0)}"),
                 **result,
             },
         }

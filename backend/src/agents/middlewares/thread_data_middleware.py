@@ -1,8 +1,8 @@
 from typing import NotRequired, override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langgraph.runtime import Runtime
 
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from src.agents.thread_state import ThreadDataState
 from src.config.paths import Paths, get_paths
 

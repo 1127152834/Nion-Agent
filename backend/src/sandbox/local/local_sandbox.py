@@ -121,8 +121,8 @@ class LocalSandbox(Sandbox):
         # First, replace python/python3 with configured Python path if set
         if self.python_path:
             # Replace python3, python at word boundaries
-            command = re.sub(r'\bpython3\b', self.python_path, command)
-            command = re.sub(r'\bpython\b', self.python_path, command)
+            command = re.sub(r"\bpython3\b", self.python_path, command)
+            command = re.sub(r"\bpython\b", self.python_path, command)
 
         # Sort mappings by length (longest first) for correct prefix matching
         sorted_mappings = sorted(self.path_mappings.items(), key=lambda x: len(x[0]), reverse=True)
@@ -156,10 +156,7 @@ class LocalSandbox(Sandbox):
         shell_from_path = shutil.which("sh")
         if shell_from_path is not None:
             return shell_from_path
-        raise RuntimeError(
-            "No suitable shell executable found. Tried /bin/zsh, /bin/bash, "
-            "/bin/sh, and `sh` on PATH."
-        )
+        raise RuntimeError("No suitable shell executable found. Tried /bin/zsh, /bin/bash, /bin/sh, and `sh` on PATH.")
 
     def execute_command(self, command: str) -> str:
         # Resolve container paths in command before execution

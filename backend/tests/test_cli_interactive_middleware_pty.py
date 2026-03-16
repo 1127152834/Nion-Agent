@@ -39,6 +39,4 @@ def test_cli_interactive_middleware_emits_terminal_payload_for_pty(monkeypatch):
     assert payload["tool_id"] == "xhs-cli"
     assert payload["argv"] == ["login"]
     assert re.fullmatch(r"[0-9a-f\\-]{36}", payload["session_id"])
-    assert payload["websocket_url"].endswith(
-        f"/api/cli/sessions/{payload['session_id']}/stream"
-    )
+    assert payload["websocket_url"].endswith(f"/api/cli/sessions/{payload['session_id']}/stream")

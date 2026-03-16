@@ -1,7 +1,5 @@
 """Evolution analyzer."""
 
-from datetime import datetime
-
 from src.evolution.models import EvolutionSuggestion, SuggestionPriority, SuggestionType
 
 

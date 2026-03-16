@@ -7,6 +7,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from src.runtime_profile import RuntimeProfileRepository
+
 _ROUTER_MODULE_PATH = Path(__file__).resolve().parents[1] / "src" / "gateway" / "routers" / "runtime_profile.py"
 _ROUTER_SPEC = importlib.util.spec_from_file_location("runtime_profile_router_test_module", _ROUTER_MODULE_PATH)
 if _ROUTER_SPEC is None or _ROUTER_SPEC.loader is None:  # pragma: no cover
@@ -17,8 +19,6 @@ _ROUTER_SPEC.loader.exec_module(_ROUTER_MODULE)
 _ROUTER_MODULE.RuntimeProfileResponse.model_rebuild()
 _ROUTER_MODULE.RuntimeProfileUpdateRequest.model_rebuild()
 router = _ROUTER_MODULE.router
-
-from src.runtime_profile import RuntimeProfileRepository
 
 
 def _make_client(monkeypatch, tmp_path: Path, *, desktop: bool) -> TestClient:

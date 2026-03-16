@@ -182,6 +182,7 @@ def update_suggestion_status(suggestion_id: str, new_status: SuggestionStatus, a
         # Update status
         found_suggestion.status = new_status
         from datetime import datetime
+
         found_suggestion.updated_at = datetime.now()
 
         # Add to new status

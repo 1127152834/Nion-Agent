@@ -9,8 +9,8 @@ import json
 import logging
 import os
 import re
-import signal
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -1065,9 +1065,7 @@ def _normalize_match_rules(raw: Any) -> dict[str, Any]:
 
     extensions = _to_clean_string_list(raw.get("extensions"))
     if isinstance(raw.get("extensions"), str):
-        extensions = _to_clean_string_list(
-            [part.strip() for part in str(raw.get("extensions", "")).split(",")]
-        )
+        extensions = _to_clean_string_list([part.strip() for part in str(raw.get("extensions", "")).split(",")])
     normalized_extensions = []
     for ext in extensions:
         clean = ext.strip().lstrip(".").lower()
@@ -1076,9 +1074,7 @@ def _normalize_match_rules(raw: Any) -> dict[str, Any]:
 
     project_markers = _to_clean_string_list(raw.get("projectMarkers"))
     if isinstance(raw.get("projectMarkers"), str):
-        project_markers = _to_clean_string_list(
-            [part.strip() for part in str(raw.get("projectMarkers", "")).split(",")]
-        )
+        project_markers = _to_clean_string_list([part.strip() for part in str(raw.get("projectMarkers", "")).split(",")])
 
     return {
         "allowAll": allow_all,
@@ -1090,11 +1086,7 @@ def _normalize_match_rules(raw: Any) -> dict[str, Any]:
 
 
 def _is_workflow_requirements_done(state: dict[str, Any]) -> bool:
-    return bool(
-        _to_non_empty_string(state.get("goal"))
-        and _to_non_empty_string(state.get("target_user"))
-        and _to_non_empty_string(state.get("plugin_scope"))
-    )
+    return bool(_to_non_empty_string(state.get("goal")) and _to_non_empty_string(state.get("target_user")) and _to_non_empty_string(state.get("plugin_scope")))
 
 
 def _is_workflow_interaction_done(state: dict[str, Any]) -> bool:
@@ -1104,11 +1096,7 @@ def _is_workflow_interaction_done(state: dict[str, Any]) -> bool:
 
 
 def _is_workflow_ui_done(state: dict[str, Any]) -> bool:
-    return bool(
-        _to_non_empty_string(state.get("layout_template"))
-        and _to_non_empty_string(state.get("visual_style"))
-        and _to_non_empty_string(state.get("responsive_rules"))
-    )
+    return bool(_to_non_empty_string(state.get("layout_template")) and _to_non_empty_string(state.get("visual_style")) and _to_non_empty_string(state.get("responsive_rules")))
 
 
 def _compute_workflow_stage(state: dict[str, Any], session_state: str) -> Literal["requirements", "interaction", "ui_design", "generate"]:
@@ -1175,12 +1163,7 @@ def _build_targets_from_match_rules(match_rules: dict[str, Any]) -> list[dict[st
         target["projectMarkers"] = normalized["projectMarkers"]
 
     # 至少要有一个可用目标规则，避免空规则导致无法匹配。
-    if (
-        target["kind"] == "file"
-        and not target.get("extensions")
-        and not target.get("pathPattern")
-        and not target.get("projectMarkers")
-    ):
+    if target["kind"] == "file" and not target.get("extensions") and not target.get("pathPattern") and not target.get("projectMarkers"):
         return [{"kind": "file", "priority": 85}]
     return [target]
 
@@ -1194,12 +1177,7 @@ def _match_rules_from_manifest(manifest_payload: dict[str, Any]) -> dict[str, An
     extensions = _to_clean_string_list(first.get("extensions"))
     path_pattern = _to_non_empty_string(first.get("pathPattern"))
     project_markers = _to_clean_string_list(first.get("projectMarkers"))
-    allow_all = (
-        kind == "file"
-        and not extensions
-        and not path_pattern
-        and not project_markers
-    )
+    allow_all = kind == "file" and not extensions and not path_pattern and not project_markers
     return _normalize_match_rules(
         {
             "allowAll": allow_all,
@@ -1263,8 +1241,12 @@ def _import_plugin_studio_test_materials(
 ) -> None:
     session_id = str(session_payload["session_id"])
     root_virtual = _plugin_studio_test_materials_virtual_root(session_id)
-    resolved_thread_id = _to_non_empty_string(thread_id) or _to_non_empty_string(payload.thread_id) or _to_non_empty_string(
-        session_payload.get("preview_thread_id"),
+    resolved_thread_id = (
+        _to_non_empty_string(thread_id)
+        or _to_non_empty_string(payload.thread_id)
+        or _to_non_empty_string(
+            session_payload.get("preview_thread_id"),
+        )
     )
     if not resolved_thread_id:
         raise HTTPException(
@@ -1286,7 +1268,7 @@ def _import_plugin_studio_test_materials(
             source = _to_non_empty_string(item.get("source")) or "upload"
             prefix = f"{root_virtual}/"
             if path.startswith(prefix):
-                relative = path[len(prefix):]
+                relative = path[len(prefix) :]
                 if relative:
                     existing_source_map[relative] = source
 
@@ -1340,8 +1322,12 @@ def _delete_plugin_studio_test_material(
 ) -> None:
     session_id = str(session_payload["session_id"])
     root_virtual = _plugin_studio_test_materials_virtual_root(session_id)
-    resolved_thread_id = _to_non_empty_string(thread_id) or _to_non_empty_string(payload.thread_id) or _to_non_empty_string(
-        session_payload.get("preview_thread_id"),
+    resolved_thread_id = (
+        _to_non_empty_string(thread_id)
+        or _to_non_empty_string(payload.thread_id)
+        or _to_non_empty_string(
+            session_payload.get("preview_thread_id"),
+        )
     )
     if not resolved_thread_id:
         raise HTTPException(
@@ -1354,7 +1340,7 @@ def _delete_plugin_studio_test_material(
     target_path = _to_non_empty_string(payload.path)
     prefix = f"{root_virtual}/"
     if target_path.startswith(prefix):
-        relative = target_path[len(prefix):]
+        relative = target_path[len(prefix) :]
     else:
         relative = _safe_relative_material_path(target_path)
     relative = _safe_relative_material_path(relative)
@@ -1387,7 +1373,7 @@ def _delete_plugin_studio_test_material(
             file_path = _to_non_empty_string(item.get("path"))
             source = _to_non_empty_string(item.get("source")) or "upload"
             if file_path.startswith(prefix):
-                rel = file_path[len(prefix):]
+                rel = file_path[len(prefix) :]
                 if rel and rel != relative:
                     source_map[rel] = source
 
@@ -1398,9 +1384,7 @@ def _delete_plugin_studio_test_material(
     )
     session_payload["test_materials"] = records
     selected_path = _to_non_empty_string(session_payload.get("selected_test_material_path"))
-    if not selected_path or selected_path == f"{root_virtual}/{relative}" or not any(
-        item.get("path") == selected_path for item in records
-    ):
+    if not selected_path or selected_path == f"{root_virtual}/{relative}" or not any(item.get("path") == selected_path for item in records):
         first_file = next((item for item in records if item.get("kind") == "file"), None)
         session_payload["selected_test_material_path"] = first_file.get("path") if first_file else ""
 
@@ -1468,21 +1452,9 @@ def _sync_plugin_studio_session_metadata_from_source_dir(
 ) -> None:
     manifest_payload = _load_plugin_studio_manifest_from_source_dir(source_dir)
 
-    linked_plugin_id = _safe_plugin_id(
-        str(
-            session_payload.get("linked_plugin_id")
-            or session_payload.get("plugin_id")
-            or manifest_payload.get("id")
-            or session_payload.get("plugin_name")
-            or "plugin"
-        )
-    )
-    plugin_name = _to_non_empty_string(manifest_payload.get("name")) or _to_non_empty_string(
-        session_payload.get("plugin_name")
-    ) or linked_plugin_id
-    description = _to_non_empty_string(manifest_payload.get("description")) or _to_non_empty_string(
-        session_payload.get("description")
-    )
+    linked_plugin_id = _safe_plugin_id(str(session_payload.get("linked_plugin_id") or session_payload.get("plugin_id") or manifest_payload.get("id") or session_payload.get("plugin_name") or "plugin"))
+    plugin_name = _to_non_empty_string(manifest_payload.get("name")) or _to_non_empty_string(session_payload.get("plugin_name")) or linked_plugin_id
+    description = _to_non_empty_string(manifest_payload.get("description")) or _to_non_empty_string(session_payload.get("description"))
     version = _normalize_semver(
         _to_non_empty_string(manifest_payload.get("version")) or str(session_payload.get("current_version") or "0.1.0"),
     )
@@ -1512,22 +1484,12 @@ def _sync_plugin_studio_session_metadata_from_source_dir(
     if not workflow_state.get("entry_points"):
         targets = manifest_payload.get("targets")
         if isinstance(targets, list):
-            workflow_state["entry_points"] = [
-                _to_non_empty_string(item.get("kind"))
-                for item in targets
-                if isinstance(item, dict) and _to_non_empty_string(item.get("kind"))
-            ][:3]
+            workflow_state["entry_points"] = [_to_non_empty_string(item.get("kind")) for item in targets if isinstance(item, dict) and _to_non_empty_string(item.get("kind"))][:3]
     if not workflow_state.get("core_actions"):
         capabilities = manifest_payload.get("capabilities")
         if isinstance(capabilities, list):
-            workflow_state["core_actions"] = [
-                _to_non_empty_string(item)
-                for item in capabilities
-                if _to_non_empty_string(item)
-            ][:3]
-    workflow_state["file_match_mode"] = "all_files" if match_rules.get("allowAll") else str(
-        match_rules.get("kind") or "file"
-    )
+            workflow_state["core_actions"] = [_to_non_empty_string(item) for item in capabilities if _to_non_empty_string(item)][:3]
+    workflow_state["file_match_mode"] = "all_files" if match_rules.get("allowAll") else str(match_rules.get("kind") or "file")
 
     session_payload["plugin_id"] = linked_plugin_id
     session_payload["linked_plugin_id"] = linked_plugin_id
@@ -1645,11 +1607,7 @@ def _plugin_studio_response(payload: dict[str, Any]) -> PluginStudioSessionRespo
     demo_rel_paths = demo_rel_list if isinstance(demo_rel_list, list) else []
     package_rel = str(payload.get("package_rel_path") or "").strip()
     readme_url = f"/api/workbench/plugin-studio/sessions/{session_id}/readme" if readme_rel else None
-    demo_urls = [
-        f"/api/workbench/plugin-studio/sessions/{session_id}/assets/{quote(str(rel).lstrip('/'))}"
-        for rel in demo_rel_paths
-        if str(rel).strip()
-    ]
+    demo_urls = [f"/api/workbench/plugin-studio/sessions/{session_id}/assets/{quote(str(rel).lstrip('/'))}" for rel in demo_rel_paths if str(rel).strip()]
     package_download_url = None
     if package_rel:
         package_download_url = f"/api/workbench/plugin-studio/sessions/{session_id}/package/download"
@@ -1929,11 +1887,7 @@ def _refresh_plugin_studio_artifact_refs(session_payload: dict[str, Any]) -> Non
     source_dir = _plugin_studio_scaffold_dir(session_id)
     readme_file = source_dir / "README.md"
     session_payload["readme_rel_path"] = "README.md" if readme_file.exists() else ""
-    demo_paths = sorted(
-        file_path.relative_to(source_dir).as_posix()
-        for file_path in source_dir.glob("docs/demo/*")
-        if file_path.is_file()
-    )
+    demo_paths = sorted(file_path.relative_to(source_dir).as_posix() for file_path in source_dir.glob("docs/demo/*") if file_path.is_file())
     session_payload["demo_rel_paths"] = demo_paths
 
 
@@ -2095,7 +2049,7 @@ def _fixture_relative_from_virtual(path_value: str) -> str | None:
         return None
     prefix = "/mnt/user-data/workspace/"
     if normalized.startswith(prefix):
-        relative = normalized[len(prefix):]
+        relative = normalized[len(prefix) :]
     elif normalized.startswith("/mnt/user-data/workspace"):
         relative = normalized.replace("/mnt/user-data/workspace", "", 1).lstrip("/")
     else:
@@ -2216,16 +2170,9 @@ def _import_plugin_studio_source(
     if not isinstance(manifest_payload, dict):
         raise HTTPException(status_code=400, detail="Imported manifest payload is invalid")
 
-    linked_plugin_id = _safe_plugin_id(
-        payload.linked_plugin_id
-        or str(session_payload.get("plugin_id") or manifest_payload.get("id") or session_payload.get("plugin_name") or "plugin")
-    )
+    linked_plugin_id = _safe_plugin_id(payload.linked_plugin_id or str(session_payload.get("plugin_id") or manifest_payload.get("id") or session_payload.get("plugin_name") or "plugin"))
     plugin_name = (payload.plugin_name or str(manifest_payload.get("name") or session_payload.get("plugin_name") or linked_plugin_id)).strip()
-    description = (
-        payload.description
-        if payload.description is not None
-        else str(manifest_payload.get("description") or session_payload.get("description") or "")
-    ).strip()
+    description = (payload.description if payload.description is not None else str(manifest_payload.get("description") or session_payload.get("description") or "")).strip()
     version = _normalize_semver(str(manifest_payload.get("version") or session_payload.get("current_version") or "0.1.0"))
     match_rules = _match_rules_from_manifest(manifest_payload)
 
@@ -2249,19 +2196,11 @@ def _import_plugin_studio_source(
     if not workflow_state.get("entry_points"):
         targets = manifest_payload.get("targets")
         if isinstance(targets, list):
-            workflow_state["entry_points"] = [
-                _to_non_empty_string(item.get("kind"))
-                for item in targets
-                if isinstance(item, dict) and _to_non_empty_string(item.get("kind"))
-            ][:3]
+            workflow_state["entry_points"] = [_to_non_empty_string(item.get("kind")) for item in targets if isinstance(item, dict) and _to_non_empty_string(item.get("kind"))][:3]
     if not workflow_state.get("core_actions"):
         capabilities = manifest_payload.get("capabilities")
         if isinstance(capabilities, list):
-            workflow_state["core_actions"] = [
-                _to_non_empty_string(item)
-                for item in capabilities
-                if _to_non_empty_string(item)
-            ][:3]
+            workflow_state["core_actions"] = [_to_non_empty_string(item) for item in capabilities if _to_non_empty_string(item)][:3]
     workflow_state["file_match_mode"] = "all_files" if match_rules.get("allowAll") else str(match_rules.get("kind") or "file")
 
     session_payload["plugin_id"] = linked_plugin_id
@@ -2282,15 +2221,7 @@ def _import_plugin_studio_source(
     session_payload["workflow_stage"] = "requirements"
     session_payload["preview_thread_id"] = preview_thread_id
 
-    fixture_specs = [
-        _to_non_empty_string(item)
-        for item in (
-            manifest_payload.get("fixtures")
-            if isinstance(manifest_payload.get("fixtures"), list)
-            else []
-        )
-        if _to_non_empty_string(item)
-    ]
+    fixture_specs = [_to_non_empty_string(item) for item in (manifest_payload.get("fixtures") if isinstance(manifest_payload.get("fixtures"), list) else []) if _to_non_empty_string(item)]
     if fixture_specs:
         fixture_entries, selected_fixture_path = _collect_fixture_entries_from_scaffold(
             source_dir=source_dir,
@@ -2312,7 +2243,7 @@ def _import_plugin_studio_source(
                     source = _to_non_empty_string(item.get("source")) or "upload"
                     prefix = f"{root_virtual}/"
                     if path.startswith(prefix):
-                        relative = path[len(prefix):]
+                        relative = path[len(prefix) :]
                         if relative:
                             existing_source_map[relative] = source
 
@@ -2408,10 +2339,7 @@ def _apply_plugin_studio_publish_changes(
     readme_path.parent.mkdir(parents=True, exist_ok=True)
     existing_readme = readme_path.read_text(encoding="utf-8") if readme_path.exists() else f"# {plugin_name}\n\n{description}\n"
     release_marker = f"### v{version} "
-    release_block = (
-        f"\n\n## 发布记录\n\n### v{version} ({datetime.now(UTC).date().isoformat()})\n\n"
-        f"{payload.release_notes.strip()}\n"
-    )
+    release_block = f"\n\n## 发布记录\n\n### v{version} ({datetime.now(UTC).date().isoformat()})\n\n{payload.release_notes.strip()}\n"
     if "## 发布记录" not in existing_readme:
         updated_readme = existing_readme.rstrip() + release_block
     elif release_marker not in existing_readme:
@@ -2657,9 +2585,7 @@ async def update_plugin_studio_draft(
             normalized_match_rules = _normalize_match_rules(payload.match_rules)
             session_payload["match_rules"] = normalized_match_rules
             workflow_state = _normalize_workflow_state(session_payload.get("workflow_state"))
-            workflow_state["file_match_mode"] = "all_files" if normalized_match_rules.get("allowAll") else str(
-                normalized_match_rules.get("kind") or "file"
-            )
+            workflow_state["file_match_mode"] = "all_files" if normalized_match_rules.get("allowAll") else str(normalized_match_rules.get("kind") or "file")
             session_payload["workflow_state"] = workflow_state
         if payload.workflow_state is not None:
             session_payload["workflow_state"] = _normalize_workflow_state(payload.workflow_state)

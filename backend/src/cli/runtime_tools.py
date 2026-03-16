@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable
 
 from langchain.tools import BaseTool
 from langgraph.typing import ContextT
@@ -23,7 +22,6 @@ from src.sandbox.tools import (
     replace_virtual_paths_in_command,
 )
 from src.tools.builtins.langchain_compat import ToolRuntime, tool
-
 
 _BLOCKED_HOST_PREFIXES = ("/Users/", "/home/", "/private/", "C:\\", "D:\\", "E:\\")
 _MAX_TOOL_OUTPUT_CHARS = 120_000

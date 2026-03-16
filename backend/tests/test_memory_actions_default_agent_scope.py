@@ -28,4 +28,3 @@ def test_BE_CORE_MEM_406_query_memory_action_default_agent_maps_to_global(monkey
     )
 
     assert provider.last_agent_name is None
-

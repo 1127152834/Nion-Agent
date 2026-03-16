@@ -148,10 +148,7 @@ def create_chat_model(name: str | None = None, thinking_enabled: bool = False, *
         effective_wte = {**effective_wte, "thinking": merged_thinking}
     if thinking_enabled and has_thinking_settings:
         if not model_config.supports_thinking:
-            raise ValueError(
-                f"Model {name} does not support thinking. "
-                "Set `supports_thinking: true` for this model via Config Center (UI) or the Config Center API (/api/config) to enable thinking."
-            ) from None
+            raise ValueError(f"Model {name} does not support thinking. Set `supports_thinking: true` for this model via Config Center (UI) or the Config Center API (/api/config) to enable thinking.") from None
         if effective_wte:
             model_settings_from_config.update(effective_wte)
     if not thinking_enabled and has_thinking_settings:

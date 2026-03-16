@@ -284,11 +284,7 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest) -> SkillRes
 
         # Persist extensions state in the Nion data dir (NION_HOME / $HOME/.nion) so it survives
         # desktop restarts and repository checkout replacement.
-        config_path = (
-            Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
-            if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
-            else ExtensionsConfig.default_config_path()
-        )
+        config_path = Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve() if os.getenv("NION_EXTENSIONS_CONFIG_PATH") else ExtensionsConfig.default_config_path()
         config_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Load current configuration

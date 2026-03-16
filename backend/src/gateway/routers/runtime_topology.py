@@ -28,9 +28,7 @@ class RuntimeTopologyResponse(BaseModel):
 @router.get("", response_model=RuntimeTopologyResponse, summary="Inspect Runtime Topology")
 async def get_runtime_topology() -> RuntimeTopologyResponse:
     cfg = get_gateway_config()
-    runtime_mode: Literal["desktop", "web"] = (
-        "desktop" if os.getenv("NION_DESKTOP_RUNTIME", "0") == "1" else "web"
-    )
+    runtime_mode: Literal["desktop", "web"] = "desktop" if os.getenv("NION_DESKTOP_RUNTIME", "0") == "1" else "web"
     return RuntimeTopologyResponse(
         runtime_mode=runtime_mode,
         gateway_host=cfg.host,

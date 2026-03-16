@@ -11,8 +11,8 @@ import sys
 import tarfile
 import tempfile
 import zipfile
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -203,7 +203,7 @@ def _resolve_bin_in_store_bin_dir(store_dir: Path, name: str) -> Path:
         candidates = [base]
 
     for cand in candidates:
-        candidate = (bin_dir / cand)
+        candidate = bin_dir / cand
         try:
             if candidate.exists() and candidate.is_file():
                 return candidate.resolve()
@@ -460,10 +460,7 @@ async def install_cli_tool(
                     shutil.rmtree(store_dir)
             except OSError:
                 pass
-            raise CliInstallError(
-                f"{package_kind} install failed (exit {code}).\n"
-                f"stdout:\n{_truncate_text(out)}\n\nstderr:\n{_truncate_text(err)}"
-            )
+            raise CliInstallError(f"{package_kind} install failed (exit {code}).\nstdout:\n{_truncate_text(out)}\n\nstderr:\n{_truncate_text(err)}")
 
         source_ref = spec
     else:

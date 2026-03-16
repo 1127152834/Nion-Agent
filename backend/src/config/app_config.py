@@ -65,9 +65,7 @@ class AppConfig(BaseModel):
         if os.getenv("NION_CONFIG_PATH"):
             path = Path(os.getenv("NION_CONFIG_PATH"))
             if not Path.exists(path):
-                raise FileNotFoundError(
-                    f"Config file specified by environment variable `NION_CONFIG_PATH` not found at {path}"
-                )
+                raise FileNotFoundError(f"Config file specified by environment variable `NION_CONFIG_PATH` not found at {path}")
             return path
 
         path = Path(os.getcwd()) / "config.yaml"

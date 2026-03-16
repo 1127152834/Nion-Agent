@@ -70,4 +70,3 @@ def test_BE_CORE_MEM_409_forget_tolerates_remote_not_found(monkeypatch, tmp_path
 
     assert result["deleted"] is True
     assert runtime._sqlite_index.get_resource(agent_name=None, memory_id="m1") is None
-

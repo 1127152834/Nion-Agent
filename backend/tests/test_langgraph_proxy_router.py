@@ -61,8 +61,8 @@ class _FakeUpstreamResponse:
 
     async def aiter_raw(self):
         for chunk in (
-            b"event: message\ndata: {\"delta\":\"hello\"}\n\n",
-            b"event: message\ndata: {\"delta\":\" world\"}\n\n",
+            b'event: message\ndata: {"delta":"hello"}\n\n',
+            b'event: message\ndata: {"delta":" world"}\n\n',
         ):
             yield chunk
 

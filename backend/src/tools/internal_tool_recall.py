@@ -43,20 +43,12 @@ def recommend_internal_tools(query: str, limit: int = 5) -> list[InternalToolHit
 
     q = _normalize(q_raw)
     config = ExtensionsConfig.from_file()
-    enabled_clis = [
-        tool_id
-        for tool_id, cfg in (config.clis or {}).items()
-        if getattr(cfg, "enabled", False)
-    ]
+    enabled_clis = [tool_id for tool_id, cfg in (config.clis or {}).items() if getattr(cfg, "enabled", False)]
     if not enabled_clis:
         return []
 
     catalog = load_cli_catalog()
-    tool_defs = {
-        t.get("id"): t
-        for t in catalog.get("tools", [])
-        if isinstance(t, dict) and isinstance(t.get("id"), str)
-    }
+    tool_defs = {t.get("id"): t for t in catalog.get("tools", []) if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
     hits: list[InternalToolHit] = []
     for tool_id in enabled_clis:
@@ -108,4 +100,3 @@ def recommend_internal_tools(query: str, limit: int = 5) -> list[InternalToolHit
 
     hits.sort(key=lambda item: item.score, reverse=True)
     return hits[: max(0, int(limit or 0))]
-

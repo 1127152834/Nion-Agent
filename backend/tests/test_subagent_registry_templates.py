@@ -1,7 +1,5 @@
 """Test subagent registry with new templates."""
 
-import pytest
-
 from src.subagents import get_subagent_config, list_subagents
 
 

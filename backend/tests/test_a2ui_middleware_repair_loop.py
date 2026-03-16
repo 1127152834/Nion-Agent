@@ -205,4 +205,3 @@ def test_wrap_tool_call_accepts_multi_op_dict_envelope_and_succeeds():
     assert isinstance(tool_message, ToolMessage)
     payload = tool_message.additional_kwargs["a2ui"]
     assert payload["surface_id"] == "surface-envelope"
-

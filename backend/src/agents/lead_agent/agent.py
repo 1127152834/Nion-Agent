@@ -13,10 +13,10 @@ from src.agents.middlewares.memory_middleware import MemoryMiddleware
 from src.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
 from src.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
 from src.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
-from src.agents.middlewares.tool_policy_guard_middleware import ToolPolicyGuardMiddleware
 from src.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
 from src.agents.middlewares.title_middleware import TitleMiddleware
 from src.agents.middlewares.todo_middleware import TodoMiddleware
+from src.agents.middlewares.tool_policy_guard_middleware import ToolPolicyGuardMiddleware
 from src.agents.middlewares.tool_safety_guard_middleware import ToolSafetyGuardMiddleware
 from src.agents.middlewares.uploads_middleware import UploadsMiddleware
 from src.agents.middlewares.view_image_middleware import ViewImageMiddleware
@@ -35,10 +35,7 @@ def _load_create_agent():
     try:
         from langchain.agents import create_agent as _create_agent
     except Exception as exc:  # noqa: BLE001
-        raise ImportError(
-            "langchain.agents.create_agent is unavailable. "
-            "Please install/upgrade langchain to a compatible version."
-        ) from exc
+        raise ImportError("langchain.agents.create_agent is unavailable. Please install/upgrade langchain to a compatible version.") from exc
     return _create_agent
 
 
@@ -81,10 +78,7 @@ def _resolve_model_name(requested_model_name: str | None = None) -> str:
     app_config = get_app_config()
     default_model_name = app_config.models[0].name if app_config.models else None
     if default_model_name is None:
-        raise ValueError(
-            "No chat models are configured. "
-            "Please configure at least one model via Config Center (UI) or the Config Center API (/api/config)."
-        )
+        raise ValueError("No chat models are configured. Please configure at least one model via Config Center (UI) or the Config Center API (/api/config).")
 
     if requested_model_name and app_config.get_model_config(requested_model_name):
         return requested_model_name
@@ -376,11 +370,7 @@ def make_lead_agent(config: RunnableConfig):
         candidate = requested_skills_raw.strip()
         requested_skills = [candidate] if candidate else None
     elif isinstance(requested_skills_raw, list):
-        cleaned = [
-            item.strip()
-            for item in requested_skills_raw
-            if isinstance(item, str) and item.strip()
-        ]
+        cleaned = [item.strip() for item in requested_skills_raw if isinstance(item, str) and item.strip()]
         requested_skills = cleaned or None
 
     agent_config = load_agent_config(agent_name) if not is_bootstrap else None
@@ -394,11 +384,7 @@ def make_lead_agent(config: RunnableConfig):
     model_config = app_config.get_model_config(model_name) if model_name else None
 
     if model_config is None:
-        raise ValueError(
-            "No chat model could be resolved. "
-            "Please configure at least one model via Config Center (UI) or the Config Center API (/api/config), "
-            "or provide a valid 'model_name'/'model' in the request."
-        )
+        raise ValueError("No chat model could be resolved. Please configure at least one model via Config Center (UI) or the Config Center API (/api/config), or provide a valid 'model_name'/'model' in the request.")
     if thinking_enabled and not model_config.supports_thinking:
         logger.warning(f"Thinking mode is enabled but model '{model_name}' does not support it; fallback to non-thinking mode.")
         thinking_enabled = False

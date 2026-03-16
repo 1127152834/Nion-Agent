@@ -17,9 +17,10 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import override
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from langchain.agents.middleware.types import ModelCallResult, ModelRequest, ModelResponse
 from langchain_core.messages import ToolMessage
+
+from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 
 logger = logging.getLogger(__name__)
 

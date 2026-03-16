@@ -11,9 +11,11 @@ from langchain.tools import tool
 try:  # Backward compatibility for older langchain versions used in tests.
     from langchain.tools import ToolRuntime
 except Exception:  # noqa: BLE001
+
     class ToolRuntime:  # type: ignore[no-redef]
         context: dict[str, Any]
         state: dict[str, Any]
+
 
 from src.agents.memory.actions import (
     compact_memory_action,

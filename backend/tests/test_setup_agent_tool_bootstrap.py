@@ -103,13 +103,7 @@ def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
 def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
     from src.tools.builtins.setup_agent_tool import setup_agent
 
-    existing = (
-        "manual header\n"
-        "<!-- nion:bootstrap:user_profile:start -->\n"
-        "old block\n"
-        "<!-- nion:bootstrap:user_profile:end -->\n"
-        "manual footer\n"
-    )
+    existing = "manual header\n<!-- nion:bootstrap:user_profile:start -->\nold block\n<!-- nion:bootstrap:user_profile:end -->\nmanual footer\n"
     (tmp_path / "USER.md").write_text(existing, encoding="utf-8")
 
     with (
@@ -129,4 +123,3 @@ def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
     assert "manual footer" in updated
     assert "old block" not in updated
     assert "new block" in updated
-

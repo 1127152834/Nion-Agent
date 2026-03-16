@@ -49,4 +49,3 @@ def resolve_agent_for_memory_scope(*, scope: MemoryScope, agent_name: str | None
             raise ValueError("agent_name is required when scope=agent")
         return resolved_agent
     raise ValueError(f"Unsupported scope: {scope}")
-

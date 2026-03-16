@@ -228,3 +228,10 @@ class ConfigRepository:
     def get_runtime_status(self) -> dict[str, Any]:
         """Get runtime configuration loading status."""
         return get_app_config_runtime_status(process_name="gateway")
+
+
+__all__ = [
+    "ConfigRepository",
+    "ConfigValidationError",
+    "VersionConflictError",
+]

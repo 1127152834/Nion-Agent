@@ -7,7 +7,6 @@ import json
 import threading
 from typing import Literal
 
-from src.tools.builtins.langchain_compat import ToolRuntime, tool
 from langgraph.typing import ContextT
 
 from src.agents.thread_state import ThreadState
@@ -24,6 +23,7 @@ from src.gateway.routers.models import ModelConnectionTestRequest, test_model_co
 from src.gateway.routers.skills import SkillInstallRequest, SkillUpdateRequest, install_skill, update_skill
 from src.skills import load_skills
 from src.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
+from src.tools.builtins.langchain_compat import ToolRuntime, tool
 from src.tools.builtins.management_response import build_action_card, build_management_response
 
 

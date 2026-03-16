@@ -5,8 +5,9 @@ from collections.abc import Sequence
 from typing import Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import APIRouter, HTTPException
 import httpx
+from fastapi import APIRouter, HTTPException
+
 try:
     from langchain_core.language_models.chat_models import BaseChatModel
 except Exception:  # pragma: no cover - compatibility fallback
@@ -254,21 +255,9 @@ def _guess_models_dev_provider_key(use: str, api_base: str | None) -> str | None
         return "alibaba"
     if "minimax" in use_lower or "minimax" in api_base_lower:
         return "minimax"
-    if (
-        "moonshot" in use_lower
-        or "moonshot" in api_base_lower
-        or "kimi" in use_lower
-        or "kimi" in api_base_lower
-    ):
+    if "moonshot" in use_lower or "moonshot" in api_base_lower or "kimi" in use_lower or "kimi" in api_base_lower:
         return "moonshotai"
-    if (
-        "zhipu" in use_lower
-        or "bigmodel" in use_lower
-        or "glm" in use_lower
-        or "zhipu" in api_base_lower
-        or "bigmodel" in api_base_lower
-        or "glm" in api_base_lower
-    ):
+    if "zhipu" in use_lower or "bigmodel" in use_lower or "glm" in use_lower or "zhipu" in api_base_lower or "bigmodel" in api_base_lower or "glm" in api_base_lower:
         return "zhipuai"
     if "anthropic" in use_lower:
         return "anthropic"
@@ -316,19 +305,11 @@ def _build_provider_model_option_with_models_dev(
     input_modalities_raw = modalities.get("input") if isinstance(modalities, dict) else []
     if not isinstance(input_modalities_raw, list):
         input_modalities_raw = []
-    input_modalities = {
-        str(modality).strip().lower()
-        for modality in input_modalities_raw
-        if isinstance(modality, str)
-    }
+    input_modalities = {str(modality).strip().lower() for modality in input_modalities_raw if isinstance(modality, str)}
 
     supports_thinking = bool(meta.get("reasoning")) if "reasoning" in meta else None
-    supports_vision = (
-        True if {"image", "pdf"} & input_modalities else False if input_modalities else None
-    )
-    supports_video = (
-        True if "video" in input_modalities else False if input_modalities else None
-    )
+    supports_vision = True if {"image", "pdf"} & input_modalities else False if input_modalities else None
+    supports_video = True if "video" in input_modalities else False if input_modalities else None
 
     context_window = None
     max_output_tokens = None
@@ -490,10 +471,7 @@ async def _load_models_dev_catalog(timeout_seconds: float) -> dict[str, Any]:
     global _MODELS_DEV_CACHE, _MODELS_DEV_CACHE_AT
 
     now = time.monotonic()
-    if (
-        _MODELS_DEV_CACHE is not None
-        and now - _MODELS_DEV_CACHE_AT < _MODELS_DEV_CACHE_TTL_SECONDS
-    ):
+    if _MODELS_DEV_CACHE is not None and now - _MODELS_DEV_CACHE_AT < _MODELS_DEV_CACHE_TTL_SECONDS:
         return _MODELS_DEV_CACHE
 
     timeout = min(max(timeout_seconds, 1.0), 30.0)
@@ -791,10 +769,7 @@ async def test_model_connection(
             latency_ms = int((time.perf_counter() - started_at) * 1000)
             return ModelConnectionTestResponse(
                 success=True,
-                message=(
-                    "Connection successful. Provider model list endpoint is unavailable; "
-                    "please add model IDs manually."
-                ),
+                message=("Connection successful. Provider model list endpoint is unavailable; please add model IDs manually."),
                 latency_ms=latency_ms,
             )
         except Exception as exc:  # pragma: no cover - branch tested through api behavior

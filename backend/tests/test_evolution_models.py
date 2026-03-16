@@ -1,7 +1,5 @@
 """Test Evolution models."""
 
-import pytest
-
 from src.evolution.models import (
     EvolutionReport,
     EvolutionSettings,

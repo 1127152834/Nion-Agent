@@ -8,7 +8,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 CliOs = Literal["macos", "linux", "windows"]
 CliArch = Literal["x86_64", "arm64"]
 

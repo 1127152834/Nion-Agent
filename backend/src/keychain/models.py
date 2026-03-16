@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class CredentialType(str, Enum):
+class CredentialType(StrEnum):
     """Credential type enumeration."""
 
     PASSWORD = "password"

@@ -507,7 +507,7 @@ class MemoryWriteGraph:
 
         content = normalized if tier != "episode" else self._build_episode_card(normalized, now)
         retention_policy, ttl_seconds, expires_at = self._retention_for_tier(tier, now)
-        candidate_id = hashlib.sha1(f"user:{tier}:{normalized}".encode("utf-8")).hexdigest()[:16]
+        candidate_id = hashlib.sha1(f"user:{tier}:{normalized}".encode()).hexdigest()[:16]
         return MemoryCandidate(
             candidate_id=candidate_id,
             role="user",
@@ -545,7 +545,7 @@ class MemoryWriteGraph:
         quality = 0.62
         content = self._build_episode_card(normalized, now)
         retention_policy, ttl_seconds, expires_at = self._retention_for_tier("episode", now)
-        candidate_id = hashlib.sha1(f"assistant:episode:{normalized}".encode("utf-8")).hexdigest()[:16]
+        candidate_id = hashlib.sha1(f"assistant:episode:{normalized}".encode()).hexdigest()[:16]
         return MemoryCandidate(
             candidate_id=candidate_id,
             role="assistant",
@@ -710,15 +710,7 @@ class MemoryWriteGraph:
         outcome = self._extract_outcome(text)
         followup = self._extract_followup(text)
         entity_line = ", ".join(entities) if entities else "-"
-        return (
-            f"when: {when}\n"
-            f"task: {task}\n"
-            f"key_entities: {entity_line}\n"
-            f"actions: {actions}\n"
-            f"issue_resolution: {issue_resolution}\n"
-            f"outcome: {outcome}\n"
-            f"followup: {followup}"
-        )
+        return f"when: {when}\ntask: {task}\nkey_entities: {entity_line}\nactions: {actions}\nissue_resolution: {issue_resolution}\noutcome: {outcome}\nfollowup: {followup}"
 
     @staticmethod
     def _truncate_sentence(text: str, limit: int) -> str:
@@ -760,14 +752,14 @@ class MemoryWriteGraph:
             return ("long_term", None, None)
         if tier == "episode":
             ttl_seconds = 180 * 24 * 3600
-            expires_at = (now_dt.timestamp() + ttl_seconds)
+            expires_at = now_dt.timestamp() + ttl_seconds
             return (
                 "mid_term_180d",
                 ttl_seconds,
                 datetime.fromtimestamp(expires_at, tz=UTC).isoformat().replace("+00:00", "Z"),
             )
         ttl_seconds = 7 * 24 * 3600
-        expires_at = (now_dt.timestamp() + ttl_seconds)
+        expires_at = now_dt.timestamp() + ttl_seconds
         return (
             "short_term_7d",
             ttl_seconds,

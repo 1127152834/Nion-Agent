@@ -19,8 +19,9 @@ class LocalSandboxProvider(SandboxProvider):
             Python executable path from config, or None to use system Python
         """
         try:
-            from src.config import get_app_config
             import os
+
+            from src.config import get_app_config
 
             config = get_app_config()
             python_path = config.sandbox.python_path

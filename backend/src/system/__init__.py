@@ -11,4 +11,3 @@ __all__ = [
     "TimezoneUpdateSummary",
     "get_timezone_service",
 ]
-

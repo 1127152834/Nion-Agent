@@ -4,7 +4,6 @@ from langchain.tools import BaseTool
 
 from src.config.app_config import ensure_latest_app_config
 from src.reflection import resolve_variable
-from src.tools.policy import filter_tools_by_policy
 from src.tools.builtins import (
     ask_clarification_tool,
     mcp_manage_tool,
@@ -18,14 +17,15 @@ from src.tools.builtins import (
     ov_session_commit_tool,
     present_file_tool,
     query_history_tool,
-    send_a2ui_json_to_client_tool,
     scheduler_create_task_tool,
     scheduler_operate_task_tool,
     search_memory_tool,
+    send_a2ui_json_to_client_tool,
     skills_manage_tool,
     task_tool,
     view_image_tool,
 )
+from src.tools.policy import filter_tools_by_policy
 
 logger = logging.getLogger(__name__)
 
@@ -133,11 +133,7 @@ def get_available_tools(
     except Exception:  # noqa: BLE001
         a2ui_enabled = True
     if not a2ui_enabled:
-        builtin_tools = [
-            tool
-            for tool in builtin_tools
-            if getattr(tool, "name", None) != "send_a2ui_json_to_client"
-        ]
+        builtin_tools = [tool for tool in builtin_tools if getattr(tool, "name", None) != "send_a2ui_json_to_client"]
         logger.info("A2UI is disabled by config; removed send_a2ui_json_to_client tool from available tools")
 
     # Add subagent tools only if enabled via runtime parameter

@@ -27,19 +27,17 @@ class DingTalkPairingCardRenderer:
             "",
         ]
         if code:
-            lines.extend([
-                f"申请标识：`{code}`",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"申请标识：`{code}`",
+                    "",
+                ]
+            )
         lines.append("授权成功后，你可以直接继续聊天，无需再次配对。")
         return "\n".join(lines)
 
     def build_pairing_approved_notice(self, workspace_label: str | None) -> str:
         normalized = (workspace_label or "").strip()
         if normalized:
-            return (
-                "配对成功，已授权接入 Nion。\n"
-                f"当前绑定工作空间：{normalized}\n"
-                "现在可以直接发送消息开始聊天。"
-            )
+            return f"配对成功，已授权接入 Nion。\n当前绑定工作空间：{normalized}\n现在可以直接发送消息开始聊天。"
         return "配对成功，已授权接入 Nion。现在可以直接发送消息开始聊天。"

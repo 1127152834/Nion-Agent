@@ -87,9 +87,7 @@ def _normalize_presented_filepath(
         if stripped == virtual_prefix or stripped.startswith(virtual_prefix + "/"):
             relative_path = Path(normalized_virtual[len(OUTPUTS_VIRTUAL_PREFIX) :].lstrip("/"))
         else:
-            raise ValueError(
-                f"Only files in {OUTPUTS_VIRTUAL_PREFIX} can be presented: {filepath}"
-            ) from exc
+            raise ValueError(f"Only files in {OUTPUTS_VIRTUAL_PREFIX} can be presented: {filepath}") from exc
 
     return f"{OUTPUTS_VIRTUAL_PREFIX}/{relative_path.as_posix()}"
 
@@ -131,30 +129,19 @@ def present_file_tool(
     Args:
         filepaths: List of absolute file paths to present to the user. **Only** files in `/mnt/user-data/outputs` can be presented.
     """
-    has_runtime = bool(
-        runtime is not None
-        and getattr(runtime, "state", None) is not None
-        and isinstance(getattr(runtime, "context", None), dict)
-        and runtime.context.get("thread_id")
-    )
+    has_runtime = bool(runtime is not None and getattr(runtime, "state", None) is not None and isinstance(getattr(runtime, "context", None), dict) and runtime.context.get("thread_id"))
 
     if has_runtime:
         try:
-            normalized_paths = [
-                _normalize_presented_filepath(runtime, filepath) for filepath in filepaths
-            ]
+            normalized_paths = [_normalize_presented_filepath(runtime, filepath) for filepath in filepaths]
         except ValueError as exc:
             return Command(
-                update={
-                    "messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]
-                },
+                update={"messages": [ToolMessage(f"Error: {exc}", tool_call_id=tool_call_id)]},
             )
         return Command(
             update={
                 "artifacts": normalized_paths,
-                "messages": [
-                    ToolMessage("Successfully presented files", tool_call_id=tool_call_id)
-                ],
+                "messages": [ToolMessage("Successfully presented files", tool_call_id=tool_call_id)],
             },
         )
 
@@ -169,10 +156,7 @@ def present_file_tool(
 
     message = "Successfully presented files"
     if ignored_count > 0:
-        message = (
-            "Presented allowed files only. "
-            f"Ignored {ignored_count} path(s) outside {VIRTUAL_PATH_PREFIX}."
-        )
+        message = f"Presented allowed files only. Ignored {ignored_count} path(s) outside {VIRTUAL_PATH_PREFIX}."
 
     return Command(
         update={"artifacts": valid_paths, "messages": [ToolMessage(message, tool_call_id=tool_call_id)]},

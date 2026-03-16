@@ -6,7 +6,6 @@ import argparse
 import json
 import sys
 from datetime import timedelta
-from pathlib import Path
 
 from src.keychain import CredentialType, get_keychain
 
@@ -59,7 +58,7 @@ def cmd_get(args):
     )
 
     if value is None:
-        print(f"✗ Credential not found", file=sys.stderr)
+        print("✗ Credential not found", file=sys.stderr)
         sys.exit(1)
 
     if args.json:
@@ -110,9 +109,9 @@ def cmd_delete(args):
     )
 
     if deleted:
-        print(f"✓ Deleted credential")
+        print("✓ Deleted credential")
     else:
-        print(f"✗ Credential not found", file=sys.stderr)
+        print("✗ Credential not found", file=sys.stderr)
         sys.exit(1)
 
 
@@ -162,7 +161,7 @@ def cmd_session_delete(args):
     if deleted:
         print(f"✓ Deleted session for {args.service}")
     else:
-        print(f"✗ Session not found", file=sys.stderr)
+        print("✗ Session not found", file=sys.stderr)
         sys.exit(1)
 
 

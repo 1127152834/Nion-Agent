@@ -313,11 +313,7 @@ class ChannelRepository:
         normalized = _ensure_platform(platform)
         now = _utcnow()
         with self._db.transaction() as conn:
-            normalized_session_webhook = (
-                session_webhook.strip()
-                if isinstance(session_webhook, str) and session_webhook.strip()
-                else None
-            )
+            normalized_session_webhook = session_webhook.strip() if isinstance(session_webhook, str) and session_webhook.strip() else None
             try:
                 cursor = conn.execute(
                     """
@@ -393,12 +389,7 @@ class ChannelRepository:
         if not clauses:
             return None
 
-        sql = (
-            "SELECT * FROM channel_pair_requests "
-            "WHERE platform = ? AND status = 'pending' AND ("
-            + " OR ".join(clauses)
-            + ") ORDER BY created_at DESC LIMIT 1"
-        )
+        sql = "SELECT * FROM channel_pair_requests WHERE platform = ? AND status = 'pending' AND (" + " OR ".join(clauses) + ") ORDER BY created_at DESC LIMIT 1"
         with self._db.connect() as conn:
             row = conn.execute(sql, tuple(params)).fetchone()
         return _row_to_dict(row)
@@ -448,9 +439,7 @@ class ChannelRepository:
     ) -> dict[str, Any]:
         normalized = _ensure_platform(platform)
         now = _utcnow()
-        normalized_workspace_id = (
-            workspace_id.strip() if isinstance(workspace_id, str) and workspace_id.strip() else None
-        )
+        normalized_workspace_id = workspace_id.strip() if isinstance(workspace_id, str) and workspace_id.strip() else None
         with self._db.transaction() as conn:
             request = self._get_pair_request(conn, normalized, request_id)
             conn.execute(
@@ -632,11 +621,7 @@ class ChannelRepository:
         if not normalized_external_user_id:
             raise ValueError("external_user_id is required")
         normalized_chat_id = chat_id.strip() if isinstance(chat_id, str) and chat_id.strip() else None
-        normalized_external_user_name = (
-            external_user_name.strip()
-            if isinstance(external_user_name, str) and external_user_name.strip()
-            else None
-        )
+        normalized_external_user_name = external_user_name.strip() if isinstance(external_user_name, str) and external_user_name.strip() else None
         with self._db.transaction() as conn:
             cursor = conn.execute(
                 """
@@ -655,9 +640,7 @@ class ChannelRepository:
                 ),
             )
             if cursor.rowcount == 0:
-                raise ChannelRepositoryNotFoundError(
-                    f"channel authorized user {user_id} not found"
-                )
+                raise ChannelRepositoryNotFoundError(f"channel authorized user {user_id} not found")
             row = conn.execute(
                 "SELECT * FROM channel_authorized_users WHERE id = ?",
                 (user_id,),
@@ -675,9 +658,7 @@ class ChannelRepository:
         workspace_id: str | None,
     ) -> dict[str, Any]:
         normalized = _ensure_platform(platform)
-        normalized_workspace_id = (
-            workspace_id.strip() if isinstance(workspace_id, str) and workspace_id.strip() else None
-        )
+        normalized_workspace_id = workspace_id.strip() if isinstance(workspace_id, str) and workspace_id.strip() else None
         with self._db.transaction() as conn:
             cursor = conn.execute(
                 """
@@ -692,9 +673,7 @@ class ChannelRepository:
                 ),
             )
             if cursor.rowcount == 0:
-                raise ChannelRepositoryNotFoundError(
-                    f"channel authorized user {user_id} not found"
-                )
+                raise ChannelRepositoryNotFoundError(f"channel authorized user {user_id} not found")
             row = conn.execute(
                 "SELECT * FROM channel_authorized_users WHERE id = ?",
                 (user_id,),
@@ -727,9 +706,7 @@ class ChannelRepository:
                 ),
             )
             if cursor.rowcount == 0:
-                raise ChannelRepositoryNotFoundError(
-                    f"channel authorized user {user_id} not found"
-                )
+                raise ChannelRepositoryNotFoundError(f"channel authorized user {user_id} not found")
             row = conn.execute(
                 "SELECT * FROM channel_authorized_users WHERE id = ?",
                 (user_id,),
@@ -814,18 +791,10 @@ class ChannelRepository:
     ) -> dict[str, Any]:
         normalized = _ensure_platform(platform)
         now = _utcnow()
-        normalized_stream_chunk_count = (
-            max(0, int(stream_chunk_count)) if stream_chunk_count is not None else 0
-        )
-        normalized_media_attempted_count = (
-            max(0, int(media_attempted_count)) if media_attempted_count is not None else 0
-        )
-        normalized_media_sent_count = (
-            max(0, int(media_sent_count)) if media_sent_count is not None else 0
-        )
-        normalized_media_failed_count = (
-            max(0, int(media_failed_count)) if media_failed_count is not None else 0
-        )
+        normalized_stream_chunk_count = max(0, int(stream_chunk_count)) if stream_chunk_count is not None else 0
+        normalized_media_attempted_count = max(0, int(media_attempted_count)) if media_attempted_count is not None else 0
+        normalized_media_sent_count = max(0, int(media_sent_count)) if media_sent_count is not None else 0
+        normalized_media_failed_count = max(0, int(media_failed_count)) if media_failed_count is not None else 0
         with self._db.transaction() as conn:
             cursor = conn.execute(
                 """
@@ -895,18 +864,10 @@ class ChannelRepository:
             raise ValueError(f"Invalid run_status: {run_status}")
         if delivery_status not in allowed_delivery_status:
             raise ValueError(f"Invalid delivery_status: {delivery_status}")
-        normalized_stream_chunk_count = (
-            max(0, int(stream_chunk_count)) if stream_chunk_count is not None else None
-        )
-        normalized_media_attempted_count = (
-            max(0, int(media_attempted_count)) if media_attempted_count is not None else None
-        )
-        normalized_media_sent_count = (
-            max(0, int(media_sent_count)) if media_sent_count is not None else None
-        )
-        normalized_media_failed_count = (
-            max(0, int(media_failed_count)) if media_failed_count is not None else None
-        )
+        normalized_stream_chunk_count = max(0, int(stream_chunk_count)) if stream_chunk_count is not None else None
+        normalized_media_attempted_count = max(0, int(media_attempted_count)) if media_attempted_count is not None else None
+        normalized_media_sent_count = max(0, int(media_sent_count)) if media_sent_count is not None else None
+        normalized_media_failed_count = max(0, int(media_failed_count)) if media_failed_count is not None else None
 
         now = _utcnow()
         with self._db.transaction() as conn:

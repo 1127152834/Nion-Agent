@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Generic, NotRequired, TypeVar, override
+from typing import Any, NotRequired, override
 
 from langchain_core.messages import SystemMessage
 from langgraph.runtime import Runtime
@@ -14,14 +14,16 @@ from src.tools.internal_tool_recall import recommend_internal_tools
 try:
     from langchain.agents import AgentState
 except Exception:  # noqa: BLE001
+
     class AgentState(dict):  # type: ignore[no-redef]
         pass
 
-_StateT = TypeVar("_StateT")
+
 try:
     from langchain.agents.middleware import AgentMiddleware
 except Exception:  # noqa: BLE001
-    class AgentMiddleware(Generic[_StateT]):  # type: ignore[no-redef]
+
+    class AgentMiddleware[StateT]:  # type: ignore[no-redef]
         state_schema = dict
 
         def __init__(self, *args, **kwargs):
@@ -149,9 +151,9 @@ class InternalToolRecallMiddleware(AgentMiddleware[InternalToolRecallState]):
         marker = f'{_TOOL_RECALL_MARKER_PREFIX}query_hash="{query_hash}" limit="{self._limit}">'
         lines: list[str] = [marker]
         for hit in hits:
-            lines.append(f'- type={hit.tool_type} id={hit.tool_id}')
-            lines.append(f'  why: {hit.why}')
-            lines.append(f'  example: {hit.example_call}')
+            lines.append(f"- type={hit.tool_type} id={hit.tool_id}")
+            lines.append(f"  why: {hit.why}")
+            lines.append(f"  example: {hit.example_call}")
         lines.append("</internal_tool_recall>")
 
         return {"messages": [SystemMessage(content="\n".join(lines))]}
@@ -159,4 +161,3 @@ class InternalToolRecallMiddleware(AgentMiddleware[InternalToolRecallState]):
     @override
     async def abefore_model(self, state: InternalToolRecallState, runtime: Runtime) -> dict[str, Any] | None:
         return self.before_model(state, runtime)
-

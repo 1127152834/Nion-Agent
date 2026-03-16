@@ -32,4 +32,3 @@ def test_base_dir_defaults_to_user_home(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     paths = Paths()
     assert paths.base_dir == (tmp_path / ".nion").resolve()
-

@@ -34,11 +34,7 @@ def _safe_text(value: Any) -> str:
 
 
 def _resolve_dingtalk_proxy_mode(credentials: dict[str, str]) -> str:
-    normalized = _safe_text(
-        credentials.get("proxy_mode")
-        or os.getenv("NION_DINGTALK_PROXY_MODE")
-        or "auto"
-    ).lower()
+    normalized = _safe_text(credentials.get("proxy_mode") or os.getenv("NION_DINGTALK_PROXY_MODE") or "auto").lower()
     if normalized not in {"auto", "direct", "system"}:
         return "auto"
     return normalized
@@ -59,8 +55,7 @@ class ChannelStreamDriver(Protocol):
         on_disconnected: Callable[[str | None], None],
         on_active_users: Callable[[int], None],
         on_event: Callable[[IncomingWebhookEvent], None],
-    ) -> None:
-        ...
+    ) -> None: ...
 
 
 class _UnavailableStreamDriver:
@@ -85,9 +80,7 @@ class _UnavailableStreamDriver:
         _ = on_disconnected
         _ = on_active_users
         _ = on_event
-        raise ChannelStreamFatalError(
-            f"stream driver '{self._platform}' unavailable: {self._reason}"
-        )
+        raise ChannelStreamFatalError(f"stream driver '{self._platform}' unavailable: {self._reason}")
 
 
 class _LarkStreamDriver:
@@ -118,14 +111,8 @@ class _LarkStreamDriver:
             None,
         )
         if dispatcher_builder is None:
-            raise ChannelStreamFatalError(
-                "lark-oapi EventDispatcherHandler.builder not found"
-            )
-        dispatcher = (
-            dispatcher_builder(verification_token, encrypt_key)
-            .register_p2_im_message_receive_v1(_message_handler)
-            .build()
-        )
+            raise ChannelStreamFatalError("lark-oapi EventDispatcherHandler.builder not found")
+        dispatcher = dispatcher_builder(verification_token, encrypt_key).register_p2_im_message_receive_v1(_message_handler).build()
         return dispatcher
 
     def _coerce_lark_payload(self, data: Any) -> dict[str, Any]:
@@ -152,12 +139,8 @@ class _LarkStreamDriver:
                 },
                 "sender": {
                     "sender_id": {
-                        "open_id": _safe_text(
-                            getattr(getattr(sender, "sender_id", None), "open_id", None)
-                        ),
-                        "user_id": _safe_text(
-                            getattr(getattr(sender, "sender_id", None), "user_id", None)
-                        ),
+                        "open_id": _safe_text(getattr(getattr(sender, "sender_id", None), "open_id", None)),
+                        "user_id": _safe_text(getattr(getattr(sender, "sender_id", None), "user_id", None)),
                     },
                     "sender_name": _safe_text(getattr(sender, "sender_name", None)),
                 },
@@ -184,9 +167,7 @@ class _LarkStreamDriver:
         try:
             import lark_oapi as lark  # type: ignore[import-not-found]
         except Exception as exc:  # pragma: no cover - depends on optional dependency
-            raise ChannelStreamFatalError(
-                "missing dependency 'lark-oapi', install it before enabling stream mode"
-            ) from exc
+            raise ChannelStreamFatalError("missing dependency 'lark-oapi', install it before enabling stream mode") from exc
 
         ws_client: Any | None = None
         ws_thread: threading.Thread | None = None
@@ -205,9 +186,7 @@ class _LarkStreamDriver:
                     app_id,
                     app_secret,
                     event_handler=event_handler,
-                    log_level=getattr(lark, "LogLevel", object()).INFO
-                    if hasattr(getattr(lark, "LogLevel", object()), "INFO")
-                    else None,
+                    log_level=getattr(lark, "LogLevel", object()).INFO if hasattr(getattr(lark, "LogLevel", object()), "INFO") else None,
                 )
                 on_connected()
                 ws_client.start()
@@ -266,11 +245,7 @@ class _DingTalkStreamDriver:
 
     @staticmethod
     def _resolve_proxy_mode(credentials: dict[str, str]) -> str:
-        normalized = _safe_text(
-            credentials.get("proxy_mode")
-            or os.getenv("NION_DINGTALK_PROXY_MODE")
-            or "auto"
-        ).lower()
+        normalized = _safe_text(credentials.get("proxy_mode") or os.getenv("NION_DINGTALK_PROXY_MODE") or "auto").lower()
         if normalized not in {"auto", "direct", "system"}:
             return "auto"
         return normalized
@@ -295,9 +270,7 @@ class _DingTalkStreamDriver:
         try:
             import python_socks  # type: ignore[import-not-found] # noqa: F401
         except Exception as exc:
-            raise ChannelStreamFatalError(
-                "proxy_dependency_missing: SOCKS proxy detected but python-socks is missing"
-            ) from exc
+            raise ChannelStreamFatalError("proxy_dependency_missing: SOCKS proxy detected but python-socks is missing") from exc
 
     @staticmethod
     @contextmanager
@@ -349,18 +322,14 @@ class _DingTalkStreamDriver:
     ) -> None:
         _ = platform
         client_id = _safe_text(credentials.get("client_id") or credentials.get("app_key"))
-        client_secret = _safe_text(
-            credentials.get("client_secret") or credentials.get("app_secret")
-        )
+        client_secret = _safe_text(credentials.get("client_secret") or credentials.get("app_secret"))
         if not client_id or not client_secret:
             raise ChannelStreamFatalError("missing client_id/client_secret")
 
         try:
             import dingtalk_stream  # type: ignore[import-not-found]
         except Exception as exc:  # pragma: no cover - depends on optional dependency
-            raise ChannelStreamFatalError(
-                "missing dependency 'dingtalk-stream', install it before enabling stream mode"
-            ) from exc
+            raise ChannelStreamFatalError("missing dependency 'dingtalk-stream', install it before enabling stream mode") from exc
 
         proxy_mode = self._resolve_proxy_mode(credentials)
         self._ensure_proxy_dependency(proxy_mode)
@@ -405,9 +374,7 @@ class _DingTalkStreamDriver:
             normalized_topics.append(topic)
 
         if not normalized_topics:
-            raise ChannelStreamFatalError(
-                "dingtalk-stream topic constant for chatbot messages not found"
-            )
+            raise ChannelStreamFatalError("dingtalk-stream topic constant for chatbot messages not found")
 
         class _MessageHandler(dingtalk_stream.CallbackHandler):  # type: ignore[attr-defined]
             async def process(self, callback_message: Any) -> Any:
@@ -485,11 +452,7 @@ class _DingTalkStreamDriver:
             raise ChannelStreamFatalError(f"failed to register dingtalk callback handler: {exc}") from exc
 
         run_error: Exception | None = None
-        proxy_context = (
-            self._direct_proxy_env_context()
-            if proxy_mode == "direct"
-            else nullcontext()
-        )
+        proxy_context = self._direct_proxy_env_context() if proxy_mode == "direct" else nullcontext()
 
         def _run_client() -> None:
             nonlocal run_error
@@ -605,9 +568,7 @@ class _TelegramStreamDriver:
                 while not stop_event.is_set():
                     params: dict[str, Any] = {
                         "timeout": 10,
-                        "allowed_updates": json.dumps(
-                            ["message", "edited_message", "channel_post", "callback_query"]
-                        ),
+                        "allowed_updates": json.dumps(["message", "edited_message", "channel_post", "callback_query"]),
                     }
                     if offset is not None:
                         params["offset"] = offset
@@ -616,21 +577,15 @@ class _TelegramStreamDriver:
                     if response.status_code >= 400:
                         error_message = f"http {response.status_code}: {_safe_text(response.text)}"
                         if response.status_code in {401, 403, 404}:
-                            raise ChannelStreamFatalError(
-                                f"telegram_auth_failed: {error_message}"
-                            )
+                            raise ChannelStreamFatalError(f"telegram_auth_failed: {error_message}")
                         raise RuntimeError(error_message)
 
                     payload = response.json()
                     if not bool(payload.get("ok")):
                         error_code = int(payload.get("error_code") or 0)
-                        description = _safe_text(
-                            payload.get("description") or "telegram getUpdates failed"
-                        )
+                        description = _safe_text(payload.get("description") or "telegram getUpdates failed")
                         if error_code in {401, 403, 404}:
-                            raise ChannelStreamFatalError(
-                                f"telegram_auth_failed: {description}"
-                            )
+                            raise ChannelStreamFatalError(f"telegram_auth_failed: {description}")
                         raise RuntimeError(description)
 
                     updates = payload.get("result")
@@ -831,10 +786,7 @@ class ChannelRuntimeManager:
         self._on_inbound_result = on_inbound_result
         self._on_runtime_state = on_runtime_state
         self._workers: dict[str, _ChannelStreamWorker] = {}
-        self._states: dict[str, _RuntimeState] = {
-            platform: _RuntimeState(platform=platform, updated_at=_utcnow())
-            for platform in sorted(SUPPORTED_CHANNEL_PLATFORMS)
-        }
+        self._states: dict[str, _RuntimeState] = {platform: _RuntimeState(platform=platform, updated_at=_utcnow()) for platform in sorted(SUPPORTED_CHANNEL_PLATFORMS)}
         self._lock = threading.RLock()
 
     def start(self) -> None:

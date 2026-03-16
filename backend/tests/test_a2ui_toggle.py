@@ -15,7 +15,7 @@ def test_prompt_template_can_disable_a2ui_section() -> None:
 
     disabled = apply_prompt_template(a2ui_enabled=False)
     assert "<a2ui_system>" not in disabled
-    assert "<a2ui_policy enabled=\"false\">" in disabled
+    assert '<a2ui_policy enabled="false">' in disabled
     assert "@a2ui-sdk/react/0.8" not in disabled
 
 
@@ -63,4 +63,3 @@ def test_lead_agent_middlewares_respect_a2ui_toggle(monkeypatch: pytest.MonkeyPa
     has_a2ui = any(isinstance(item, A2UIMiddleware) for item in middlewares)
 
     assert has_a2ui is enabled
-

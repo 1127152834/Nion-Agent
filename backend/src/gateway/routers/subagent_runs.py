@@ -78,4 +78,3 @@ async def patch_subagent_run(run_id: str, payload: PatchSubagentRunRequest) -> S
     if patched is None:
         raise HTTPException(status_code=404, detail=f"Subagent run not found: {run_id}")
     return patched
-
