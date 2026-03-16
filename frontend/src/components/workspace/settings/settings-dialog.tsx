@@ -87,17 +87,15 @@ function SettingsNavGroupTitle({
     <div className="space-y-1">
       <SidebarGroupLabel
         className={cn(
-          "h-10 gap-3 rounded-lg px-3",
-          "bg-sidebar-accent/70 text-sidebar-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)/0.75)]",
-          "text-[12px] font-semibold",
+          // Intentionally subdued so group titles read as structure, not as clickable items.
+          "h-auto gap-2 rounded-none bg-transparent px-2 py-1",
+          "text-[11px] font-semibold text-sidebar-foreground/60",
         )}
       >
-        <span className="grid size-6 place-items-center rounded-md bg-background/60 shadow-[inset_0_0_0_1px_hsl(var(--border)/0.55)]">
-          <Icon className="size-3.5 opacity-80" />
-        </span>
+        <Icon className="size-3.5 shrink-0 opacity-70" />
         <span className="truncate">{title}</span>
       </SidebarGroupLabel>
-      <div className="mx-3 h-px bg-sidebar-border/80" aria-hidden="true" />
+      <div className="mx-2 h-px bg-sidebar-border/60" aria-hidden="true" />
     </div>
   );
 }
@@ -242,7 +240,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           }}
         >
           <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_1fr]">
-            <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
+            <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border border-sidebar-border p-2">
               <div className="space-y-3 pr-1">
                 {navGroups.map((group) => (
                   <div key={group.id} className="space-y-2">
@@ -256,14 +254,22 @@ export function SettingsDialog(props: SettingsDialogProps) {
                               type="button"
                               onClick={() => setActiveSection(id)}
                               className={cn(
-                                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                                "group flex w-full items-center gap-3 rounded-md border px-3 py-2 text-sm transition-colors",
+                                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                                 active
-                                  ? "bg-primary text-primary-foreground shadow-sm"
-                                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                  ? "border-sidebar-border bg-sidebar-accent font-semibold text-foreground"
+                                  : "border-transparent text-muted-foreground hover:border-sidebar-border/70 hover:bg-sidebar-accent/50 hover:text-foreground",
                               )}
                             >
-                              <Icon className="size-4" />
-                              <span>{label}</span>
+                              <Icon
+                                className={cn(
+                                  "size-4 shrink-0",
+                                  active
+                                    ? "opacity-90"
+                                    : "opacity-70 group-hover:opacity-90",
+                                )}
+                              />
+                              <span className="truncate">{label}</span>
                             </button>
                           </li>
                         );
