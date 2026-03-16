@@ -84,19 +84,21 @@ function SettingsNavGroupTitle({
   title: string;
 }) {
   return (
-    <SidebarGroupLabel
-      className={cn(
-        "h-10 gap-2 rounded-lg px-3",
-        "bg-sidebar-accent/70 text-sidebar-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)/0.75)]",
-        "text-[12px] font-semibold",
-        "after:content-[''] after:ml-3 after:h-px after:flex-1 after:bg-sidebar-border/90",
-      )}
-    >
-      <span className="grid size-6 place-items-center rounded-md bg-background/60 shadow-[inset_0_0_0_1px_hsl(var(--border)/0.55)]">
-        <Icon className="size-3.5 opacity-80" />
-      </span>
-      <span className="truncate">{title}</span>
-    </SidebarGroupLabel>
+    <div className="space-y-1">
+      <SidebarGroupLabel
+        className={cn(
+          "h-10 gap-3 rounded-lg px-3",
+          "bg-sidebar-accent/70 text-sidebar-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)/0.75)]",
+          "text-[12px] font-semibold",
+        )}
+      >
+        <span className="grid size-6 place-items-center rounded-md bg-background/60 shadow-[inset_0_0_0_1px_hsl(var(--border)/0.55)]">
+          <Icon className="size-3.5 opacity-80" />
+        </span>
+        <span className="truncate">{title}</span>
+      </SidebarGroupLabel>
+      <div className="mx-3 h-px bg-sidebar-border/80" aria-hidden="true" />
+    </div>
   );
 }
 
