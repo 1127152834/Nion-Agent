@@ -29,6 +29,9 @@
 - 启动阶段耗时打点
   - 在 Electron 主进程记录每个启动 stage 的开始/结束时间，并输出 stage 耗时 TopN 及总耗时。
   - 目的：精准回答“慢在哪一步”，为后续优化提供证据。
+- dev 模式前端缓存策略（Next/Turbopack）
+  - 默认不再在每次桌面端启动时清理 `.next/dev` 与 `.next/cache`，避免反复触发“全量冷编译”导致启动与首跳显著变慢。
+  - 如需排查疑难编译问题，可通过环境变量 `NION_DESKTOP_CLEAR_FRONTEND_DEV_ARTIFACTS=1` 显式开启清理以回到旧行为。
 - 黑屏闪烁修复
   - BrowserWindow 设置与 bootstrap data-url 页面一致的 `backgroundColor`，降低从启动页跳转到前端 URL 时的黑屏空白帧感知。
 

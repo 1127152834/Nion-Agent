@@ -416,7 +416,7 @@ export class DesktopProcessManager {
     const logPath = path.join(this.paths.logsDir, "frontend.log");
     const logStartOffset = this.getLogStartOffset(logPath);
 
-    if (!this.paths.frontendServerEntry) {
+    if (!this.paths.frontendServerEntry && this.isFrontendDevArtifactCleanupEnabled()) {
       this.clearFrontendDevArtifacts();
     }
 
@@ -456,6 +456,13 @@ export class DesktopProcessManager {
     this.services.set("frontend", { name: "frontend", child, logStream, logPath, logStartOffset });
 
     return { logPath, logStartOffset };
+  }
+
+  private isFrontendDevArtifactCleanupEnabled(): boolean {
+    const raw = (process.env.NION_DESKTOP_CLEAR_FRONTEND_DEV_ARTIFACTS ?? "")
+      .trim()
+      .toLowerCase();
+    return raw === "1" || raw === "true" || raw === "yes";
   }
 
   private async waitForFrontendReady(): Promise<void> {
