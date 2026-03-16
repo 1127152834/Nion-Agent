@@ -6,9 +6,7 @@ import * as realtimeProvider from "@/core/channels/channel-realtime-provider";
 import type { ChannelThreadRealtimeState } from "@/core/channels/channel-realtime-types";
 
 vi.mock("@/core/channels/channel-realtime-provider", async () => {
-  const actual = await vi.importActual<typeof import("@/core/channels/channel-realtime-provider")>(
-    "@/core/channels/channel-realtime-provider",
-  );
+  const actual = await vi.importActual<typeof realtimeProvider>("@/core/channels/channel-realtime-provider");
   return {
     ...actual,
     useChannelRealtimeContext: vi.fn(),

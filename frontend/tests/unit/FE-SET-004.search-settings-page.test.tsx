@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SearchSettingsPage } from "@/components/workspace/settings/search-settings-page";
@@ -17,8 +18,7 @@ type SearchSettingsConfigSnapshot = {
   };
 };
 
-vi.mock("@/components/workspace/settings/use-config-editor", async () => {
-  const React = await vi.importActual<typeof import("react")>("react");
+vi.mock("@/components/workspace/settings/use-config-editor", () => {
   return {
     useConfigEditor: () => {
       const [draftConfig, setDraftConfig] = React.useState<Record<string, unknown>>({});

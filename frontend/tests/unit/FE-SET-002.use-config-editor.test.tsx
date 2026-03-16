@@ -6,7 +6,7 @@ import * as configCenterHooks from "@/core/config-center";
 import { ConfigCenterApiError } from "@/core/config-center/types";
 
 vi.mock("@/core/config-center", async () => {
-  const actual = await vi.importActual<typeof import("@/core/config-center")>("@/core/config-center");
+  const actual = await vi.importActual<typeof configCenterHooks>("@/core/config-center");
   return {
     ...actual,
     useConfigCenter: vi.fn(),
