@@ -69,7 +69,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import src.gateway.routers.openviking as openviking_router
+import app.gateway.routers.openviking as openviking_router
 
 
 class _DummyProvider:
@@ -114,7 +114,7 @@ Expected:
 **Step 3: 如失败则修复（最小改动）**
 
 Fix hint:
-- 检查 [openviking.py](/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/backend/src/gateway/routers/openviking.py) 的 `_resolve_agent_by_scope` 与 `list_openviking_items()` 是否确实使用 `resolve_agent_for_memory_scope` 并把 `_default` 映射为 `None`。
+- 检查 [openviking.py](/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/backend/app/gateway/routers/openviking.py) 的 `_resolve_agent_by_scope` 与 `list_openviking_items()` 是否确实使用 `resolve_agent_for_memory_scope` 并把 `_default` 映射为 `None`。
 
 **Step 4: 回归测试**
 
@@ -131,11 +131,11 @@ Expected:
 
 Run:
 ```bash
-git add backend/tests/test_openviking_items_default_agent_alias.py backend/src/gateway/routers/openviking.py
+git add backend/tests/test_openviking_items_default_agent_alias.py backend/app/gateway/routers/openviking.py
 git commit -m "test(memory): guard /api/openviking/items so _default always aliases to global" \
   -m "Why: users can still run older UIs that call scope=agent&agent_name=_default; backend must remain backward compatible and never create/return a separate agent:_default scope." \
   -m "Change: add FastAPI router-level unit test asserting provider is called with (scope=global, agent_name=None) and response scope is normalized to global." \
-  -m "Files: backend/tests/test_openviking_items_default_agent_alias.py; backend/src/gateway/routers/openviking.py (if touched)" \
+  -m "Files: backend/tests/test_openviking_items_default_agent_alias.py; backend/app/gateway/routers/openviking.py (if touched)" \
   -m "Verify: cd backend && uv run pytest -q tests/test_openviking_items_default_agent_alias.py"
 ```
 
@@ -146,9 +146,9 @@ git commit -m "test(memory): guard /api/openviking/items so _default always alia
 ### Task 2: 新增 Gateway 运行时信息端点（base_dir / ledger 路径 / 依赖健康 / _default 映射）
 
 **Files:**
-- Create: `backend/src/gateway/routers/runtime_info.py`
-- Modify: `backend/src/gateway/routers/__init__.py`
-- Modify: `backend/src/gateway/app.py`
+- Create: `backend/app/gateway/routers/runtime_info.py`
+- Modify: `backend/app/gateway/routers/__init__.py`
+- Modify: `backend/app/gateway/app.py`
 - Test: `backend/tests/test_runtime_info_endpoint.py`
 
 **Step 1: 写失败测试**
@@ -160,7 +160,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import src.gateway.routers.runtime_info as runtime_info
+import app.gateway.routers.runtime_info as runtime_info
 
 
 def test_BE_GATEWAY_RUNTIME_601_runtime_info_reports_base_dir(monkeypatch, tmp_path):
@@ -193,7 +193,7 @@ Expected:
 
 **Step 3: 实现最小后端端点**
 
-Create `backend/src/gateway/routers/runtime_info.py`:
+Create `backend/app/gateway/routers/runtime_info.py`:
 ```python
 from __future__ import annotations
 
@@ -205,9 +205,9 @@ from typing import Literal
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from src.agents.memory.scope import normalize_agent_name_for_memory
-from src.config.default_agent import DEFAULT_AGENT_NAME
-from src.config.paths import get_paths
+from nion.agents.memory.scope import normalize_agent_name_for_memory
+from nion.config.default_agent import DEFAULT_AGENT_NAME
+from nion.config.paths import get_paths
 
 router = APIRouter(prefix="/api/runtime/info", tags=["runtime"])
 
@@ -261,8 +261,8 @@ async def get_runtime_info() -> RuntimeInfoResponse:
 **Step 4: 挂载 router 到 Gateway**
 
 Modify:
-- [__init__.py](/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/backend/src/gateway/routers/__init__.py): `_ROUTER_MODULES` 加入 `"runtime_info"`
-- [app.py](/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/backend/src/gateway/app.py): import `runtime_info` 并 `app.include_router(runtime_info.router)`（建议紧跟 `runtime_topology`）
+- [__init__.py](/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/backend/app/gateway/routers/__init__.py): `_ROUTER_MODULES` 加入 `"runtime_info"`
+- [app.py](/Users/zhangtiancheng/Documents/项目/新项目/Nion-Agent/backend/app/gateway/app.py): import `runtime_info` 并 `app.include_router(runtime_info.router)`（建议紧跟 `runtime_topology`）
 
 **Step 5: 重新运行测试**
 
@@ -279,11 +279,11 @@ Expected:
 
 Run:
 ```bash
-git add backend/src/gateway/routers/runtime_info.py backend/src/gateway/routers/__init__.py backend/src/gateway/app.py backend/tests/test_runtime_info_endpoint.py
+git add backend/app/gateway/routers/runtime_info.py backend/app/gateway/routers/__init__.py backend/app/gateway/app.py backend/tests/test_runtime_info_endpoint.py
 git commit -m "feat(runtime): add /api/runtime/info to expose base_dir + memory diagnostics" \
   -m "Root cause: debugging memory scope issues is ambiguous when multiple frontends/backends exist (e.g. stale next-server cwd, desktop runtime uses a different NION_HOME, gateway not started causing Failed to fetch). Without runtime introspection users cannot confirm which instance they are hitting." \
   -m "Change: add /api/runtime/info reporting runtime_mode, resolved base_dir, OpenViking ledger db path, python version, git sha best-effort, sentence-transformers availability, and default-agent memory normalization result (_default -> None/global)." \
-  -m "Files: backend/src/gateway/routers/runtime_info.py; backend/src/gateway/routers/__init__.py; backend/src/gateway/app.py; backend/tests/test_runtime_info_endpoint.py" \
+  -m "Files: backend/app/gateway/routers/runtime_info.py; backend/app/gateway/routers/__init__.py; backend/app/gateway/app.py; backend/tests/test_runtime_info_endpoint.py" \
   -m "Verify: cd backend && uv run pytest -q tests/test_runtime_info_endpoint.py"
 ```
 
@@ -549,8 +549,8 @@ git commit -m "feat(ui): add runtime diagnostics page to reveal gateway topology
 ### Task 4: SQLite ledger scope 迁移（agent:_default -> global）
 
 **Files:**
-- Modify: `backend/src/agents/memory/sqlite_index.py`
-- Modify: `backend/src/agents/memory/openviking_runtime.py`
+- Modify: `backend/packages/harness/nion/agents/memory/sqlite_index.py`
+- Modify: `backend/packages/harness/nion/agents/memory/openviking_runtime.py`
 - Test: `backend/tests/test_sqlite_index_migrate_default_scope.py`
 
 **Step 1: 写失败测试**
@@ -562,7 +562,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from src.agents.memory.sqlite_index import OpenVikingSQLiteIndex
+from nion.agents.memory.sqlite_index import OpenVikingSQLiteIndex
 
 
 def _count(conn: sqlite3.Connection, table: str, scope: str) -> int:
@@ -626,11 +626,11 @@ Expected:
 
 Run:
 ```bash
-git add backend/src/agents/memory/sqlite_index.py backend/src/agents/memory/openviking_runtime.py backend/tests/test_sqlite_index_migrate_default_scope.py
+git add backend/packages/harness/nion/agents/memory/sqlite_index.py backend/packages/harness/nion/agents/memory/openviking_runtime.py backend/tests/test_sqlite_index_migrate_default_scope.py
 git commit -m "fix(memory): migrate legacy agent:_default ledger scope into global on startup" \
   -m "Root cause: older builds wrote default-agent memories under scope=agent:_default. After defining '_default' as an alias of global, those legacy rows become invisible unless migrated." \
   -m "Change: add SQLiteIndex scope migration helper (conflict-safe via INSERT OR IGNORE) and invoke it once during OpenVikingRuntime initialization when legacy scope is detected." \
-  -m "Files: backend/src/agents/memory/sqlite_index.py; backend/src/agents/memory/openviking_runtime.py; backend/tests/test_sqlite_index_migrate_default_scope.py" \
+  -m "Files: backend/packages/harness/nion/agents/memory/sqlite_index.py; backend/packages/harness/nion/agents/memory/openviking_runtime.py; backend/tests/test_sqlite_index_migrate_default_scope.py" \
   -m "Verify: cd backend && uv run pytest -q tests/test_sqlite_index_migrate_default_scope.py"
 ```
 

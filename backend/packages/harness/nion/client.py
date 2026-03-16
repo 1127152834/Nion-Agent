@@ -1071,4 +1071,4 @@ class NionClient:
 
 
 # Backward-compat alias for upstream integrations/tests.
-DeerFlowClient = NionClient
+NionClient = NionClient

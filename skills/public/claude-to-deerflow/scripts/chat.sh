@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# chat.sh — Send a message to DeerFlow and collect the streaming response.
+# chat.sh — Send a message to Nion and collect the streaming response.
 #
 # Usage:
 #   bash chat.sh "Your question here"
 #   bash chat.sh "Your question" <thread_id>          # continue conversation
 #   bash chat.sh "Your question" "" pro                # specify mode
-#   DEERFLOW_URL=http://host:2026 bash chat.sh "hi"   # custom endpoint
+#   NION_URL=http://host:2026 bash chat.sh "hi"   # custom endpoint
 #
 # Environment variables:
-#   DEERFLOW_URL          — Unified proxy base URL (default: http://localhost:2026)
-#   DEERFLOW_GATEWAY_URL  — Gateway API base URL (default: $DEERFLOW_URL)
-#   DEERFLOW_LANGGRAPH_URL — LangGraph API base URL (default: $DEERFLOW_URL/api/langgraph)
+#   NION_URL          — Unified proxy base URL (default: http://localhost:2026)
+#   NION_GATEWAY_URL  — Gateway API base URL (default: $NION_URL)
+#   NION_LANGGRAPH_URL — LangGraph API base URL (default: $NION_URL/api/langgraph)
 #
 # Modes: flash, standard, pro (default), ultra
 
 set -euo pipefail
 
-DEERFLOW_URL="${DEERFLOW_URL:-http://localhost:2026}"
-GATEWAY_URL="${DEERFLOW_GATEWAY_URL:-$DEERFLOW_URL}"
-LANGGRAPH_URL="${DEERFLOW_LANGGRAPH_URL:-$DEERFLOW_URL/api/langgraph}"
+NION_URL="${NION_URL:-http://localhost:2026}"
+GATEWAY_URL="${NION_GATEWAY_URL:-$NION_URL}"
+LANGGRAPH_URL="${NION_LANGGRAPH_URL:-$NION_URL/api/langgraph}"
 MESSAGE="${1:?Usage: chat.sh <message> [thread_id] [mode]}"
 THREAD_ID="${2:-}"
 MODE="${3:-pro}"
@@ -26,8 +26,8 @@ MODE="${3:-pro}"
 # --- Health check ---
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${GATEWAY_URL}/health" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "000" ] || [ "$HTTP_CODE" -ge 400 ]; then
-  echo "ERROR: DeerFlow is not reachable at ${GATEWAY_URL} (HTTP ${HTTP_CODE})" >&2
-  echo "Make sure DeerFlow is running. Start it with: cd <deerflow-dir> && make dev" >&2
+  echo "ERROR: Nion is not reachable at ${GATEWAY_URL} (HTTP ${HTTP_CODE})" >&2
+  echo "Make sure Nion is running. Start it with: cd <nion-dir> && make dev" >&2
   exit 1
 fi
 
@@ -221,7 +221,7 @@ else:
     # Check for error events
     for event_type, data_str in events:
         if event_type == "error":
-            print(f"ERROR from DeerFlow: {data_str}", file=sys.stderr)
+            print(f"ERROR from Nion: {data_str}", file=sys.stderr)
             sys.exit(1)
     print("No AI response found in the stream.", file=sys.stderr)
     if len(raw) < 2000:

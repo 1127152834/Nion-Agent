@@ -1,6 +1,6 @@
-# Deer-Flow 上游同步评估与执行报告（2026-03-09）
+# Nion 上游同步评估与执行报告（2026-03-09）
 
-- 本地分支：`codex/sync-deerflow-mainline`
+- 本地分支：`codex/sync-nion-mainline`
 - 分叉基线：`b17c087174cc5999392fe6160ba2fe3692acefa1`
 - 上游范围：`b17c087..upstream/main`（18 commits）
 - 评估策略：`A=直接吸收`，`B=函数级吸收`，`C=跳过`
@@ -27,7 +27,7 @@
 | `cf9af1fe` | 2026-03-08 | chat UI + thinking message | 9 | 7 | L2 | C | 前端/中间件重叠高，且与本地 UI 走向冲突风险高 | 跳过 |
 | `6b5c4fe6` | 2026-03-08 | gateway 启动诊断 | 4 | 4 | L2 | B | `app.py` 异常链路增强有价值，但 Makefile/README 含 config.yaml 预检不可引入 | 仅吸收 `backend/src/gateway/app.py`，落地为 `4ca75df1` |
 | `3721c82b` | 2026-03-08 | nginx + thread hooks | 3 | 3 | L2 | B | nginx `/api/threads` 兜底路由有价值；hooks 改动与本地 `isNewThread` 逻辑冲突 | 仅吸收 nginx 两文件，落地为 `dd6a6bc3` |
-| `8871fca5` | 2026-03-08 | claude-to-deerflow skill | 5 | 1 | L1 | C | 非本轮核心运行时能力 | 跳过 |
+| `8871fca5` | 2026-03-08 | claude-to-nion skill | 5 | 1 | L1 | C | 非本轮核心运行时能力 | 跳过 |
 | `ac1e1915` | 2026-03-08 | channels session 配置化 | 5 | 2 | L3 | C | 依赖 upstream `channels/manager.py/service.py` 架构，本地不存在对应形态 | 跳过；保留思路借鉴 |
 
 ## 已吸收提交（按落地顺序）

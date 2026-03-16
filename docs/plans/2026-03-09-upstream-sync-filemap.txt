@@ -241,13 +241,13 @@ OVERLAP
   - docker/nginx/nginx.local.conf
   - frontend/src/core/threads/hooks.ts
 
-### 8871fca5cbe2d4f9b68139d549b7c2b7f7313a63|2026-03-08|feat: add claude-to-deerflow skill for DeerFlow API integration (#1024)
+### 8871fca5cbe2d4f9b68139d549b7c2b7f7313a63|2026-03-08|feat: add claude-to-nion skill for Nion API integration (#1024)
 FILES
   - README.md
   - backend/src/channels/telegram.py
-  - skills/public/claude-to-deerflow/SKILL.md
-  - skills/public/claude-to-deerflow/scripts/chat.sh
-  - skills/public/claude-to-deerflow/scripts/status.sh
+  - skills/public/claude-to-nion/SKILL.md
+  - skills/public/claude-to-nion/scripts/chat.sh
+  - skills/public/claude-to-nion/scripts/status.sh
 OVERLAP
   - README.md
 

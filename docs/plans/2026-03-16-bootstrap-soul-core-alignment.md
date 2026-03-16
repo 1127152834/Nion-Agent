@@ -3,7 +3,7 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:**  
-把 `bootstrap`（入门引导）从旧 deer-flow 语义升级为“资产引导生成器”，对齐当前 Nion 的 Soul Core：支持“新建自定义智能体”与“默认助手初始化/更新”两条路径，最终落盘 `SOUL.md + IDENTITY.md`，并可同步更新全局 `USER.md`（用户画像）。
+把 `bootstrap`（入门引导）从旧 nion 语义升级为“资产引导生成器”，对齐当前 Nion 的 Soul Core：支持“新建自定义智能体”与“默认助手初始化/更新”两条路径，最终落盘 `SOUL.md + IDENTITY.md`，并可同步更新全局 `USER.md`（用户画像）。
 
 **Architecture:**  
 保持“文件资产 + 运行时注入”的轻量策略不变：`SOUL.md / IDENTITY.md / USER.md` 仍落在 `{base_dir}` 下，由 `SoulResolver/SoulSummarizer` 汇总并注入到 `SYSTEM_PROMPT`。本次只做 bootstrap skill 与 `setup_agent` 工具的对齐与加固，不引入数据库、不做 Heartbeat/Evolution 接线改造。
@@ -59,7 +59,7 @@ import pytest
 
 
 def _paths(base_dir: Path):
-    from src.config.paths import Paths
+    from nion.config.paths import Paths
     return Paths(base_dir=base_dir)
 
 
@@ -74,9 +74,9 @@ def _runtime(*, agent_name: str | None, agent_display_name: str | None = None):
 
 
 def test_setup_agent_custom_creates_assets_and_user_profile_block(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         result = setup_agent.func(
             soul="# SOUL\\ncustom soul",
             description="A custom agent for writing and editing.",
@@ -105,14 +105,14 @@ def test_setup_agent_custom_creates_assets_and_user_profile_block(tmp_path: Path
 
 
 def test_setup_agent_custom_rejects_existing_agent_dir_without_mutation(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     agent_dir = tmp_path / "agents" / "writer"
     agent_dir.mkdir(parents=True, exist_ok=True)
     sentinel = agent_dir / "sentinel.txt"
     sentinel.write_text("do-not-delete", encoding="utf-8")
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         result = setup_agent.func(
             soul="new soul",
             description="new desc",
@@ -129,9 +129,9 @@ def test_setup_agent_custom_rejects_existing_agent_dir_without_mutation(tmp_path
 
 
 def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         result = setup_agent.func(
             soul="# SOUL\\ndefault soul v2",
             description="ignored",
@@ -149,7 +149,7 @@ def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
 
 
 def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     existing = (
         "manual header\\n"
@@ -160,7 +160,7 @@ def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
     )
     (tmp_path / "USER.md").write_text(existing, encoding="utf-8")
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         _ = setup_agent.func(
             soul="soul",
             description="desc",
@@ -200,7 +200,7 @@ git commit -m "test(bootstrap): add failing tests for setup_agent target+identit
 ### Task 2：实现 USER.md marker 写入策略 + `setup_agent` 扩展（让测试转绿）
 
 **Files:**
-- Modify: `backend/src/tools/builtins/setup_agent_tool.py`
+- Modify: `backend/packages/harness/nion/tools/builtins/setup_agent_tool.py`
 
 **Step 1: 实现 USER.md marker upsert（最小可读实现）**
 
@@ -277,7 +277,7 @@ Expected:
 **Step 4: Commit（后端实现）**
 
 ```bash
-git add backend/src/tools/builtins/setup_agent_tool.py
+git add backend/packages/harness/nion/tools/builtins/setup_agent_tool.py
 git commit -m "feat(bootstrap): extend setup_agent for default target + identity + USER.md marker update"
 ```
 

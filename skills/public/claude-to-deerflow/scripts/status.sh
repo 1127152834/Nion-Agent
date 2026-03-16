@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# status.sh — Check DeerFlow status and list available resources.
+# status.sh — Check Nion status and list available resources.
 #
 # Usage:
 #   bash status.sh                  # health + summary
@@ -11,30 +11,30 @@
 #   bash status.sh thread <id>      # show thread history
 #
 # Environment variables:
-#   DEERFLOW_URL           — Unified proxy base URL (default: http://localhost:2026)
-#   DEERFLOW_GATEWAY_URL   — Gateway API base URL (default: $DEERFLOW_URL)
-#   DEERFLOW_LANGGRAPH_URL — LangGraph API base URL (default: $DEERFLOW_URL/api/langgraph)
+#   NION_URL           — Unified proxy base URL (default: http://localhost:2026)
+#   NION_GATEWAY_URL   — Gateway API base URL (default: $NION_URL)
+#   NION_LANGGRAPH_URL — LangGraph API base URL (default: $NION_URL/api/langgraph)
 
 set -euo pipefail
 
-DEERFLOW_URL="${DEERFLOW_URL:-http://localhost:2026}"
-GATEWAY_URL="${DEERFLOW_GATEWAY_URL:-$DEERFLOW_URL}"
-LANGGRAPH_URL="${DEERFLOW_LANGGRAPH_URL:-$DEERFLOW_URL/api/langgraph}"
+NION_URL="${NION_URL:-http://localhost:2026}"
+GATEWAY_URL="${NION_GATEWAY_URL:-$NION_URL}"
+LANGGRAPH_URL="${NION_LANGGRAPH_URL:-$NION_URL/api/langgraph}"
 CMD="${1:-health}"
 ARG="${2:-}"
 
 case "$CMD" in
   health)
-    echo "Checking DeerFlow at ${GATEWAY_URL}..."
+    echo "Checking Nion at ${GATEWAY_URL}..."
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${GATEWAY_URL}/health" 2>/dev/null || echo "000")
     if [ "$HTTP_CODE" = "000" ]; then
-      echo "UNREACHABLE — DeerFlow is not running at ${GATEWAY_URL}"
+      echo "UNREACHABLE — Nion is not running at ${GATEWAY_URL}"
       exit 1
     elif [ "$HTTP_CODE" -ge 400 ]; then
       echo "ERROR — Health check returned HTTP ${HTTP_CODE}"
       exit 1
     else
-      echo "OK — DeerFlow is running (HTTP ${HTTP_CODE})"
+      echo "OK — Nion is running (HTTP ${HTTP_CODE})"
     fi
     ;;
   models)

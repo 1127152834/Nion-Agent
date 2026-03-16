@@ -30,11 +30,11 @@ const SYSTEM_SKILL_DISPLAY_NAMES: Record<string, Record<string, string>> = {
     zh: "图表可视化",
     "zh-CN": "图表可视化",
   },
-  "claude-to-deerflow": {
-    en: "DeerFlow Connector",
-    "en-US": "DeerFlow Connector",
-    zh: "连接 DeerFlow",
-    "zh-CN": "连接 DeerFlow",
+  "claude-to-nion": {
+    en: "Nion Connector",
+    "en-US": "Nion Connector",
+    zh: "连接 Nion",
+    "zh-CN": "连接 Nion",
   },
   "consulting-analysis": {
     en: "Consulting Analysis",

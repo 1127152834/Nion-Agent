@@ -1,21 +1,21 @@
 ---
-name: claude-to-deerflow
-description: '{"en":"Interact with DeerFlow via HTTP API. Use to delegate research/analysis, start threads, check status, list models/skills/agents, manage memory, upload files, and handle deep research tasks.","zh-CN":"通过 HTTP API 与 DeerFlow 平台交互。用于委托调研/分析、创建线程、查看状态、列出模型/技能/Agent、管理记忆、上传文件，或处理深度研究任务。"}'
+name: claude-to-nion
+description: '{"en":"Interact with Nion via HTTP API. Use to delegate research/analysis, start threads, check status, list models/skills/agents, manage memory, upload files, and handle deep research tasks.","zh-CN":"通过 HTTP API 与 Nion 平台交互。用于委托调研/分析、创建线程、查看状态、列出模型/技能/Agent、管理记忆、上传文件，或处理深度研究任务。"}'
 ---
 
-# DeerFlow Skill
+# Nion Skill
 
-Communicate with a running DeerFlow instance via its HTTP API. DeerFlow is an AI agent platform
+Communicate with a running Nion instance via its HTTP API. Nion is an AI agent platform
 built on LangGraph that orchestrates sub-agents for research, code execution, web browsing, and more.
 
 ## Architecture
 
-DeerFlow exposes two API surfaces behind an Nginx reverse proxy:
+Nion exposes two API surfaces behind an Nginx reverse proxy:
 
 | Service        | Direct Port | Via Proxy                        | Purpose                          |
 |----------------|-------------|----------------------------------|----------------------------------|
-| Gateway API    | 8001        | `$DEERFLOW_GATEWAY_URL`          | REST endpoints (models, skills, memory, uploads) |
-| LangGraph API  | 2024        | `$DEERFLOW_LANGGRAPH_URL`        | Agent threads, runs, streaming   |
+| Gateway API    | 8001        | `$NION_GATEWAY_URL`          | REST endpoints (models, skills, memory, uploads) |
+| LangGraph API  | 2024        | `$NION_LANGGRAPH_URL`        | Agent threads, runs, streaming   |
 
 ## Environment Variables
 
@@ -23,27 +23,27 @@ All URLs are configurable via environment variables. **Read these env vars befor
 
 | Variable                | Default                                  | Description                        |
 |-------------------------|------------------------------------------|------------------------------------|
-| `DEERFLOW_URL`          | `http://localhost:2026`                  | Unified proxy base URL             |
-| `DEERFLOW_GATEWAY_URL`  | `${DEERFLOW_URL}`                        | Gateway API base (models, skills, memory, uploads) |
-| `DEERFLOW_LANGGRAPH_URL`| `${DEERFLOW_URL}/api/langgraph`          | LangGraph API base (threads, runs) |
+| `NION_URL`          | `http://localhost:2026`                  | Unified proxy base URL             |
+| `NION_GATEWAY_URL`  | `${NION_URL}`                        | Gateway API base (models, skills, memory, uploads) |
+| `NION_LANGGRAPH_URL`| `${NION_URL}/api/langgraph`          | LangGraph API base (threads, runs) |
 
 When making curl calls, always resolve the URL like this:
 
 ```bash
 # Resolve base URLs from env (do this FIRST before any API call)
-DEERFLOW_URL="${DEERFLOW_URL:-http://localhost:2026}"
-DEERFLOW_GATEWAY_URL="${DEERFLOW_GATEWAY_URL:-$DEERFLOW_URL}"
-DEERFLOW_LANGGRAPH_URL="${DEERFLOW_LANGGRAPH_URL:-$DEERFLOW_URL/api/langgraph}"
+NION_URL="${NION_URL:-http://localhost:2026}"
+NION_GATEWAY_URL="${NION_GATEWAY_URL:-$NION_URL}"
+NION_LANGGRAPH_URL="${NION_LANGGRAPH_URL:-$NION_URL/api/langgraph}"
 ```
 
 ## Available Operations
 
 ### 1. Health Check
 
-Verify DeerFlow is running:
+Verify Nion is running:
 
 ```bash
-curl -s "$DEERFLOW_GATEWAY_URL/health"
+curl -s "$NION_GATEWAY_URL/health"
 ```
 
 ### 2. Send a Message (Streaming)
@@ -53,7 +53,7 @@ This is the primary operation. It creates a thread and streams the agent's respo
 **Step 1: Create a thread**
 
 ```bash
-curl -s -X POST "$DEERFLOW_LANGGRAPH_URL/threads" \
+curl -s -X POST "$NION_LANGGRAPH_URL/threads" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -63,7 +63,7 @@ Response: `{"thread_id": "<uuid>", ...}`
 **Step 2: Stream a run**
 
 ```bash
-curl -s -N -X POST "$DEERFLOW_LANGGRAPH_URL/threads/<thread_id>/runs/stream" \
+curl -s -N -X POST "$NION_LANGGRAPH_URL/threads/<thread_id>/runs/stream" \
   -H "Content-Type: application/json" \
   -d '{
     "assistant_id": "lead_agent",
@@ -115,7 +115,7 @@ with the new message.
 ### 4. List Models
 
 ```bash
-curl -s "$DEERFLOW_GATEWAY_URL/api/models"
+curl -s "$NION_GATEWAY_URL/api/models"
 ```
 
 Returns: `{"models": [{"name": "...", "provider": "...", ...}, ...]}`
@@ -123,7 +123,7 @@ Returns: `{"models": [{"name": "...", "provider": "...", ...}, ...]}`
 ### 5. List Skills
 
 ```bash
-curl -s "$DEERFLOW_GATEWAY_URL/api/skills"
+curl -s "$NION_GATEWAY_URL/api/skills"
 ```
 
 Returns: `{"skills": [{"name": "...", "enabled": true, ...}, ...]}`
@@ -131,7 +131,7 @@ Returns: `{"skills": [{"name": "...", "enabled": true, ...}, ...]}`
 ### 6. Enable/Disable a Skill
 
 ```bash
-curl -s -X PUT "$DEERFLOW_GATEWAY_URL/api/skills/<skill_name>" \
+curl -s -X PUT "$NION_GATEWAY_URL/api/skills/<skill_name>" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
 ```
@@ -139,7 +139,7 @@ curl -s -X PUT "$DEERFLOW_GATEWAY_URL/api/skills/<skill_name>" \
 ### 7. List Agents
 
 ```bash
-curl -s "$DEERFLOW_GATEWAY_URL/api/agents"
+curl -s "$NION_GATEWAY_URL/api/agents"
 ```
 
 Returns: `{"agents": [{"name": "...", ...}, ...]}`
@@ -147,7 +147,7 @@ Returns: `{"agents": [{"name": "...", ...}, ...]}`
 ### 8. Get Memory
 
 ```bash
-curl -s "$DEERFLOW_GATEWAY_URL/api/openviking/status"
+curl -s "$NION_GATEWAY_URL/api/openviking/status"
 ```
 
 Returns OpenViking runtime and governance status.
@@ -155,7 +155,7 @@ Returns OpenViking runtime and governance status.
 ### 9. Upload Files to a Thread
 
 ```bash
-curl -s -X POST "$DEERFLOW_GATEWAY_URL/api/threads/<thread_id>/uploads" \
+curl -s -X POST "$NION_GATEWAY_URL/api/threads/<thread_id>/uploads" \
   -F "files=@/path/to/file.pdf"
 ```
 
@@ -164,19 +164,19 @@ Supports PDF, PPTX, XLSX, DOCX — automatically converts to Markdown.
 ### 10. List Uploaded Files
 
 ```bash
-curl -s "$DEERFLOW_GATEWAY_URL/api/threads/<thread_id>/uploads/list"
+curl -s "$NION_GATEWAY_URL/api/threads/<thread_id>/uploads/list"
 ```
 
 ### 11. Get Thread History
 
 ```bash
-curl -s "$DEERFLOW_LANGGRAPH_URL/threads/<thread_id>/history"
+curl -s "$NION_LANGGRAPH_URL/threads/<thread_id>/history"
 ```
 
 ### 12. List Threads
 
 ```bash
-curl -s -X POST "$DEERFLOW_LANGGRAPH_URL/threads/search" \
+curl -s -X POST "$NION_LANGGRAPH_URL/threads/search" \
   -H "Content-Type: application/json" \
   -d '{"limit": 20, "sort_by": "updated_at", "sort_order": "desc"}'
 ```
@@ -186,7 +186,7 @@ curl -s -X POST "$DEERFLOW_LANGGRAPH_URL/threads/search" \
 For sending messages and collecting the full response, use the helper script:
 
 ```bash
-bash /path/to/skills/claude-to-deerflow/scripts/chat.sh "Your question here"
+bash /path/to/skills/claude-to-nion/scripts/chat.sh "Your question here"
 ```
 
 See `scripts/chat.sh` for the implementation. The script:
@@ -205,7 +205,7 @@ The stream returns SSE events. To extract the final AI response from a `values` 
 
 ## Error Handling
 
-- If health check fails, DeerFlow is not running. Inform the user they need to start it.
+- If health check fails, Nion is not running. Inform the user they need to start it.
 - If the stream returns an error event, extract and display the error message.
 - Common issues: port not open, services still starting up, config errors.
 

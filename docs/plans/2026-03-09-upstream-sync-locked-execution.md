@@ -1,6 +1,6 @@
-# Deer-Flow 上游逐提交同步执行报告（锁定版）
+# Nion 上游逐提交同步执行报告（锁定版）
 
-- 执行分支：`codex/sync-deerflow-mainline`
+- 执行分支：`codex/sync-nion-mainline`
 - 执行位置：隔离 worktree（未在主脏工作区直接操作）
 - 红线：未恢复 `config.yaml` 为运行时真源；配置仍走页面/API 持久化
 - 范围：`merge-base..upstream/main` 中用户确认的 1-11 决策集合
@@ -18,7 +18,7 @@
 | 7 | `75b73020` | B（本地化） | 已本地化实现 | 未并入 upstream channels 全家桶；在现有架构新增 Telegram（Webhook + Stream），并复用本地飞书/钉钉链路。 |
 | 8 | `3512279c` | A/B | 已吸收 | `model_config.thinking` 与 factory 的 anthropic thinking 兼容已并入。 |
 | 9 | `cf9af1fe` | C | 已跳过 | 按用户决策跳过。 |
-| 10 | `8871fca5` | A/B | 已吸收 | `claude-to-deerflow` skill 已吸收；Telegram 生命周期优化逻辑映射到本地运行链路。 |
+| 10 | `8871fca5` | A/B | 已吸收 | `claude-to-nion` skill 已吸收；Telegram 生命周期优化逻辑映射到本地运行链路。 |
 | 11 | `ac1e1915` | C | 已跳过 | 按用户决策跳过。 |
 
 ## 第7项（Telegram 本地化）落地点
