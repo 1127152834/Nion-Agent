@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onStartupStage: (callback: (data: any) => void) => {
     ipcRenderer.on("startup:stage", (_, data) => callback(data));
   },
+  startupRecovery: (actionId: string) => ipcRenderer.invoke("desktop:startup-recovery", actionId),
 
   // 运行时组件状态与下载
   getRuntimeStatus: () => ipcRenderer.invoke("desktop:get-runtime-status"),
@@ -63,6 +64,7 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   showItemInFolder: (fullPath: string) => Promise<void>;
   onStartupStage: (callback: (data: any) => void) => void;
+  startupRecovery: (actionId: string) => Promise<{ ok: boolean; statusMessage: string }>;
   getRuntimeStatus: () => Promise<any>;
   installRuntimeCore: () => Promise<any>;
   getRuntimePorts: () => Promise<{

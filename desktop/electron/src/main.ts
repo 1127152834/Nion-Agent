@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { resolveRuntimePaths, type DesktopRuntimePaths } from "./paths";
 import { WorkspaceDirectoryWatcher } from "./workspace-directory-watcher";
-import { DesktopProcessManager, type DesktopRuntimePorts } from "./process-manager";
+import { DesktopProcessManager, type DesktopRuntimePorts, type DesktopStartupObserver } from "./process-manager";
 import {
   RuntimeOptionalComponentsManager,
   type RuntimeDownloadProgress,
@@ -16,7 +16,7 @@ import {
   type DesktopRuntimePortsConfig,
 } from "./runtime-ports-config";
 import { renderStartupLoadingHtml } from "./startup-screen";
-import { getDesktopStartupCopy, normalizeDesktopLocale, type DesktopLocale } from "./i18n";
+import { getDesktopStartupCopy, normalizeDesktopLocale, resolveStartupStageCopy, type DesktopLocale } from "./i18n";
 
 let mainWindow: BrowserWindow | null = null;
 let runtimePaths: DesktopRuntimePaths | null = null;
@@ -24,6 +24,8 @@ let processManager: DesktopProcessManager | null = null;
 let runtimePorts: DesktopRuntimePorts | null = null;
 let runtimeOptionalComponentsManager: RuntimeOptionalComponentsManager | null = null;
 let startupInProgress = false;
+let startupAttempt = 0;
+let startupProgressValue = 0;
 let isShuttingDown = false;
 let creatingMainWindow = false;
 let runtimeRestartInProgress = false;
@@ -56,8 +58,7 @@ app.on("ready", async () => {
       return;
     }
 
-    runtimePorts = await startupRuntime();
-    // 导航已由 onFrontendHttpReady 回调提前完成，此处无需重复调用
+    void attemptStartup("initial");
   } catch (error) {
     console.error("Startup failed:", error);
     app.quit();
@@ -94,38 +95,49 @@ app.on("before-quit", async (event) => {
   }
 });
 
-async function startupRuntime(): Promise<DesktopRuntimePorts> {
-  if (startupInProgress || !runtimePaths) {
-    throw new Error("Startup already in progress or paths not initialized");
+async function startupRuntimeInternal(observer?: DesktopStartupObserver): Promise<DesktopRuntimePorts> {
+  if (!runtimePaths) {
+    throw new Error("Runtime paths not initialized");
+  }
+
+  processManager = new DesktopProcessManager(runtimePaths, {
+    onStageStart: (stage) => {
+      console.log(`[Startup] ${stage} started`);
+      observer?.onStageStart?.(stage);
+    },
+    onStageSuccess: (stage) => {
+      console.log(`[Startup] ${stage} succeeded`);
+      observer?.onStageSuccess?.(stage);
+    },
+    onStageFailure: (stage, error) => {
+      console.error(`[Startup] ${stage} failed:`, error);
+      observer?.onStageFailure?.(stage, error);
+    },
+    onFrontendHttpReady: (ports) => {
+      // 前端 HTTP 已就绪，立即导航（无需等待 workspace 健康检查）
+      observer?.onFrontendHttpReady?.(ports);
+      runtimePorts = ports;
+      void loadMainWindowFrontend();
+    },
+  });
+
+  const ports = await processManager.startup();
+  console.log("[Startup] All services started:", ports);
+
+  return ports;
+}
+
+async function startupRuntime(observer?: DesktopStartupObserver): Promise<DesktopRuntimePorts> {
+  if (startupInProgress) {
+    throw new Error("Startup already in progress");
+  }
+  if (!runtimePaths) {
+    throw new Error("Runtime paths not initialized");
   }
 
   startupInProgress = true;
-
   try {
-    processManager = new DesktopProcessManager(runtimePaths, {
-      onStageStart: (stage) => {
-        console.log(`[Startup] ${stage} started`);
-        mainWindow?.webContents.send("startup:stage", { stage, status: "started" });
-      },
-      onStageSuccess: (stage) => {
-        console.log(`[Startup] ${stage} succeeded`);
-        mainWindow?.webContents.send("startup:stage", { stage, status: "success" });
-      },
-      onStageFailure: (stage, error) => {
-        console.error(`[Startup] ${stage} failed:`, error);
-        mainWindow?.webContents.send("startup:stage", { stage, status: "failed", error: String(error) });
-      },
-      onFrontendHttpReady: (ports) => {
-        // 前端 HTTP 已就绪，立即导航（无需等待 workspace 健康检查）
-        runtimePorts = ports;
-        void loadMainWindowFrontend();
-      },
-    });
-
-    const ports = await processManager.startup();
-    console.log("[Startup] All services started:", ports);
-
-    return ports;
+    return await startupRuntimeInternal(observer);
   } finally {
     startupInProgress = false;
   }
@@ -349,9 +361,288 @@ function ensureMainWindow(): void {
   createMainWindow();
 }
 
+type StartupRecoveryActionId = "retry_startup" | "open_logs" | "exit_app";
+
+interface StartupRecoveryAction {
+  id: StartupRecoveryActionId;
+  label: string;
+  kind: "primary" | "secondary" | "danger";
+}
+
+interface StartupFailureDescriptor {
+  code: string;
+  title: string;
+  summary: string;
+  detail: string;
+  actions: StartupRecoveryAction[];
+}
+
+interface StartupStageProgress {
+  message: string;
+  detail: string;
+  percent?: number;
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function setWindowProgress(value: number): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  // Keep progress in startup page UI and hide Dock progress bar on macOS.
+  if (process.platform === "darwin") {
+    mainWindow.setProgressBar(-1);
+    return;
+  }
+
+  mainWindow.setProgressBar(value);
+}
+
+async function loadStartupPage(): Promise<void> {
+  ensureMainWindow();
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const locale = resolveDesktopLocale();
+  const html = renderStartupLoadingHtml({
+    locale,
+    appVersion: resolveDesktopAppVersion(),
+    startupLogoDataUri: resolveStartupLogoDataUri(),
+  });
+
+  await mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+}
+
+function resetBootstrapStatus(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  startupProgressValue = 0;
+  setWindowProgress(0.02);
+  void mainWindow.webContents
+    .executeJavaScript("window.__resetBootstrapStatus?.();", true)
+    .catch(() => undefined);
+}
+
+function reportBootstrapProgress(progress: StartupStageProgress): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  const normalizedPercent =
+    typeof progress.percent === "number" ? clampNumber(progress.percent, 0, 1) : undefined;
+  const monotonicPercent =
+    typeof normalizedPercent === "number"
+      ? Math.max(startupProgressValue, Math.min(normalizedPercent, 1))
+      : undefined;
+  if (typeof monotonicPercent === "number") {
+    startupProgressValue = monotonicPercent;
+  }
+
+  if (typeof monotonicPercent === "number") {
+    setWindowProgress(monotonicPercent);
+  } else {
+    // Electron: value > 1 makes the progress bar indeterminate on supported platforms.
+    setWindowProgress(2);
+  }
+
+  const payload = JSON.stringify({
+    message: progress.message,
+    detail: progress.detail,
+    percent: monotonicPercent,
+  });
+
+  void mainWindow.webContents
+    .executeJavaScript(`window.__updateBootstrap?.(${payload});`, true)
+    .catch(() => undefined);
+}
+
+function showBootstrapFailure(descriptor: StartupFailureDescriptor): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  setWindowProgress(-1);
+
+  const payload = JSON.stringify({
+    ...descriptor,
+    attempt: startupAttempt,
+  });
+
+  void mainWindow.webContents
+    .executeJavaScript(`window.__showBootstrapFailure?.(${payload});`, true)
+    .catch(() => undefined);
+}
+
+function toErrorText(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.message}\n${error.stack ?? ""}`;
+  }
+  return String(error ?? "unknown error");
+}
+
+function compact(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function classifyStartupFailure(error: unknown): string {
+  const text = compact(toErrorText(error));
+
+  if (text.includes("port") && text.includes("conflict")) {
+    return "port_conflict";
+  }
+
+  if (
+    text.includes("enotfound") ||
+    text.includes("econnrefused") ||
+    text.includes("network") ||
+    text.includes("timeout") ||
+    text.includes("http readiness timeout")
+  ) {
+    return "network";
+  }
+
+  if (
+    text.includes("uv not found") ||
+    text.includes("pnpm not found") ||
+    text.includes("dependency") ||
+    text.includes("python")
+  ) {
+    return "python_dependency_missing";
+  }
+
+  return "unknown";
+}
+
+function describeStartupFailure(error: unknown, locale: DesktopLocale): StartupFailureDescriptor {
+  const text = getDesktopStartupCopy(locale);
+  const code = classifyStartupFailure(error);
+  const detail = toErrorText(error);
+
+  const summary =
+    code === "python_dependency_missing"
+      ? text.startupErrorDependencySummary
+      : code === "port_conflict"
+        ? text.startupErrorPortSummary
+        : text.startupErrorSummary;
+
+  return {
+    code,
+    title: text.startupErrorTitle,
+    summary,
+    detail,
+    actions: [
+      { id: "retry_startup", label: text.startupActionRetryStartup, kind: "primary" },
+      { id: "open_logs", label: text.startupActionOpenLogs, kind: "secondary" },
+      { id: "exit_app", label: text.startupActionExitApp, kind: "danger" },
+    ],
+  };
+}
+
+async function shutdownRuntime(): Promise<void> {
+  if (!processManager) {
+    return;
+  }
+
+  try {
+    await processManager.shutdown();
+  } finally {
+    processManager = null;
+  }
+}
+
+async function attemptStartup(reason: "initial" | "recovery"): Promise<void> {
+  if (startupInProgress) {
+    return;
+  }
+  if (!runtimePaths) {
+    throw new Error("Runtime paths not initialized");
+  }
+
+  startupInProgress = true;
+  startupAttempt += 1;
+
+  const locale = resolveDesktopLocale();
+  const text = getDesktopStartupCopy(locale);
+
+  try {
+    await loadStartupPage();
+    resetBootstrapStatus();
+    reportBootstrapProgress({
+      message: text.startupStateInit,
+      detail: text.startupDetailInit,
+      percent: 0.02,
+    });
+
+    await startupRuntimeInternal({
+      onStageStart: (stage) => {
+        const stageCopy = resolveStartupStageCopy(locale, stage);
+        if (!stageCopy) {
+          reportBootstrapProgress({ message: stage, detail: "" });
+          return;
+        }
+        reportBootstrapProgress({
+          message: stageCopy.message,
+          detail: stageCopy.detail,
+          percent: stageCopy.percent,
+        });
+      },
+      onFrontendHttpReady: () => {
+        reportBootstrapProgress({
+          message: text.startupDoneMessage,
+          detail: text.startupDoneDetail,
+          percent: 1,
+        });
+      },
+    });
+  } catch (error) {
+    showBootstrapFailure(describeStartupFailure(error, locale));
+    await shutdownRuntime().catch(() => undefined);
+  } finally {
+    startupInProgress = false;
+  }
+}
+
+async function handleStartupRecovery(actionId: string): Promise<{ ok: boolean; statusMessage: string }> {
+  const locale = resolveDesktopLocale();
+  const text = getDesktopStartupCopy(locale);
+
+  if (startupInProgress) {
+    return { ok: false, statusMessage: text.startupInProgressStatus };
+  }
+
+  switch (actionId) {
+    case "retry_startup": {
+      void attemptStartup("recovery");
+      return { ok: true, statusMessage: text.startupRetryStartedStatus };
+    }
+
+    case "open_logs": {
+      const openResult = await shell.openPath(ensureRuntimePathsInitialized().logsDir);
+      if (openResult) {
+        return { ok: false, statusMessage: `${text.openLogsFailedPrefix}${openResult}` };
+      }
+      return { ok: true, statusMessage: text.logsOpenedStatus };
+    }
+
+    case "exit_app": {
+      void shutdownRuntime().finally(() => app.quit());
+      return { ok: true, statusMessage: text.appExitingStatus };
+    }
+
+    default:
+      return { ok: false, statusMessage: `${text.unknownRecoveryActionPrefix}${actionId}` };
+  }
+}
+
 function renderRuntimeBootstrapHtml(): string {
   return `<!doctype html>
-<html lang="zh-CN">
+ <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -752,6 +1043,13 @@ ipcMain.handle("desktop:open-external", async (_, url: string) => {
 
 ipcMain.handle("desktop:show-item-in-folder", async (_, fullPath: string) => {
   shell.showItemInFolder(fullPath);
+});
+
+ipcMain.handle("desktop:startup-recovery", async (_, actionId: string) => {
+  if (!actionId || typeof actionId !== "string") {
+    throw new Error("Invalid action id");
+  }
+  return handleStartupRecovery(actionId);
 });
 
 ipcMain.handle(
