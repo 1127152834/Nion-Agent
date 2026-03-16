@@ -4,14 +4,13 @@ import logging
 import re
 from typing import Any, NotRequired, override
 
-from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-
 from langgraph.runtime import Runtime
 
 from nion.agents.memory.core import MemoryWriteRequest
 from nion.agents.memory.queue import get_memory_queue
 from nion.agents.memory.registry import get_default_memory_provider
 from nion.agents.memory.scope import normalize_agent_name_for_memory
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from nion.config.memory_config import get_memory_config
 
 logger = logging.getLogger(__name__)

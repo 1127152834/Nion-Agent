@@ -786,8 +786,8 @@ class NionClient:
             FileNotFoundError: If the file does not exist.
             ValueError: If the file is invalid.
         """
-        from nion.skills.validation import _validate_skill_frontmatter
         from nion.skills.loader import get_skills_root_path
+        from nion.skills.validation import _validate_skill_frontmatter
 
         path = Path(skill_path)
         if not path.exists():

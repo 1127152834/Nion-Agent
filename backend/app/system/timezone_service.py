@@ -10,8 +10,8 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
-from nion.config.paths import get_paths
 from app.heartbeat.service import get_heartbeat_service
+from nion.config.paths import get_paths
 from nion.scheduler.models import TriggerType
 from nion.scheduler.service import get_scheduler
 

@@ -4,8 +4,8 @@ import json
 import threading
 from pathlib import Path
 
-from nion.config.paths import get_paths
 from app.evolution.models import EvolutionReport, EvolutionSettings, EvolutionSuggestion, SuggestionStatus
+from nion.config.paths import get_paths
 
 _lock = threading.Lock()
 

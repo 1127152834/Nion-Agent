@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import threading
 from datetime import UTC, datetime
@@ -12,11 +13,9 @@ from typing import Any, Literal
 import httpx
 from fastapi import HTTPException
 
-from nion.config.paths import get_paths
 from app.gateway.langgraph_client import build_langgraph_upstream_url
 from app.gateway.path_utils import resolve_thread_virtual_path
-
-import logging
+from nion.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +313,7 @@ def _safe_relative_material_path(name: str) -> str:
 
 
 def _plugin_studio_test_materials_virtual_root(session_id: str) -> str:
-    return f"/mnt/user-data/workspace/fixtures"
+    return "/mnt/user-data/workspace/fixtures"
 
 
 def _normalize_material_relative_path(name: str) -> str:

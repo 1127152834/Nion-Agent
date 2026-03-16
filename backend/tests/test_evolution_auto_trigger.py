@@ -4,9 +4,9 @@ import asyncio
 import time
 from unittest.mock import patch
 
-from nion.config.paths import Paths
 from app.evolution.models import EvolutionSettings
 from app.evolution.service import EvolutionService
+from nion.config.paths import Paths
 from nion.scheduler import store as scheduler_store
 from nion.scheduler.mode_registry import register_mode_executor
 from nion.scheduler.service import get_scheduler, shutdown_scheduler

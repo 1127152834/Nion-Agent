@@ -5,8 +5,8 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from nion.config.paths import Paths
 from app.gateway.routers.evolution import router
+from nion.config.paths import Paths
 
 
 def _make_app() -> FastAPI:

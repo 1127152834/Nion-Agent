@@ -9,8 +9,6 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import override
 
-logger = logging.getLogger(__name__)
-
 from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.graph import END
 from langgraph.prebuilt.tool_node import ToolCallRequest
@@ -20,6 +18,8 @@ from langgraph.types import Command
 from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 from nion.cli.catalog import load_cli_catalog
 from nion.sandbox.tools import ensure_sandbox_initialized
+
+logger = logging.getLogger(__name__)
 
 
 class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):

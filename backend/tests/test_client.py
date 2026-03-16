@@ -10,10 +10,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa: F401
 
-from nion.agents.memory.core import MemoryReadRequest
-from nion.client import NionClient
 from app.gateway.routers.openviking import OpenVikingConfigResponse
 from app.gateway.routers.uploads import UploadResponse
+from nion.agents.memory.core import MemoryReadRequest
+from nion.client import NionClient
 from nion.tools.builtins._service_ops import McpConfigResponse, ModelResponse, ModelsListResponse, SkillInstallResponse, SkillResponse, SkillsListResponse
 
 # ---------------------------------------------------------------------------

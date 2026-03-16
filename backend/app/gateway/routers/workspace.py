@@ -9,8 +9,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from nion.config.paths import VIRTUAL_PATH_PREFIX, get_paths
 from app.gateway.path_utils import resolve_thread_virtual_path
+from nion.config.paths import VIRTUAL_PATH_PREFIX, get_paths
 from nion.runtime_profile import RuntimeProfileRepository
 from nion.sandbox.sandbox_provider import get_sandbox_provider
 

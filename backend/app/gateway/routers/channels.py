@@ -22,7 +22,6 @@ from app.channels.webhook_service import (
     get_lark_challenge,
     is_lark_challenge,
 )
-from nion.config.paths import get_paths
 from app.gateway.schemas.channels import (
     ChannelAuthorizedUserResponse,
     ChannelAuthorizedUserRevokeRequest,
@@ -43,6 +42,7 @@ from app.gateway.schemas.channels import (
     ChannelRuntimeStatusResponse,
     ChannelWebhookResponse,
 )
+from nion.config.paths import get_paths
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
 logger = logging.getLogger(__name__)

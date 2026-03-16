@@ -5,7 +5,6 @@ import logging
 import yaml
 from fastapi import APIRouter, HTTPException
 
-from nion.config.config_repository import ConfigRepository, ConfigValidationError, VersionConflictError
 from app.gateway.schemas import (
     ConfigReadResponse,
     ConfigRuntimeStatusResponse,
@@ -18,6 +17,7 @@ from app.gateway.schemas import (
     ConfigValidateResponse,
     ConfigValidateWarningItem,
 )
+from nion.config.config_repository import ConfigRepository, ConfigValidationError, VersionConflictError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["config"])

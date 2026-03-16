@@ -5,11 +5,9 @@ from __future__ import annotations
 import subprocess
 import time
 import uuid
-from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 
-from nion.config.paths import get_paths
 from app.gateway.path_utils import resolve_thread_virtual_path
 from app.gateway.routers.workbench._helpers import (
     _ensure_langgraph_thread_for_plugin_test,
@@ -22,6 +20,7 @@ from app.gateway.routers.workbench.models import (
     PluginTestStepResult,
     PluginTestThreadResponse,
 )
+from nion.config.paths import get_paths
 
 router = APIRouter(prefix="/api/workbench/plugins", tags=["workbench"])
 

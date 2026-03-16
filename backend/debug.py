@@ -19,14 +19,6 @@ backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
 sys.path.insert(0, os.path.join(backend_dir, "packages", "harness"))
 
-# Load environment variables
-from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage
-
-from nion.agents import make_lead_agent
-
-load_dotenv()
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -36,6 +28,15 @@ logging.basicConfig(
 
 
 async def main():
+    # Keep imports here so the script can be executed directly without requiring
+    # a packaged install (sys.path is adjusted above).
+    from dotenv import load_dotenv
+    from langchain_core.messages import HumanMessage
+
+    from nion.agents import make_lead_agent
+
+    load_dotenv()
+
     # Initialize MCP tools at startup
     try:
         from nion.mcp import initialize_mcp_tools

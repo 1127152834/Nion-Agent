@@ -7,13 +7,9 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from nion.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
 from app.channels.event_broker import ChannelEventBroker
 from app.channels.repository import ChannelRepository
 from app.channels.runtime_manager import ChannelRuntimeManager
-from nion.config.app_config import get_app_config
-from nion.config.default_agent import ensure_default_agent
-from nion.config.paths import get_paths
 from app.gateway.config import get_gateway_config
 from app.gateway.routers import (
     agents,
@@ -43,6 +39,10 @@ from app.gateway.routers import (
     workbench,
     workspace,
 )
+from nion.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
+from nion.config.app_config import get_app_config
+from nion.config.default_agent import ensure_default_agent
+from nion.config.paths import get_paths
 from nion.scheduler.service import shutdown_scheduler, startup_scheduler
 
 # Configure logging
@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         from nion.config.migration import migrate_use_paths_src_to_nion
 
         if migrate_use_paths_src_to_nion():
-            logger.info("Migrated config 'use' paths from src.* to nion.*")
+            logger.info("Migrated config 'use' paths: src.* -> nion.*")
     except Exception as e:
         logger.warning("Config use-path migration failed (non-blocking): %s", e)
 

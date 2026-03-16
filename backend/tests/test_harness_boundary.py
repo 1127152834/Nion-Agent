@@ -36,7 +36,7 @@ def test_harness_does_not_import_app():
 
 
 def test_no_residual_src_imports():
-    """No Python file should still reference 'from src.' or 'import src.' after migration."""
+    """No Python file should still reference legacy `src.*` imports after migration."""
     violations: list[str] = []
     search_roots = [
         HARNESS_ROOT,
@@ -63,4 +63,3 @@ def test_no_residual_src_imports():
                         rel = py_file.relative_to(Path(__file__).parent.parent)
                         violations.append(f"  {rel}:{node.lineno}  from {node.module}")
     assert not violations, "Residual src.* imports found:\n" + "\n".join(violations)
-

@@ -11,8 +11,8 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from nion.config.paths import Paths
 from app.gateway.routers.scheduler import router as scheduler_router
+from nion.config.paths import Paths
 from nion.scheduler.models import AgentStep, ScheduledTask, TriggerConfig, TriggerType, WorkflowStep
 from nion.scheduler.service import get_scheduler, shutdown_scheduler
 from nion.tools.builtins.scheduler_manage_tools import scheduler_create_task_tool, scheduler_operate_task_tool

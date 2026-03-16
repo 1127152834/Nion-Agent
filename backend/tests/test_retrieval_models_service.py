@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from nion.config.retrieval_models_config import RetrievalModelsConfig
 from app.retrieval_models.service import RetrievalModelsError, RetrievalModelsService
+from nion.config.retrieval_models_config import RetrievalModelsConfig
 
 
 def _build_retrieval_config(

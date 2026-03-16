@@ -10,7 +10,11 @@ from nion.tools.builtins._service_ops import (
     SkillsListResponse,
     SkillUpdateRequest,
     _skill_to_response,
+)
+from nion.tools.builtins._service_ops import (
     install_skill as _install_skill,
+)
+from nion.tools.builtins._service_ops import (
     update_skill as _update_skill,
 )
 

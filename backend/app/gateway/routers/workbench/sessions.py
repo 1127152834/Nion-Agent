@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import signal
 import subprocess
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -18,7 +17,6 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.gateway.routers.workbench._helpers import (
-    DEFAULT_CWD,
     MAX_SESSIONS,
     SESSION_TTL_SECONDS,
     _resolve_cwd,

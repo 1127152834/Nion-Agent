@@ -7,8 +7,8 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from nion.config.paths import Paths
 from app.gateway.routers.scheduler import router
+from nion.config.paths import Paths
 from nion.scheduler.service import get_scheduler, shutdown_scheduler
 
 

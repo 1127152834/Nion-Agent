@@ -6,20 +6,23 @@ import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from nion.config.extensions_config import ExtensionsConfig
 from app.gateway.build_info import PROCESS_START_TIME
+from nion.config.extensions_config import ExtensionsConfig
 from nion.tools.builtins._service_ops import (
     McpConfigResponse,
     McpConfigUpdateRequest,
-    McpServerConfigResponse,
+)
+from nion.tools.builtins._service_ops import (
     get_mcp_configuration as _get_mcp_configuration,
+)
+from nion.tools.builtins._service_ops import (
     update_mcp_configuration as _update_mcp_configuration,
 )
 

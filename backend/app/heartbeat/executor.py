@@ -3,9 +3,9 @@
 import asyncio
 from datetime import datetime
 
-from nion.client import NionClient
 from app.heartbeat.models import HeartbeatLogRecord, HeartbeatResultType
 from app.heartbeat.store import append_log
+from nion.client import NionClient
 
 
 class HeartbeatExecutor:

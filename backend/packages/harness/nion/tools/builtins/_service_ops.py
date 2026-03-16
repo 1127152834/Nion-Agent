@@ -25,6 +25,7 @@ from typing import Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
+from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from nion.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
@@ -658,7 +659,6 @@ try:
     from langchain_core.language_models.chat_models import BaseChatModel
 except Exception:  # pragma: no cover - compatibility fallback
     from langchain.chat_models import BaseChatModel  # type: ignore
-from langchain_core.messages import HumanMessage
 
 
 async def test_model_connection(

@@ -10,13 +10,13 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from nion.config.paths import Paths
 from app.gateway.path_utils import resolve_thread_virtual_path
 from app.gateway.routers.workbench import _helpers as workbench_helpers
 from app.gateway.routers.workbench import marketplace as workbench_marketplace
 from app.gateway.routers.workbench import plugin_studio as workbench_plugin_studio
 from app.gateway.routers.workbench import plugins as workbench_plugins
 from app.gateway.routers.workbench.models import PluginTestCommandStep, PluginTestRequest, PluginTestResponse, PluginTestStepResult
+from nion.config.paths import Paths
 
 PluginTestCommandStep.model_rebuild()
 PluginTestRequest.model_rebuild()

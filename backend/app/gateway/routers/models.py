@@ -1,4 +1,3 @@
-import asyncio
 import os
 import time
 from collections.abc import Sequence
@@ -9,20 +8,20 @@ import httpx
 from fastapi import APIRouter, HTTPException
 
 try:
-    from langchain_core.language_models.chat_models import BaseChatModel
+    pass
 except Exception:  # pragma: no cover - compatibility fallback
-    from langchain.chat_models import BaseChatModel  # type: ignore
-from langchain_core.messages import HumanMessage
+    pass  # type: ignore
 from pydantic import BaseModel, Field
 
 from nion.config import get_app_config
-from nion.reflection import resolve_class
 from nion.tools.builtins._service_ops import (
     ModelConnectionTestRequest,
     ModelConnectionTestResponse,
     ModelResponse,
     ModelsListResponse,
     ProviderModelListUnsupportedError,
+)
+from nion.tools.builtins._service_ops import (
     test_model_connection as _test_model_connection,
 )
 

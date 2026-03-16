@@ -10,13 +10,12 @@ import uuid
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from nion.config.paths import get_paths
 from app.gateway.path_utils import resolve_thread_virtual_path
 from app.gateway.routers.workbench._helpers import (
     _PLUGIN_STUDIO_LOCK,
@@ -26,7 +25,6 @@ from app.gateway.routers.workbench._helpers import (
     _build_targets_from_match_rules,
     _compute_workflow_stage,
     _default_workflow_state,
-    _ensure_langgraph_thread_for_plugin_test,
     _ensure_plugin_studio_preview_thread,
     _increment_patch,
     _is_semver_greater,
@@ -37,16 +35,13 @@ from app.gateway.routers.workbench._helpers import (
     _normalize_workflow_state,
     _parse_semver,
     _plugin_studio_session_dir,
-    _plugin_studio_sessions_dir,
+    _plugin_studio_test_materials_virtual_root,
     _read_plugin_studio_session,
     _safe_plugin_id,
     _safe_relative_material_path,
     _save_plugin_studio_session,
-    _plugin_studio_test_materials_virtual_root,
-    _to_clean_string_list,
     _to_non_empty_string,
     _utcnow_iso,
-    _write_json,
 )
 from app.gateway.routers.workbench.models import (
     PluginStudioAutoVerifyResponse,
@@ -68,6 +63,7 @@ from app.gateway.routers.workbench.models import (
     PluginStudioWorkspaceSeedResponse,
     PluginStudioWorkspaceSyncRequest,
 )
+from nion.config.paths import get_paths
 
 router = APIRouter(prefix="/api/workbench/plugin-studio", tags=["workbench"])
 

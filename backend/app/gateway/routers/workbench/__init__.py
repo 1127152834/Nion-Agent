@@ -10,10 +10,10 @@ This package combines all sub-routers into the top-level names expected by
     app.include_router(workbench.plugin_studio_router)
 """
 
-from app.gateway.routers.workbench.sessions import router as router
-from app.gateway.routers.workbench.plugins import router as plugin_router
 from app.gateway.routers.workbench.marketplace import router as marketplace_router
 from app.gateway.routers.workbench.plugin_studio import router as plugin_studio_router
+from app.gateway.routers.workbench.plugins import router as plugin_router
+from app.gateway.routers.workbench.sessions import router as router
 
 __all__ = [
     "router",
