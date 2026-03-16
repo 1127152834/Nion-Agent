@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from src.agents.memory.core import MemoryPolicyRequest, MemoryReadRequest, MemoryWriteRequest
@@ -109,6 +110,102 @@ class OpenVikingMemoryProvider:
 
     def commit_session(self, *, thread_id: str, messages: list[Any], agent_name: str | None = None) -> dict[str, Any]:
         return self._runtime.commit_session(thread_id=thread_id, messages=messages, agent_name=agent_name)
+
+    # ------------------------------------------------------------------
+    # OpenViking Context Filesystem (read-only)
+    # ------------------------------------------------------------------
+    def fs_find(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+        target_uri: str = "",
+        score_threshold: float | None = None,
+        agent_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self._runtime.fs_find(
+            query=query,
+            limit=limit,
+            target_uri=target_uri,
+            score_threshold=score_threshold,
+            agent_name=agent_name,
+        )
+
+    def fs_search(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+        target_uri: str = "",
+        score_threshold: float | None = None,
+        filter_json: dict[str, Any] | None = None,
+        agent_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        return self._runtime.fs_search(
+            query=query,
+            limit=limit,
+            target_uri=target_uri,
+            score_threshold=score_threshold,
+            filter_json=filter_json,
+            agent_name=agent_name,
+        )
+
+    def fs_overview(self, *, uri: str, agent_name: str | None = None) -> str:
+        return self._runtime.fs_overview(uri=uri, agent_name=agent_name)
+
+    def fs_read(self, *, uri: str, offset: int = 0, limit: int = -1, agent_name: str | None = None) -> str:
+        return self._runtime.fs_read(uri=uri, offset=offset, limit=limit, agent_name=agent_name)
+
+    def fs_ls(
+        self,
+        *,
+        uri: str,
+        simple: bool = True,
+        recursive: bool = False,
+        agent_name: str | None = None,
+    ) -> list[Any]:
+        return self._runtime.fs_ls(uri=uri, simple=simple, recursive=recursive, agent_name=agent_name)
+
+    def fs_tree(self, *, uri: str, agent_name: str | None = None) -> dict[str, Any]:
+        return self._runtime.fs_tree(uri=uri, agent_name=agent_name)
+
+    def fs_grep(
+        self,
+        *,
+        uri: str,
+        pattern: str,
+        case_insensitive: bool = False,
+        agent_name: str | None = None,
+    ) -> dict[str, Any]:
+        return self._runtime.fs_grep(uri=uri, pattern=pattern, case_insensitive=case_insensitive, agent_name=agent_name)
+
+    def fs_glob(
+        self,
+        *,
+        pattern: str,
+        uri: str = "viking://",
+        agent_name: str | None = None,
+    ) -> dict[str, Any]:
+        return self._runtime.fs_glob(pattern=pattern, uri=uri, agent_name=agent_name)
+
+    def fs_stat(self, *, uri: str, agent_name: str | None = None) -> dict[str, Any]:
+        return self._runtime.fs_stat(uri=uri, agent_name=agent_name)
+
+    def sync_managed_resource(
+        self,
+        *,
+        local_path: str | Path,
+        target_uri: str,
+        agent_name: str | None,
+        reason: str = "nion_asset_sync",
+    ) -> dict[str, Any]:
+        resolved = local_path if isinstance(local_path, Path) else Path(str(local_path))
+        return self._runtime.sync_managed_resource(
+            local_path=resolved,
+            target_uri=target_uri,
+            agent_name=agent_name,
+            reason=reason,
+        )
 
     def get_retrieval_status(self, *, agent_name: str | None = None) -> dict[str, Any]:
         return self._runtime.get_retrieval_status(agent_name=agent_name)

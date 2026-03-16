@@ -14,6 +14,7 @@ import re
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -112,6 +113,9 @@ class OpenVikingRuntime:
         self._sqlite_index = OpenVikingSQLiteIndex(self._paths.openviking_index_db)
         self._scope_locks: dict[str, threading.Lock] = {}
         self._scope_locks_guard = threading.Lock()
+        # OpenViking Python SDK resolves config via `OPENVIKING_CONFIG_FILE` env.
+        # That env var is process-global, so per-scope locks are insufficient.
+        self._ov_env_lock = threading.Lock()
         self._embedding_model_cache: dict[str, Any] = {}
         self._embedding_guard = threading.Lock()
         self._embedding_health_cache: dict[str, tuple[bool, str, float]] = {}
@@ -160,15 +164,25 @@ class OpenVikingRuntime:
             updated_at = str(item.get("updated_at") or "")
             if updated_at and updated_at > last_updated:
                 last_updated = updated_at
+            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            tier = self._memory_tier(metadata)
+            expires_at = str(metadata.get("expires_at") or "")
+            retention_policy = str(metadata.get("retention_policy") or "")
+            quality_score = float(metadata.get("quality_score") or item.get("score", 0.0) or 0.0)
             facts.append(
                 {
                     "id": item.get("memory_id", ""),
                     "content": item.get("summary", ""),
                     "category": "openviking",
                     "confidence": float(item.get("score", 0.0) or 0.0),
+                    "quality_score": quality_score,
                     "createdAt": item.get("created_at", ""),
+                    "updatedAt": updated_at,
                     "source": item.get("source_thread_id", ""),
                     "status": item.get("status", "active"),
+                    "tier": tier,
+                    "retention_policy": retention_policy,
+                    "expires_at": expires_at,
                     "uri": item.get("uri", ""),
                     "last_used_at": item.get("last_used_at", ""),
                     "use_count": int(item.get("use_count", 0) or 0),
@@ -1073,17 +1087,16 @@ class OpenVikingRuntime:
 
         scope_lock = self._lock_for_scope(agent_name)
         with scope_lock:
-            client = None
             try:
-                client = self._build_openviking_client(agent_name)
-                for msg in normalized_messages:
-                    client.add_message(
-                        thread_id,
-                        msg["role"],
-                        content=msg["content"],
-                    )
-                result = client.commit_session(thread_id)
-                commit_result_payload = self._to_jsonable(result)
+                with self._openviking_client(agent_name) as client:
+                    for msg in normalized_messages:
+                        client.add_message(
+                            thread_id,
+                            msg["role"],
+                            content=msg["content"],
+                        )
+                    result = client.commit_session(thread_id)
+                    commit_result_payload = self._to_jsonable(result)
             except Exception as exc:  # noqa: BLE001
                 # Degrade to local ledger-only commit when OpenViking is unavailable.
                 commit_status = "committed_local_only"
@@ -1094,11 +1107,6 @@ class OpenVikingRuntime:
                     self._scope_name(agent_name),
                     exc,
                 )
-            finally:
-                if client is not None:
-                    close_fn = getattr(client, "close", None)
-                    if callable(close_fn):
-                        close_fn()
 
         try:
             self._upsert_runtime_indexes(
@@ -1750,21 +1758,11 @@ class OpenVikingRuntime:
         return rescored
 
     def _upsert_runtime_indexes(self, *, thread_id: str, messages: list[dict[str, str]], agent_name: str | None) -> None:
-        configured, model_name = self._resolve_local_embedding_model()
-        vector_ready = bool(configured and model_name)
-        if not vector_ready:
-            self._set_last_fallback_reason(
-                agent_name=agent_name,
-                reason="local_embedding_not_configured",
-            )
-        else:
-            health_ok, health_message = self._check_embedding_health(model_name)
-            if not health_ok:
-                vector_ready = False
-                self._set_last_fallback_reason(
-                    agent_name=agent_name,
-                    reason=f"embedding_unhealthy:{health_message}",
-                )
+        # Session commits are treated as TRACE evidence:
+        # - short retention (7d) with explicit expires_at
+        # - excluded from default injection/retrieval
+        expires_at = (datetime.now(UTC) + timedelta(days=7)).isoformat().replace("+00:00", "Z")
+        ttl_seconds = 7 * 24 * 3600
 
         for msg in messages:
             content = str(msg.get("content", "")).strip()
@@ -1781,29 +1779,16 @@ class OpenVikingRuntime:
                 source_thread_id=thread_id,
                 score=0.6,
                 status="active",
-                metadata={"source": "session_commit", "role": role},
+                metadata={
+                    "source": "session_commit",
+                    "role": role,
+                    "tier": "trace",
+                    "retention_policy": "short_term_7d",
+                    "ttl_seconds": ttl_seconds,
+                    "expires_at": expires_at,
+                },
                 bump_usage=True,
             )
-
-            if not vector_ready or not model_name:
-                continue
-            vector = self._embed_text_local(content, model_name)
-            if not vector:
-                continue
-            self._sqlite_index.upsert_vector(
-                agent_name=agent_name,
-                memory_id=memory_id,
-                thread_id=thread_id,
-                content=content,
-                vector=vector,
-                metadata={"source": "session_commit", "role": role},
-            )
-            if get_memory_config().graph_enabled:
-                self._sqlite_index.upsert_graph_from_text(
-                    agent_name=agent_name,
-                    memory_id=memory_id,
-                    text=content,
-                )
 
     def _commit_session_async(self, *, thread_id: str, messages: list[Any], agent_name: str | None) -> None:
         def _runner():
@@ -1840,6 +1825,38 @@ class OpenVikingRuntime:
                 self._scope_locks[scope] = lock
             return lock
 
+    @contextmanager
+    def _openviking_client(self, agent_name: str | None):
+        """Build an OpenViking client with a scope-specific config env.
+
+        OpenViking SDK resolves config via `OPENVIKING_CONFIG_FILE` env var.
+        That env is process-global, so we must:
+        1) serialize env mutation across all scopes/threads,
+        2) restore previous env after the client use,
+        3) ensure client is always closed.
+        """
+
+        # "_default" is a reserved runtime agent name and must share the global scope.
+        agent_name = self._normalize_agent_name(agent_name)
+        _, conf_file = self._ensure_openviking_scope(agent_name)
+
+        with self._ov_env_lock:
+            previous = os.environ.get("OPENVIKING_CONFIG_FILE")
+            os.environ["OPENVIKING_CONFIG_FILE"] = str(conf_file)
+            client = None
+            try:
+                client = self._build_openviking_client(agent_name)
+                yield client
+            finally:
+                if client is not None:
+                    close_fn = getattr(client, "close", None)
+                    if callable(close_fn):
+                        close_fn()
+                if previous is None:
+                    os.environ.pop("OPENVIKING_CONFIG_FILE", None)
+                else:
+                    os.environ["OPENVIKING_CONFIG_FILE"] = previous
+
     def _build_openviking_client(self, agent_name: str | None):
         agent_name = self._normalize_agent_name(agent_name)
         try:
@@ -1847,24 +1864,18 @@ class OpenVikingRuntime:
         except Exception as exc:  # noqa: BLE001
             raise RuntimeError(f"OpenViking import failed: {exc}") from exc
 
-        data_dir, conf_file = self._ensure_openviking_scope(agent_name)
-        # OpenViking Python SDK currently resolves config via env/default path.
-        os.environ["OPENVIKING_CONFIG_FILE"] = str(conf_file)
+        # NOTE: `OPENVIKING_CONFIG_FILE` must be set/restored by `_openviking_client`.
+        data_dir, _ = self._ensure_openviking_scope(agent_name)
         client = ov.SyncOpenViking(path=str(data_dir))
         client.initialize()
         return client
 
     def _openviking_rm(self, *, uri: str, agent_name: str | None) -> None:
-        client = self._build_openviking_client(agent_name)
-        try:
+        with self._openviking_client(agent_name) as client:
             rm_fn = getattr(client, "rm", None)
             if not callable(rm_fn):
                 raise RuntimeError("OpenViking client does not expose rm(uri)")
             rm_fn(uri)
-        finally:
-            close_fn = getattr(client, "close", None)
-            if callable(close_fn):
-                close_fn()
 
     def _ensure_openviking_scope(self, agent_name: str | None) -> tuple[Path, Path]:
         data_dir = self._paths.openviking_data_dir(agent_name)
@@ -1936,8 +1947,7 @@ class OpenVikingRuntime:
         return {}
 
     def _openviking_find(self, *, query: str, limit: int, agent_name: str | None) -> list[dict[str, Any]]:
-        client = self._build_openviking_client(agent_name)
-        try:
+        with self._openviking_client(agent_name) as client:
             results = client.find(query, limit=max(1, limit))
             resources = getattr(results, "resources", None) or []
             output: list[dict[str, Any]] = []
@@ -1959,10 +1969,217 @@ class OpenVikingRuntime:
                     }
                 )
             return output
-        finally:
-            close_fn = getattr(client, "close", None)
-            if callable(close_fn):
-                close_fn()
+
+    # ------------------------------------------------------------------
+    # OpenViking Context Filesystem (read-only)
+    # ------------------------------------------------------------------
+    def fs_find(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+        target_uri: str = "",
+        score_threshold: float | None = None,
+        agent_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return []
+
+        with self._openviking_client(agent_name) as client:
+            results = client.find(
+                normalized_query,
+                target_uri=str(target_uri or ""),
+                limit=max(1, int(limit)),
+                score_threshold=score_threshold,
+            )
+            resources = getattr(results, "resources", None)
+            if resources is None and isinstance(results, dict):
+                resources = results.get("resources")
+            resources = resources or []
+
+            output: list[dict[str, Any]] = []
+            for resource in resources:
+                uri = getattr(resource, "uri", None) if not isinstance(resource, dict) else resource.get("uri")
+                score = getattr(resource, "score", None) if not isinstance(resource, dict) else resource.get("score")
+                resolved_uri = str(uri or "").strip() or "viking://"
+                resolved_score = float(score or 0.0)
+                abstract = ""
+                try:
+                    abstract = str(client.abstract(resolved_uri) or "").strip()
+                except Exception:  # noqa: BLE001
+                    abstract = ""
+                output.append({"uri": resolved_uri, "score": resolved_score, "abstract": abstract})
+            return output
+
+    def fs_search(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+        target_uri: str = "",
+        score_threshold: float | None = None,
+        filter_json: dict[str, Any] | None = None,
+        agent_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return []
+
+        with self._openviking_client(agent_name) as client:
+            results = client.search(
+                normalized_query,
+                target_uri=str(target_uri or ""),
+                limit=max(1, int(limit)),
+                score_threshold=score_threshold,
+                filter=filter_json,
+            )
+            resources = getattr(results, "resources", None)
+            if resources is None and isinstance(results, dict):
+                resources = results.get("resources")
+            resources = resources or []
+
+            output: list[dict[str, Any]] = []
+            for resource in resources:
+                uri = getattr(resource, "uri", None) if not isinstance(resource, dict) else resource.get("uri")
+                score = getattr(resource, "score", None) if not isinstance(resource, dict) else resource.get("score")
+                resolved_uri = str(uri or "").strip() or "viking://"
+                resolved_score = float(score or 0.0)
+                abstract = ""
+                try:
+                    abstract = str(client.abstract(resolved_uri) or "").strip()
+                except Exception:  # noqa: BLE001
+                    abstract = ""
+                output.append({"uri": resolved_uri, "score": resolved_score, "abstract": abstract})
+            return output
+
+    def fs_overview(self, *, uri: str, agent_name: str | None = None) -> str:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            return str(client.overview(target) or "")
+
+    def fs_read(self, *, uri: str, offset: int = 0, limit: int = -1, agent_name: str | None = None) -> str:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            return str(client.read(target, offset=max(0, int(offset)), limit=int(limit)) or "")
+
+    def fs_ls(
+        self,
+        *,
+        uri: str,
+        simple: bool = True,
+        recursive: bool = False,
+        agent_name: str | None = None,
+    ) -> list[Any]:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            return list(client.ls(target, simple=bool(simple), recursive=bool(recursive)) or [])
+
+    def fs_tree(self, *, uri: str, agent_name: str | None = None) -> dict[str, Any]:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.tree(target)
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
+    def fs_grep(
+        self,
+        *,
+        uri: str,
+        pattern: str,
+        case_insensitive: bool = False,
+        agent_name: str | None = None,
+    ) -> dict[str, Any]:
+        target = uri.strip()
+        needle = pattern
+        if not target:
+            raise ValueError("uri is required")
+        if not needle:
+            raise ValueError("pattern is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.grep(target, needle, case_insensitive=bool(case_insensitive))
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
+    def fs_glob(self, *, pattern: str, uri: str = "viking://", agent_name: str | None = None) -> dict[str, Any]:
+        needle = pattern
+        base = str(uri or "viking://").strip() or "viking://"
+        if not needle:
+            raise ValueError("pattern is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.glob(needle, uri=base)
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
+    def fs_stat(self, *, uri: str, agent_name: str | None = None) -> dict[str, Any]:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.stat(target)
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
+    # ------------------------------------------------------------------
+    # Managed OpenViking resources sync (write, backend-controlled only)
+    # ------------------------------------------------------------------
+    def sync_managed_resource(
+        self,
+        *,
+        local_path: Path,
+        target_uri: str,
+        agent_name: str | None,
+        reason: str = "nion_asset_sync",
+    ) -> dict[str, Any]:
+        """Sync a local file into the managed OpenViking resources namespace.
+
+        Security model:
+        - Only backend code paths call this method.
+        - Target URI must be under the fixed managed prefix to prevent overwriting
+          user-owned resources.
+        """
+
+        managed_prefix = "viking://resources/nion/managed/"
+        normalized_target = (target_uri or "").strip()
+        if not normalized_target.startswith(managed_prefix):
+            raise ValueError(f"target_uri must start with managed prefix {managed_prefix!r}")
+
+        resolved_path = Path(local_path)
+        if not resolved_path.exists() or not resolved_path.is_file():
+            raise FileNotFoundError(f"local_path not found: {resolved_path}")
+
+        if "/" not in normalized_target.rstrip("/"):
+            raise ValueError("target_uri must include a file name")
+        target_dir = normalized_target.rstrip("/").rsplit("/", 1)[0]
+
+        with self._openviking_client(agent_name) as client:
+            # 1) mkdir (best-effort)
+            try:
+                client.mkdir(target_dir)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("OpenViking mkdir ignored (dir=%s): %s", target_dir, exc)
+
+            # 2) rm existing file (idempotent from caller perspective)
+            try:
+                client.rm(normalized_target)
+            except Exception as exc:  # noqa: BLE001
+                if not _is_not_found_error(exc):
+                    raise
+
+            # 3) add_resource into directory (non-blocking)
+            result = client.add_resource(
+                path=str(resolved_path),
+                target=target_dir,
+                reason=reason,
+                wait=False,
+            )
+            if isinstance(result, dict):
+                return self._to_jsonable(result)
+            return {"result": self._to_jsonable(result)}
 
     def _normalize_messages(self, messages: list[Any]) -> list[dict[str, str]]:
         normalized: list[dict[str, str]] = []

@@ -1,6 +1,7 @@
 """Prompt templates for memory update and injection."""
 
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 try:
@@ -166,6 +167,16 @@ def _count_tokens(text: str, encoding_name: str = "cl100k_base") -> int:
         return len(text) // 4
 
 
+def _parse_iso(value: str | None) -> datetime | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(UTC)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2000) -> str:
     """Format memory data for injection into system prompt.
 
@@ -179,72 +190,108 @@ def format_memory_for_injection(memory_data: dict[str, Any], max_tokens: int = 2
     if not memory_data:
         return ""
 
-    sections = []
-
-    user_data = memory_data.get("user", {})
-    if user_data:
-        user_sections = []
-
-        work_ctx = user_data.get("workContext", {})
-        if work_ctx.get("summary"):
-            user_sections.append(f"Work: {work_ctx['summary']}")
-
-        personal_ctx = user_data.get("personalContext", {})
-        if personal_ctx.get("summary"):
-            user_sections.append(f"Personal: {personal_ctx['summary']}")
-
-        top_of_mind = user_data.get("topOfMind", {})
-        if top_of_mind.get("summary"):
-            user_sections.append(f"Current Focus: {top_of_mind['summary']}")
-
-        if user_sections:
-            sections.append("User Context:\n" + "\n".join(f"- {item}" for item in user_sections))
-
-    history_data = memory_data.get("history", {})
-    if history_data:
-        history_sections = []
-
-        recent = history_data.get("recentMonths", {})
-        if recent.get("summary"):
-            history_sections.append(f"Recent: {recent['summary']}")
-
-        earlier = history_data.get("earlierContext", {})
-        if earlier.get("summary"):
-            history_sections.append(f"Earlier: {earlier['summary']}")
-
-        if history_sections:
-            sections.append("History:\n" + "\n".join(f"- {item}" for item in history_sections))
-
-    try:
-        from src.config.memory_config import get_memory_config
-
-        fact_threshold = getattr(get_memory_config(), "fact_confidence_threshold", 0.7)
-    except Exception:
-        fact_threshold = 0.7
-
-    facts = [fact for fact in memory_data.get("facts", []) if isinstance(fact, dict) and fact.get("content") and float(fact.get("confidence", 0) or 0) >= fact_threshold]
-    if facts:
-        facts = sorted(
-            facts,
-            key=lambda fact: (float(fact.get("confidence", 0) or 0), str(fact.get("createdAt", ""))),
-            reverse=True,
-        )[:10]
-        fact_lines = [str(fact["content"]).strip() for fact in facts if str(fact["content"]).strip()]
-        if fact_lines:
-            sections.append("Key Facts:\n" + "\n".join(f"- {item}" for item in fact_lines))
-
-    if not sections:
+    facts_raw = memory_data.get("facts") or []
+    if not isinstance(facts_raw, list):
         return ""
 
-    result = "\n\n".join(sections)
+    now = datetime.now(UTC)
+    profile_items: list[dict[str, Any]] = []
+    preference_items: list[dict[str, Any]] = []
+    episode_items: list[dict[str, Any]] = []
 
-    token_count = _count_tokens(result)
-    if token_count > max_tokens:
-        char_per_token = len(result) / token_count
+    for fact in facts_raw:
+        if not isinstance(fact, dict):
+            continue
+        text = str(fact.get("content") or "").strip()
+        if not text:
+            continue
+        status = str(fact.get("status") or "active").strip().lower()
+        if status != "active":
+            continue
+        tier = str(fact.get("tier") or "").strip().lower() or "episode"
+        if tier == "trace":
+            continue
+        expires_at = str(fact.get("expires_at") or "").strip()
+        expires_at_dt = _parse_iso(expires_at)
+        if expires_at_dt is not None and expires_at_dt <= now:
+            continue
+
+        quality = float(fact.get("quality_score") or fact.get("confidence") or 0.0)
+        updated_at = str(fact.get("updatedAt") or fact.get("createdAt") or "")
+        record = {
+            "text": text,
+            "quality": quality,
+            "updated_at": updated_at,
+        }
+
+        if tier == "profile":
+            profile_items.append(record)
+        elif tier == "preference":
+            preference_items.append(record)
+        else:
+            episode_items.append(record)
+
+    def _sort_key(item: dict[str, Any]) -> tuple[float, str]:
+        return (float(item.get("quality") or 0.0), str(item.get("updated_at") or ""))
+
+    def _dedupe(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        seen: set[str] = set()
+        out: list[dict[str, Any]] = []
+        for item in items:
+            text = str(item.get("text") or "").strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            out.append(item)
+        return out
+
+    profile_items = _dedupe(sorted(profile_items, key=_sort_key, reverse=True))[:12]
+    preference_items = _dedupe(sorted(preference_items, key=_sort_key, reverse=True))[:12]
+    # Episodes are high-cardinality; keep only top-N by quality.
+    episode_items = _dedupe(sorted(episode_items, key=_sort_key, reverse=True))[:5]
+
+    sections: list[str] = []
+
+    if profile_items:
+        sections.append("Profile:\n" + "\n".join(f"- {item['text']}" for item in profile_items))
+    if preference_items:
+        sections.append("Preference:\n" + "\n".join(f"- {item['text']}" for item in preference_items))
+
+    base = "\n\n".join(sections).strip()
+    if not base:
+        if not episode_items:
+            return ""
+        episode_only = "Episodes:\n" + "\n".join(f"- {item['text']}" for item in episode_items)
+        if _count_tokens(episode_only) <= max_tokens:
+            return episode_only
+        token_count = _count_tokens(episode_only)
+        if token_count <= 0:
+            return episode_only[: max(0, int(max_tokens) * 4)]
+        char_per_token = len(episode_only) / token_count
         target_chars = int(max_tokens * char_per_token * 0.95)
-        result = result[:target_chars] + "\n..."
+        return episode_only[:target_chars] + "\n..."
 
-    return result
+    # Episodes are optional and should never crowd out Profile/Preference.
+    if episode_items:
+        episode_section = "Episodes:\n" + "\n".join(f"- {item['text']}" for item in episode_items)
+        candidate = f"{base}\n\n{episode_section}"
+    else:
+        candidate = base
+
+    if _count_tokens(candidate) <= max_tokens:
+        return candidate
+
+    # Over budget: drop Episodes first.
+    if _count_tokens(base) <= max_tokens:
+        return base
+
+    # Still over budget: hard-truncate while preserving Profile/Preference structure.
+    token_count = _count_tokens(base)
+    if token_count <= 0:
+        return base[: max(0, int(max_tokens) * 4)]
+    char_per_token = len(base) / token_count
+    target_chars = int(max_tokens * char_per_token * 0.95)
+    return base[:target_chars] + "\n..."
 
 
 def format_conversation_for_update(messages: list[Any]) -> str:

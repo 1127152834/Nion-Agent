@@ -239,3 +239,86 @@ def test_setup_agent_default_writes_memory_items_to_global_scope(tmp_path: Path)
     assert args["content"] == "偏好：重要变更必须先确认"
     assert args["metadata"]["tier"] == "preference"
     assert result.update.get("memory_results") == [{"memory_id": "g1"}]
+
+
+def test_setup_agent_custom_syncs_assets_to_openviking_managed_resources(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    sync_calls: list[dict[str, object]] = []
+
+    class _DummyProvider:
+        name = "openviking"
+
+        def sync_managed_resource(self, *, local_path, target_uri: str, agent_name: str | None, reason: str = "", **kwargs):  # noqa: ANN001
+            sync_calls.append(
+                {
+                    "local_path": str(local_path),
+                    "target_uri": target_uri,
+                    "agent_name": agent_name,
+                    "reason": reason,
+                }
+            )
+            return {"ok": True}
+
+    with (
+        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("src.tools.builtins.setup_agent_tool.get_default_memory_provider", return_value=_DummyProvider()),
+    ):
+        _ = setup_agent.func(
+            soul="# SOUL\ncustom soul",
+            description="A custom agent for writing and editing.",
+            runtime=_runtime(agent_name="writer", agent_display_name="写作助手"),
+            target="custom",
+            identity="# IDENTITY\ncustom identity",
+            user_profile="# USER\nuser profile v1",
+            user_profile_strategy="replace_generated_block",
+        )
+
+    assert any(
+        call["target_uri"] == "viking://resources/nion/managed/agents/writer/SOUL.md"
+        and call["agent_name"] == "writer"
+        and call["reason"] == "nion_asset_sync"
+        for call in sync_calls
+    )
+    assert any(call["target_uri"] == "viking://resources/nion/managed/agents/writer/IDENTITY.md" and call["agent_name"] == "writer" for call in sync_calls)
+    assert any(call["target_uri"] == "viking://resources/nion/managed/agents/writer/agent.json" and call["agent_name"] == "writer" for call in sync_calls)
+    assert any(call["target_uri"] == "viking://resources/nion/managed/user/USER.md" and call["agent_name"] is None for call in sync_calls)
+
+
+def test_setup_agent_default_syncs_assets_to_openviking_managed_resources(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    sync_calls: list[dict[str, object]] = []
+
+    class _DummyProvider:
+        name = "openviking"
+
+        def sync_managed_resource(self, *, local_path, target_uri: str, agent_name: str | None, reason: str = "", **kwargs):  # noqa: ANN001
+            sync_calls.append(
+                {
+                    "local_path": str(local_path),
+                    "target_uri": target_uri,
+                    "agent_name": agent_name,
+                    "reason": reason,
+                }
+            )
+            return {"ok": True}
+
+    with (
+        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch("src.tools.builtins.setup_agent_tool.get_default_memory_provider", return_value=_DummyProvider()),
+    ):
+        _ = setup_agent.func(
+            soul="# SOUL\ndefault soul v2",
+            description="ignored",
+            runtime=_runtime(agent_name=None),
+            target="default",
+            identity="# IDENTITY\ndefault identity v2",
+            user_profile="# USER\nuser profile v2",
+        )
+
+    assert any(call["target_uri"] == "viking://resources/nion/managed/agents/_default/SOUL.md" and call["agent_name"] is None for call in sync_calls)
+    assert any(call["target_uri"] == "viking://resources/nion/managed/agents/_default/IDENTITY.md" and call["agent_name"] is None for call in sync_calls)
+    assert any(call["target_uri"] == "viking://resources/nion/managed/agents/_default/agent.json" and call["agent_name"] is None for call in sync_calls)
+    assert any(call["target_uri"] == "viking://resources/nion/managed/user/USER.md" and call["agent_name"] is None for call in sync_calls)

@@ -342,7 +342,13 @@ def ov_find_tool(
     scope: Literal["global", "agent", "auto"] = "auto",
     agent_name: str | None = None,
 ) -> str:
-    """OpenViking find (semantic search over viking memory).
+    """DEPRECATED: alias of `memory_query`, not OpenViking Context FS.
+
+    This tool currently queries Nion Curated Memory (SQLite ledger/vector index)
+    via `memory_query` semantics. It does NOT call OpenViking Context Filesystem
+    APIs.
+
+    Use `ovfs_find` when you need to search OpenViking resources/session FS.
 
     Args:
         query: Search query text.
@@ -367,7 +373,13 @@ def ov_search_tool(
     scope: Literal["global", "agent", "auto"] = "auto",
     agent_name: str | None = None,
 ) -> str:
-    """OpenViking search (advanced retrieval alias).
+    """DEPRECATED: alias of `memory_query`, not OpenViking Context FS.
+
+    This tool currently queries Nion Curated Memory (SQLite ledger/vector index)
+    via `memory_query` semantics. It does NOT call OpenViking Context Filesystem
+    APIs.
+
+    Use `ovfs_search` when you need OpenViking FS search with `filter_json`.
 
     Args:
         query: Search query text.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
@@ -297,3 +298,29 @@ def test_BE_CORE_MEM_309_get_memory_items_exposes_layered_metadata(monkeypatch):
     assert item["decision_reason"] == "high_value_memory"
     assert item["evidence"]["write_evidence_id"] == "act_abc"
     assert item["retention_policy"] == "long_term_locked"
+
+
+@pytest.mark.unit
+def test_BE_CORE_MEM_310_openviking_client_context_restores_config_env(monkeypatch, tmp_path):
+    runtime = OpenVikingRuntime()
+    runtime._paths = Paths(base_dir=tmp_path)
+
+    original = "original-config.json"
+    os.environ["OPENVIKING_CONFIG_FILE"] = original
+
+    class _DummyClient:
+        def close(self):
+            return None
+
+    monkeypatch.setattr(runtime, "_build_openviking_client", lambda agent_name: _DummyClient())
+
+    _, conf_a = runtime._ensure_openviking_scope("agent-a")
+    _, conf_b = runtime._ensure_openviking_scope("agent-b")
+
+    with runtime._openviking_client("agent-a"):
+        assert os.environ["OPENVIKING_CONFIG_FILE"] == str(conf_a)
+    assert os.environ["OPENVIKING_CONFIG_FILE"] == original
+
+    with runtime._openviking_client("agent-b"):
+        assert os.environ["OPENVIKING_CONFIG_FILE"] == str(conf_b)
+    assert os.environ["OPENVIKING_CONFIG_FILE"] == original

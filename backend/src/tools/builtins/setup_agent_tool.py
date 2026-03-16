@@ -9,6 +9,7 @@ from langchain_core.tools import tool
 from langgraph.types import Command
 
 from src.agents.memory.actions import store_memory_action
+from src.agents.memory.registry import get_default_memory_provider
 from src.config.paths import get_paths
 from src.tools.builtins.langchain_compat import ToolRuntime
 
@@ -56,6 +57,49 @@ def _upsert_user_profile_block(*, user_md_path: Path, content: str) -> None:
     # No marker block found: append without destroying existing manual content.
     merged = raw.rstrip("\n") + "\n\n" + block
     user_md_path.write_text(merged, encoding="utf-8")
+
+
+def _sync_openviking_managed_resources(
+    *,
+    items: list[tuple[Path, str, str | None]],
+) -> list[str]:
+    """Best-effort sync to OpenViking managed resources.
+
+    Must never break the main bootstrap flow. Callers should treat returned
+    strings as warnings only.
+    """
+
+    if not items:
+        return []
+
+    try:
+        provider = get_default_memory_provider()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[agent_creator] OpenViking sync skipped: provider resolve failed: %s", exc)
+        return [str(exc)]
+
+    if getattr(provider, "name", None) != "openviking" or not hasattr(provider, "sync_managed_resource"):
+        return []
+
+    warnings: list[str] = []
+    for local_path, target_uri, agent_name in items:
+        try:
+            provider.sync_managed_resource(  # type: ignore[attr-defined]
+                local_path=local_path,
+                target_uri=target_uri,
+                agent_name=agent_name,
+                reason="nion_asset_sync",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "[agent_creator] OpenViking managed resource sync failed (agent=%s target=%s): %s",
+                agent_name,
+                target_uri,
+                exc,
+                exc_info=True,
+            )
+            warnings.append(f"{target_uri}: {exc}")
+    return warnings
 
 
 def _runtime_context(runtime: ToolRuntime) -> dict[str, Any]:
@@ -220,11 +264,27 @@ def setup_agent(
                         )
                         memory_errors.append(f"{idx}: {e}")
 
+            managed_base = "viking://resources/nion/managed"
+            sync_items: list[tuple[Path, str, str | None]] = [
+                (soul_path, f"{managed_base}/agents/{default_name}/SOUL.md", None),
+                (identity_path, f"{managed_base}/agents/{default_name}/IDENTITY.md", None),
+            ]
+            config_path = paths.agent_config_file(default_name)
+            if config_path.exists():
+                sync_items.append((config_path, f"{managed_base}/agents/{default_name}/agent.json", None))
+            if isinstance(user_profile, str) and user_profile.strip() and paths.user_md_file.exists():
+                sync_items.append((paths.user_md_file, f"{managed_base}/user/USER.md", None))
+            sync_warnings = _sync_openviking_managed_resources(items=sync_items)
+
             logger.info("[agent_creator] Updated default agent assets at %s", paths.agent_dir(default_name))
             message_lines = ["Default agent assets updated successfully!"]
             if memory_errors:
                 message_lines.append(
                     f"Warning: memory initialization failed for {len(memory_errors)} item(s): " + "; ".join(memory_errors)
+                )
+            if sync_warnings:
+                message_lines.append(
+                    f"Warning: OpenViking resource sync failed for {len(sync_warnings)} item(s): " + "; ".join(sync_warnings)
                 )
             return Command(
                 update={
@@ -343,11 +403,25 @@ def setup_agent(
                     )
                     memory_errors.append(f"{idx}: {e}")
 
+        managed_base = "viking://resources/nion/managed"
+        sync_items: list[tuple[Path, str, str | None]] = [
+            (soul_file, f"{managed_base}/agents/{normalized_agent_name}/SOUL.md", normalized_agent_name),
+            (identity_file, f"{managed_base}/agents/{normalized_agent_name}/IDENTITY.md", normalized_agent_name),
+            (config_file, f"{managed_base}/agents/{normalized_agent_name}/agent.json", normalized_agent_name),
+        ]
+        if isinstance(user_profile, str) and user_profile.strip() and paths.user_md_file.exists():
+            sync_items.append((paths.user_md_file, f"{managed_base}/user/USER.md", None))
+        sync_warnings = _sync_openviking_managed_resources(items=sync_items)
+
         logger.info(f"[agent_creator] Created agent '{normalized_agent_name}' at {agent_dir}")
         message_lines = [f"Agent '{normalized_agent_name}' created successfully!"]
         if memory_errors:
             message_lines.append(
                 f"Warning: memory initialization failed for {len(memory_errors)} item(s): " + "; ".join(memory_errors)
+            )
+        if sync_warnings:
+            message_lines.append(
+                f"Warning: OpenViking resource sync failed for {len(sync_warnings)} item(s): " + "; ".join(sync_warnings)
             )
         return Command(
             update={
