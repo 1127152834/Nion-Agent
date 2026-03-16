@@ -24,7 +24,6 @@ except Exception:  # noqa: BLE001
 from src.agents.memory.scope import resolve_agent_for_memory_scope
 from src.agents.memory.registry import get_default_memory_provider
 
-
 MemoryScope = Literal["global", "agent", "auto"]
 
 
