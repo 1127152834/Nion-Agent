@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
-import { existsSync, promises as fs } from "node:fs";
+import { existsSync, promises as fs, readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { resolveRuntimePaths, type DesktopRuntimePaths } from "./paths";
@@ -16,6 +16,7 @@ import {
   type DesktopRuntimePortsConfig,
 } from "./runtime-ports-config";
 import { renderStartupLoadingHtml } from "./startup-screen";
+import { getDesktopStartupCopy, normalizeDesktopLocale, type DesktopLocale } from "./i18n";
 
 let mainWindow: BrowserWindow | null = null;
 let runtimePaths: DesktopRuntimePaths | null = null;
@@ -26,6 +27,7 @@ let startupInProgress = false;
 let isShuttingDown = false;
 let creatingMainWindow = false;
 let runtimeRestartInProgress = false;
+let cachedAppVersion: string | null = null;
 const workspaceWatchers = new Map<string, { watcher: WorkspaceDirectoryWatcher; senderId: number }>();
 
 // 单实例锁
@@ -201,6 +203,55 @@ function resolveAppIconPngPath(): string | null {
   return null;
 }
 
+function resolveDesktopLocale(): DesktopLocale {
+  return normalizeDesktopLocale(app.getLocale());
+}
+
+function resolveStartupLogoDataUri(): string | null {
+  const iconPath = resolveAppIconPngPath();
+  if (!iconPath) {
+    return null;
+  }
+  try {
+    const encoded = readFileSync(iconPath).toString("base64");
+    if (!encoded) {
+      return null;
+    }
+    return `data:image/png;base64,${encoded}`;
+  } catch {
+    return null;
+  }
+}
+
+function resolveDesktopAppVersion(): string {
+  if (cachedAppVersion) {
+    return cachedAppVersion;
+  }
+
+  const candidates = [
+    path.resolve(__dirname, "..", "package.json"),
+    path.join(app.getAppPath(), "package.json"),
+  ];
+
+  try {
+    for (const packagePath of candidates) {
+      if (!existsSync(packagePath)) {
+        continue;
+      }
+      const packageJson = JSON.parse(readFileSync(packagePath, "utf-8")) as { version?: unknown };
+      if (typeof packageJson.version === "string" && packageJson.version.trim()) {
+        cachedAppVersion = packageJson.version.trim();
+        return cachedAppVersion;
+      }
+    }
+  } catch {
+    // Ignore and fallback.
+  }
+
+  cachedAppVersion = app.getVersion();
+  return cachedAppVersion;
+}
+
 function applyAppIcon(): void {
   const iconPath = resolveAppIconPngPath();
   if (!iconPath) {
@@ -229,6 +280,8 @@ function createMainWindow(): void {
   creatingMainWindow = true;
   const isMac = process.platform === "darwin";
   const iconPath = resolveAppIconPngPath();
+  const locale = resolveDesktopLocale();
+  const startupCopy = getDesktopStartupCopy(locale);
 
   try {
     mainWindow = new BrowserWindow({
@@ -236,7 +289,7 @@ function createMainWindow(): void {
       height: 900,
       minWidth: 1000,
       minHeight: 600,
-      title: "Nion",
+      title: startupCopy.windowTitle,
       ...(iconPath && !isMac ? { icon: iconPath } : {}),
       ...(isMac
         ? {
@@ -257,7 +310,11 @@ function createMainWindow(): void {
     } else {
       // 运行时尚未就绪时显示启动进度界面。
       void mainWindow.loadURL(
-        `data:text/html;charset=utf-8,${encodeURIComponent(renderStartupLoadingHtml())}`
+        `data:text/html;charset=utf-8,${encodeURIComponent(renderStartupLoadingHtml({
+          locale,
+          appVersion: resolveDesktopAppVersion(),
+          startupLogoDataUri: resolveStartupLogoDataUri(),
+        }))}`
       );
     }
 
