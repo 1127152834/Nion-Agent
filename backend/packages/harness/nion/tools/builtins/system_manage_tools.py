@@ -217,6 +217,22 @@ def _collect_desktop_logs_tail(*, base_dir: Path, tail_lines: int) -> dict[str, 
     return {name: _safe_read_tail_lines(base_dir=base_dir, path=logs_dir / name, tail_lines=tail_lines) for name in allowed}
 
 
+def _wrap_child_management_response(raw: str, *, argv: list[str]) -> str:
+    """Ensure child tool responses include argv in data (best-effort, non-breaking)."""
+    try:
+        payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            return raw
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            data = {}
+        data.setdefault("argv", argv)
+        payload["data"] = data
+        return json.dumps(payload, ensure_ascii=False)
+    except Exception:  # noqa: BLE001
+        return raw
+
+
 @tool("nion_manage")
 def nion_manage_tool(
     runtime: ToolRuntime[ContextT, ThreadState] | None = None,
@@ -286,6 +302,66 @@ def nion_manage_tool(
             )
 
         subcommand = normalized_argv[1]
+        if subcommand == "list":
+            raw = skills_manage_tool.func(runtime=runtime, action="list")
+            return _wrap_child_management_response(raw, argv=normalized_argv)
+
+        if subcommand in {"enable", "disable"}:
+            if len(normalized_argv) < 3:
+                return build_management_response(
+                    success=False,
+                    message=f"{subcommand} 需要参数：<skill>",
+                    data={"argv": normalized_argv},
+                )
+            skill_name = normalized_argv[2]
+            enabled = subcommand == "enable"
+            raw = skills_manage_tool.func(
+                runtime=runtime,
+                action="set_enabled",
+                skill_name=skill_name,
+                enabled=enabled,
+                confirmation_token=confirmation_token,
+            )
+            return _wrap_child_management_response(raw, argv=normalized_argv)
+
+        if subcommand == "install":
+            skill_package_path: str | None = None
+            install_thread_id: str | None = None
+
+            i = 2
+            while i < len(normalized_argv):
+                token = normalized_argv[i]
+                if token.startswith("--path="):
+                    skill_package_path = token.split("=", 1)[1].strip() or None
+                    i += 1
+                    continue
+                if token == "--path":
+                    if i + 1 >= len(normalized_argv):
+                        return build_management_response(success=False, message="install 需要 --path 参数。", data={"argv": normalized_argv})
+                    skill_package_path = normalized_argv[i + 1].strip() or None
+                    i += 2
+                    continue
+                if token.startswith("--thread-id="):
+                    install_thread_id = token.split("=", 1)[1].strip() or None
+                    i += 1
+                    continue
+                if token == "--thread-id":
+                    if i + 1 >= len(normalized_argv):
+                        return build_management_response(success=False, message="install 需要 --thread-id 参数。", data={"argv": normalized_argv})
+                    install_thread_id = normalized_argv[i + 1].strip() or None
+                    i += 2
+                    continue
+
+                return build_management_response(success=False, message=f"未知参数：{token!r}", data={"argv": normalized_argv})
+
+            raw = skills_manage_tool.func(
+                runtime=runtime,
+                action="install",
+                skill_package_path=skill_package_path,
+                thread_id=install_thread_id or thread_id,
+            )
+            return _wrap_child_management_response(raw, argv=normalized_argv)
+
         if subcommand == "rename":
             if len(normalized_argv) < 4:
                 return build_management_response(
@@ -345,7 +421,7 @@ def nion_manage_tool(
                 },
             )
 
-        _ = runtime, thread_id  # explicitly reserved for future skills subcommands (list/enable/disable/install)
+        _ = runtime, thread_id  # explicitly reserved for future skills subcommands
         return build_management_response(
             success=False,
             message=f"未知 skills 子命令：{subcommand}。运行 nion_manage skills help 查看用法。",
