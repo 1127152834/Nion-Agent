@@ -1748,21 +1748,11 @@ class OpenVikingRuntime:
         return rescored
 
     def _upsert_runtime_indexes(self, *, thread_id: str, messages: list[dict[str, str]], agent_name: str | None) -> None:
-        configured, model_name = self._resolve_local_embedding_model()
-        vector_ready = bool(configured and model_name)
-        if not vector_ready:
-            self._set_last_fallback_reason(
-                agent_name=agent_name,
-                reason="local_embedding_not_configured",
-            )
-        else:
-            health_ok, health_message = self._check_embedding_health(model_name)
-            if not health_ok:
-                vector_ready = False
-                self._set_last_fallback_reason(
-                    agent_name=agent_name,
-                    reason=f"embedding_unhealthy:{health_message}",
-                )
+        # Session commits are treated as TRACE evidence:
+        # - short retention (7d) with explicit expires_at
+        # - excluded from default injection/retrieval
+        expires_at = (datetime.now(UTC) + timedelta(days=7)).isoformat().replace("+00:00", "Z")
+        ttl_seconds = 7 * 24 * 3600
 
         for msg in messages:
             content = str(msg.get("content", "")).strip()
@@ -1779,29 +1769,16 @@ class OpenVikingRuntime:
                 source_thread_id=thread_id,
                 score=0.6,
                 status="active",
-                metadata={"source": "session_commit", "role": role},
+                metadata={
+                    "source": "session_commit",
+                    "role": role,
+                    "tier": "trace",
+                    "retention_policy": "short_term_7d",
+                    "ttl_seconds": ttl_seconds,
+                    "expires_at": expires_at,
+                },
                 bump_usage=True,
             )
-
-            if not vector_ready or not model_name:
-                continue
-            vector = self._embed_text_local(content, model_name)
-            if not vector:
-                continue
-            self._sqlite_index.upsert_vector(
-                agent_name=agent_name,
-                memory_id=memory_id,
-                thread_id=thread_id,
-                content=content,
-                vector=vector,
-                metadata={"source": "session_commit", "role": role},
-            )
-            if get_memory_config().graph_enabled:
-                self._sqlite_index.upsert_graph_from_text(
-                    agent_name=agent_name,
-                    memory_id=memory_id,
-                    text=content,
-                )
 
     def _commit_session_async(self, *, thread_id: str, messages: list[Any], agent_name: str | None) -> None:
         def _runner():

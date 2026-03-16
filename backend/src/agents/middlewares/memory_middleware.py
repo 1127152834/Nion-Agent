@@ -27,6 +27,7 @@ except Exception:  # noqa: BLE001
 from langgraph.runtime import Runtime
 
 from src.agents.memory.core import MemoryWriteRequest
+from src.agents.memory.queue import get_memory_queue
 from src.agents.memory.registry import get_default_memory_provider
 from src.agents.memory.scope import normalize_agent_name_for_memory
 from src.config.memory_config import get_memory_config
@@ -171,6 +172,18 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
 
         if not user_messages or not assistant_messages:
             return None
+
+        # Optional: commit raw session to OpenViking as trace evidence.
+        # This is intentionally debounced and isolated from the main chat flow.
+        if config.openviking_session_commit_enabled:
+            try:
+                get_memory_queue().add(
+                    thread_id=thread_id,
+                    messages=filtered_messages,
+                    agent_name=self._agent_name,
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"MemoryMiddleware: Failed to enqueue OpenViking session commit for {thread_id}: {exc}")
 
         # Always enqueue memory writes asynchronously so memory-side failures
         # never break the user-visible chat run.
