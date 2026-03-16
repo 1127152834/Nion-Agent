@@ -56,8 +56,10 @@ export class DesktopProcessManager {
       // Frontend 编译不依赖后端，提前 spawn 可节省 15-30s
       this.notifyStage("runtime.start.langgraph");
       this.notifyStage("runtime.start.frontend");
+      // 注意：必须先 spawn LangGraph，否则 waitForPort 会一直超时，导致启动流程失败。
+      const langgraphPromise = this.startLangGraph();
       const frontendSpawnInfo = this.spawnFrontend();
-      await this.waitForLangGraph();
+      await langgraphPromise;
       this.notifySuccess("runtime.start.langgraph");
 
       // 阶段 4：启动 Gateway（依赖 LangGraph 就绪）
