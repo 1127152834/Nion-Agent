@@ -148,7 +148,7 @@ Backend core:
 - `backend/src/sandbox/` - sandbox provider + tool wrappers
 - `backend/src/subagents/` - subagent registry/execution
 - `backend/src/mcp/` - MCP integration
-- `backend/langgraph.json` - graph entrypoint (`src.agents:make_lead_agent`)
+- `backend/langgraph.json` - graph entrypoint (`nion.agents:make_lead_agent`)
 - `backend/pyproject.toml` - Python deps and `requires-python`
 - `backend/ruff.toml` - lint/format policy
 - `backend/tests/` - backend unit and integration-like tests

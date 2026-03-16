@@ -5,7 +5,7 @@ dev:
 	uv run langgraph dev --no-browser --allow-blocking --no-reload
 
 gateway:
-	uv run uvicorn src.gateway.app:app --host 0.0.0.0 --port 8001
+	PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001
 
 test:
 	PYTHONPATH=. uv run pytest tests/ -v
@@ -18,11 +18,11 @@ format:
 
 # Coverage (pytest-cov) - report only, does not change the default `make test` behavior.
 coverage:
-	PYTHONPATH=. uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=xml
+	PYTHONPATH=. uv run pytest tests/ -v --cov=nion --cov=app --cov-report=term-missing --cov-report=xml
 
 coverage-html:
-	PYTHONPATH=. uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
+	PYTHONPATH=. uv run pytest tests/ -v --cov=nion --cov=app --cov-report=term-missing --cov-report=html
 
 # Dead code candidate scan (heuristic). Use as an input signal for cleanup, NOT as a hard gate by default.
 deadcode:
-	uv run vulture src --min-confidence 80
+	uv run vulture packages/harness/nion app --min-confidence 80

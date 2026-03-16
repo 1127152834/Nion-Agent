@@ -357,7 +357,7 @@ export class DesktopProcessManager {
     const child = this.paths.pythonExecutable
       ? spawn(
           this.paths.pythonExecutable,
-          ["-m", "uvicorn", "src.gateway.app:app", "--host", "0.0.0.0", "--port", String(this.ports!.gatewayPort)],
+          ["-m", "uvicorn", "app.gateway.app:app", "--host", "0.0.0.0", "--port", String(this.ports!.gatewayPort)],
           {
             cwd: this.paths.backendCwd,
             env,
@@ -366,7 +366,7 @@ export class DesktopProcessManager {
         )
       : spawn(
           "uv",
-          ["run", "uvicorn", "src.gateway.app:app", "--host", "0.0.0.0", "--port", String(this.ports!.gatewayPort)],
+          ["run", "uvicorn", "app.gateway.app:app", "--host", "0.0.0.0", "--port", String(this.ports!.gatewayPort)],
           {
             cwd: this.paths.backendCwd,
             env,

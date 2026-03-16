@@ -63,6 +63,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.channel_runtime_manager = None
     app.state.channel_runtime_error = None
 
+    # One-time compatibility migration: update legacy `src.*` use-paths already
+    # stored in SQLite config store to the new `nion.*` harness prefix.
+    try:
+        from nion.config.migration import migrate_use_paths_src_to_nion
+
+        if migrate_use_paths_src_to_nion():
+            logger.info("Migrated config 'use' paths from src.* to nion.*")
+    except Exception as e:
+        logger.warning("Config use-path migration failed (non-blocking): %s", e)
+
     # Load config and check necessary environment variables at startup
     try:
         get_app_config(process_name="gateway")

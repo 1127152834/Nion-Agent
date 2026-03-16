@@ -11,6 +11,10 @@ resolution-markers = [
 ]
 
 [manifest]
+members = [
+    "nion",
+    "nion-harness",
+]
 overrides = [{ name = "langgraph", specifier = "==1.1.0" }]
 
 [[package]]
@@ -2503,6 +2507,11 @@ dev = [
     { name = "ruff", specifier = ">=0.14.11" },
     { name = "vulture", specifier = ">=2.11" },
 ]
+
+[[package]]
+name = "nion-harness"
+version = "0.1.0"
+source = { editable = "packages/harness" }
 
 [[package]]
 name = "numpy"

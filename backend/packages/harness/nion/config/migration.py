@@ -116,3 +116,48 @@ def ensure_config_migrated() -> None:
     except Exception as e:
         logger.error(f"Config migration failed: {e}")
         # Don't fail startup, let the application use default config
+
+
+def migrate_use_paths_src_to_nion() -> bool:
+    """Migrate `use` field paths from `src.*` to `nion.*` in the SQLite config store.
+
+    This is a one-time compatibility migration after the harness/app restructuring.
+    It is intentionally idempotent and returns True only if any changes were made.
+    """
+    store = create_config_store()
+    try:
+        if not store.exists():
+            return False
+    except Exception:  # noqa: BLE001
+        # If store existence check fails, keep startup resilient.
+        return False
+
+    try:
+        data, version, _ = store.read()
+    except Exception:  # noqa: BLE001
+        return False
+
+    if not isinstance(data, dict):
+        return False
+
+    changed = False
+
+    def _migrate_use(obj: Any) -> None:
+        nonlocal changed
+        if isinstance(obj, dict):
+            for key, val in obj.items():
+                if key == "use" and isinstance(val, str) and val.startswith("src."):
+                    obj[key] = "nion." + val[4:]
+                    changed = True
+                else:
+                    _migrate_use(val)
+        elif isinstance(obj, list):
+            for item in obj:
+                _migrate_use(item)
+
+    _migrate_use(data)
+
+    if changed:
+        store.write(data, expected_version=version)
+
+    return changed

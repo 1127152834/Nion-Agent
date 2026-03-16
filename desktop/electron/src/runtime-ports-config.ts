@@ -29,7 +29,7 @@ const MAX_PORT = 65535;
 
 const READ_RUNTIME_PORTS_SCRIPT = `
 import json
-from src.config.config_repository import ConfigRepository
+from nion.config.config_repository import ConfigRepository
 
 repo = ConfigRepository()
 config, version, _ = repo.read()
@@ -57,8 +57,8 @@ const WRITE_RUNTIME_PORTS_SCRIPT = `
 import json
 import sys
 
-from src.config.config_repository import ConfigRepository
-from src.config.config_store import VersionConflictError
+from nion.config.config_repository import ConfigRepository
+from nion.config.config_store import VersionConflictError
 
 ports = json.loads(sys.argv[1])
 
