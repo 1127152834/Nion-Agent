@@ -51,8 +51,8 @@ function SignalIndicator({ title, active, tone = "ok", icon: Icon }: SignalIndic
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="text-muted-foreground inline-flex h-7 items-center gap-1.5 rounded-full border border-border/80 bg-background/90 px-2.5">
-          <Icon className="size-3.5" />
+        <span className="text-muted-foreground inline-flex h-6 items-center gap-1 rounded-full border border-border/80 bg-background/90 px-2">
+          <Icon className="size-3" />
           <span
             className={cn(
               "relative size-2 shrink-0 rounded-full",
@@ -137,7 +137,7 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
           <circle cx="118" cy="44" r="20" stroke="currentColor" strokeWidth="1" />
         </svg>
 
-        <CardHeader className="relative p-5 pb-3">
+        <CardHeader className="relative p-4 pb-2">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-3">
               <AgentAvatarEditor
@@ -148,7 +148,7 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
               />
               <div className="min-w-0">
                 <CardTitle className="truncate text-[17px] leading-tight">{agentDisplayName}</CardTitle>
-                <div className="mt-1.5 flex min-h-5 items-center gap-2">
+                <div className="mt-1 flex min-h-4 items-center gap-2">
                   {isDefault ? (
                     <span className="rounded-full border border-border/80 bg-muted/60 px-2 py-0.5 text-[11px] text-muted-foreground">
                       {t.agents.defaultBadge}
@@ -183,19 +183,19 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
             </div>
           </div>
 
-          <CardDescription className="mt-3 line-clamp-2 text-[13.5px] leading-6">
+          <CardDescription className="mt-2 line-clamp-2 text-[13px] leading-5">
             {agent.description || t.agents.picker.noDescription}
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="px-5 pt-0 pb-3">
-          <div className="rounded-xl border border-dashed border-border/90 bg-muted/25 px-3 py-2">
+        <CardContent className="px-4 pt-0 pb-2">
+          <div className="rounded-xl border border-dashed border-border/90 bg-muted/25 px-3 py-1.5">
             <p className="text-foreground text-xs font-medium">{t.agents.memoryOverview}</p>
             <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">{memoryOverview}</p>
           </div>
         </CardContent>
 
-        <CardFooter className="mt-auto flex items-center gap-2 px-5 pb-5 pt-1">
+        <CardFooter className="mt-auto flex items-center gap-2 px-4 pb-4 pt-0">
           <Button size="sm" className="h-8 flex-1 rounded-xl" onClick={handleChat}>
             <MessageSquareIcon className="mr-1.5 size-3.5" />
             {t.agents.chat}

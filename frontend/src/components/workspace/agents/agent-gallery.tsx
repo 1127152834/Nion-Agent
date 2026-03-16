@@ -116,7 +116,7 @@ export function AgentGallery() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
             {cards.map(({ agent, isDefault }) => (
               <AgentCard
                 key={agent.name}
