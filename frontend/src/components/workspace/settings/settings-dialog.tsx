@@ -7,6 +7,7 @@ import {
   GlobeIcon,
   Link2Icon,
   PaletteIcon,
+  RouteIcon,
   SparklesIcon,
   WrenchIcon,
   SquareTerminalIcon,
@@ -27,6 +28,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AppearanceSettingsPage } from "@/components/workspace/settings/appearance-settings-page";
 import { ChannelSettingsPage } from "@/components/workspace/settings/channel-settings-page";
 import { CliToolsPage } from "@/components/workspace/settings/cli-tools-page";
+import { DiagnosticsSettingsPage } from "@/components/workspace/settings/diagnostics-settings-page";
 import { DesktopRuntimeSettingsPage } from "@/components/workspace/settings/desktop-runtime-settings-page";
 import { MCPServersPage } from "@/components/workspace/settings/mcp-servers-page";
 import { MemorySettingsPage } from "@/components/workspace/settings/memory-settings-page";
@@ -51,6 +53,7 @@ type SettingsSection =
   | "sessionPolicy"
   | "memory"
   | "embedding"
+  | "diagnostics"
   | "tools"
   | "cliTools"
   | "searchSettings"
@@ -107,6 +110,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
         label: t.settings.sections.embedding ?? t.settings.retrieval?.title ?? "Retrieval",
         icon: DatabaseIcon,
       },
+      { id: "diagnostics", label: t.settings.sections.diagnostics, icon: RouteIcon },
       { id: "tools", label: t.settings.sections.tools, icon: WrenchIcon },
       { id: "cliTools", label: t.settings.sections.cliTools, icon: SquareTerminalIcon },
       { id: "searchSettings", label: t.settings.sections.searchSettings ?? "搜索设置", icon: GlobeIcon },
@@ -131,6 +135,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       t.settings.sections.memory,
       t.settings.sections.embedding,
       t.settings.retrieval?.title,
+      t.settings.sections.diagnostics,
       t.settings.sections.tools,
       t.settings.sections.cliTools,
       t.settings.sections.searchSettings,
@@ -202,6 +207,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   />
                 )}
                 {activeSection === "embedding" && <RetrievalSettingsPage />}
+                {activeSection === "diagnostics" && <DiagnosticsSettingsPage />}
                 {activeSection === "tools" && <ToolSettingsPage />}
                 {activeSection === "cliTools" && <CliToolsPage />}
                 {activeSection === "searchSettings" && <SearchSettingsPage />}
