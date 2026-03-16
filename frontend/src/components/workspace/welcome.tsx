@@ -31,6 +31,34 @@ export function Welcome({
     waved = true;
   }, []);
 
+  if (searchParams.get("mode") === "temporary-chat") {
+    return (
+      <div
+        className={cn(
+          "mx-auto flex w-full flex-col items-center justify-center gap-3 px-4 text-center",
+          className,
+        )}
+      >
+        <div className="inline-flex items-center gap-2 rounded-full border bg-background/60 px-3 py-1 text-xs">
+          <span className="font-medium">{t.inputBox.temporaryChat}</span>
+          <span className="text-foreground/60">{t.welcome.temporaryChatBadgeHint}</span>
+        </div>
+        <div className="text-[clamp(2rem,4vw,3rem)] font-semibold tracking-[-0.05em] text-balance text-foreground">
+          🕶 {t.welcome.temporaryChatTitle}
+        </div>
+        <div className="text-foreground/62 max-w-2xl text-[15px] leading-7">
+          {t.welcome.temporaryChatDescription.includes("\n") ? (
+            <pre className="font-sans whitespace-pre-wrap">
+              {t.welcome.temporaryChatDescription}
+            </pre>
+          ) : (
+            <p>{t.welcome.temporaryChatDescription}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (searchParams.get("mode") === "skill") {
     return (
       <div

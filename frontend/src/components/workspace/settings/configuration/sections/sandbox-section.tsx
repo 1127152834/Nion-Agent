@@ -189,27 +189,11 @@ export function SandboxSection({
 
       {sandboxMode === "aio" && (
         <>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium">{copy.image}</div>
-              <Input
-                value={asString(sandbox.image)}
-                placeholder={copy.imagePlaceholder}
-                onChange={(e) => updateSandbox("image", e.target.value)}
-                disabled={disabled}
-              />
+          {copy.aioDefaultsHint ? (
+            <div className="text-muted-foreground text-xs leading-relaxed">
+              {copy.aioDefaultsHint}
             </div>
-            <div className="space-y-1.5">
-              <div className="text-xs font-medium">{copy.port}</div>
-              <Input
-                type="number"
-                value={asString(sandbox.port)}
-                placeholder="8080"
-                onChange={(e) => updateSandboxNumber("port", e.target.value)}
-                disabled={disabled}
-              />
-            </div>
-          </div>
+          ) : null}
 
           <label className="flex items-center gap-2 text-sm">
             <Switch
@@ -234,6 +218,25 @@ export function SandboxSection({
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-3">
               <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium">{copy.image}</div>
+                  <Input
+                    value={asString(sandbox.image)}
+                    placeholder={copy.imagePlaceholder}
+                    onChange={(e) => updateSandbox("image", e.target.value)}
+                    disabled={disabled}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium">{copy.port}</div>
+                  <Input
+                    type="number"
+                    value={asString(sandbox.port)}
+                    placeholder="8080"
+                    onChange={(e) => updateSandboxNumber("port", e.target.value)}
+                    disabled={disabled}
+                  />
+                </div>
                 <div className="space-y-1.5">
                   <div className="text-xs font-medium">{copy.baseUrl}</div>
                   <Input

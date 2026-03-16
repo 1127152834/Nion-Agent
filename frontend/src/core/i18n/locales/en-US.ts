@@ -82,6 +82,11 @@ export const enUS: Translations = {
     description:
       "One thought, everything delivered. Your personal AI assistant that understands your intent and acts for you.",
 
+    temporaryChatTitle: "Temporary chat is on",
+    temporaryChatDescription:
+      "This chat is read-only for memory by default and won't appear in your recent list.\nLeaving the page or ending the temporary chat will automatically clean it up.",
+    temporaryChatBadgeHint: "No memory writes, auto-cleanup",
+
     createYourOwnSkill: "Create Your Own Skill",
     createYourOwnSkillDescription:
       "Create your own skill to release the power of Nion. With customized skills,\nNion can help you search on the web, analyze data, and generate\n artifacts like slides, web pages and do almost anything.",
@@ -1079,8 +1084,8 @@ export const enUS: Translations = {
         modeTipEn: "Pick the sandbox mode for command execution.",
         modeTipZh: "Pick the sandbox mode for command execution.",
         strictMode: "Strict mode (disable desktop file access)",
-        strictModeTipEn: "When enabled, host/desktop filesystem access features and host mode are disabled. Recommended to use AIO sandbox.",
-        strictModeTipZh: "When enabled, host/desktop filesystem access features and host mode are disabled. Recommended to use AIO sandbox.",
+        strictModeTipEn: "When enabled, host/desktop filesystem access features are disabled and Nion will switch to the AIO container sandbox; host mode is disabled. Defaults are usually fine. Use Advanced to override image/port.",
+        strictModeTipZh: "When enabled, host/desktop filesystem access features are disabled and Nion will switch to the AIO container sandbox; host mode is disabled. Defaults are usually fine. Use Advanced to override image/port.",
         baseUrl: "Base URL",
         baseUrlPlaceholder: "https://your-sandbox.example.com",
         image: "Image",
@@ -1089,6 +1094,7 @@ export const enUS: Translations = {
         port: "Port",
         idleTimeout: "Idle timeout (seconds)",
         autoStart: "Auto start",
+        aioDefaultsHint: "AIO sandbox uses built-in defaults for image/port in most cases. Open Advanced to override.",
         customConfiguredHint: "Custom sandbox endpoint is configured.",
         usePath: "Use path",
         usePathPlaceholder: "/run/sandbox",
@@ -1104,9 +1110,9 @@ export const enUS: Translations = {
         backendTipEn: "SQLite is recommended for desktop single-user runtime and avoids thread state errors.",
         backendRecommended: "Use SQLite for desktop apps so thread state survives restarts locally.",
         backendRisk: "Memory loses state after restart.",
-        connectionString: "Connection string / path",
+        connectionString: "Default path",
         sqlitePlaceholder: "checkpoints.db",
-        sqliteHint: "Relative paths are stored under backend/.nion/, which is ideal for desktop persistence.",
+        sqliteHint: "Defaults to $HOME/.nion/checkpoints.db (override with NION_HOME).",
         memoryHint: "State lives only in the current process and is lost after restart.",
       }),
       models: withFallbackLabels({

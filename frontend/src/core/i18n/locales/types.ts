@@ -45,6 +45,9 @@ export interface Translations {
   welcome: {
     greeting: string;
     description: string;
+    temporaryChatTitle: string;
+    temporaryChatDescription: string;
+    temporaryChatBadgeHint: string;
     createYourOwnSkill: string;
     createYourOwnSkillDescription: string;
     createYourOwnPlugin: string;

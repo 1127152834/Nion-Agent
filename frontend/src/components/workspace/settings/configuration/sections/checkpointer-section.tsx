@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -16,6 +15,8 @@ import { FieldTip } from "../field-tip";
 import { asObject, asString, cloneConfig, type ConfigDraft } from "../shared";
 
 type CheckpointerType = "memory" | "sqlite";
+
+const DEFAULT_SQLITE_CONNECTION_STRING = "checkpoints.db";
 
 function normalizeType(value: unknown): CheckpointerType {
   if (typeof value !== "string") {
@@ -71,9 +72,21 @@ export function CheckpointerSection({
 
   useEffect(() => {
     if (!hasUnsupportedType) return;
-    updateCheckpointer({ type: "sqlite", connection_string: "checkpoints.db" });
+    updateCheckpointer({ type: "sqlite", connection_string: DEFAULT_SQLITE_CONNECTION_STRING });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasUnsupportedType]);
+
+  useEffect(() => {
+    // Product decision: do not expose the checkpointer storage path in the UI.
+    // Always normalize SQLite to a stable default so users don't end up with
+    // surprising thread-state persistence behavior.
+    if (hasUnsupportedType) return;
+    if (type !== "sqlite") return;
+    if (connectionString !== DEFAULT_SQLITE_CONNECTION_STRING) {
+      updateCheckpointer({ connection_string: DEFAULT_SQLITE_CONNECTION_STRING });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionString, hasUnsupportedType, type]);
 
   const handleTypeChange = (nextType: string) => {
     const normalized = normalizeType(nextType);
@@ -83,7 +96,7 @@ export function CheckpointerSection({
     }
     updateCheckpointer({
       type: "sqlite",
-      connection_string: connectionString || "checkpoints.db",
+      connection_string: DEFAULT_SQLITE_CONNECTION_STRING,
     });
   };
 
@@ -120,12 +133,9 @@ export function CheckpointerSection({
       {type !== "memory" ? (
         <div className="space-y-1.5">
           <div className="text-xs font-medium">{copy.connectionString}</div>
-          <Input
-            value={connectionString}
-            placeholder={copy.sqlitePlaceholder}
-            onChange={(event) => updateCheckpointer({ connection_string: event.target.value })}
-            disabled={disabled}
-          />
+          <div className="bg-muted/10 text-foreground/80 rounded-md border px-3 py-2 text-xs font-mono">
+            {DEFAULT_SQLITE_CONNECTION_STRING}
+          </div>
           <div className="text-muted-foreground text-xs">{connectionHint}</div>
         </div>
       ) : (

@@ -82,6 +82,11 @@ export const zhCN: Translations = {
     description:
       "一念之间，万事即达。你的专属AI智能助手，懂你所想，为你而行。\n耗费繁琐操作，只需一个念头，工作与生活，皆可轻松托付。",
 
+    temporaryChatTitle: "临时会话已开启",
+    temporaryChatDescription:
+      "该会话默认不会写入记忆，也不会出现在最近对话列表。\n离开页面或点击“结束临时对话”后，将自动清理本次会话。",
+    temporaryChatBadgeHint: "不写入记忆，离开即清理",
+
     createYourOwnSkill: "创建你自己的 Agent SKill",
     createYourOwnSkillDescription:
       "创建你的 Agent Skill 来释放 Nion 的潜力。通过自定义技能，Nion\n可以帮你搜索网络、分析数据，还能为你生成幻灯片、\n网页等作品，几乎可以做任何事情。",
@@ -1057,8 +1062,8 @@ export const zhCN: Translations = {
         modeTipEn: "选择命令执行使用的沙箱模式。",
         modeTipZh: "选择命令执行使用的沙箱模式。",
         strictMode: "严格模式（禁用桌面文件访问）",
-        strictModeTipEn: "开启后将禁用主机/桌面文件访问能力，并禁用主机模式；建议配合“一体化”沙箱使用。",
-        strictModeTipZh: "开启后将禁用主机/桌面文件访问能力，并禁用主机模式；建议配合“一体化”沙箱使用。",
+        strictModeTipEn: "启用后将禁用主机/桌面文件访问能力，并自动切换到“一体化”容器沙箱；主机模式会被禁用。通常无需配置镜像/端口，如需自定义请展开“高级设置”。",
+        strictModeTipZh: "启用后将禁用主机/桌面文件访问能力，并自动切换到“一体化”容器沙箱；主机模式会被禁用。通常无需配置镜像/端口，如需自定义请展开“高级设置”。",
         baseUrl: "基础地址",
         baseUrlPlaceholder: "https://your-sandbox.example.com",
         image: "镜像",
@@ -1067,6 +1072,7 @@ export const zhCN: Translations = {
         port: "端口",
         idleTimeout: "空闲超时（秒）",
         autoStart: "自动启动",
+        aioDefaultsHint: "一体化沙箱默认使用内置镜像与端口（通常无需修改）。如需自定义，请展开“高级设置”。",
         customConfiguredHint: "已配置自定义沙箱端点。",
         usePath: "使用路径",
         usePathPlaceholder: "/run/sandbox",
@@ -1082,9 +1088,9 @@ export const zhCN: Translations = {
         backendTipEn: "SQLite is the best default for desktop single-user runtime.",
         backendRecommended: "桌面端默认使用 SQLite，本地持久化最稳妥。",
         backendRisk: "Memory 模式重启会丢失状态。",
-        connectionString: "连接串 / 路径",
+        connectionString: "默认路径",
         sqlitePlaceholder: "checkpoints.db",
-        sqliteHint: "相对路径会写入 backend/.nion/ 下，适合桌面单机持久化。",
+        sqliteHint: "默认使用 $HOME/.nion/checkpoints.db（可通过 NION_HOME 修改存放目录）。",
         memoryHint: "仅保存在当前进程内，应用重启后线程状态会丢失。",
       }),
       models: withFallbackLabels({
