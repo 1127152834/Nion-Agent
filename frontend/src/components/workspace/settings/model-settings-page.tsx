@@ -11,7 +11,7 @@ import {
   ModelsSection,
   type ModelSettingsChildView,
   normalizeModelProviderConfig,
-} from "./configuration/sections/models-section";
+} from "./configuration/sections/models";
 import { asArray, asString } from "./configuration/shared";
 import { SettingsSection } from "./settings-section";
 import { useConfigEditor } from "./use-config-editor";
