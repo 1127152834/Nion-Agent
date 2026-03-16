@@ -86,12 +86,15 @@ function SettingsNavGroupTitle({
   return (
     <SidebarGroupLabel
       className={cn(
-        "bg-muted/40 text-foreground/75 shadow-[inset_0_0_0_1px_hsl(var(--border)/0.6)]",
-        "text-[11px] font-semibold tracking-[0.18em]",
-        "after:content-[''] after:ml-2 after:h-px after:flex-1 after:bg-border/70",
+        "h-10 gap-2 rounded-lg px-3",
+        "bg-sidebar-accent/70 text-sidebar-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border)/0.75)]",
+        "text-[12px] font-semibold",
+        "after:content-[''] after:ml-3 after:h-px after:flex-1 after:bg-sidebar-border/90",
       )}
     >
-      <Icon className="size-3.5 opacity-80" />
+      <span className="grid size-6 place-items-center rounded-md bg-background/60 shadow-[inset_0_0_0_1px_hsl(var(--border)/0.55)]">
+        <Icon className="size-3.5 opacity-80" />
+      </span>
       <span className="truncate">{title}</span>
     </SidebarGroupLabel>
   );
@@ -240,7 +243,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
               <div className="space-y-3 pr-1">
                 {navGroups.map((group) => (
-                  <div key={group.id} className="space-y-1">
+                  <div key={group.id} className="space-y-2">
                     <SettingsNavGroupTitle icon={group.icon} title={group.title} />
                     <ul className="space-y-1">
                       {group.items.map(({ id, label, icon: Icon }) => {
