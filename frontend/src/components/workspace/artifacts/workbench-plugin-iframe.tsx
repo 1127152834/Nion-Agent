@@ -540,13 +540,16 @@ export function WorkbenchPluginIframe({
       })();
     };
 
+    const streamDisposers = streamDisposersRef.current;
+    const ownedSessions = ownedSessionsRef.current;
+
     window.addEventListener("message", onMessage);
     return () => {
       window.removeEventListener("message", onMessage);
-      for (const dispose of streamDisposersRef.current.values()) dispose();
-      streamDisposersRef.current.clear();
-      const sessionIds = Array.from(ownedSessionsRef.current);
-      ownedSessionsRef.current.clear();
+      for (const dispose of streamDisposers.values()) dispose();
+      streamDisposers.clear();
+      const sessionIds = Array.from(ownedSessions);
+      ownedSessions.clear();
       void Promise.allSettled(sessionIds.map((sid) => context.stopCommand(sid)));
     };
   }, [context]);
