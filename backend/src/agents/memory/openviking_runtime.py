@@ -1983,6 +1983,160 @@ class OpenVikingRuntime:
                 )
             return output
 
+    # ------------------------------------------------------------------
+    # OpenViking Context Filesystem (read-only)
+    # ------------------------------------------------------------------
+    def fs_find(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+        target_uri: str = "",
+        score_threshold: float | None = None,
+        agent_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return []
+
+        with self._openviking_client(agent_name) as client:
+            results = client.find(
+                normalized_query,
+                target_uri=str(target_uri or ""),
+                limit=max(1, int(limit)),
+                score_threshold=score_threshold,
+            )
+            resources = getattr(results, "resources", None)
+            if resources is None and isinstance(results, dict):
+                resources = results.get("resources")
+            resources = resources or []
+
+            output: list[dict[str, Any]] = []
+            for resource in resources:
+                uri = getattr(resource, "uri", None) if not isinstance(resource, dict) else resource.get("uri")
+                score = getattr(resource, "score", None) if not isinstance(resource, dict) else resource.get("score")
+                resolved_uri = str(uri or "").strip() or "viking://"
+                resolved_score = float(score or 0.0)
+                abstract = ""
+                try:
+                    abstract = str(client.abstract(resolved_uri) or "").strip()
+                except Exception:  # noqa: BLE001
+                    abstract = ""
+                output.append({"uri": resolved_uri, "score": resolved_score, "abstract": abstract})
+            return output
+
+    def fs_search(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+        target_uri: str = "",
+        score_threshold: float | None = None,
+        filter_json: dict[str, Any] | None = None,
+        agent_name: str | None = None,
+    ) -> list[dict[str, Any]]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return []
+
+        with self._openviking_client(agent_name) as client:
+            results = client.search(
+                normalized_query,
+                target_uri=str(target_uri or ""),
+                limit=max(1, int(limit)),
+                score_threshold=score_threshold,
+                filter=filter_json,
+            )
+            resources = getattr(results, "resources", None)
+            if resources is None and isinstance(results, dict):
+                resources = results.get("resources")
+            resources = resources or []
+
+            output: list[dict[str, Any]] = []
+            for resource in resources:
+                uri = getattr(resource, "uri", None) if not isinstance(resource, dict) else resource.get("uri")
+                score = getattr(resource, "score", None) if not isinstance(resource, dict) else resource.get("score")
+                resolved_uri = str(uri or "").strip() or "viking://"
+                resolved_score = float(score or 0.0)
+                abstract = ""
+                try:
+                    abstract = str(client.abstract(resolved_uri) or "").strip()
+                except Exception:  # noqa: BLE001
+                    abstract = ""
+                output.append({"uri": resolved_uri, "score": resolved_score, "abstract": abstract})
+            return output
+
+    def fs_overview(self, *, uri: str, agent_name: str | None = None) -> str:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            return str(client.overview(target) or "")
+
+    def fs_read(self, *, uri: str, offset: int = 0, limit: int = -1, agent_name: str | None = None) -> str:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            return str(client.read(target, offset=max(0, int(offset)), limit=int(limit)) or "")
+
+    def fs_ls(
+        self,
+        *,
+        uri: str,
+        simple: bool = True,
+        recursive: bool = False,
+        agent_name: str | None = None,
+    ) -> list[Any]:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            return list(client.ls(target, simple=bool(simple), recursive=bool(recursive)) or [])
+
+    def fs_tree(self, *, uri: str, agent_name: str | None = None) -> dict[str, Any]:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.tree(target)
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
+    def fs_grep(
+        self,
+        *,
+        uri: str,
+        pattern: str,
+        case_insensitive: bool = False,
+        agent_name: str | None = None,
+    ) -> dict[str, Any]:
+        target = uri.strip()
+        needle = pattern
+        if not target:
+            raise ValueError("uri is required")
+        if not needle:
+            raise ValueError("pattern is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.grep(target, needle, case_insensitive=bool(case_insensitive))
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
+    def fs_glob(self, *, pattern: str, uri: str = "viking://", agent_name: str | None = None) -> dict[str, Any]:
+        needle = pattern
+        base = str(uri or "viking://").strip() or "viking://"
+        if not needle:
+            raise ValueError("pattern is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.glob(needle, uri=base)
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
+    def fs_stat(self, *, uri: str, agent_name: str | None = None) -> dict[str, Any]:
+        target = uri.strip()
+        if not target:
+            raise ValueError("uri is required")
+        with self._openviking_client(agent_name) as client:
+            result = client.stat(target)
+            return self._to_jsonable(result) if isinstance(result, dict) else {"data": self._to_jsonable(result)}
+
     def _normalize_messages(self, messages: list[Any]) -> list[dict[str, str]]:
         normalized: list[dict[str, str]] = []
         for msg in messages:
