@@ -108,3 +108,26 @@ git branch codex/ws0-guardrails-20260316 352db3b5
 - 是否需要同步删除 GitHub `origin` 上的已合并远端分支：需要明确删除范围与审批（建议仅限 `origin/codex/*` 且仅删除已合并到 `origin/main` 的分支）。
 - 待 `codex/backend-ruff-cleanup-20260316` 的未提交改动处理完（提交并合并或丢弃）后，再回收对应 worktree 与分支。
 
+---
+
+## 远端分支清理（origin）
+
+在获得确认后，已同步删除 `origin` 上的 3 条 `codex/*` 远端分支（均无独立 patch 价值）：
+
+- `origin/codex/backend-cleanup-refactor-20260315`
+- `origin/codex/backend-dir-refactor-20260316`
+- `origin/codex/rollback-main-pre-memory-v2-20260306-144159`
+
+执行命令（审计线索）：
+
+```bash
+git push origin --delete \
+  codex/backend-cleanup-refactor-20260315 \
+  codex/backend-dir-refactor-20260316 \
+  codex/rollback-main-pre-memory-v2-20260306-144159
+git fetch --prune origin
+```
+
+删除后确认：
+
+- `git branch -r` 仅剩 `origin/main` 与 `origin/HEAD -> origin/main`。
