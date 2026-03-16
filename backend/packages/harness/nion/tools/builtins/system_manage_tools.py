@@ -64,6 +64,70 @@ def _runtime_thread_id(runtime: ToolRuntime[ContextT, ThreadState] | None) -> st
     return None
 
 
+def _nion_manage_usage() -> str:
+    # Keep this as plain text because it is shown to both Agent and UI.
+    return (
+        "Usage:\n"
+        "  nion_manage help\n"
+        "  nion_manage doctor [--tail N] [--include-logs] [--include-processlog]\n"
+        "  nion_manage skills <subcommand> [...]\n"
+        "\n"
+        "Commands:\n"
+        "  help\n"
+        "    Show this message.\n"
+        "  doctor\n"
+        "    Collect runtime diagnostics for troubleshooting (Task 3).\n"
+        "  skills\n"
+        "    Manage skills (list/enable/disable/install/rename).\n"
+        "\n"
+        "Notes:\n"
+        "  - This is an agent-facing control-plane tool (CLI-shaped) and returns JSON.\n"
+        "  - Destructive operations may require a confirmation token.\n"
+    )
+
+
+@tool("nion_manage")
+def nion_manage_tool(
+    runtime: ToolRuntime[ContextT, ThreadState] | None = None,
+    argv: list[str] | None = None,
+    confirmation_token: str | None = None,
+    thread_id: str | None = None,
+) -> str:
+    """Agent-only control-plane tool (CLI-shaped) that routes argv-style commands."""
+    # Normalize argv: ensure we only deal with non-empty tokens.
+    normalized_argv = [str(item).strip() for item in (argv or []) if str(item).strip()]
+    if not normalized_argv or normalized_argv[0] in {"help", "-h", "--help"}:
+        return build_management_response(
+            success=True,
+            message=_nion_manage_usage(),
+            data={"argv": normalized_argv},
+        )
+
+    command = normalized_argv[0]
+    if command == "doctor":
+        # Task 3 will implement this. Keep a stable placeholder to avoid accidental silent failures.
+        return build_management_response(
+            success=False,
+            message="doctor 暂未实现（等待 Task 3）。",
+            data={"argv": normalized_argv},
+        )
+
+    if command == "skills":
+        # Task 4 will implement argv routing for skills (including custom-skill rename).
+        return build_management_response(
+            success=False,
+            message="skills 子命令暂未实现（等待后续任务）。",
+            data={"argv": normalized_argv},
+        )
+
+    _ = runtime, confirmation_token, thread_id  # explicitly reserved for future subcommands
+    return build_management_response(
+        success=False,
+        message=f"未知命令：{command}。运行 nion_manage help 查看用法。",
+        data={"argv": normalized_argv},
+    )
+
+
 @tool("skills_manage")
 def skills_manage_tool(
     runtime: ToolRuntime[ContextT, ThreadState],
