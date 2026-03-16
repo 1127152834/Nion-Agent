@@ -77,18 +77,22 @@ export function EvolutionReportsViewer({ agentName }: EvolutionReportsViewerProp
   const { locale, t } = useI18n();
   const copy = t.agents.settings.logs;
   const [selectedSuggestionId, setSelectedSuggestionId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [reportStatusFilter, setReportStatusFilter] = useState<string>("");
+  const [suggestionStatusFilter, setSuggestionStatusFilter] = useState<string>("");
 
   const { data: reports, isLoading: reportsLoading, error: reportsError } = useEvolutionReports(agentName);
   const { data: suggestions, isLoading: suggestionsLoading, error: suggestionsError } = useEvolutionSuggestions(
     agentName,
-    statusFilter || undefined
+    suggestionStatusFilter || undefined
   );
 
   const dismissMutation = useDismissSuggestion(agentName);
   const acceptMutation = useAcceptSuggestion(agentName);
 
   const selectedSuggestion = suggestions?.find((s) => s.id === selectedSuggestionId);
+  const filteredReports = (reports ?? []).filter((report) =>
+    reportStatusFilter ? report.status === reportStatusFilter : true
+  );
 
   const formatDate = (timestamp: string) => {
     return new Date(timestamp).toLocaleString(locale, {
@@ -121,8 +125,18 @@ export function EvolutionReportsViewer({ agentName }: EvolutionReportsViewerProp
     <div className="space-y-6">
       {/* Reports Section */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
           <CardTitle className="text-base">{copy.reportsTitle}</CardTitle>
+          <select
+            value={reportStatusFilter}
+            onChange={(e) => setReportStatusFilter(e.target.value)}
+            className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+          >
+            <option value="">{copy.allStatus}</option>
+            <option value="pending">{copy.status.pending}</option>
+            <option value="completed">{copy.status.completed}</option>
+            <option value="failed">{copy.status.failed}</option>
+          </select>
         </CardHeader>
         <CardContent>
           {reportsLoading ? (
@@ -137,9 +151,13 @@ export function EvolutionReportsViewer({ agentName }: EvolutionReportsViewerProp
             <div className="py-8 text-center text-muted-foreground">
               {copy.noReports}
             </div>
+          ) : filteredReports.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">
+              {copy.noReports}
+            </div>
           ) : (
             <div className="space-y-2">
-              {reports?.map((report) => (
+              {filteredReports.map((report) => (
                 <div
                   key={report.report_id}
                   className="flex items-center justify-between rounded-md border p-3"
@@ -175,8 +193,8 @@ export function EvolutionReportsViewer({ agentName }: EvolutionReportsViewerProp
         <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
           <CardTitle className="text-base">{copy.suggestionsTitle}</CardTitle>
           <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            value={suggestionStatusFilter}
+            onChange={(e) => setSuggestionStatusFilter(e.target.value)}
             className="h-8 rounded-md border border-input bg-background px-2 text-sm"
           >
             <option value="">{copy.allStatus}</option>
