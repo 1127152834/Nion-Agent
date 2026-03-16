@@ -164,15 +164,25 @@ class OpenVikingRuntime:
             updated_at = str(item.get("updated_at") or "")
             if updated_at and updated_at > last_updated:
                 last_updated = updated_at
+            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            tier = self._memory_tier(metadata)
+            expires_at = str(metadata.get("expires_at") or "")
+            retention_policy = str(metadata.get("retention_policy") or "")
+            quality_score = float(metadata.get("quality_score") or item.get("score", 0.0) or 0.0)
             facts.append(
                 {
                     "id": item.get("memory_id", ""),
                     "content": item.get("summary", ""),
                     "category": "openviking",
                     "confidence": float(item.get("score", 0.0) or 0.0),
+                    "quality_score": quality_score,
                     "createdAt": item.get("created_at", ""),
+                    "updatedAt": updated_at,
                     "source": item.get("source_thread_id", ""),
                     "status": item.get("status", "active"),
+                    "tier": tier,
+                    "retention_policy": retention_policy,
+                    "expires_at": expires_at,
                     "uri": item.get("uri", ""),
                     "last_used_at": item.get("last_used_at", ""),
                     "use_count": int(item.get("use_count", 0) or 0),
