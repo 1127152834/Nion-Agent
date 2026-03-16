@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -247,6 +248,139 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest) -> SkillRes
 
     logger.info("Skill '%s' enabled status updated to %s", skill_name, request.enabled)
     return _skill_to_response(updated_skill)
+
+
+def _validate_skill_name(name: str) -> str:
+    value = str(name or "").strip()
+    if not value:
+        raise ValueError("Skill name cannot be empty")
+    if not re.match(r"^[a-z0-9-]+$", value):
+        raise ValueError(f"Name '{value}' should be hyphen-case (lowercase letters, digits, and hyphens only)")
+    if value.startswith("-") or value.endswith("-") or "--" in value:
+        raise ValueError(f"Name '{value}' cannot start/end with hyphen or contain consecutive hyphens")
+    if len(value) > 64:
+        raise ValueError(f"Name is too long ({len(value)} characters). Maximum is 64 characters.")
+    return value
+
+
+def _rewrite_skill_frontmatter_name(skill_md_path: Path, *, new_name: str) -> None:
+    content = skill_md_path.read_text(encoding="utf-8")
+    if not content.startswith("---"):
+        raise ValueError("No YAML frontmatter found")
+
+    match = re.match(r"^---\n(.*?)\n---\n?", content, re.DOTALL)
+    if not match:
+        raise ValueError("Invalid frontmatter format")
+
+    frontmatter_text = match.group(1)
+
+    # NOTE:
+    # `nion.skills.parser.parse_skill_file()` intentionally uses a *very* simple line-based parser
+    # for YAML frontmatter: it expects `key: value` on a single line and does not support YAML
+    # block scalars (`|`, `>-`) or other advanced formatting.
+    #
+    # Therefore we must avoid `yaml.safe_dump()` here because it may reformat strings into
+    # multi-line/block styles, which would make skills undiscoverable after a rename.
+    #
+    # We keep this operation minimal and only rewrite the first `name:` line within frontmatter,
+    # leaving all other keys/values and overall formatting untouched.
+    name_line_pattern = re.compile("(?m)^(\\s*name\\s*:\\s*)([^\\n#]*?)(\\s*(?:#.*)?)$")
+    if not name_line_pattern.search(frontmatter_text):
+        raise ValueError("Frontmatter missing required field: name")
+
+    def _rewrite_name_line(match: re.Match[str]) -> str:
+        # Preserve indentation/spacing prefix and any trailing inline comment.
+        return f"{match.group(1)}{new_name}{match.group(3)}"
+
+    rewritten_frontmatter = name_line_pattern.sub(_rewrite_name_line, frontmatter_text, count=1)
+    updated = content[: match.start(1)] + rewritten_frontmatter + content[match.end(1) :]
+
+    temp_path = skill_md_path.with_suffix(".tmp")
+    temp_path.write_text(updated, encoding="utf-8")
+    temp_path.replace(skill_md_path)
+
+
+def rename_skill(old_name: str, new_name: str, *, skills_path: Path | None = None) -> SkillResponse:
+    """Rename a custom skill by editing SKILL.md frontmatter and migrating extensions state.
+
+    This is a business-layer operation used by agent control-plane tools (and future Gateway adapters).
+
+    Constraints:
+    - Only skills under `skills/custom` may be renamed.
+    - The rename updates the SKILL.md frontmatter `name` field.
+    - Enabled state in `extensions_config.json` is migrated from old->new when present.
+    """
+    old_value = str(old_name or "").strip()
+    if not old_value:
+        raise ValueError("old_name cannot be empty")
+
+    new_value = _validate_skill_name(new_name)
+    if new_value == old_value:
+        raise ValueError("new_name must be different from old_name")
+
+    # Resolve skills root for discovery.
+    resolved_skills_path: Path
+    if skills_path is not None:
+        resolved_skills_path = Path(skills_path).resolve()
+    else:
+        try:
+            from nion.config import get_app_config  # lazy import to avoid heavy deps at import time
+
+            resolved_skills_path = get_app_config().skills.get_skills_path()
+        except Exception:  # noqa: BLE001
+            resolved_skills_path = get_skills_root_path()
+
+    skills = load_skills(skills_path=resolved_skills_path, use_config=False, enabled_only=False)
+    existing_old = next((s for s in skills if s.name == old_value), None)
+    if existing_old is None:
+        raise FileNotFoundError(f"Skill '{old_value}' not found")
+    if existing_old.category != "custom":
+        raise PermissionError(f"Skill '{old_value}' is not a custom skill and cannot be renamed")
+
+    if any(s.name == new_value for s in skills):
+        raise FileExistsError(f"Skill '{new_value}' already exists")
+
+    skill_md = existing_old.skill_file
+    _rewrite_skill_frontmatter_name(skill_md, new_name=new_value)
+
+    # Migrate extensions state (enabled flag) old -> new.
+    config_path = (
+        Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve()
+        if os.getenv("NION_EXTENSIONS_CONFIG_PATH")
+        else ExtensionsConfig.default_config_path()
+    )
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    raw: dict[str, Any] = {}
+    if config_path.exists():
+        try:
+            loaded = json.loads(config_path.read_text(encoding="utf-8") or "{}")
+            if isinstance(loaded, dict):
+                raw = loaded
+        except Exception:  # noqa: BLE001
+            raw = {}
+
+    skills_state = raw.get("skills")
+    if not isinstance(skills_state, dict):
+        skills_state = {}
+
+    if old_value in skills_state:
+        skills_state[new_value] = skills_state.get(old_value)
+        skills_state.pop(old_value, None)
+
+    raw["skills"] = skills_state
+
+    tmp_path = config_path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp_path.replace(config_path)
+    reload_extensions_config(str(config_path))
+
+    updated_skills = load_skills(skills_path=resolved_skills_path, use_config=False, enabled_only=False)
+    updated = next((s for s in updated_skills if s.name == new_value), None)
+    if updated is None:
+        raise RuntimeError(f"Failed to reload renamed skill '{new_value}'")
+
+    return _skill_to_response(updated)
 
 
 def _resolve_thread_virtual_path(thread_id: str, virtual_path: str) -> Path:
