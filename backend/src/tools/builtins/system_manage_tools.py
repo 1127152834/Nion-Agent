@@ -13,18 +13,22 @@ from src.agents.thread_state import ThreadState
 from src.config import get_app_config
 from src.config.config_repository import ConfigRepository
 from src.config.extensions_config import get_extensions_config
-from src.gateway.routers.mcp import (
-    McpConfigUpdateRequest,
-    McpServerConfigResponse,
-    get_mcp_configuration,
-    update_mcp_configuration,
-)
-from src.gateway.routers.models import ModelConnectionTestRequest, test_model_connection
-from src.gateway.routers.skills import SkillInstallRequest, SkillUpdateRequest, install_skill, update_skill
 from src.skills import load_skills
 from src.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
 from src.tools.builtins.langchain_compat import ToolRuntime, tool
 from src.tools.builtins.management_response import build_action_card, build_management_response
+from src.tools.builtins._service_ops import (
+    McpConfigUpdateRequest,
+    McpServerConfigResponse,
+    ModelConnectionTestRequest,
+    SkillInstallRequest,
+    SkillUpdateRequest,
+    get_mcp_configuration,
+    install_skill,
+    test_model_connection,
+    update_mcp_configuration,
+    update_skill,
+)
 
 
 def _run_async(coro):

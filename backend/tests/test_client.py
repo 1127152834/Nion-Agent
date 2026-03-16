@@ -12,11 +12,9 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa
 
 from src.agents.memory.core import MemoryReadRequest
 from src.client import NionClient
-from src.gateway.routers.mcp import McpConfigResponse
-from src.gateway.routers.models import ModelResponse, ModelsListResponse
 from src.gateway.routers.openviking import OpenVikingConfigResponse
-from src.gateway.routers.skills import SkillInstallResponse, SkillResponse, SkillsListResponse
 from src.gateway.routers.uploads import UploadResponse
+from src.tools.builtins._service_ops import McpConfigResponse, ModelResponse, ModelsListResponse, SkillInstallResponse, SkillResponse, SkillsListResponse
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -725,7 +723,7 @@ class TestSkillsManagement:
 
             with (
                 patch("src.skills.loader.get_skills_root_path", return_value=skills_root),
-                patch("src.gateway.routers.skills._validate_skill_frontmatter", return_value=(True, "OK", "my-skill")),
+                patch("src.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-skill")),
             ):
                 result = client.install_skill(archive_path)
 
@@ -1500,7 +1498,7 @@ class TestScenarioSkillInstallAndUse:
             # Step 1: Install
             with (
                 patch("src.skills.loader.get_skills_root_path", return_value=skills_root),
-                patch("src.gateway.routers.skills._validate_skill_frontmatter", return_value=(True, "OK", "my-analyzer")),
+                patch("src.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-analyzer")),
             ):
                 result = client.install_skill(archive)
             assert result["success"] is True
@@ -1634,8 +1632,8 @@ class TestScenarioEdgeCases:
 
             with (
                 patch.object(NionClient, "_get_uploads_dir", return_value=uploads_dir),
-                patch("src.gateway.routers.uploads.CONVERTIBLE_EXTENSIONS", {".pdf"}),
-                patch("src.gateway.routers.uploads.convert_file_to_markdown", side_effect=Exception("conversion failed")),
+                patch("src.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
+                patch("src.utils.file_conversion.convert_file_to_markdown", side_effect=Exception("conversion failed")),
             ):
                 result = client.upload_files("t-pdf-fail", [pdf_file])
 

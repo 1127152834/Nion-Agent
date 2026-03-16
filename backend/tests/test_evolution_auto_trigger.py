@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from unittest.mock import patch
 
@@ -7,6 +8,7 @@ from src.config.paths import Paths
 from src.evolution.models import EvolutionSettings
 from src.evolution.service import EvolutionService
 from src.scheduler import store as scheduler_store
+from src.scheduler.mode_registry import register_mode_executor
 from src.scheduler.service import get_scheduler, shutdown_scheduler
 
 
@@ -23,6 +25,26 @@ def test_evolution_auto_trigger_creates_system_task_and_runs_once(tmp_path):
     with patch("src.scheduler.store.get_paths", return_value=paths):
         with patch("src.evolution.store.get_paths", return_value=paths):
             with patch("src.evolution.service.get_evolution_service", return_value=_StubEvolutionService()):
+                async def _evolution_executor(task, trace_id):
+                    from datetime import UTC, datetime
+
+                    from src.evolution.service import get_evolution_service
+
+                    report = await asyncio.wait_for(
+                        get_evolution_service().run(task.agent_name),
+                        timeout=task.timeout_seconds,
+                    )
+                    payload = report.model_dump(mode="json") if hasattr(report, "model_dump") else report
+                    return {
+                        "success": True,
+                        "mode": task.mode.value,
+                        "evolution": payload,
+                        "trace_id": trace_id,
+                        "triggered_at": datetime.now(UTC).isoformat(),
+                    }
+
+                register_mode_executor("evolution", _evolution_executor)
+
                 scheduler = get_scheduler()
                 scheduler.start()
                 try:

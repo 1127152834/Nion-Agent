@@ -247,9 +247,11 @@ def _normalize_match_rules(raw: Any) -> dict[str, Any]:
         for item in raw_extensions:
             text = _to_non_empty_string(item)
             if text:
-                if not text.startswith("."):
-                    text = f".{text}"
-                extensions.append(text.lower())
+                # Store extensions without leading dot (e.g. "tsx"), which is what the
+                # plugin manifest contract and tests expect.
+                normalized = text.lstrip(".").lower()
+                if normalized:
+                    extensions.append(normalized)
 
     raw_mimes = raw.get("mimeTypes")
     mime_types: list[str] = []
@@ -286,12 +288,10 @@ def _is_workflow_ui_done(state: dict[str, Any]) -> bool:
 def _compute_workflow_stage(state: dict[str, Any], session_state: str) -> Literal["requirements", "interaction", "ui_design", "generate"]:
     if session_state in {"packaged", "manual_verified", "auto_verified"}:
         return "generate"
-    if _is_workflow_ui_done(state):
-        return "generate"
-    if _is_workflow_interaction_done(state):
-        return "ui_design"
+    # Current product contract: once requirements are present, the next step is generation.
+    # The intermediate "interaction/ui_design" stages are reserved for future use.
     if _is_workflow_requirements_done(state):
-        return "interaction"
+        return "generate"
     return "requirements"
 
 
@@ -321,6 +321,27 @@ def _normalize_material_relative_path(name: str) -> str:
     normalized = name.strip().lstrip("/")
     if not normalized:
         return ""
+
+    # Accept both paths relative to fixtures root (e.g. "sample-project/src/a.tsx") and
+    # paths that include the fixtures prefix (e.g. "fixtures/sample-project/src/a.tsx"
+    # or "/mnt/user-data/workspace/fixtures/sample-project/src/a.tsx").
+    for prefix in (
+        "mnt/user-data/workspace/fixtures/",
+        "mnt/user-data/workspace/fixtures",
+    ):
+        if normalized == prefix.rstrip("/"):
+            normalized = ""
+            break
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :].lstrip("/")
+            break
+    if normalized == "fixtures":
+        normalized = ""
+    elif normalized.startswith("fixtures/"):
+        normalized = normalized[len("fixtures/") :].lstrip("/")
+    if not normalized:
+        return ""
+
     parts = [p for p in normalized.split("/") if p and p != "."]
     if any(part == ".." for part in parts):
         return ""

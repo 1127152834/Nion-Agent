@@ -1,6 +1,8 @@
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -85,6 +87,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
+
+    # Register app-layer mode executors for scheduler before scheduler startup.
+    # This avoids harness-layer scheduler importing app-layer evolution/heartbeat modules.
+    from src.scheduler.mode_registry import register_mode_executor
+
+    async def _evolution_executor(task, trace_id):
+        from src.evolution.service import get_evolution_service
+
+        report = await asyncio.wait_for(
+            get_evolution_service().run(task.agent_name),
+            timeout=task.timeout_seconds,
+        )
+        payload = report.model_dump(mode="json") if hasattr(report, "model_dump") else report
+        return {
+            "success": True,
+            "mode": task.mode.value,
+            "evolution": payload,
+            "trace_id": trace_id,
+            "triggered_at": datetime.now(UTC).isoformat(),
+        }
+
+    async def _heartbeat_executor(task, trace_id):
+        if not task.name.startswith("heartbeat:"):
+            raise ValueError(f"Invalid heartbeat task name: {task.name}")
+        parts = task.name.split(":", 2)
+        if len(parts) != 3 or not parts[2]:
+            raise ValueError(f"Invalid heartbeat task name: {task.name}")
+
+        template_id = parts[2]
+        from src.heartbeat.executor import HeartbeatExecutor
+
+        record = await asyncio.wait_for(
+            HeartbeatExecutor().execute(template_id, task.agent_name),
+            timeout=task.timeout_seconds,
+        )
+        payload = record.model_dump(mode="json") if hasattr(record, "model_dump") else record
+        return {
+            "success": True,
+            "mode": task.mode.value,
+            "heartbeat": payload,
+            "trace_id": trace_id,
+            "triggered_at": datetime.now(UTC).isoformat(),
+        }
+
+    register_mode_executor("evolution", _evolution_executor)
+    register_mode_executor("heartbeat", _heartbeat_executor)
+
     startup_scheduler()
     logger.info("Scheduler service started")
 

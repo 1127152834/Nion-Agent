@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import UTC, datetime
 from unittest.mock import patch
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from src.config.paths import Paths
 from src.gateway.routers.scheduler import router
+from src.scheduler.mode_registry import register_mode_executor
 from src.scheduler.models import ScheduledTask
 from src.scheduler.service import get_scheduler, shutdown_scheduler
 
@@ -36,6 +38,24 @@ def test_scheduler_filters_out_evolution_system_tasks(tmp_path):
 
     with patch("src.scheduler.store.get_paths", return_value=paths):
         with patch("src.evolution.service.get_evolution_service", return_value=_StubEvolutionService()):
+            async def _evolution_executor(task, trace_id):
+                from src.evolution.service import get_evolution_service
+
+                report = await asyncio.wait_for(
+                    get_evolution_service().run(task.agent_name),
+                    timeout=task.timeout_seconds,
+                )
+                payload = report.model_dump(mode="json") if hasattr(report, "model_dump") else report
+                return {
+                    "success": True,
+                    "mode": task.mode.value,
+                    "evolution": payload,
+                    "trace_id": trace_id,
+                    "triggered_at": datetime.now(UTC).isoformat(),
+                }
+
+            register_mode_executor("evolution", _evolution_executor)
+
             with TestClient(app) as client:
                 scheduler = get_scheduler()
                 scheduler.start()

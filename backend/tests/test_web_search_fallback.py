@@ -14,6 +14,9 @@ class _FakeAppConfig:
 
 
 def test_web_search_auto_falls_back_to_searxng(monkeypatch):
+    # Force legacy config path for this test, regardless of any global `search_settings`
+    # configured by other tests or local developer config.
+    monkeypatch.setattr(web_search_tools, "_get_search_settings_payload", lambda: None)
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.setattr(web_search_tools, "get_app_config", lambda: _FakeAppConfig(extra={"provider": "auto"}))
 
@@ -48,24 +51,21 @@ def test_provider_chain_auto_without_tavily_uses_searxng_only(monkeypatch):
 
 
 def test_search_settings_provider_chain_falls_back_to_builtin(monkeypatch):
-    class _FakeAppConfigV2:
-        def __init__(self):
-            self.model_extra = {
-                "search_settings": {
-                    "provider_configs": {
-                        "brave": {"api_key": "brave-key"},
-                    },
-                    "web_search": {
-                        "providers": ["brave"],
-                        "max_results": 3,
-                    },
-                }
-            }
-
-        def get_tool_config(self, name: str):
-            return None
-
-    monkeypatch.setattr(web_search_tools, "get_app_config", lambda: _FakeAppConfigV2())
+    # Force new `search_settings` config root for this test to avoid flakiness from
+    # global config store state leaking across the test suite.
+    monkeypatch.setattr(
+        web_search_tools,
+        "_get_search_settings_payload",
+        lambda: {
+            "provider_configs": {
+                "brave": {"api_key": "brave-key"},
+            },
+            "web_search": {
+                "providers": ["brave"],
+                "max_results": 3,
+            },
+        },
+    )
     monkeypatch.setattr(web_search_tools, "_search_brave", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("unauthorized")))
     monkeypatch.setattr(
         web_search_tools,

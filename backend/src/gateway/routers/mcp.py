@@ -11,67 +11,20 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
-from src.config.extensions_config import ExtensionsConfig, get_extensions_config, reload_extensions_config
+from src.config.extensions_config import ExtensionsConfig
 from src.gateway.build_info import PROCESS_START_TIME
+from src.tools.builtins._service_ops import (
+    McpConfigResponse,
+    McpConfigUpdateRequest,
+    McpServerConfigResponse,
+    get_mcp_configuration as _get_mcp_configuration,
+    update_mcp_configuration as _update_mcp_configuration,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["mcp"])
-
-
-class McpOAuthConfigResponse(BaseModel):
-    """OAuth configuration for an MCP server."""
-
-    enabled: bool = Field(default=True, description="Whether OAuth token injection is enabled")
-    token_url: str = Field(default="", description="OAuth token endpoint URL")
-    grant_type: Literal["client_credentials", "refresh_token"] = Field(default="client_credentials", description="OAuth grant type")
-    client_id: str | None = Field(default=None, description="OAuth client ID")
-    client_secret: str | None = Field(default=None, description="OAuth client secret")
-    refresh_token: str | None = Field(default=None, description="OAuth refresh token")
-    scope: str | None = Field(default=None, description="OAuth scope")
-    audience: str | None = Field(default=None, description="OAuth audience")
-    token_field: str = Field(default="access_token", description="Token response field containing access token")
-    token_type_field: str = Field(default="token_type", description="Token response field containing token type")
-    expires_in_field: str = Field(default="expires_in", description="Token response field containing expires-in seconds")
-    default_token_type: str = Field(default="Bearer", description="Default token type when response omits token_type")
-    refresh_skew_seconds: int = Field(default=60, description="Refresh this many seconds before expiry")
-    extra_token_params: dict[str, str] = Field(default_factory=dict, description="Additional form params sent to token endpoint")
-    model_config = ConfigDict(extra="allow")
-
-
-class McpServerConfigResponse(BaseModel):
-    """Response model for MCP server configuration."""
-
-    enabled: bool = Field(default=True, description="Whether this MCP server is enabled")
-    type: str = Field(default="stdio", description="Transport type: 'stdio', 'sse', or 'http'")
-    command: str | None = Field(default=None, description="Command to execute to start the MCP server (for stdio type)")
-    args: list[str] = Field(default_factory=list, description="Arguments to pass to the command (for stdio type)")
-    env: dict[str, str] = Field(default_factory=dict, description="Environment variables for the MCP server")
-    url: str | None = Field(default=None, description="URL of the MCP server (for sse or http type)")
-    headers: dict[str, str] = Field(default_factory=dict, description="HTTP headers to send (for sse or http type)")
-    oauth: McpOAuthConfigResponse | None = Field(default=None, description="OAuth configuration for MCP HTTP/SSE servers")
-    description: str = Field(default="", description="Human-readable description of what this MCP server provides")
-    meta: dict[str, Any] | None = Field(default=None, description="Optional metadata for UI/marketplace integration")
-    model_config = ConfigDict(extra="allow")
-
-
-class McpConfigResponse(BaseModel):
-    """Response model for MCP configuration."""
-
-    mcp_servers: dict[str, McpServerConfigResponse] = Field(
-        default_factory=dict,
-        description="Map of MCP server name to configuration",
-    )
-
-
-class McpConfigUpdateRequest(BaseModel):
-    """Request model for updating MCP configuration."""
-
-    mcp_servers: dict[str, McpServerConfigResponse] = Field(
-        ...,
-        description="Map of MCP server name to configuration",
-    )
 
 
 class McpServerProbeResponse(BaseModel):
@@ -254,9 +207,11 @@ async def get_mcp_configuration() -> McpConfigResponse:
         }
         ```
     """
-    config = get_extensions_config()
-
-    return McpConfigResponse(mcp_servers={name: McpServerConfigResponse(**server.model_dump()) for name, server in config.mcp_servers.items()})
+    try:
+        return await _get_mcp_configuration()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to get MCP configuration: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get MCP configuration: {exc}") from exc
 
 
 @router.put(
@@ -298,40 +253,10 @@ async def update_mcp_configuration(request: McpConfigUpdateRequest) -> McpConfig
         ```
     """
     try:
-        # NOTE: The extensions config MUST live in the Nion data dir (NION_HOME / $HOME/.nion),
-        # not under the repository checkout. Desktop runtime can restart from different CWDs,
-        # and the repo itself may be replaced (re-clone / history rewrite), which would make
-        # installed MCP servers "disappear" if we write relative to CWD.
-        config_path = Path(os.getenv("NION_EXTENSIONS_CONFIG_PATH")).expanduser().resolve() if os.getenv("NION_EXTENSIONS_CONFIG_PATH") else ExtensionsConfig.default_config_path()
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Load current config to preserve skills configuration
-        current_config = get_extensions_config()
-
-        # Convert request to dict format for JSON serialization
-        config_data = {
-            "mcpServers": {name: server.model_dump() for name, server in request.mcp_servers.items()},
-            "skills": {name: {"enabled": skill.enabled} for name, skill in current_config.skills.items()},
-            "clis": {name: cli.model_dump() for name, cli in current_config.clis.items()},
-        }
-
-        # Write atomically to avoid corrupting the config on crash/interruption.
-        temp_path = config_path.with_suffix(".tmp")
-        temp_path.write_text(json.dumps(config_data, indent=2, ensure_ascii=False), encoding="utf-8")
-        temp_path.replace(config_path)
-
-        logger.info(f"MCP configuration updated and saved to: {config_path}")
-
-        # NOTE: No need to reload/reset cache here - LangGraph Server (separate process)
-        # will detect config file changes via mtime and reinitialize MCP tools automatically
-
-        # Reload the configuration and update the global cache
-        reloaded_config = reload_extensions_config(str(config_path))
-        return McpConfigResponse(mcp_servers={name: McpServerConfigResponse(**server.model_dump()) for name, server in reloaded_config.mcp_servers.items()})
-
-    except Exception as e:
-        logger.error(f"Failed to update MCP configuration: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update MCP configuration: {str(e)}")
+        return await _update_mcp_configuration(request)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Failed to update MCP configuration: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update MCP configuration: {exc}") from exc
 
 
 @router.get(

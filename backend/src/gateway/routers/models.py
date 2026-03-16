@@ -17,64 +17,20 @@ from pydantic import BaseModel, Field
 
 from src.config import get_app_config
 from src.reflection import resolve_class
+from src.tools.builtins._service_ops import (
+    ModelConnectionTestRequest,
+    ModelConnectionTestResponse,
+    ModelResponse,
+    ModelsListResponse,
+    ProviderModelListUnsupportedError,
+    test_model_connection as _test_model_connection,
+)
 
 router = APIRouter(prefix="/api", tags=["models"])
 
 _MODELS_DEV_CACHE: dict[str, Any] | None = None
 _MODELS_DEV_CACHE_AT = 0.0
 _MODELS_DEV_CACHE_TTL_SECONDS = 600.0
-
-
-class ProviderModelListUnsupportedError(Exception):
-    """Raised when provider endpoint does not expose a model listing API."""
-
-
-class ModelResponse(BaseModel):
-    """Response model for model information."""
-
-    name: str = Field(..., description="Unique identifier for the model")
-    display_name: str | None = Field(None, description="Human-readable name")
-    description: str | None = Field(None, description="Model description")
-    supports_thinking: bool = Field(default=False, description="Whether model supports thinking mode")
-    supports_reasoning_effort: bool = Field(default=False, description="Whether model supports reasoning effort")
-    supports_vision: bool = Field(default=False, description="Whether model supports vision/image inputs")
-    supports_video: bool = Field(default=False, description="Whether model supports video inputs")
-
-
-class ModelsListResponse(BaseModel):
-    """Response model for listing all models."""
-
-    models: list[ModelResponse]
-
-
-class ModelConnectionTestRequest(BaseModel):
-    """Request model for testing model provider connection."""
-
-    use: str = Field(..., min_length=1, description="Provider class path")
-    model: str | None = Field(
-        default=None,
-        description="Provider model id (optional; when omitted, test connectivity without model invocation)",
-    )
-    api_key: str | None = Field(default=None, description="Provider API key")
-    api_base: str | None = Field(default=None, description="Provider API base URL")
-    provider_protocol: Literal["auto", "openai-compatible", "anthropic-compatible"] | None = Field(
-        default="auto",
-        description="Provider protocol type: auto, openai-compatible, or anthropic-compatible",
-    )
-    timeout_seconds: float = Field(default=12.0, ge=1.0, le=60.0, description="Request timeout in seconds")
-    probe_message: str = Field(default="Hello", min_length=1, description="Probe message used for test invocation")
-
-
-class ModelConnectionTestResponse(BaseModel):
-    """Response model for model provider connection test."""
-
-    success: bool = Field(..., description="Whether test connection is successful")
-    message: str = Field(..., description="Result message")
-    latency_ms: int | None = Field(default=None, description="Latency in milliseconds when successful")
-    response_preview: str | None = Field(
-        default=None,
-        description="Short preview from model response when successful",
-    )
 
 
 class ProviderModelsRequest(BaseModel):
@@ -728,110 +684,7 @@ async def get_model(model_name: str) -> ModelResponse:
 async def test_model_connection(
     request: ModelConnectionTestRequest,
 ) -> ModelConnectionTestResponse:
-    """Test model provider connectivity and credentials.
-
-    The endpoint attempts to instantiate the model class and send one probe message.
-    Errors are returned as structured payloads to simplify frontend handling.
-    """
-    use = request.use.strip()
-    probe_model = _strip_optional(request.model)
-    raw_api_key = _strip_optional(request.api_key)
-    api_key = _resolve_env_placeholder(request.api_key)
-    api_base = _strip_optional(request.api_base)
-
-    if probe_model is None:
-        provider_type = _detect_provider_type(
-            use=use,
-            api_base=api_base,
-            provider_protocol=request.provider_protocol,
-        )
-        if provider_type == "unknown":
-            return ModelConnectionTestResponse(
-                success=False,
-                message="Provider protocol is unknown. Please choose OpenAI-compatible or Anthropic-compatible.",
-            )
-
-        started_at = time.perf_counter()
-        try:
-            if provider_type == "anthropic-compatible":
-                await _fetch_provider_models_anthropic(
-                    api_base=api_base,
-                    api_key=api_key,
-                    timeout_seconds=request.timeout_seconds,
-                )
-            else:
-                await _fetch_provider_models_openai_compatible(
-                    api_base=api_base,
-                    api_key=api_key,
-                    timeout_seconds=request.timeout_seconds,
-                )
-        except ProviderModelListUnsupportedError:
-            latency_ms = int((time.perf_counter() - started_at) * 1000)
-            return ModelConnectionTestResponse(
-                success=True,
-                message=("Connection successful. Provider model list endpoint is unavailable; please add model IDs manually."),
-                latency_ms=latency_ms,
-            )
-        except Exception as exc:  # pragma: no cover - branch tested through api behavior
-            message = _sanitize_error_message(str(exc), [raw_api_key, api_key])
-            return ModelConnectionTestResponse(
-                success=False,
-                message=f"Provider request failed: {message}",
-            )
-
-        latency_ms = int((time.perf_counter() - started_at) * 1000)
-        return ModelConnectionTestResponse(
-            success=True,
-            message="Connection successful",
-            latency_ms=latency_ms,
-        )
-
-    provider_kwargs = _build_provider_init_kwargs(
-        use=use,
-        model=probe_model,
-        api_key=api_key,
-        api_base=api_base,
-        provider_protocol=request.provider_protocol,
-    )
-
-    try:
-        model_class = resolve_class(use, BaseChatModel)
-        chat_model = model_class(**provider_kwargs)
-    except Exception as exc:  # pragma: no cover - branch tested through api behavior
-        message = _sanitize_error_message(str(exc), [raw_api_key, api_key])
-        return ModelConnectionTestResponse(
-            success=False,
-            message=f"Failed to initialize provider: {message}",
-        )
-
-    started_at = time.perf_counter()
-    try:
-        response = await asyncio.wait_for(
-            asyncio.to_thread(
-                chat_model.invoke,
-                [HumanMessage(content=request.probe_message.strip())],
-            ),
-            timeout=request.timeout_seconds,
-        )
-    except TimeoutError:
-        return ModelConnectionTestResponse(
-            success=False,
-            message=f"Connection timed out after {request.timeout_seconds:.0f}s",
-        )
-    except Exception as exc:  # pragma: no cover - branch tested through api behavior
-        message = _sanitize_error_message(str(exc), [raw_api_key, api_key])
-        return ModelConnectionTestResponse(
-            success=False,
-            message=f"Provider request failed: {message}",
-        )
-
-    latency_ms = int((time.perf_counter() - started_at) * 1000)
-    return ModelConnectionTestResponse(
-        success=True,
-        message="Connection successful",
-        latency_ms=latency_ms,
-        response_preview=_extract_text_preview(response),
-    )
+    return await _test_model_connection(request)
 
 
 @router.post(

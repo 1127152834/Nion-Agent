@@ -835,48 +835,13 @@ class TaskScheduler:
             return fallback
 
     def _execute_workflow(self, task: ScheduledTask, *, trace_id: str, thread_id: str | None) -> dict[str, Any]:
-        if task.mode == TaskMode.EVOLUTION:
-            from src.evolution.service import get_evolution_service
+        if task.mode in {TaskMode.EVOLUTION, TaskMode.HEARTBEAT}:
+            from src.scheduler.mode_registry import get_mode_executor
 
-            report = asyncio.run(
-                asyncio.wait_for(
-                    get_evolution_service().run(task.agent_name),
-                    timeout=task.timeout_seconds,
-                )
-            )
-            payload = report.model_dump(mode="json") if hasattr(report, "model_dump") else report
-            return {
-                "success": True,
-                "mode": task.mode.value,
-                "evolution": payload,
-                "trace_id": trace_id,
-                "triggered_at": datetime.now(UTC).isoformat(),
-            }
-
-        if task.mode == TaskMode.HEARTBEAT:
-            if not task.name.startswith("heartbeat:"):
-                raise ValueError(f"Invalid heartbeat task name: {task.name}")
-            parts = task.name.split(":", 2)
-            if len(parts) != 3 or not parts[2]:
-                raise ValueError(f"Invalid heartbeat task name: {task.name}")
-
-            template_id = parts[2]
-            from src.heartbeat.executor import HeartbeatExecutor
-
-            record = asyncio.run(
-                asyncio.wait_for(
-                    HeartbeatExecutor().execute(template_id, task.agent_name),
-                    timeout=task.timeout_seconds,
-                )
-            )
-            payload = record.model_dump(mode="json") if hasattr(record, "model_dump") else record
-            return {
-                "success": True,
-                "mode": task.mode.value,
-                "heartbeat": payload,
-                "trace_id": trace_id,
-                "triggered_at": datetime.now(UTC).isoformat(),
-            }
+            executor = get_mode_executor(task.mode.value)
+            if executor is None:
+                raise ValueError(f"No executor registered for mode {task.mode.value}")
+            return asyncio.run(executor(task, trace_id))
 
         if task.mode == TaskMode.REMINDER:
             reminder = {
