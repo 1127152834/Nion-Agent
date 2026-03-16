@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from src.config import get_app_config
+from nion.config import get_app_config
 
 
 def _as_string(value: Any) -> str:

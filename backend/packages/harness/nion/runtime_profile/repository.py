@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
-from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from nion.config.paths import VIRTUAL_PATH_PREFIX, get_paths
 
 ExecutionMode = Literal["sandbox", "host"]
 

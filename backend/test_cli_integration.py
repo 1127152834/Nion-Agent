@@ -7,6 +7,7 @@ from pathlib import Path
 # 添加 backend 到 Python 路径
 backend_dir = Path(__file__).parent
 sys.path.insert(0, str(backend_dir))
+sys.path.insert(0, str(backend_dir / "packages" / "harness"))
 
 
 def _cli_tools_loading_ok() -> bool:
@@ -22,7 +23,7 @@ def _cli_tools_loading_ok() -> bool:
     print("测试 1: CLI 工具加载")
     print("=" * 60)
 
-    from src.cli.runtime_tools import get_cli_tools
+    from nion.cli.runtime_tools import get_cli_tools
 
     tools = get_cli_tools(agent_name="lead")
     print(f"✅ 成功加载 {len(tools)} 个 CLI 工具:")
@@ -45,7 +46,7 @@ def _agent_tools_integration_ok() -> bool:
     print("测试 2: Agent 工具系统集成")
     print("=" * 60)
 
-    from src.tools.tools import get_available_tools
+    from nion.tools.tools import get_available_tools
 
     # NOTE: MCP tools may require external servers / async event loops; this
     # integration smoke test should remain offline and deterministic.
@@ -72,7 +73,7 @@ def _marketplace_catalog_ok() -> bool:
     print("测试 3: Marketplace 目录加载")
     print("=" * 60)
 
-    from src.cli.catalog import load_cli_marketplace_catalog
+    from nion.cli.catalog import load_cli_marketplace_catalog
 
     catalog_path = backend_dir / "data" / "cli_marketplace" / "catalog.json"
     catalog = load_cli_marketplace_catalog(catalog_path)
@@ -97,7 +98,7 @@ def _extensions_config_ok() -> bool:
     print("测试 4: 配置文件验证")
     print("=" * 60)
 
-    from src.config.extensions_config import ExtensionsConfig
+    from nion.config.extensions_config import ExtensionsConfig
 
     config = ExtensionsConfig.from_file()
 

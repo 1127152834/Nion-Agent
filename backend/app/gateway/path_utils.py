@@ -4,8 +4,8 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from src.config.paths import get_paths
-from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
+from nion.config.paths import get_paths
+from nion.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
 
 
 def resolve_thread_virtual_path(thread_id: str, virtual_path: str) -> Path:

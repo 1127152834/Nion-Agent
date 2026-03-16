@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from src.agents.memory.policy import MemorySessionPolicy
+from nion.agents.memory.policy import MemorySessionPolicy
 
 
 @dataclass(frozen=True, slots=True)

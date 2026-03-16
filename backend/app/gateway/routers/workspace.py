@@ -9,10 +9,10 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-from src.gateway.path_utils import resolve_thread_virtual_path
-from src.runtime_profile import RuntimeProfileRepository
-from src.sandbox.sandbox_provider import get_sandbox_provider
+from nion.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from app.gateway.path_utils import resolve_thread_virtual_path
+from nion.runtime_profile import RuntimeProfileRepository
+from nion.sandbox.sandbox_provider import get_sandbox_provider
 
 router = APIRouter(prefix="/api/threads/{thread_id}/workspace", tags=["workspace"])
 

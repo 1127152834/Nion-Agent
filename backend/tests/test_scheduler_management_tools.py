@@ -11,11 +11,11 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.config.paths import Paths
-from src.gateway.routers.scheduler import router as scheduler_router
-from src.scheduler.models import AgentStep, ScheduledTask, TriggerConfig, TriggerType, WorkflowStep
-from src.scheduler.service import get_scheduler, shutdown_scheduler
-from src.tools.builtins.scheduler_manage_tools import scheduler_create_task_tool, scheduler_operate_task_tool
+from nion.config.paths import Paths
+from app.gateway.routers.scheduler import router as scheduler_router
+from nion.scheduler.models import AgentStep, ScheduledTask, TriggerConfig, TriggerType, WorkflowStep
+from nion.scheduler.service import get_scheduler, shutdown_scheduler
+from nion.tools.builtins.scheduler_manage_tools import scheduler_create_task_tool, scheduler_operate_task_tool
 
 
 def _make_app() -> FastAPI:
@@ -76,11 +76,11 @@ def _workflow_task() -> ScheduledTask:
 
 def test_scheduler_create_task_tool_creates_reminder_with_runtime_timezone(tmp_path):
     paths = Paths(base_dir=tmp_path)
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         app = _make_app()
         with TestClient(app) as client:
             with patch(
-                "src.tools.builtins.scheduler_manage_tools.httpx.request",
+                "nion.tools.builtins.scheduler_manage_tools.httpx.request",
                 new=_httpx_request_via_test_client(client),
             ):
                 scheduler = get_scheduler()
@@ -109,7 +109,7 @@ def test_scheduler_create_task_tool_creates_reminder_with_runtime_timezone(tmp_p
 
 def test_scheduler_create_task_missing_cron_returns_clarification(tmp_path):
     paths = Paths(base_dir=tmp_path)
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         scheduler = get_scheduler()
         scheduler.start()
 
@@ -129,11 +129,11 @@ def test_scheduler_create_task_missing_cron_returns_clarification(tmp_path):
 
 def test_scheduler_operate_task_requires_confirmation_for_delete(tmp_path):
     paths = Paths(base_dir=tmp_path)
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         app = _make_app()
         with TestClient(app) as client:
             with patch(
-                "src.tools.builtins.scheduler_manage_tools.httpx.request",
+                "nion.tools.builtins.scheduler_manage_tools.httpx.request",
                 new=_httpx_request_via_test_client(client),
             ):
                 scheduler = get_scheduler()

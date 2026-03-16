@@ -13,9 +13,9 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.config.app_config import AppConfig
-from src.config.config_repository import ConfigRepository
-from src.config.config_store import SQLiteConfigStore
+from nion.config.app_config import AppConfig
+from nion.config.config_repository import ConfigRepository
+from nion.config.config_store import SQLiteConfigStore
 
 
 def _config_store_ok() -> bool:

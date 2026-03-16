@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
-from src.gateway.config import get_gateway_config
+from app.gateway.config import get_gateway_config
 
 
 class LangGraphThreadNotFoundError(RuntimeError):

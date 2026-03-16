@@ -11,7 +11,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from src.gateway.routers.workbench.models import (
+from app.gateway.routers.workbench.models import (
     MarketplacePluginDetailResponse,
     MarketplacePluginListItem,
     MarketplacePluginListResponse,

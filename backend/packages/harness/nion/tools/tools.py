@@ -2,9 +2,9 @@ import logging
 
 from langchain.tools import BaseTool
 
-from src.config.app_config import ensure_latest_app_config
-from src.reflection import resolve_variable
-from src.tools.builtins import (
+from nion.config.app_config import ensure_latest_app_config
+from nion.reflection import resolve_variable
+from nion.tools.builtins import (
     ask_clarification_tool,
     mcp_manage_tool,
     memory_compact_tool,
@@ -34,12 +34,12 @@ from src.tools.builtins import (
     task_tool,
     view_image_tool,
 )
-from src.tools.policy import filter_tools_by_policy
+from nion.tools.policy import filter_tools_by_policy
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_WEB_SEARCH_TOOL_USE = "src.community.web_search.tools:web_search_tool"
-DEFAULT_WEB_FETCH_TOOL_USE = "src.community.web_fetch.tools:web_fetch_tool"
+DEFAULT_WEB_SEARCH_TOOL_USE = "nion.community.web_search.tools:web_search_tool"
+DEFAULT_WEB_FETCH_TOOL_USE = "nion.community.web_fetch.tools:web_fetch_tool"
 
 BUILTIN_TOOLS = [
     present_file_tool,
@@ -86,7 +86,7 @@ def get_available_tools(
     """Get all available tools from config.
 
     Note: MCP tools should be initialized at application startup using
-    `initialize_mcp_tools()` from src.mcp module.
+    `initialize_mcp_tools()` from nion.mcp module.
 
     Args:
         groups: Optional list of tool groups to filter by.
@@ -127,8 +127,8 @@ def get_available_tools(
     mcp_tools = []
     if include_mcp:
         try:
-            from src.config.extensions_config import ExtensionsConfig
-            from src.mcp.cache import get_cached_mcp_tools
+            from nion.config.extensions_config import ExtensionsConfig
+            from nion.mcp.cache import get_cached_mcp_tools
 
             extensions_config = ExtensionsConfig.from_file()
             if extensions_config.get_enabled_mcp_servers():
@@ -171,7 +171,7 @@ def get_available_tools(
 
     all_tools = loaded_tools + builtin_tools + mcp_tools
     try:
-        from src.cli.runtime_tools import get_cli_tools
+        from nion.cli.runtime_tools import get_cli_tools
 
         all_tools.extend(get_cli_tools(agent_name=agent_name))
     except Exception as exc:  # noqa: BLE001

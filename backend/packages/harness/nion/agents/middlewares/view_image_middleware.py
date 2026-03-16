@@ -5,8 +5,8 @@ from typing import NotRequired, override
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.runtime import Runtime
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.agents.thread_state import ViewedImageData
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.agents.thread_state import ViewedImageData
 
 
 class ViewImageMiddlewareState(AgentState):

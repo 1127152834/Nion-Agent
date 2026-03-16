@@ -9,9 +9,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from src.config.paths import get_paths
-from src.keychain.encryption import KeychainEncryption
-from src.keychain.models import Credential, CredentialType, SessionState
+from nion.config.paths import get_paths
+from nion.keychain.encryption import KeychainEncryption
+from nion.keychain.models import Credential, CredentialType, SessionState
 
 
 class KeychainManager:

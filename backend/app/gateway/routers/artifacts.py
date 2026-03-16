@@ -8,9 +8,9 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 
-from src.gateway.path_utils import resolve_thread_virtual_path
-from src.runtime_profile import RuntimeProfileRepository
-from src.sandbox.sandbox_provider import get_sandbox_provider
+from app.gateway.path_utils import resolve_thread_virtual_path
+from nion.runtime_profile import RuntimeProfileRepository
+from nion.sandbox.sandbox_provider import get_sandbox_provider
 
 logger = logging.getLogger(__name__)
 

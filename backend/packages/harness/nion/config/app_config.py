@@ -10,24 +10,24 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.config.a2ui_config import A2UIConfig
-from src.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
-from src.config.config_store import (
+from nion.config.a2ui_config import A2UIConfig
+from nion.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
+from nion.config.config_store import (
     DEFAULT_CHECKPOINTER_CONFIG,
     ConfigStoreNotInitializedError,
     create_config_store,
 )
-from src.config.extensions_config import ExtensionsConfig
-from src.config.memory_config import load_memory_config_from_dict
-from src.config.model_config import ModelConfig
-from src.config.retrieval_models_config import RetrievalModelsConfig
-from src.config.sandbox_config import SandboxConfig
-from src.config.skills_config import SkillsConfig
-from src.config.subagents_config import load_subagents_config_from_dict
-from src.config.suggestions_config import load_suggestions_config_from_dict
-from src.config.summarization_config import load_summarization_config_from_dict
-from src.config.title_config import load_title_config_from_dict
-from src.config.tool_config import ToolConfig, ToolGroupConfig
+from nion.config.extensions_config import ExtensionsConfig
+from nion.config.memory_config import load_memory_config_from_dict
+from nion.config.model_config import ModelConfig
+from nion.config.retrieval_models_config import RetrievalModelsConfig
+from nion.config.sandbox_config import SandboxConfig
+from nion.config.skills_config import SkillsConfig
+from nion.config.subagents_config import load_subagents_config_from_dict
+from nion.config.suggestions_config import load_suggestions_config_from_dict
+from nion.config.summarization_config import load_summarization_config_from_dict
+from nion.config.title_config import load_title_config_from_dict
+from nion.config.tool_config import ToolConfig, ToolGroupConfig
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -143,7 +143,7 @@ class AppConfig(BaseModel):
         strict_env: bool = False,
     ) -> tuple[Self, str | None, Path | None, str]:
         """Load config from store first, fallback only on first initialization paths."""
-        from src.config.migration import migrate_config_to_sqlite
+        from nion.config.migration import migrate_config_to_sqlite
 
         store = create_config_store()
 
@@ -178,7 +178,7 @@ class AppConfig(BaseModel):
                 "models": [],
                 "tools": [],
                 "tool_groups": [],
-                "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "nion.sandbox.local:LocalSandboxProvider"},
                 "checkpointer": {"type": "sqlite", "connection_string": "checkpoints.db"},
                 "extensions": ExtensionsConfig.from_file().model_dump(),
             }

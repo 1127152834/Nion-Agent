@@ -1,6 +1,6 @@
 """Test subagent scope integration."""
 
-from src.subagents import SubagentConfig, SubagentScopes, get_subagent_config
+from nion.subagents import SubagentConfig, SubagentScopes, get_subagent_config
 
 
 def test_researcher_has_read_only_memory_scope():

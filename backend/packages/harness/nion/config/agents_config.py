@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from src.config.paths import get_paths
+from nion.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 

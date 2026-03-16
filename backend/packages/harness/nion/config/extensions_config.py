@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.config.paths import get_paths
+from nion.config.paths import get_paths
 
 
 class McpOAuthConfig(BaseModel):

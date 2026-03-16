@@ -2,9 +2,9 @@
 
 from datetime import datetime
 
-from src.evolution.analyzer import EvolutionAnalyzer
-from src.evolution.models import EvolutionReport, EvolutionSettings, EvolutionSuggestion, ReportStatus, SuggestionStatus
-from src.evolution.store import (
+from app.evolution.analyzer import EvolutionAnalyzer
+from app.evolution.models import EvolutionReport, EvolutionSettings, EvolutionSuggestion, ReportStatus, SuggestionStatus
+from app.evolution.store import (
     get_report,
     load_reports,
     load_settings,
@@ -33,9 +33,9 @@ class EvolutionService:
 
         from datetime import UTC, datetime
 
-        from src.scheduler.models import ScheduledTask, TaskMode, TriggerConfig, TriggerType
-        from src.scheduler.runner import TaskAlreadyRunningError
-        from src.scheduler.service import get_scheduler
+        from nion.scheduler.models import ScheduledTask, TaskMode, TriggerConfig, TriggerType
+        from nion.scheduler.runner import TaskAlreadyRunningError
+        from nion.scheduler.service import get_scheduler
 
         scheduler = get_scheduler()
         scheduler.start()

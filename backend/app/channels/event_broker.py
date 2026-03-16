@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
-from src.channels.repository import SUPPORTED_CHANNEL_PLATFORMS
+from app.channels.repository import SUPPORTED_CHANNEL_PLATFORMS
 
 
 def _utcnow() -> str:

@@ -17,7 +17,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from src.gateway.routers.workbench._helpers import (
+from app.gateway.routers.workbench._helpers import (
     DEFAULT_CWD,
     MAX_SESSIONS,
     SESSION_TTL_SECONDS,
@@ -25,7 +25,7 @@ from src.gateway.routers.workbench._helpers import (
     _sse,
     _utcnow_iso,
 )
-from src.gateway.routers.workbench.models import (
+from app.gateway.routers.workbench.models import (
     WorkbenchSessionCreateRequest,
     WorkbenchSessionCreateResponse,
     WorkbenchSessionStopResponse,

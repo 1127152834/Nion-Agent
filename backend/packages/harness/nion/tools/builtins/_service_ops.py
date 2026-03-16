@@ -3,7 +3,7 @@
 This module exists to break *harness -> gateway(app)* reverse dependencies.
 
 Rules:
-- Must NOT import FastAPI or any `src.gateway.*` modules.
+- Must NOT import FastAPI or any `app.gateway.*` modules.
 - Exposes Pydantic models and async functions that both:
   1) Gateway routers can wrap (HTTP adapters)
   2) Harness-layer code (tools/client) can call directly
@@ -27,13 +27,13 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
-from src.config.paths import get_paths
-from src.reflection import resolve_class
-from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
-from src.skills import Skill, load_skills
-from src.skills.loader import get_skills_root_path
-from src.skills.validation import _validate_skill_frontmatter
+from nion.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
+from nion.config.paths import get_paths
+from nion.reflection import resolve_class
+from nion.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
+from nion.skills import Skill, load_skills
+from nion.skills.loader import get_skills_root_path
+from nion.skills.validation import _validate_skill_frontmatter
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +251,7 @@ async def update_skill(skill_name: str, request: SkillUpdateRequest) -> SkillRes
 def _resolve_thread_virtual_path(thread_id: str, virtual_path: str) -> Path:
     """Resolve a thread virtual path to a filesystem path.
 
-    This is a FastAPI-free equivalent of `src.gateway.path_utils.resolve_thread_virtual_path`,
+    This is a FastAPI-free equivalent of `app.gateway.path_utils.resolve_thread_virtual_path`,
     suitable for harness-layer usage.
 
     Raises:
@@ -764,4 +764,3 @@ async def test_model_connection(
         latency_ms=latency_ms,
         response_preview=_extract_text_preview(response),
     )
-

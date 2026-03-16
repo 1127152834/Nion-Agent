@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.config.paths import Paths
+from nion.config.paths import Paths
 
 
 def test_base_dir_prefers_constructor_argument(monkeypatch, tmp_path: Path) -> None:

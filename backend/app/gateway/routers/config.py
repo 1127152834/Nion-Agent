@@ -5,8 +5,8 @@ import logging
 import yaml
 from fastapi import APIRouter, HTTPException
 
-from src.config.config_repository import ConfigRepository, ConfigValidationError, VersionConflictError
-from src.gateway.schemas import (
+from nion.config.config_repository import ConfigRepository, ConfigValidationError, VersionConflictError
+from app.gateway.schemas import (
     ConfigReadResponse,
     ConfigRuntimeStatusResponse,
     ConfigSchemaResponse,

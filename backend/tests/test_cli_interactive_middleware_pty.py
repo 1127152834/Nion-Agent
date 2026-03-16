@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from src.agents.middlewares.cli_interactive_middleware import CLIInteractiveMiddleware
+from nion.agents.middlewares.cli_interactive_middleware import CLIInteractiveMiddleware
 
 
 def test_cli_interactive_middleware_emits_terminal_payload_for_pty(monkeypatch):

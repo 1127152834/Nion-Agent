@@ -6,8 +6,8 @@ from typing import Literal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from src.gateway.config import get_gateway_config
-from src.gateway.langgraph_client import get_langgraph_upstream_base_url
+from app.gateway.config import get_gateway_config
+from app.gateway.langgraph_client import get_langgraph_upstream_base_url
 
 router = APIRouter(prefix="/api/runtime/topology", tags=["runtime"])
 

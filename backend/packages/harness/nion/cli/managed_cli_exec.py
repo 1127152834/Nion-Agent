@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.cli.manifests import load_cli_install_manifest
-from src.config.paths import get_paths
+from nion.cli.manifests import load_cli_install_manifest
+from nion.config.paths import get_paths
 
 
 def resolve_managed_cli_command(tool_id: str, argv: list[str]) -> list[str]:

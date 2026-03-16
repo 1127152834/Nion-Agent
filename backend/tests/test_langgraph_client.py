@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from src.gateway.langgraph_client import cancel_active_thread_runs
+from app.gateway.langgraph_client import cancel_active_thread_runs
 
 
 class _MockResponse:

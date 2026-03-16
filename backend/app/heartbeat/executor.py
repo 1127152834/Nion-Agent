@@ -3,9 +3,9 @@
 import asyncio
 from datetime import datetime
 
-from src.client import NionClient
-from src.heartbeat.models import HeartbeatLogRecord, HeartbeatResultType
-from src.heartbeat.store import append_log
+from nion.client import NionClient
+from app.heartbeat.models import HeartbeatLogRecord, HeartbeatResultType
+from app.heartbeat.store import append_log
 
 
 class HeartbeatExecutor:
@@ -74,8 +74,8 @@ class HeartbeatExecutor:
 
     async def _execute_memory_maintenance(self, agent_name: str) -> dict:
         """Execute memory maintenance."""
-        from src.agents.memory.maintenance import compact_memory, get_usage_stats, rebuild_memory
-        from src.agents.memory.registry import get_memory_registry
+        from nion.agents.memory.maintenance import compact_memory, get_usage_stats, rebuild_memory
+        from nion.agents.memory.registry import get_memory_registry
 
         # Get Memory Provider
         registry = get_memory_registry()
@@ -122,7 +122,7 @@ class HeartbeatExecutor:
 
     async def _execute_memory_governance(self, agent_name: str) -> dict:
         """Execute memory governance batch and refresh agent catalog."""
-        from src.agents.memory.governor import get_memory_governor
+        from nion.agents.memory.governor import get_memory_governor
 
         if agent_name != "_default":
             # Governance is global shared-layer maintenance.
@@ -156,8 +156,8 @@ class HeartbeatExecutor:
         Returns:
             Identity check result dict
         """
-        from src.agents.soul.resolver import SoulResolver
-        from src.agents.soul.summarizer import SoulSummarizer
+        from nion.agents.soul.resolver import SoulResolver
+        from nion.agents.soul.summarizer import SoulSummarizer
 
         resolver = SoulResolver()
         summarizer = SoulSummarizer()
@@ -233,7 +233,7 @@ USER.md 摘要：
         Returns:
             Daily review result dict
         """
-        from src.agents.memory.registry import get_memory_registry
+        from nion.agents.memory.registry import get_memory_registry
 
         # Get today's memories
         registry = get_memory_registry()
@@ -282,7 +282,7 @@ USER.md 摘要：
         Returns:
             Weekly reset result dict
         """
-        from src.agents.memory.registry import get_memory_registry
+        from nion.agents.memory.registry import get_memory_registry
 
         # Get this week's memories
         registry = get_memory_registry()

@@ -20,7 +20,7 @@ def _get_config_mtime() -> float | None:
     Returns:
         The modification time as a float, or None if the file doesn't exist.
     """
-    from src.config.extensions_config import ExtensionsConfig
+    from nion.config.extensions_config import ExtensionsConfig
 
     config_path = ExtensionsConfig.resolve_config_path()
     if config_path and config_path.exists():
@@ -68,7 +68,7 @@ async def initialize_mcp_tools() -> list[BaseTool]:
             logger.info("MCP tools already initialized")
             return _mcp_tools_cache or []
 
-        from src.mcp.tools import get_mcp_tools
+        from nion.mcp.tools import get_mcp_tools
 
         logger.info("Initializing MCP tools...")
         _mcp_tools_cache = await get_mcp_tools()

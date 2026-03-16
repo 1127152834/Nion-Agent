@@ -28,7 +28,7 @@ except Exception:  # noqa: BLE001
 
 from langgraph.runtime import Runtime
 
-from src.tools.policy import is_tool_enabled
+from nion.tools.policy import is_tool_enabled
 
 logger = logging.getLogger(__name__)
 

@@ -7,12 +7,12 @@ from pathlib import Path
 from langchain.tools import BaseTool
 from langgraph.typing import ContextT
 
-from src.agents.thread_state import ThreadState
-from src.cli.manifests import load_cli_install_manifest
-from src.config.extensions_config import ExtensionsConfig
-from src.config.paths import CLIS_VIRTUAL_ROOT
-from src.sandbox.exceptions import SandboxError
-from src.sandbox.tools import (
+from nion.agents.thread_state import ThreadState
+from nion.cli.manifests import load_cli_install_manifest
+from nion.config.extensions_config import ExtensionsConfig
+from nion.config.paths import CLIS_VIRTUAL_ROOT
+from nion.sandbox.exceptions import SandboxError
+from nion.sandbox.tools import (
     ensure_sandbox_initialized,
     ensure_thread_directories_exist,
     get_execution_mode,
@@ -21,7 +21,7 @@ from src.sandbox.tools import (
     prefix_command_with_workdir,
     replace_virtual_paths_in_command,
 )
-from src.tools.builtins.langchain_compat import ToolRuntime, tool
+from nion.tools.builtins.langchain_compat import ToolRuntime, tool
 
 _BLOCKED_HOST_PREFIXES = ("/Users/", "/home/", "/private/", "C:\\", "D:\\", "E:\\")
 _MAX_TOOL_OUTPUT_CHARS = 120_000

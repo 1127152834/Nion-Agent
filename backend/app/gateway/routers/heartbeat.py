@@ -3,8 +3,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.heartbeat.models import HeartbeatLogRecord, HeartbeatSettings, HeartbeatTemplate
-from src.heartbeat.service import get_heartbeat_service
+from app.heartbeat.models import HeartbeatLogRecord, HeartbeatSettings, HeartbeatTemplate
+from app.heartbeat.service import get_heartbeat_service
 
 router = APIRouter(prefix="/api/heartbeat", tags=["heartbeat"])
 

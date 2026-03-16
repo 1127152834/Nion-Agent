@@ -7,15 +7,15 @@ from typing import Any, Literal
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
-from src.agents.memory.actions import (
+from nion.agents.memory.actions import (
     compact_memory_action,
     forget_memory_action,
     query_memory_action,
     store_memory_action,
 )
-from src.agents.memory.registry import get_default_memory_provider
-from src.agents.memory.scope import resolve_agent_for_memory_scope
-from src.config.memory_config import get_memory_config
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.agents.memory.scope import resolve_agent_for_memory_scope
+from nion.config.memory_config import get_memory_config
 
 router = APIRouter(prefix="/api/openviking", tags=["openviking"])
 

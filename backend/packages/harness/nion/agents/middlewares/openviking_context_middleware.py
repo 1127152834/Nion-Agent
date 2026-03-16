@@ -8,11 +8,11 @@ from typing import Any, NotRequired, override
 from langchain_core.messages import SystemMessage
 from langgraph.runtime import Runtime
 
-from src.agents.memory.core import MemoryReadRequest
-from src.agents.memory.registry import get_default_memory_provider
-from src.agents.memory.scope import normalize_agent_name_for_memory
-from src.config.app_config import get_app_config
-from src.config.memory_config import get_memory_config
+from nion.agents.memory.core import MemoryReadRequest
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.agents.memory.scope import normalize_agent_name_for_memory
+from nion.config.app_config import get_app_config
+from nion.config.memory_config import get_memory_config
 
 try:
     from langchain.agents import AgentState

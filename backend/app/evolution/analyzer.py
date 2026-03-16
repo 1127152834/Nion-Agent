@@ -1,6 +1,6 @@
 """Evolution analyzer."""
 
-from src.evolution.models import EvolutionSuggestion, SuggestionPriority, SuggestionType
+from app.evolution.models import EvolutionSuggestion, SuggestionPriority, SuggestionType
 
 
 class EvolutionAnalyzer:
@@ -26,8 +26,8 @@ class EvolutionAnalyzer:
 
     async def _analyze_memory(self, report_id: str, agent_name: str) -> list[EvolutionSuggestion]:
         """Analyze Memory and generate suggestions."""
-        from src.agents.memory.maintenance import get_usage_stats
-        from src.agents.memory.registry import get_memory_registry
+        from nion.agents.memory.maintenance import get_usage_stats
+        from nion.agents.memory.registry import get_memory_registry
 
         suggestions: list[EvolutionSuggestion] = []
 
@@ -59,7 +59,7 @@ class EvolutionAnalyzer:
 
     async def _analyze_soul(self, report_id: str, agent_name: str) -> list[EvolutionSuggestion]:
         """Analyze Soul and generate suggestions."""
-        from src.agents.soul.resolver import SoulResolver
+        from nion.agents.soul.resolver import SoulResolver
 
         suggestions: list[EvolutionSuggestion] = []
 
@@ -103,7 +103,7 @@ class EvolutionAnalyzer:
 
     async def _analyze_agent(self, report_id: str, agent_name: str) -> list[EvolutionSuggestion]:
         """Analyze Agent and generate suggestions."""
-        from src.heartbeat.service import get_heartbeat_service
+        from app.heartbeat.service import get_heartbeat_service
 
         suggestions: list[EvolutionSuggestion] = []
 

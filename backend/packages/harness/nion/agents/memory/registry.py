@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.agents.memory.core import MemoryProvider
+from nion.agents.memory.core import MemoryProvider
 
 
 class MemoryRegistry:
@@ -22,9 +22,9 @@ class MemoryRegistry:
 
 
 def _build_default_registry() -> MemoryRegistry:
-    from src.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
-    from src.agents.memory.openviking_provider import OpenVikingMemoryProvider
-    from src.agents.memory.openviking_runtime import OpenVikingRuntime
+    from nion.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
+    from nion.agents.memory.openviking_provider import OpenVikingMemoryProvider
+    from nion.agents.memory.openviking_runtime import OpenVikingRuntime
 
     # Hard-cut safety: always remove legacy/structured artifacts on runtime init.
     ensure_legacy_memory_removed()

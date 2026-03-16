@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agents.checkpointer import get_checkpointer, reset_checkpointer
-from src.config.app_config import AppConfig
-from src.config.checkpointer_config import (
+from nion.agents.checkpointer import get_checkpointer, reset_checkpointer
+from nion.config.app_config import AppConfig
+from nion.config.checkpointer_config import (
     CheckpointerConfig,
     get_checkpointer_config,
     load_checkpointer_config_from_dict,
@@ -22,39 +22,39 @@ def reset_state():
     """Reset singleton state before each test."""
     set_checkpointer_config(None)
     reset_checkpointer()
-    original_client_module = sys.modules.get("src.client")
+    original_client_module = sys.modules.get("nion.client")
     yield
     set_checkpointer_config(None)
     reset_checkpointer()
-    # Avoid leaking dynamically reloaded src.client into other test modules.
+    # Avoid leaking dynamically reloaded nion.client into other test modules.
     if original_client_module is None:
-        sys.modules.pop("src.client", None)
+        sys.modules.pop("nion.client", None)
     else:
-        sys.modules["src.client"] = original_client_module
+        sys.modules["nion.client"] = original_client_module
 
 
 def _load_client_module():
-    sys.modules.pop("src.client", None)
+    sys.modules.pop("nion.client", None)
 
-    lead_agent_pkg = types.ModuleType("src.agents.lead_agent")
+    lead_agent_pkg = types.ModuleType("nion.agents.lead_agent")
     lead_agent_pkg.__path__ = []
     lead_agent_pkg.make_lead_agent = MagicMock()
 
-    lead_agent_agent = types.ModuleType("src.agents.lead_agent.agent")
+    lead_agent_agent = types.ModuleType("nion.agents.lead_agent.agent")
     lead_agent_agent._build_middlewares = MagicMock()
 
-    lead_agent_prompt = types.ModuleType("src.agents.lead_agent.prompt")
+    lead_agent_prompt = types.ModuleType("nion.agents.lead_agent.prompt")
     lead_agent_prompt.apply_prompt_template = MagicMock(return_value="")
 
     with patch.dict(
         sys.modules,
         {
-            "src.agents.lead_agent": lead_agent_pkg,
-            "src.agents.lead_agent.agent": lead_agent_agent,
-            "src.agents.lead_agent.prompt": lead_agent_prompt,
+            "nion.agents.lead_agent": lead_agent_pkg,
+            "nion.agents.lead_agent.agent": lead_agent_agent,
+            "nion.agents.lead_agent.prompt": lead_agent_prompt,
         },
     ):
-        return importlib.import_module("src.client")
+        return importlib.import_module("nion.client")
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +180,7 @@ class TestAppConfigLoadsCheckpointer:
                 "models": [],
                 "tools": [],
                 "tool_groups": [],
-                "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
+                "sandbox": {"use": "nion.sandbox.local:LocalSandboxProvider"},
             },
             strict_env=False,
         )

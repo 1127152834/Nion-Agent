@@ -1,7 +1,7 @@
 """Writer subagent configuration."""
 
-from src.subagents.config import SubagentConfig
-from src.subagents.scopes import SubagentScopes
+from nion.subagents.config import SubagentConfig
+from nion.subagents.scopes import SubagentScopes
 
 WRITER_CONFIG = SubagentConfig(
     name="writer",

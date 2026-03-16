@@ -11,9 +11,9 @@ from fastapi import APIRouter, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from src.scheduler import store
-from src.scheduler.events import SchedulerEvent, get_scheduler_event_hub
-from src.scheduler.models import (
+from nion.scheduler import store
+from nion.scheduler.events import SchedulerEvent, get_scheduler_event_hub
+from nion.scheduler.models import (
     RetryPolicy,
     ScheduledTask,
     TaskExecutionRecord,
@@ -22,8 +22,8 @@ from src.scheduler.models import (
     TriggerType,
     WorkflowStep,
 )
-from src.scheduler.runner import TaskAlreadyRunningError
-from src.scheduler.service import get_scheduler
+from nion.scheduler.runner import TaskAlreadyRunningError
+from nion.scheduler.service import get_scheduler
 
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 

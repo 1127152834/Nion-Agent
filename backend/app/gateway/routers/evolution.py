@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, HTTPException
 
-from src.evolution.models import EvolutionReport, EvolutionSettings, EvolutionSuggestion, SuggestionStatus
-from src.evolution.service import get_evolution_service
+from app.evolution.models import EvolutionReport, EvolutionSettings, EvolutionSuggestion, SuggestionStatus
+from app.evolution.service import get_evolution_service
 
 router = APIRouter(prefix="/api/evolution", tags=["evolution"])
 

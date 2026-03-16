@@ -13,9 +13,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from src.config.extensions_config import ExtensionsConfig
-from src.gateway.build_info import PROCESS_START_TIME
-from src.tools.builtins._service_ops import (
+from nion.config.extensions_config import ExtensionsConfig
+from app.gateway.build_info import PROCESS_START_TIME
+from nion.tools.builtins._service_ops import (
     McpConfigResponse,
     McpConfigUpdateRequest,
     McpServerConfigResponse,
@@ -279,7 +279,7 @@ async def probe_mcp_server(server_name: str) -> McpServerProbeResponse:
         return McpServerProbeResponse(success=False, message="Server is disabled", tool_count=0, tools=[])
 
     try:
-        from src.mcp.client import build_server_params
+        from nion.mcp.client import build_server_params
 
         params = build_server_params(server_name, server_config)
     except ValueError as exc:
@@ -347,7 +347,7 @@ async def probe_mcp_server(server_name: str) -> McpServerProbeResponse:
     try:
         from langchain_mcp_adapters.client import MultiServerMCPClient
 
-        from src.mcp.oauth import build_oauth_tool_interceptor, get_initial_oauth_headers
+        from nion.mcp.oauth import build_oauth_tool_interceptor, get_initial_oauth_headers
 
         # Inject initial OAuth headers for discovery/session init.
         initial_oauth_headers = await get_initial_oauth_headers(config)
@@ -509,7 +509,7 @@ async def check_mcp_prerequisites(commands: str | None = None) -> McpPrerequisit
     if not commands:
         return McpPrerequisiteResponse(commands={})
 
-    from src.mcp.toolchains import resolve_managed_command
+    from nion.mcp.toolchains import resolve_managed_command
 
     result: dict[str, McpPrerequisiteStatus] = {}
     for raw in commands.split(","):
@@ -536,7 +536,7 @@ async def check_mcp_prerequisites(commands: str | None = None) -> McpPrerequisit
 )
 async def ensure_mcp_node_toolchain() -> McpToolchainEnsureResponse:
     try:
-        from src.mcp.toolchains import ensure_node_toolchain
+        from nion.mcp.toolchains import ensure_node_toolchain
 
         toolchain, installed_now = await ensure_node_toolchain()
     except Exception as exc:  # noqa: BLE001

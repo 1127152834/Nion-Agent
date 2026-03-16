@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 
-from src.config.app_config import ensure_latest_app_config
-from src.reflection import resolve_class
-from src.sandbox.sandbox import Sandbox
+from nion.config.app_config import ensure_latest_app_config
+from nion.reflection import resolve_class
+from nion.sandbox.sandbox import Sandbox
 
 
 class SandboxProvider(ABC):
@@ -56,7 +56,7 @@ def get_sandbox_provider(**kwargs) -> SandboxProvider:
     sandbox_use = str(getattr(config.sandbox, "use", "") or "")
 
     if bool(getattr(config.sandbox, "strict_mode", False)) and "LocalSandboxProvider" in sandbox_use:
-        raise RuntimeError("Strict sandbox mode requires a container-based sandbox provider. Switch sandbox.use to src.community.aio_sandbox:AioSandboxProvider.")
+        raise RuntimeError("Strict sandbox mode requires a container-based sandbox provider. Switch sandbox.use to nion.community.aio_sandbox:AioSandboxProvider.")
 
     # Reload provider when the `sandbox.use` config changes.
     if _default_sandbox_provider is None or _default_sandbox_provider_use != sandbox_use:

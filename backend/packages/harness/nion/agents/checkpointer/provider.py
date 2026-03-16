@@ -7,7 +7,7 @@ Supported backends: memory, sqlite.
 
 Usage::
 
-    from src.agents.checkpointer.provider import get_checkpointer, checkpointer_context
+    from nion.agents.checkpointer.provider import get_checkpointer, checkpointer_context
 
     # Singleton — reused across calls, closed on process exit
     cp = get_checkpointer()
@@ -25,9 +25,9 @@ from collections.abc import Iterator
 
 from langgraph.types import Checkpointer
 
-from src.config.app_config import get_app_config
-from src.config.checkpointer_config import CheckpointerConfig
-from src.config.paths import resolve_path
+from nion.config.app_config import get_app_config
+from nion.config.checkpointer_config import CheckpointerConfig
+from nion.config.paths import resolve_path
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ def get_checkpointer() -> Checkpointer | None:
     if _checkpointer is not None:
         return _checkpointer
 
-    from src.config.checkpointer_config import get_checkpointer_config
+    from nion.config.checkpointer_config import get_checkpointer_config
 
     config = _get_effective_checkpointer_config(get_checkpointer_config())
 

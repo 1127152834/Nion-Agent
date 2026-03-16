@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.sandbox.local.local_sandbox import LocalSandbox
+from nion.sandbox.local.local_sandbox import LocalSandbox
 
 
 @pytest.mark.parametrize(

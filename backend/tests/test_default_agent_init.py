@@ -4,8 +4,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
-from src.config.paths import Paths
+from nion.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
+from nion.config.paths import Paths
 
 
 def test_ensure_default_agent_creates_files():
@@ -14,10 +14,10 @@ def test_ensure_default_agent_creates_files():
         paths = Paths(base_dir=tmpdir)
 
         # Monkey patch get_paths to use temp directory
-        import src.config.default_agent
+        import nion.config.default_agent
 
-        original_get_paths = src.config.default_agent.get_paths
-        src.config.default_agent.get_paths = lambda: paths
+        original_get_paths = nion.config.default_agent.get_paths
+        nion.config.default_agent.get_paths = lambda: paths
 
         try:
             ensure_default_agent()
@@ -49,7 +49,7 @@ def test_ensure_default_agent_creates_files():
             assert len(identity_file.read_text(encoding="utf-8")) > 0
 
         finally:
-            src.config.default_agent.get_paths = original_get_paths
+            nion.config.default_agent.get_paths = original_get_paths
 
 
 def test_ensure_default_agent_idempotent():
@@ -57,10 +57,10 @@ def test_ensure_default_agent_idempotent():
     with tempfile.TemporaryDirectory() as tmpdir:
         paths = Paths(base_dir=tmpdir)
 
-        import src.config.default_agent
+        import nion.config.default_agent
 
-        original_get_paths = src.config.default_agent.get_paths
-        src.config.default_agent.get_paths = lambda: paths
+        original_get_paths = nion.config.default_agent.get_paths
+        nion.config.default_agent.get_paths = lambda: paths
 
         try:
             # First call creates the agent
@@ -75,7 +75,7 @@ def test_ensure_default_agent_idempotent():
             assert first_mtime == second_mtime
 
         finally:
-            src.config.default_agent.get_paths = original_get_paths
+            nion.config.default_agent.get_paths = original_get_paths
 
 
 def test_paths_agent_config_file():

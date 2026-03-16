@@ -7,10 +7,10 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 from langgraph.typing import ContextT
 
-from src.agents.thread_state import ThreadState
-from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-from src.sandbox.sandbox_provider import get_sandbox_provider
-from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
+from nion.agents.thread_state import ThreadState
+from nion.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from nion.sandbox.sandbox_provider import get_sandbox_provider
+from nion.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 
 OUTPUTS_VIRTUAL_PREFIX = f"{VIRTUAL_PATH_PREFIX}/outputs"
 

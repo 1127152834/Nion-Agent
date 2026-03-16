@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 from langchain.tools import tool
 
-from src.community._search_utils import (
+from nion.community._search_utils import (
     _as_dict,
     _as_positive_int,
     _as_string,
@@ -16,7 +16,7 @@ from src.community._search_utils import (
     _safe_exc_message,
     _split_items,
 )
-from src.config import get_app_config
+from nion.config import get_app_config
 
 logger = logging.getLogger(__name__)
 

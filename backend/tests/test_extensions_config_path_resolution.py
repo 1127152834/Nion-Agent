@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from src.config.extensions_config import ExtensionsConfig
+from nion.config.extensions_config import ExtensionsConfig
 
 
 def _reset_paths_singleton(monkeypatch: pytest.MonkeyPatch) -> None:
     # get_paths() caches Paths() and would otherwise ignore test-time env changes.
-    import src.config.paths as paths_module
+    import nion.config.paths as paths_module
 
     paths_module._paths = None  # type: ignore[attr-defined]
 

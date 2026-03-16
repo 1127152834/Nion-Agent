@@ -10,7 +10,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from src.retrieval_models import RetrievalModelsError, RetrievalModelsService
+from app.retrieval_models import RetrievalModelsError, RetrievalModelsService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/retrieval-models", tags=["retrieval-models"])

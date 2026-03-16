@@ -7,8 +7,8 @@ import json
 import re
 from typing import Any
 
-from src.client import NionClient
-from src.scheduler.models import AgentStep, CompletionCriteria, CompletionCriteriaType, WorkflowStep
+from nion.client import NionClient
+from nion.scheduler.models import AgentStep, CompletionCriteria, CompletionCriteriaType, WorkflowStep
 
 
 class WorkflowExecutor:

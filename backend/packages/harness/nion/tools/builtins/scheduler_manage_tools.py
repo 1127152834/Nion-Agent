@@ -12,11 +12,11 @@ from urllib.parse import quote
 import httpx
 from langgraph.typing import ContextT
 
-from src.agents.thread_state import ThreadState
-from src.scheduler.models import AgentStep, ScheduledTask, TaskMode, TriggerConfig, WorkflowStep
-from src.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
-from src.tools.builtins.langchain_compat import ToolRuntime, tool
-from src.tools.builtins.management_response import build_action_card, build_management_response
+from nion.agents.thread_state import ThreadState
+from nion.scheduler.models import AgentStep, ScheduledTask, TaskMode, TriggerConfig, WorkflowStep
+from nion.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
+from nion.tools.builtins.langchain_compat import ToolRuntime, tool
+from nion.tools.builtins.management_response import build_action_card, build_management_response
 
 
 def _runtime_agent_name(runtime: ToolRuntime[ContextT, ThreadState] | None) -> str:
@@ -52,7 +52,7 @@ def _resolve_gateway_base_url() -> str:
     # Desktop runtime writes ports into config.db; reuse it to avoid hard-coding 8001.
     if (os.getenv("NION_DESKTOP_RUNTIME") or "").strip():
         try:
-            from src.config.config_repository import ConfigRepository
+            from nion.config.config_repository import ConfigRepository
 
             config, _, _ = ConfigRepository().read()
             desktop = config.get("desktop") if isinstance(config, dict) else None

@@ -1,6 +1,6 @@
-from src.sandbox.local.local_sandbox import LocalSandbox
-from src.sandbox.sandbox import Sandbox
-from src.sandbox.sandbox_provider import SandboxProvider
+from nion.sandbox.local.local_sandbox import LocalSandbox
+from nion.sandbox.sandbox import Sandbox
+from nion.sandbox.sandbox_provider import SandboxProvider
 
 _singleton: LocalSandbox | None = None
 
@@ -21,7 +21,7 @@ class LocalSandboxProvider(SandboxProvider):
         try:
             import os
 
-            from src.config import get_app_config
+            from nion.config import get_app_config
 
             config = get_app_config()
             python_path = config.sandbox.python_path
@@ -50,7 +50,7 @@ class LocalSandboxProvider(SandboxProvider):
 
         # Map global managed CLIs directory so tools can execute shims using /mnt/clis/*
         try:
-            from src.config.paths import CLIS_VIRTUAL_ROOT, get_paths
+            from nion.config.paths import CLIS_VIRTUAL_ROOT, get_paths
 
             clis_dir = get_paths().clis_root_dir
             clis_dir.mkdir(parents=True, exist_ok=True)
@@ -61,7 +61,7 @@ class LocalSandboxProvider(SandboxProvider):
 
         # Map skills container path to local skills directory
         try:
-            from src.config import get_app_config
+            from nion.config import get_app_config
 
             config = get_app_config()
             skills_path = config.skills.get_skills_path()

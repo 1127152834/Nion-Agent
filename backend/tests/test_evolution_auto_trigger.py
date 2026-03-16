@@ -4,17 +4,17 @@ import asyncio
 import time
 from unittest.mock import patch
 
-from src.config.paths import Paths
-from src.evolution.models import EvolutionSettings
-from src.evolution.service import EvolutionService
-from src.scheduler import store as scheduler_store
-from src.scheduler.mode_registry import register_mode_executor
-from src.scheduler.service import get_scheduler, shutdown_scheduler
+from nion.config.paths import Paths
+from app.evolution.models import EvolutionSettings
+from app.evolution.service import EvolutionService
+from nion.scheduler import store as scheduler_store
+from nion.scheduler.mode_registry import register_mode_executor
+from nion.scheduler.service import get_scheduler, shutdown_scheduler
 
 
 class _StubEvolutionService:
     async def run(self, agent_name: str = "_default"):
-        from src.evolution.models import EvolutionReport, ReportStatus
+        from app.evolution.models import EvolutionReport, ReportStatus
 
         return EvolutionReport(status=ReportStatus.COMPLETED, duration_seconds=0, summary="ok")
 
@@ -22,13 +22,13 @@ class _StubEvolutionService:
 def test_evolution_auto_trigger_creates_system_task_and_runs_once(tmp_path):
     paths = Paths(base_dir=tmp_path)
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
-        with patch("src.evolution.store.get_paths", return_value=paths):
-            with patch("src.evolution.service.get_evolution_service", return_value=_StubEvolutionService()):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
+        with patch("app.evolution.store.get_paths", return_value=paths):
+            with patch("app.evolution.service.get_evolution_service", return_value=_StubEvolutionService()):
                 async def _evolution_executor(task, trace_id):
                     from datetime import UTC, datetime
 
-                    from src.evolution.service import get_evolution_service
+                    from app.evolution.service import get_evolution_service
 
                     report = await asyncio.wait_for(
                         get_evolution_service().run(task.agent_name),

@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
-from src.agents.middlewares.a2ui_middleware import A2UIMiddleware
+from nion.agents.middlewares.a2ui_middleware import A2UIMiddleware
 
 
 def _noop_handler(_req):

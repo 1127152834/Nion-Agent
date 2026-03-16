@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import src.sandbox.tools as tools_module
+import nion.sandbox.tools as tools_module
 
 
 def test_bash_tool_runs_from_local_thread_workspace(monkeypatch) -> None:

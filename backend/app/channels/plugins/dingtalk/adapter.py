@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.channels.webhook_service import IncomingWebhookEvent
+from app.channels.webhook_service import IncomingWebhookEvent
 
 
 @dataclass(slots=True)

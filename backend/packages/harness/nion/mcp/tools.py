@@ -4,9 +4,9 @@ import logging
 
 from langchain_core.tools import BaseTool
 
-from src.config.extensions_config import ExtensionsConfig
-from src.mcp.client import build_servers_config
-from src.mcp.oauth import build_oauth_tool_interceptor, get_initial_oauth_headers
+from nion.config.extensions_config import ExtensionsConfig
+from nion.mcp.client import build_servers_config
+from nion.mcp.oauth import build_oauth_tool_interceptor, get_initial_oauth_headers
 
 logger = logging.getLogger(__name__)
 

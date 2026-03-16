@@ -8,16 +8,16 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.config.paths import Paths
-from src.gateway.routers.scheduler import router
-from src.scheduler.mode_registry import register_mode_executor
-from src.scheduler.models import ScheduledTask
-from src.scheduler.service import get_scheduler, shutdown_scheduler
+from nion.config.paths import Paths
+from app.gateway.routers.scheduler import router
+from nion.scheduler.mode_registry import register_mode_executor
+from nion.scheduler.models import ScheduledTask
+from nion.scheduler.service import get_scheduler, shutdown_scheduler
 
 
 class _StubEvolutionService:
     async def run(self, agent_name: str = "_default"):
-        from src.evolution.models import EvolutionReport, ReportStatus
+        from app.evolution.models import EvolutionReport, ReportStatus
 
         return EvolutionReport(
             status=ReportStatus.COMPLETED,
@@ -36,10 +36,10 @@ def test_scheduler_filters_out_evolution_system_tasks(tmp_path):
     app = _make_app()
     paths = Paths(base_dir=tmp_path)
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
-        with patch("src.evolution.service.get_evolution_service", return_value=_StubEvolutionService()):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
+        with patch("app.evolution.service.get_evolution_service", return_value=_StubEvolutionService()):
             async def _evolution_executor(task, trace_id):
-                from src.evolution.service import get_evolution_service
+                from app.evolution.service import get_evolution_service
 
                 report = await asyncio.wait_for(
                     get_evolution_service().run(task.agent_name),

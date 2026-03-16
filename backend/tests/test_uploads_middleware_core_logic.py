@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agents.middlewares.uploads_middleware import UploadsMiddleware
-from src.config.paths import Paths
+from nion.agents.middlewares.uploads_middleware import UploadsMiddleware
+from nion.config.paths import Paths
 
 THREAD_ID = "thread-abc123"
 

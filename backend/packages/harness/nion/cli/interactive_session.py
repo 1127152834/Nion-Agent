@@ -13,8 +13,8 @@ import termios
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src.cli.managed_cli_exec import resolve_managed_cli_command
-from src.config.paths import get_paths
+from nion.cli.managed_cli_exec import resolve_managed_cli_command
+from nion.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class CLIInteractiveSessionManager:
         # Best-effort: if browser configuration exists, expose it to interactive CLIs.
         # Not all CLIs use CHROME_PATH, but this is a common convention.
         try:
-            from src.config.browser_config import load_browser_config  # type: ignore
+            from nion.config.browser_config import load_browser_config  # type: ignore
 
             chrome_path = load_browser_config().resolved_chrome_path()
             if chrome_path:

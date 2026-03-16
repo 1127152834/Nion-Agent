@@ -9,9 +9,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.subagents import get_persisted_task_result, list_persisted_tasks, patch_persisted_task
-from src.subagents.run_models import SubagentRunRecord
-from src.subagents.run_store import upsert_run
+from nion.subagents import get_persisted_task_result, list_persisted_tasks, patch_persisted_task
+from nion.subagents.run_models import SubagentRunRecord
+from nion.subagents.run_store import upsert_run
 
 router = APIRouter(prefix="/api/subagent-runs", tags=["subagent-runs"])
 

@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agents.middlewares.title_middleware import TitleMiddleware
-from src.config.title_config import TitleConfig, get_title_config, set_title_config
+from nion.agents.middlewares.title_middleware import TitleMiddleware
+from nion.config.title_config import TitleConfig, get_title_config, set_title_config
 
 
 def _clone_title_config(config: TitleConfig) -> TitleConfig:
@@ -77,7 +77,7 @@ class TestTitleMiddlewareCoreLogic:
         middleware = TitleMiddleware()
         fake_model = MagicMock()
         fake_model.invoke.return_value = MagicMock(content='"A very long generated title"')
-        monkeypatch.setattr("src.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
+        monkeypatch.setattr("nion.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
 
         state = {
             "messages": [
@@ -96,7 +96,7 @@ class TestTitleMiddlewareCoreLogic:
         middleware = TitleMiddleware()
         fake_model = MagicMock()
         fake_model.invoke.side_effect = RuntimeError("LLM unavailable")
-        monkeypatch.setattr("src.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
+        monkeypatch.setattr("nion.agents.middlewares.title_middleware.create_chat_model", lambda **kwargs: fake_model)
 
         state = {
             "messages": [
@@ -121,7 +121,7 @@ class TestTitleMiddlewareCoreLogic:
             captured.update(kwargs)
             return fake_model
 
-        monkeypatch.setattr("src.agents.middlewares.title_middleware.create_chat_model", fake_create_chat_model)
+        monkeypatch.setattr("nion.agents.middlewares.title_middleware.create_chat_model", fake_create_chat_model)
 
         state = {
             "messages": [

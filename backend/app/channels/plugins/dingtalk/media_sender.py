@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from src.channels.webhook_service import IncomingWebhookEvent
+from app.channels.webhook_service import IncomingWebhookEvent
 
 
 def _safe_text(value: Any) -> str:

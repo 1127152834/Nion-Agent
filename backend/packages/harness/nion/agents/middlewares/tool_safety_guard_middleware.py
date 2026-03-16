@@ -17,8 +17,8 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.config.app_config import ensure_latest_app_config
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.config.app_config import ensure_latest_app_config
 
 DEFAULT_DANGEROUS_PATTERNS = [
     r"\brm\s+-rf\b",

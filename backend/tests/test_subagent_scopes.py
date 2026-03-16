@@ -1,6 +1,6 @@
 """Test subagent scopes and contracts."""
 
-from src.subagents import DelegationContract, DelegationResultEnvelope, SubagentConfig, SubagentScopes
+from nion.subagents import DelegationContract, DelegationResultEnvelope, SubagentConfig, SubagentScopes
 
 
 def test_subagent_scopes_default():

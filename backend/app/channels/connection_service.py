@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from src.channels.repository import SUPPORTED_CHANNEL_PLATFORMS
+from app.channels.repository import SUPPORTED_CHANNEL_PLATFORMS
 
 
 class ChannelConnectionService:

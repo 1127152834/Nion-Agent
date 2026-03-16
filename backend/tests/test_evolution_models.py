@@ -1,6 +1,6 @@
 """Test Evolution models."""
 
-from src.evolution.models import (
+from app.evolution.models import (
     EvolutionReport,
     EvolutionSettings,
     EvolutionSuggestion,

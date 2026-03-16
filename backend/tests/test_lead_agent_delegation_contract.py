@@ -1,6 +1,6 @@
 """Test lead agent delegation contract and prompt."""
 
-from src.agents.lead_agent.prompt import _build_subagent_section
+from nion.agents.lead_agent.prompt import _build_subagent_section
 
 
 def test_subagent_section_includes_new_templates():

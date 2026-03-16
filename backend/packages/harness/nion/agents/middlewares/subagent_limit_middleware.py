@@ -5,8 +5,8 @@ from typing import override
 
 from langgraph.runtime import Runtime
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.subagents.executor import MAX_CONCURRENT_SUBAGENTS
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.subagents.executor import MAX_CONCURRENT_SUBAGENTS
 
 logger = logging.getLogger(__name__)
 

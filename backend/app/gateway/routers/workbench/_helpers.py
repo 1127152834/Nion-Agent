@@ -12,9 +12,9 @@ from typing import Any, Literal
 import httpx
 from fastapi import HTTPException
 
-from src.config.paths import get_paths
-from src.gateway.langgraph_client import build_langgraph_upstream_url
-from src.gateway.path_utils import resolve_thread_virtual_path
+from nion.config.paths import get_paths
+from app.gateway.langgraph_client import build_langgraph_upstream_url
+from app.gateway.path_utils import resolve_thread_virtual_path
 
 import logging
 

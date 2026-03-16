@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import src.config.paths as paths_mod
-import src.gateway.routers.runtime_info as runtime_info
+import nion.config.paths as paths_mod
+import app.gateway.routers.runtime_info as runtime_info
 
 
 def test_BE_GATEWAY_RUNTIME_601_runtime_info_reports_base_dir(monkeypatch, tmp_path):

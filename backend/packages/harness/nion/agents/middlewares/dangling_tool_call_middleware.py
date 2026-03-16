@@ -20,7 +20,7 @@ from typing import override
 from langchain.agents.middleware.types import ModelCallResult, ModelRequest, ModelResponse
 from langchain_core.messages import ToolMessage
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 
 logger = logging.getLogger(__name__)
 

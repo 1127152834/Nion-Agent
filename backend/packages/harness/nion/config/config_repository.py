@@ -9,9 +9,9 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from src.config.app_config import AppConfig, get_app_config_runtime_status, reload_app_config
-from src.config.config_store import VersionConflictError, create_config_store
-from src.config.extensions_config import ExtensionsConfig
+from nion.config.app_config import AppConfig, get_app_config_runtime_status, reload_app_config
+from nion.config.config_store import VersionConflictError, create_config_store
+from nion.config.extensions_config import ExtensionsConfig
 
 
 class ConfigValidationError(Exception):
@@ -167,7 +167,7 @@ class ConfigRepository:
                 errors.append(
                     self._normalize_item(
                         ["sandbox", "use"],
-                        "Strict sandbox mode requires a container-based sandbox. Switch to src.community.aio_sandbox:AioSandboxProvider.",
+                        "Strict sandbox mode requires a container-based sandbox. Switch to nion.community.aio_sandbox:AioSandboxProvider.",
                         "strict_mode_requires_container",
                     )
                 )

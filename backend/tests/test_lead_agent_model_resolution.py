@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents import make_lead_agent as root_make_lead_agent
-from src.agents.lead_agent import agent as lead_agent_module
-from src.agents.lead_agent import make_lead_agent as package_make_lead_agent
-from src.config.app_config import AppConfig
-from src.config.model_config import ModelConfig
-from src.config.sandbox_config import SandboxConfig
+from nion.agents import make_lead_agent as root_make_lead_agent
+from nion.agents.lead_agent import agent as lead_agent_module
+from nion.agents.lead_agent import make_lead_agent as package_make_lead_agent
+from nion.config.app_config import AppConfig
+from nion.config.model_config import ModelConfig
+from nion.config.sandbox_config import SandboxConfig
 
 factory_utils = pytest.importorskip("langgraph_api._factory_utils")
 
@@ -17,7 +17,7 @@ factory_utils = pytest.importorskip("langgraph_api._factory_utils")
 def _make_app_config(models: list[ModelConfig]) -> AppConfig:
     return AppConfig(
         models=models,
-        sandbox=SandboxConfig(use="src.sandbox.local:LocalSandboxProvider"),
+        sandbox=SandboxConfig(use="nion.sandbox.local:LocalSandboxProvider"),
     )
 
 
@@ -90,7 +90,7 @@ def test_resolve_model_name_raises_when_no_models_configured(monkeypatch):
 def test_make_lead_agent_disables_thinking_when_model_does_not_support_it(monkeypatch):
     app_config = _make_app_config([_make_model("safe-model", supports_thinking=False)])
 
-    import src.tools as tools_module
+    import nion.tools as tools_module
 
     monkeypatch.setattr(lead_agent_module, "get_app_config", lambda: app_config)
     monkeypatch.setattr(tools_module, "get_available_tools", lambda **kwargs: [])

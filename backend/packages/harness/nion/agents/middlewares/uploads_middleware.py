@@ -7,8 +7,8 @@ from typing import NotRequired, override
 from langchain_core.messages import HumanMessage
 from langgraph.runtime import Runtime
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.config.paths import Paths, get_paths
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.config.paths import Paths, get_paths
 
 logger = logging.getLogger(__name__)
 

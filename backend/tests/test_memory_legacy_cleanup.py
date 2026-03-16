@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-from src.agents.memory import legacy_cleanup
-from src.config.paths import Paths
+from nion.agents.memory import legacy_cleanup
+from nion.config.paths import Paths
 
 LEGACY_MEMORY_FILENAME = "memory" + ".json"
 
@@ -24,7 +24,7 @@ def test_remove_legacy_memory_files_removes_legacy_files_and_dirs(tmp_path: Path
     _write(agent_memory)
     _write(structured_root / "index" / "manifest.json", content="{}")
 
-    with patch("src.agents.memory.legacy_cleanup.get_paths", return_value=paths):
+    with patch("nion.agents.memory.legacy_cleanup.get_paths", return_value=paths):
         result = legacy_cleanup.remove_legacy_memory_files()
 
     removed = set(result["removed"])
@@ -41,7 +41,7 @@ def test_ensure_legacy_memory_removed_is_idempotent(tmp_path: Path):
     global_memory = tmp_path / LEGACY_MEMORY_FILENAME
     _write(global_memory)
 
-    with patch("src.agents.memory.legacy_cleanup.get_paths", return_value=paths):
+    with patch("nion.agents.memory.legacy_cleanup.get_paths", return_value=paths):
         # Reset module-level flag for deterministic test behavior.
         legacy_cleanup._cleanup_done = False
         first = legacy_cleanup.ensure_legacy_memory_removed()

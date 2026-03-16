@@ -4,7 +4,7 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import src.gateway.routers.workspace as workspace
+import app.gateway.routers.workspace as workspace
 
 
 def _make_client() -> TestClient:
@@ -57,7 +57,7 @@ def test_workspace_tree_returns_404_when_root_missing(tmp_path: Path):
 def test_workspace_tree_creates_empty_sandbox_dirs_for_new_thread(monkeypatch, tmp_path: Path):
     monkeypatch.setenv("NION_HOME", str(tmp_path))
 
-    from src.config import paths as paths_module
+    from nion.config import paths as paths_module
 
     paths_module._paths = None
 
@@ -116,7 +116,7 @@ def test_workspace_tree_can_list_sandbox_backed_paths(monkeypatch, tmp_path: Pat
     """
     monkeypatch.setenv("NION_HOME", str(tmp_path))
 
-    from src.config import paths as paths_module
+    from nion.config import paths as paths_module
 
     paths_module._paths = None
 

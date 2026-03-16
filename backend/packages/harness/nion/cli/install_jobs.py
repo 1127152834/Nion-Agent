@@ -13,10 +13,10 @@ from typing import Any, Literal
 
 import httpx
 
-from src.cli.catalog import CliMarketplaceTool, CliMarketplaceToolPlatform
-from src.cli.installer import CliInstallError, install_cli_tool
-from src.config.extensions_config import CliStateConfig, ExtensionsConfig, reload_extensions_config
-from src.config.paths import get_paths
+from nion.cli.catalog import CliMarketplaceTool, CliMarketplaceToolPlatform
+from nion.cli.installer import CliInstallError, install_cli_tool
+from nion.config.extensions_config import CliStateConfig, ExtensionsConfig, reload_extensions_config
+from nion.config.paths import get_paths
 
 CliInstallJobStatus = Literal["pending", "running", "succeeded", "failed"]
 

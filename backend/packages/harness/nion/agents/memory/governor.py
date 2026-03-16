@@ -6,9 +6,9 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
-from src.agents.memory.registry import get_default_memory_provider
-from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
-from src.config.paths import get_paths
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
+from nion.config.paths import get_paths
 
 
 def _summarize_markdown(content: str, *, max_chars: int = 180) -> str:

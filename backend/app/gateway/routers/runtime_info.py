@@ -8,9 +8,9 @@ from typing import Literal
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from src.agents.memory.scope import normalize_agent_name_for_memory
-from src.config.default_agent import DEFAULT_AGENT_NAME
-from src.config.paths import get_paths
+from nion.agents.memory.scope import normalize_agent_name_for_memory
+from nion.config.default_agent import DEFAULT_AGENT_NAME
+from nion.config.paths import get_paths
 
 router = APIRouter(prefix="/api/runtime/info", tags=["runtime"])
 

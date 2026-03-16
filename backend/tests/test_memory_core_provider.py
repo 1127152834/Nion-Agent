@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src.agents.memory.core import MemoryReadRequest, MemoryWriteRequest
-from src.agents.memory.openviking_provider import OpenVikingMemoryProvider
+from nion.agents.memory.core import MemoryReadRequest, MemoryWriteRequest
+from nion.agents.memory.openviking_provider import OpenVikingMemoryProvider
 
 
 class DummyRuntime:
@@ -42,8 +42,8 @@ def test_provider_delegates_memory_reads_to_runtime():
     assert payload["storage_layout"] == "openviking"
 
 
-@patch("src.config.memory_config.get_memory_config", return_value=_memory_config())
-@patch("src.agents.memory.format_memory_for_injection", return_value="remember this")
+@patch("nion.config.memory_config.get_memory_config", return_value=_memory_config())
+@patch("nion.agents.memory.format_memory_for_injection", return_value="remember this")
 def test_build_injection_context_formats_memory(_format_memory, _get_memory_config):
     runtime = DummyRuntime()
     provider = OpenVikingMemoryProvider(runtime=runtime)
@@ -53,7 +53,7 @@ def test_build_injection_context_formats_memory(_format_memory, _get_memory_conf
     assert result == "<memory>\nremember this\n</memory>\n"
 
 
-@patch("src.config.memory_config.get_memory_config", return_value=_memory_config())
+@patch("nion.config.memory_config.get_memory_config", return_value=_memory_config())
 def test_build_injection_context_respects_memory_read_gate(_get_memory_config):
     runtime = DummyRuntime()
     provider = OpenVikingMemoryProvider(runtime=runtime)

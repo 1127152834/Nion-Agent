@@ -1,4 +1,4 @@
-from src.agents.memory.registry import get_default_memory_provider, get_memory_registry, reset_memory_registry
+from nion.agents.memory.registry import get_default_memory_provider, get_memory_registry, reset_memory_registry
 
 
 def teardown_function():

@@ -5,7 +5,7 @@ import pytest
 pytest.importorskip("markdownify")
 pytest.importorskip("readabilipy")
 
-from src.community.jina_ai import tools as jina_tools
+from nion.community.jina_ai import tools as jina_tools
 
 
 class _FakeAppConfig:

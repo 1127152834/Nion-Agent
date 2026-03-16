@@ -24,8 +24,8 @@ from pathlib import Path
 
 import httpx
 
-from src.cli.catalog import normalize_cli_arch, normalize_cli_os
-from src.config.paths import get_paths
+from nion.cli.catalog import normalize_cli_arch, normalize_cli_os
+from nion.config.paths import get_paths
 
 DEFAULT_UV_VERSION = "0.10.8"
 UV_REPO = "astral-sh/uv"

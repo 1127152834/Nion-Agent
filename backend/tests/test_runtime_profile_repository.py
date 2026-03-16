@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from src.runtime_profile import RuntimeProfileLockedError, RuntimeProfileRepository, RuntimeProfileValidationError
+from nion.runtime_profile import RuntimeProfileLockedError, RuntimeProfileRepository, RuntimeProfileValidationError
 
 
 def _prepare_runtime_profile_repo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> RuntimeProfileRepository:
     monkeypatch.setenv("NION_HOME", str(tmp_path))
 
-    from src.config import paths as paths_module
+    from nion.config import paths as paths_module
 
     paths_module._paths = None
     return RuntimeProfileRepository()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def test_start_session_builds_command_via_resolver(monkeypatch):
-    from src.cli import interactive_session as mod
+    from nion.cli import interactive_session as mod
 
     built: dict = {}
 
@@ -40,7 +40,7 @@ def test_read_output_loop_invokes_callback_on_event_loop_thread(monkeypatch):
     """
     import asyncio
 
-    from src.cli import interactive_session as mod
+    from nion.cli import interactive_session as mod
 
     mgr = mod.CLIInteractiveSessionManager()
     sid = "sid"

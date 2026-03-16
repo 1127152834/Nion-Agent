@@ -1,6 +1,6 @@
 """Default Heartbeat templates."""
 
-from src.heartbeat.models import HeartbeatCategory, HeartbeatResultType, HeartbeatTemplate
+from app.heartbeat.models import HeartbeatCategory, HeartbeatResultType, HeartbeatTemplate
 
 DEFAULT_TEMPLATES = {
     "daily_review": HeartbeatTemplate(

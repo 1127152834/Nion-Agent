@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.cli.catalog import load_cli_catalog
-from src.config.extensions_config import ExtensionsConfig
+from nion.cli.catalog import load_cli_catalog
+from nion.config.extensions_config import ExtensionsConfig
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,6 @@
 """Heartbeat Core module."""
 
-from src.heartbeat.models import (
+from app.heartbeat.models import (
     HeartbeatCategory,
     HeartbeatLogRecord,
     HeartbeatResultType,

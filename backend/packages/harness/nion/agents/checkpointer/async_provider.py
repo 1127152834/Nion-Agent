@@ -7,12 +7,12 @@ Supported backends: memory, sqlite.
 
 Usage (e.g. FastAPI lifespan)::
 
-    from src.agents.checkpointer.async_provider import make_checkpointer
+    from nion.agents.checkpointer.async_provider import make_checkpointer
 
     async with make_checkpointer() as checkpointer:
         app.state.checkpointer = checkpointer
 
-For sync usage see :mod:`src.agents.checkpointer.provider`.
+For sync usage see :mod:`nion.agents.checkpointer.provider`.
 """
 
 from __future__ import annotations
@@ -23,12 +23,12 @@ from collections.abc import AsyncIterator
 
 from langgraph.types import Checkpointer
 
-from src.agents.checkpointer.provider import (
+from nion.agents.checkpointer.provider import (
     SQLITE_INSTALL,
     _get_effective_checkpointer_config,
     _resolve_sqlite_conn_str,
 )
-from src.config.app_config import get_app_config
+from nion.config.app_config import get_app_config
 
 logger = logging.getLogger(__name__)
 

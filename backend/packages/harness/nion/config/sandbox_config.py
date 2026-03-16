@@ -29,7 +29,7 @@ class SandboxConfig(BaseModel):
 
     use: str = Field(
         ...,
-        description="Class path of the sandbox provider (e.g. src.sandbox.local:LocalSandboxProvider)",
+        description="Class path of the sandbox provider (e.g. nion.sandbox.local:LocalSandboxProvider)",
     )
     python_path: str | None = Field(
         default=None,

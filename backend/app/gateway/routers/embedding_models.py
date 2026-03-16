@@ -9,7 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from src.embedding_models import EmbeddingModelsError, EmbeddingModelsService
+from app.embedding_models import EmbeddingModelsError, EmbeddingModelsService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/embedding-models", tags=["embedding-models"])

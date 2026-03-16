@@ -19,14 +19,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from src.agents.memory.core import MemoryReadRequest, MemoryWriteRequest
-from src.agents.memory.scope import normalize_agent_name_for_memory, resolve_agent_for_memory_scope
-from src.agents.memory.sqlite_index import OpenVikingSQLiteIndex
-from src.agents.memory.write_graph import MemoryWriteAction, MemoryWriteGraph
-from src.config.app_config import get_app_config
-from src.config.memory_config import get_memory_config
-from src.config.paths import get_paths
-from src.processlog.service import get_processlog_service
+from nion.agents.memory.core import MemoryReadRequest, MemoryWriteRequest
+from nion.agents.memory.scope import normalize_agent_name_for_memory, resolve_agent_for_memory_scope
+from nion.agents.memory.sqlite_index import OpenVikingSQLiteIndex
+from nion.agents.memory.write_graph import MemoryWriteAction, MemoryWriteGraph
+from nion.config.app_config import get_app_config
+from nion.config.memory_config import get_memory_config
+from nion.config.paths import get_paths
+from nion.processlog.service import get_processlog_service
 
 logger = logging.getLogger(__name__)
 
@@ -1480,7 +1480,7 @@ class OpenVikingRuntime:
         - Reserved default agent name ("_default") -> None (global)
         - Otherwise keep trimmed name
 
-        This is intentionally aligned with src.agents.memory.scope to ensure the
+        This is intentionally aligned with nion.agents.memory.scope to ensure the
         default agent never creates an agent-scoped ledger/index.
         """
 

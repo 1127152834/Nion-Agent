@@ -1,19 +1,19 @@
 """Memory module for Nion (OpenViking single-stack)."""
 
-from src.agents.memory.core import MemoryProvider, MemoryReadRequest, MemoryRuntime, MemoryWriteRequest
-from src.agents.memory.prompt import (
+from nion.agents.memory.core import MemoryProvider, MemoryReadRequest, MemoryRuntime, MemoryWriteRequest
+from nion.agents.memory.prompt import (
     FACT_EXTRACTION_PROMPT,
     MEMORY_UPDATE_PROMPT,
     format_conversation_for_update,
     format_memory_for_injection,
 )
-from src.agents.memory.queue import (
+from nion.agents.memory.queue import (
     ConversationContext,
     MemoryUpdateQueue,
     get_memory_queue,
     reset_memory_queue,
 )
-from src.agents.memory.registry import (
+from nion.agents.memory.registry import (
     MemoryRegistry,
     get_default_memory_provider,
     get_memory_registry,

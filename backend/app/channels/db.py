@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from src.config.paths import Paths, get_paths
+from nion.config.paths import Paths, get_paths
 
 _PLATFORM_CHECK_LEGACY = "check(platform in ('lark', 'dingtalk'))"
 _PLATFORM_CHECK_CURRENT = "check(platform in ('lark', 'dingtalk', 'telegram'))"

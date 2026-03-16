@@ -3,8 +3,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from src.sandbox.local.list_dir import list_dir
-from src.sandbox.sandbox import Sandbox
+from nion.sandbox.local.list_dir import list_dir
+from nion.sandbox.sandbox import Sandbox
 
 
 class LocalSandbox(Sandbox):

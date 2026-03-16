@@ -8,8 +8,8 @@ from typing import Any, NotRequired, override
 from langchain_core.messages import SystemMessage
 from langgraph.runtime import Runtime
 
-from src.config.app_config import get_app_config
-from src.tools.internal_tool_recall import recommend_internal_tools
+from nion.config.app_config import get_app_config
+from nion.tools.internal_tool_recall import recommend_internal_tools
 
 try:
     from langchain.agents import AgentState

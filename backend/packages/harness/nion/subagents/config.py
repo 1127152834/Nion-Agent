@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from src.subagents.scopes import SubagentScopes
+from nion.subagents.scopes import SubagentScopes
 
 
 @dataclass

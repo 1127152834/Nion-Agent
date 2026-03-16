@@ -5,16 +5,16 @@ from pathlib import Path
 
 from langgraph.typing import ContextT
 
-from src.agents.thread_state import ThreadDataState, ThreadState
-from src.config.paths import VIRTUAL_PATH_PREFIX
-from src.sandbox.exceptions import (
+from nion.agents.thread_state import ThreadDataState, ThreadState
+from nion.config.paths import VIRTUAL_PATH_PREFIX
+from nion.sandbox.exceptions import (
     SandboxError,
     SandboxNotFoundError,
     SandboxRuntimeError,
 )
-from src.sandbox.sandbox import Sandbox
-from src.sandbox.sandbox_provider import get_sandbox_provider
-from src.tools.builtins.langchain_compat import ToolRuntime, tool
+from nion.sandbox.sandbox import Sandbox
+from nion.sandbox.sandbox_provider import get_sandbox_provider
+from nion.tools.builtins.langchain_compat import ToolRuntime, tool
 
 
 def _is_mnt_path(path: str) -> bool:

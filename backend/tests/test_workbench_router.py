@@ -10,13 +10,13 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from src.config.paths import Paths
-from src.gateway.path_utils import resolve_thread_virtual_path
-from src.gateway.routers.workbench import _helpers as workbench_helpers
-from src.gateway.routers.workbench import marketplace as workbench_marketplace
-from src.gateway.routers.workbench import plugin_studio as workbench_plugin_studio
-from src.gateway.routers.workbench import plugins as workbench_plugins
-from src.gateway.routers.workbench.models import PluginTestCommandStep, PluginTestRequest, PluginTestResponse, PluginTestStepResult
+from nion.config.paths import Paths
+from app.gateway.path_utils import resolve_thread_virtual_path
+from app.gateway.routers.workbench import _helpers as workbench_helpers
+from app.gateway.routers.workbench import marketplace as workbench_marketplace
+from app.gateway.routers.workbench import plugin_studio as workbench_plugin_studio
+from app.gateway.routers.workbench import plugins as workbench_plugins
+from app.gateway.routers.workbench.models import PluginTestCommandStep, PluginTestRequest, PluginTestResponse, PluginTestStepResult
 
 PluginTestCommandStep.model_rebuild()
 PluginTestRequest.model_rebuild()
@@ -246,7 +246,7 @@ def test_plugin_studio_requires_auto_and_manual_before_package(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
         patch.object(workbench_helpers, "_ensure_langgraph_thread_for_plugin_test", AsyncMock(return_value=None)),
     ):
         chat_thread_id = "plugin-assistant-thread-001"
@@ -307,7 +307,7 @@ def test_plugin_studio_auto_verify_fails_when_entry_missing(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
     ):
         create_resp = client.post(
             "/api/workbench/plugin-studio/sessions",
@@ -340,7 +340,7 @@ def test_plugin_studio_draft_updates_workflow_and_match_rules(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
     ):
         create_resp = client.post(
             "/api/workbench/plugin-studio/sessions",
@@ -389,7 +389,7 @@ def test_plugin_studio_draft_updates_chat_thread_id(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
     ):
         create_resp = client.post(
             "/api/workbench/plugin-studio/sessions",
@@ -418,7 +418,7 @@ def test_plugin_studio_test_material_import_and_delete(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
         patch.object(workbench_helpers, "_ensure_langgraph_thread_for_plugin_test", AsyncMock(return_value=None)),
     ):
         create_resp = client.post(
@@ -467,7 +467,7 @@ def test_plugin_studio_source_import_auto_restores_fixtures(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
         patch.object(workbench_helpers, "_ensure_langgraph_thread_for_plugin_test", AsyncMock(return_value=None)),
     ):
         create_resp = client.post(
@@ -528,7 +528,7 @@ def test_plugin_studio_workspace_seed_copies_source_and_materials(tmp_path: Path
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
         patch.object(workbench_helpers, "_ensure_langgraph_thread_for_plugin_test", AsyncMock(return_value=None)),
     ):
         create_resp = client.post(
@@ -590,7 +590,7 @@ def test_plugin_studio_workspace_pull_overwrites_session_source(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
     ):
         create_resp = client.post(
             "/api/workbench/plugin-studio/sessions",
@@ -651,7 +651,7 @@ def test_plugin_studio_source_package_returns_session_files(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
     ):
         create_resp = client.post(
             "/api/workbench/plugin-studio/sessions",
@@ -680,7 +680,7 @@ def test_plugin_studio_publish_applies_match_rules_and_fixtures(tmp_path: Path):
         _make_client() as client,
         patch.object(workbench_plugin_studio, "get_paths", return_value=paths, create=True),
         patch.object(workbench_helpers, "get_paths", return_value=paths, create=True),
-        patch("src.gateway.path_utils.get_paths", return_value=paths),
+        patch("app.gateway.path_utils.get_paths", return_value=paths),
     ):
         create_resp = client.post(
             "/api/workbench/plugin-studio/sessions",

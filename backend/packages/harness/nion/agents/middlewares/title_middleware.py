@@ -4,9 +4,9 @@ from typing import NotRequired, override
 
 from langgraph.runtime import Runtime
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.config.title_config import get_title_config
-from src.models import create_chat_model
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.config.title_config import get_title_config
+from nion.models import create_chat_model
 
 
 class TitleMiddlewareState(AgentState):

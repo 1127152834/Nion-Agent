@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from src.tools.builtins.present_file_tool import present_file_tool
+from nion.tools.builtins.present_file_tool import present_file_tool
 
 
 def test_present_files_filters_non_virtual_paths():
@@ -71,7 +71,7 @@ def test_present_files_runtime_rejects_missing_file(tmp_path):
     )
     missing = outputs_dir / "missing.md"
 
-    with patch("src.tools.builtins.present_file_tool.resolve_thread_virtual_path") as resolver_mock:
+    with patch("nion.tools.builtins.present_file_tool.resolve_thread_virtual_path") as resolver_mock:
         # Ensure virtual path branch still resolves for completeness.
         resolver_mock.return_value = missing
         command = present_file_tool.func(
@@ -96,8 +96,8 @@ def test_present_files_runtime_accepts_virtual_path_when_only_sandbox_has_file(t
     )
 
     with (
-        patch("src.tools.builtins.present_file_tool.resolve_thread_virtual_path", return_value=host_path),
-        patch("src.tools.builtins.present_file_tool._sandbox_file_exists", return_value=True),
+        patch("nion.tools.builtins.present_file_tool.resolve_thread_virtual_path", return_value=host_path),
+        patch("nion.tools.builtins.present_file_tool._sandbox_file_exists", return_value=True),
     ):
         command = present_file_tool.func(
             runtime=runtime,

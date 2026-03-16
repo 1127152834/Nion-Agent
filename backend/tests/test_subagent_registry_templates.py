@@ -1,6 +1,6 @@
 """Test subagent registry with new templates."""
 
-from src.subagents import get_subagent_config, list_subagents
+from nion.subagents import get_subagent_config, list_subagents
 
 
 def test_list_subagents_includes_new_templates():

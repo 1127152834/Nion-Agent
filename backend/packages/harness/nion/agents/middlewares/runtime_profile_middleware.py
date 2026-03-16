@@ -3,10 +3,10 @@ from typing import Literal, NotRequired, override
 
 from langgraph.runtime import Runtime
 
-from src.agents.memory.policy import resolve_memory_policy
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.config.app_config import ensure_latest_app_config
-from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
+from nion.agents.memory.policy import resolve_memory_policy
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.config.app_config import ensure_latest_app_config
+from nion.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
 
 
 class RuntimeProfileMiddlewareState(AgentState):

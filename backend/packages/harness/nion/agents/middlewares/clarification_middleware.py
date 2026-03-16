@@ -10,7 +10,7 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
 
 
 class ClarificationMiddlewareState(AgentState):

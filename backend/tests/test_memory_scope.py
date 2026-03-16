@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.memory.scope import (
+from nion.agents.memory.scope import (
     normalize_agent_name_for_memory,
     resolve_agent_for_memory_scope,
 )

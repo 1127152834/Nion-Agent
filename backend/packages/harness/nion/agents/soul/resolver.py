@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.agents.soul.models import SoulAsset
-from src.config.paths import get_paths
+from nion.agents.soul.models import SoulAsset
+from nion.config.paths import get_paths
 
 
 class SoulResolver:

@@ -5,7 +5,7 @@ import pytest
 
 @pytest.mark.anyio
 async def test_ws_init_accepts_tool_id_and_argv(monkeypatch: pytest.MonkeyPatch):
-    from src.gateway.routers import cli_interactive as mod
+    from app.gateway.routers import cli_interactive as mod
 
     started: dict = {}
 

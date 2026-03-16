@@ -4,11 +4,11 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from src.channels.bridge_service import ChannelAgentBridgeService
-from src.channels.plugins.dingtalk.adapter import DingTalkInboundAdapter
-from src.channels.plugins.dingtalk.card_renderer import DingTalkPairingCardRenderer
-from src.channels.plugins.dingtalk.pairing_flow import DingTalkPairingFlow
-from src.channels.webhook_service import IncomingWebhookEvent
+from app.channels.bridge_service import ChannelAgentBridgeService
+from app.channels.plugins.dingtalk.adapter import DingTalkInboundAdapter
+from app.channels.plugins.dingtalk.card_renderer import DingTalkPairingCardRenderer
+from app.channels.plugins.dingtalk.pairing_flow import DingTalkPairingFlow
+from app.channels.webhook_service import IncomingWebhookEvent
 
 
 def _safe_int(value: str | None, default_value: int, *, min_value: int, max_value: int) -> int:

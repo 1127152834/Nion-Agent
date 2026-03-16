@@ -5,8 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.config.app_config import ensure_latest_app_config
-from src.system.timezone_service import SystemTimezoneState, TimezoneUpdateSummary, get_timezone_service
+from nion.config.app_config import ensure_latest_app_config
+from app.system.timezone_service import SystemTimezoneState, TimezoneUpdateSummary, get_timezone_service
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 

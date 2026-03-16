@@ -47,9 +47,11 @@ detect_sandbox_mode() {
         }
     ' "$config_file")
 
-    if [[ "$sandbox_use" == *"src.sandbox.local:LocalSandboxProvider"* ]]; then
+    # Support both legacy `src.*` and new `nion.*` class paths during the
+    # harness/app migration.
+    if [[ "$sandbox_use" == *"nion.sandbox.local:LocalSandboxProvider"* || "$sandbox_use" == *"src.sandbox.local:LocalSandboxProvider"* ]]; then
         echo "local"
-    elif [[ "$sandbox_use" == *"src.community.aio_sandbox:AioSandboxProvider"* ]]; then
+    elif [[ "$sandbox_use" == *"nion.community.aio_sandbox:AioSandboxProvider"* || "$sandbox_use" == *"src.community.aio_sandbox:AioSandboxProvider"* ]]; then
         if [ -n "$provisioner_url" ]; then
             echo "provisioner"
         else

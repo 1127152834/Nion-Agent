@@ -4,7 +4,7 @@ from typing import Any
 import httpx
 from langchain.tools import tool
 
-from src.community._search_utils import (
+from nion.community._search_utils import (
     _as_dict,
     _as_positive_int,
     _as_string,
@@ -14,9 +14,9 @@ from src.community._search_utils import (
     _safe_exc_message,
     _split_items,
 )
-from src.community.jina_ai.jina_client import JinaClient
-from src.config import get_app_config
-from src.utils.readability import ReadabilityExtractor
+from nion.community.jina_ai.jina_client import JinaClient
+from nion.config import get_app_config
+from nion.utils.readability import ReadabilityExtractor
 
 logger = logging.getLogger(__name__)
 

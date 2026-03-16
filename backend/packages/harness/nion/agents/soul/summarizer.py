@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.agents.soul.models import SoulAsset, SoulSummary
+from nion.agents.soul.models import SoulAsset, SoulSummary
 
 
 class SoulSummarizer:

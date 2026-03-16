@@ -1,4 +1,4 @@
-from src.gateway.app import create_app
+from app.gateway.app import create_app
 
 
 def test_gateway_does_not_expose_security_audit_route() -> None:

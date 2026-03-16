@@ -4,7 +4,7 @@ Provides direct programmatic access to Nion's agent capabilities
 without requiring LangGraph Server or Gateway API processes.
 
 Usage:
-    from src.client import NionClient
+    from nion.client import NionClient
 
     client = NionClient()
     response = client.chat("Analyze this paper for me", thread_id="my-thread")
@@ -33,14 +33,14 @@ from typing import Any, Literal
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from src.agents.lead_agent.prompt import apply_prompt_template
-from src.agents.memory.core import MemoryReadRequest
-from src.agents.thread_state import ThreadState
-from src.config.app_config import get_app_config, reload_app_config
-from src.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
-from src.config.paths import get_paths
-from src.models import create_chat_model
-from src.processlog.service import get_processlog_service
+from nion.agents.lead_agent.prompt import apply_prompt_template
+from nion.agents.memory.core import MemoryReadRequest
+from nion.agents.thread_state import ThreadState
+from nion.config.app_config import get_app_config, reload_app_config
+from nion.config.extensions_config import ExtensionsConfig, SkillStateConfig, get_extensions_config, reload_extensions_config
+from nion.config.paths import get_paths
+from nion.models import create_chat_model
+from nion.processlog.service import get_processlog_service
 
 logger = logging.getLogger(__name__)
 
@@ -58,18 +58,18 @@ def _load_create_agent():
 
 def _load_build_middlewares():
     """Load lead-agent middleware builder lazily to avoid importing heavy graph stack at module import time."""
-    from src.agents.lead_agent.agent import _build_middlewares as _build_middlewares_fn
+    from nion.agents.lead_agent.agent import _build_middlewares as _build_middlewares_fn
 
     return _build_middlewares_fn
 
 
 def create_agent(*args, **kwargs):
-    """Compatibility wrapper for tests that patch ``src.client.create_agent``."""
+    """Compatibility wrapper for tests that patch ``nion.client.create_agent``."""
     return _load_create_agent()(*args, **kwargs)
 
 
 def _build_middlewares(*args, **kwargs):
-    """Compatibility wrapper for tests that patch ``src.client._build_middlewares``."""
+    """Compatibility wrapper for tests that patch ``nion.client._build_middlewares``."""
     return _load_build_middlewares()(*args, **kwargs)
 
 
@@ -109,7 +109,7 @@ class NionClient:
 
     Example::
 
-        from src.client import NionClient
+        from nion.client import NionClient
 
         client = NionClient()
 
@@ -211,7 +211,7 @@ class NionClient:
         if self._checkpointer is not None:
             return self._checkpointer
 
-        from src.agents.checkpointer import get_checkpointer
+        from nion.agents.checkpointer import get_checkpointer
 
         return get_checkpointer()
 
@@ -298,7 +298,7 @@ class NionClient:
         # Keep A2UI toggle consistent across all runtimes (desktop / langgraph / embedded client).
         # Default is enabled to preserve existing behavior.
         try:
-            from src.config.app_config import ensure_latest_app_config
+            from nion.config.app_config import ensure_latest_app_config
 
             app_config = ensure_latest_app_config(process_name="client")
             a2ui_enabled = bool(getattr(getattr(app_config, "a2ui", None), "enabled", True))
@@ -331,7 +331,7 @@ class NionClient:
     @staticmethod
     def _get_tools(*, model_name: str | None, subagent_enabled: bool, agent_name: str | None):
         """Lazy import to avoid circular dependency at module level."""
-        from src.tools import get_available_tools
+        from nion.tools import get_available_tools
 
         kwargs: dict[str, Any] = {
             "model_name": model_name,
@@ -601,7 +601,7 @@ class NionClient:
             Dict with "skills" key containing list of skill info dicts,
             matching the Gateway API ``SkillsListResponse`` schema.
         """
-        from src.skills.loader import load_skills
+        from nion.skills.loader import load_skills
 
         return {
             "skills": [
@@ -622,7 +622,7 @@ class NionClient:
         Returns:
             Memory data dict from the active OpenViking provider.
         """
-        from src.agents.memory.registry import get_default_memory_provider
+        from nion.agents.memory.registry import get_default_memory_provider
 
         return get_default_memory_provider().get_memory_data(MemoryReadRequest())
 
@@ -709,7 +709,7 @@ class NionClient:
         Returns:
             Skill info dict, or None if not found.
         """
-        from src.skills.loader import load_skills
+        from nion.skills.loader import load_skills
 
         skill = next((s for s in load_skills(enabled_only=False) if s.name == name), None)
         if skill is None:
@@ -736,7 +736,7 @@ class NionClient:
             ValueError: If the skill is not found.
             OSError: If the config file cannot be written.
         """
-        from src.skills.loader import load_skills
+        from nion.skills.loader import load_skills
 
         skills = load_skills(enabled_only=False)
         skill = next((s for s in skills if s.name == name), None)
@@ -786,8 +786,8 @@ class NionClient:
             FileNotFoundError: If the file does not exist.
             ValueError: If the file is invalid.
         """
-        from src.skills.validation import _validate_skill_frontmatter
-        from src.skills.loader import get_skills_root_path
+        from nion.skills.validation import _validate_skill_frontmatter
+        from nion.skills.loader import get_skills_root_path
 
         path = Path(skill_path)
         if not path.exists():
@@ -847,7 +847,7 @@ class NionClient:
         Returns:
             The reloaded memory data dict.
         """
-        from src.agents.memory.registry import get_default_memory_provider
+        from nion.agents.memory.registry import get_default_memory_provider
 
         return get_default_memory_provider().reload_memory_data(MemoryReadRequest())
 
@@ -857,7 +857,7 @@ class NionClient:
         Returns:
             Memory config dict.
         """
-        from src.config.memory_config import get_memory_config
+        from nion.config.memory_config import get_memory_config
 
         config = get_memory_config()
         provider = config.provider if isinstance(config.provider, str) else "openviking"
@@ -918,7 +918,7 @@ class NionClient:
         Raises:
             FileNotFoundError: If any file does not exist.
         """
-        from src.utils.file_conversion import CONVERTIBLE_EXTENSIONS, convert_file_to_markdown
+        from nion.utils.file_conversion import CONVERTIBLE_EXTENSIONS, convert_file_to_markdown
 
         # Validate all files upfront to avoid partial uploads.
         resolved_files = []

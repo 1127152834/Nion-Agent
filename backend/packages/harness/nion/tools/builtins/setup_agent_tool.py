@@ -8,10 +8,10 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 from langgraph.types import Command
 
-from src.agents.memory.actions import store_memory_action
-from src.agents.memory.registry import get_default_memory_provider
-from src.config.paths import get_paths
-from src.tools.builtins.langchain_compat import ToolRuntime
+from nion.agents.memory.actions import store_memory_action
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.config.paths import get_paths
+from nion.tools.builtins.langchain_compat import ToolRuntime
 
 logger = logging.getLogger(__name__)
 AGENT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
@@ -255,7 +255,7 @@ def setup_agent(
 
         normalized_memory_items = _normalize_memory_items(memory_items)
 
-        from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
+        from nion.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
 
         try:
             # Ensure default agent directory + agent.json exist.

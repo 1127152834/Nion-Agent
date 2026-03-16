@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.cli.catalog import (
+from nion.cli.catalog import (
     CliMarketplaceCatalog,
     CliMarketplaceTool,
     default_cli_marketplace_assets_dir,
@@ -23,17 +23,17 @@ from src.cli.catalog import (
     load_cli_marketplace_catalog,
     repo_root_from_module,
 )
-from src.cli.install_jobs import (
+from nion.cli.install_jobs import (
     get_cli_install_job_snapshot,
     start_cli_install_job,
     subscribe_cli_install_job,
     unsubscribe_cli_install_job,
 )
-from src.cli.installer import CliInstallError, install_cli_tool, uninstall_cli_tool
-from src.cli.manifests import load_cli_install_manifest
-from src.config.extensions_config import CliStateConfig, ExtensionsConfig, get_extensions_config, reload_extensions_config
-from src.config.paths import get_paths
-from src.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
+from nion.cli.installer import CliInstallError, install_cli_tool, uninstall_cli_tool
+from nion.cli.manifests import load_cli_install_manifest
+from nion.config.extensions_config import CliStateConfig, ExtensionsConfig, get_extensions_config, reload_extensions_config
+from nion.config.paths import get_paths
+from nion.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["cli"])
@@ -666,7 +666,7 @@ async def check_cli_prerequisites(commands: str | None = None) -> CliPrerequisit
     if not commands:
         return CliPrerequisiteResponse(commands={})
 
-    from src.cli.toolchains import resolve_managed_command
+    from nion.cli.toolchains import resolve_managed_command
 
     result: dict[str, CliPrerequisiteStatus] = {}
     for raw in commands.split(","):
@@ -689,7 +689,7 @@ async def check_cli_prerequisites(commands: str | None = None) -> CliPrerequisit
 )
 async def ensure_cli_uv_toolchain() -> CliToolchainEnsureResponse:
     try:
-        from src.cli.toolchains import ensure_uv_toolchain
+        from nion.cli.toolchains import ensure_uv_toolchain
 
         toolchain, installed_now = await ensure_uv_toolchain()
     except Exception as exc:  # noqa: BLE001
@@ -712,7 +712,7 @@ async def ensure_cli_uv_toolchain() -> CliToolchainEnsureResponse:
 )
 async def ensure_cli_pipx_toolchain() -> CliToolchainEnsureResponse:
     try:
-        from src.cli.toolchains import ensure_pipx_toolchain
+        from nion.cli.toolchains import ensure_pipx_toolchain
 
         toolchain, installed_now = await ensure_pipx_toolchain()
     except Exception as exc:  # noqa: BLE001

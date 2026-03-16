@@ -9,15 +9,15 @@ from typing import Literal
 
 from langgraph.typing import ContextT
 
-from src.agents.thread_state import ThreadState
-from src.config import get_app_config
-from src.config.config_repository import ConfigRepository
-from src.config.extensions_config import get_extensions_config
-from src.skills import load_skills
-from src.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
-from src.tools.builtins.langchain_compat import ToolRuntime, tool
-from src.tools.builtins.management_response import build_action_card, build_management_response
-from src.tools.builtins._service_ops import (
+from nion.agents.thread_state import ThreadState
+from nion.config import get_app_config
+from nion.config.config_repository import ConfigRepository
+from nion.config.extensions_config import get_extensions_config
+from nion.skills import load_skills
+from nion.tools.builtins.confirmation_store import consume_confirmation_token, issue_confirmation_token
+from nion.tools.builtins.langchain_compat import ToolRuntime, tool
+from nion.tools.builtins.management_response import build_action_card, build_management_response
+from nion.tools.builtins._service_ops import (
     McpConfigUpdateRequest,
     McpServerConfigResponse,
     ModelConnectionTestRequest,

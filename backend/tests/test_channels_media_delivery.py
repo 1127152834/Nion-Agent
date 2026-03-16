@@ -5,11 +5,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
-from src.channels.bridge_service import ChannelAgentBridgeService
-from src.channels.db import ChannelDatabase
-from src.channels.repository import ChannelRepository
-from src.channels.webhook_service import IncomingWebhookEvent
-from src.config.paths import Paths
+from app.channels.bridge_service import ChannelAgentBridgeService
+from app.channels.db import ChannelDatabase
+from app.channels.repository import ChannelRepository
+from app.channels.webhook_service import IncomingWebhookEvent
+from nion.config.paths import Paths
 
 
 class _FakeResponse:
@@ -63,7 +63,7 @@ def test_lark_media_delivery_success(monkeypatch) -> None:
                 return _FakeResponse(status_code=200, payload={"code": 0, "data": {"message_id": "m1"}})
             return _FakeResponse(status_code=404, payload={"code": 1, "msg": "not found"})
 
-    monkeypatch.setattr("src.channels.bridge_service.httpx.Client", _FakeClient)
+    monkeypatch.setattr("app.channels.bridge_service.httpx.Client", _FakeClient)
 
     with TemporaryDirectory() as tmp_dir:
         service, paths = _make_service(tmp_dir)
@@ -120,7 +120,7 @@ def test_lark_media_delivery_skip_large_file_sends_fallback(monkeypatch) -> None
                 return _FakeResponse(status_code=200, payload={"code": 0, "data": {"message_id": "m1"}})
             return _FakeResponse(status_code=200, payload={"code": 0, "data": {}})
 
-    monkeypatch.setattr("src.channels.bridge_service.httpx.Client", _FakeClient)
+    monkeypatch.setattr("app.channels.bridge_service.httpx.Client", _FakeClient)
     monkeypatch.setenv("NION_CHANNEL_MEDIA_MAX_FILE_MB", "1")
 
     with TemporaryDirectory() as tmp_dir:
@@ -171,7 +171,7 @@ def test_telegram_media_delivery_success(monkeypatch) -> None:
             calls.append(url)
             return _FakeResponse(status_code=200, payload={"ok": True, "result": {"message_id": 1}})
 
-    monkeypatch.setattr("src.channels.bridge_service.httpx.Client", _FakeClient)
+    monkeypatch.setattr("app.channels.bridge_service.httpx.Client", _FakeClient)
 
     with TemporaryDirectory() as tmp_dir:
         service, paths = _make_service(tmp_dir)

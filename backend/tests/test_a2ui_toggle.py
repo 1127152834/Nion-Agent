@@ -7,7 +7,7 @@ import pytest
 
 def test_prompt_template_can_disable_a2ui_section() -> None:
     """A2UI toggle must remove the full A2UI system block from the prompt."""
-    from src.agents.lead_agent.prompt import apply_prompt_template
+    from nion.agents.lead_agent.prompt import apply_prompt_template
 
     enabled = apply_prompt_template(a2ui_enabled=True)
     assert "<a2ui_system>" in enabled
@@ -31,13 +31,13 @@ def _fake_app_config(*, a2ui_enabled: bool) -> MagicMock:
 @pytest.mark.parametrize("enabled", [True, False])
 def test_get_available_tools_respects_a2ui_toggle(monkeypatch: pytest.MonkeyPatch, enabled: bool) -> None:
     """When A2UI is disabled, the model must NOT see send_a2ui_json_to_client as an available tool."""
-    from src.tools.tools import get_available_tools
+    from nion.tools.tools import get_available_tools
 
     cfg = _fake_app_config(a2ui_enabled=enabled)
-    monkeypatch.setattr("src.tools.tools.ensure_latest_app_config", lambda **_: cfg)
+    monkeypatch.setattr("nion.tools.tools.ensure_latest_app_config", lambda **_: cfg)
 
     # Keep the test isolated from local CLI state (extensions_config.json).
-    import src.cli.runtime_tools as runtime_tools
+    import nion.cli.runtime_tools as runtime_tools
 
     monkeypatch.setattr(runtime_tools, "get_cli_tools", lambda **_: [])
 
@@ -53,11 +53,11 @@ def test_get_available_tools_respects_a2ui_toggle(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.parametrize("enabled", [True, False])
 def test_lead_agent_middlewares_respect_a2ui_toggle(monkeypatch: pytest.MonkeyPatch, enabled: bool) -> None:
     """A2UIMiddleware must be fully skipped when A2UI is disabled."""
-    from src.agents.lead_agent.agent import _build_middlewares
-    from src.agents.middlewares.a2ui_middleware import A2UIMiddleware
+    from nion.agents.lead_agent.agent import _build_middlewares
+    from nion.agents.middlewares.a2ui_middleware import A2UIMiddleware
 
     cfg = _fake_app_config(a2ui_enabled=enabled)
-    monkeypatch.setattr("src.agents.lead_agent.agent.get_app_config", lambda: cfg)
+    monkeypatch.setattr("nion.agents.lead_agent.agent.get_app_config", lambda: cfg)
 
     middlewares = _build_middlewares({"configurable": {}}, model_name="test-model")
     has_a2ui = any(isinstance(item, A2UIMiddleware) for item in middlewares)

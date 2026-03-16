@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from src.agents.memory.policy import resolve_memory_policy
-from src.agents.memory.registry import get_default_memory_provider
-from src.agents.memory.scope import resolve_agent_for_memory_scope
+from nion.agents.memory.policy import resolve_memory_policy
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.agents.memory.scope import resolve_agent_for_memory_scope
 
 MemoryScope = Literal["global", "agent", "auto"]
 

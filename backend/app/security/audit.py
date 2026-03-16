@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from src.config.app_config import AppConfig, get_app_config
+from nion.config.app_config import AppConfig, get_app_config
 
 Severity = Literal["info", "low", "medium", "high"]
 

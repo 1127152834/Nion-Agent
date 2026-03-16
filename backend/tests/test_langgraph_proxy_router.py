@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
 
-from src.gateway.routers import langgraph_proxy
+from app.gateway.routers import langgraph_proxy
 
 
 def _make_client() -> TestClient:

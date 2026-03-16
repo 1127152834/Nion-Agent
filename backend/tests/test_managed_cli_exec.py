@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.cli.managed_cli_exec import resolve_managed_cli_command
+from nion.cli.managed_cli_exec import resolve_managed_cli_command
 
 
 def test_resolve_managed_cli_command_uses_manifest_shim_path(
@@ -13,7 +13,7 @@ def test_resolve_managed_cli_command_uses_manifest_shim_path(
     monkeypatch: pytest.MonkeyPatch,
 ):
     # Arrange: fake ~/.nion paths
-    from src.config import paths as paths_mod
+    from nion.config import paths as paths_mod
 
     fake_root = tmp_path / "nion"
     (fake_root / "clis" / "manifests").mkdir(parents=True)
@@ -59,7 +59,7 @@ def test_resolve_managed_cli_command_raises_when_manifest_missing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    from src.config import paths as paths_mod
+    from nion.config import paths as paths_mod
 
     fake_root = tmp_path / "nion"
     fake_root.mkdir(parents=True)

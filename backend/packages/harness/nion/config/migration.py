@@ -12,8 +12,8 @@ from typing import Any
 
 import yaml
 
-from src.config.app_config import AppConfig
-from src.config.config_store import create_config_store
+from nion.config.app_config import AppConfig
+from nion.config.config_store import create_config_store
 
 logger = logging.getLogger(__name__)
 

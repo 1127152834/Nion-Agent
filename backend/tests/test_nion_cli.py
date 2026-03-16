@@ -1,8 +1,8 @@
 import json
 from unittest.mock import patch
 
-from src.nion_cli import main
-from src.security.audit import AuditFinding, AuditReport
+from app.nion_cli import main
+from app.security.audit import AuditFinding, AuditReport
 
 
 def _report_with_findings(findings: list[AuditFinding]) -> AuditReport:
@@ -24,7 +24,7 @@ def test_nion_cli_audit_fail_on_medium_returns_non_zero(capsys):
             )
         ]
     )
-    with patch("src.nion_cli.run_security_audit", return_value=report):
+    with patch("app.nion_cli.run_security_audit", return_value=report):
         exit_code = main(["security", "audit", "--fail-on", "medium"])
 
     assert exit_code == 2
@@ -34,7 +34,7 @@ def test_nion_cli_audit_fail_on_medium_returns_non_zero(capsys):
 
 def test_nion_cli_audit_json_output(capsys):
     report = _report_with_findings([])
-    with patch("src.nion_cli.run_security_audit", return_value=report):
+    with patch("app.nion_cli.run_security_audit", return_value=report):
         exit_code = main(["security", "audit", "--json"])
 
     assert exit_code == 0

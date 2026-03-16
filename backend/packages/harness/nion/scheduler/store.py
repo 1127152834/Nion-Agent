@@ -8,8 +8,8 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from src.config.paths import get_paths
-from src.scheduler.models import ScheduledTask, TaskExecutionRecord
+from nion.config.paths import get_paths
+from nion.scheduler.models import ScheduledTask, TaskExecutionRecord
 
 _LOCK = threading.Lock()
 logger = logging.getLogger(__name__)

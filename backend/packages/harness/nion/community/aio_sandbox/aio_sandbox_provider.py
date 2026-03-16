@@ -21,10 +21,10 @@ import threading
 import time
 import uuid
 
-from src.config import get_app_config
-from src.config.paths import VIRTUAL_PATH_PREFIX, get_paths
-from src.sandbox.sandbox import Sandbox
-from src.sandbox.sandbox_provider import SandboxProvider
+from nion.config import get_app_config
+from nion.config.paths import VIRTUAL_PATH_PREFIX, get_paths
+from nion.sandbox.sandbox import Sandbox
+from nion.sandbox.sandbox_provider import SandboxProvider
 
 from .aio_sandbox import AioSandbox
 from .backend import SandboxBackend, wait_for_sandbox_ready
@@ -55,7 +55,7 @@ class AioSandboxProvider(SandboxProvider):
         - Cross-process consistency via file-based or Redis state stores
 
     Configuration options in the runtime config payload under `sandbox` (Config Store / UI / API):
-        use: src.community.aio_sandbox:AioSandboxProvider
+        use: nion.community.aio_sandbox:AioSandboxProvider
         image: <container image>
         port: 8080                      # Base port for local containers
         base_url: http://...            # If set, uses remote backend (K8s/external)

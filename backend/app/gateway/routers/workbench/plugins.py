@@ -9,14 +9,14 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 
-from src.config.paths import get_paths
-from src.gateway.path_utils import resolve_thread_virtual_path
-from src.gateway.routers.workbench._helpers import (
+from nion.config.paths import get_paths
+from app.gateway.path_utils import resolve_thread_virtual_path
+from app.gateway.routers.workbench._helpers import (
     _ensure_langgraph_thread_for_plugin_test,
     _resolve_cwd,
     _utcnow_iso,
 )
-from src.gateway.routers.workbench.models import (
+from app.gateway.routers.workbench.models import (
     PluginTestRequest,
     PluginTestResponse,
     PluginTestStepResult,

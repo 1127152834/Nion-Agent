@@ -14,9 +14,9 @@ from urllib.request import getproxies
 
 import httpx
 
-from src.channels.incoming_service import ChannelInboundResult, ChannelInboundService
-from src.channels.repository import SUPPORTED_CHANNEL_PLATFORMS, ChannelRepository
-from src.channels.webhook_service import IncomingWebhookEvent, extract_incoming_event
+from app.channels.incoming_service import ChannelInboundResult, ChannelInboundService
+from app.channels.repository import SUPPORTED_CHANNEL_PLATFORMS, ChannelRepository
+from app.channels.webhook_service import IncomingWebhookEvent, extract_incoming_event
 
 logger = logging.getLogger(__name__)
 

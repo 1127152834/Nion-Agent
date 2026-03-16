@@ -17,9 +17,9 @@ from langgraph.prebuilt.tool_node import ToolCallRequest
 from langgraph.runtime import Runtime
 from langgraph.types import Command
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.cli.catalog import load_cli_catalog
-from src.sandbox.tools import ensure_sandbox_initialized
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.cli.catalog import load_cli_catalog
+from nion.sandbox.tools import ensure_sandbox_initialized
 
 
 class CLIInteractiveMiddleware(AgentMiddleware[AgentState]):

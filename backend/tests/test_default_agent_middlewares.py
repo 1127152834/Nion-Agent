@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.middlewares.memory_middleware import MemoryMiddleware
-from src.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
+from nion.agents.middlewares.memory_middleware import MemoryMiddleware
+from nion.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
 
 
 @pytest.mark.unit

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.memory.openviking_runtime import OpenVikingRuntime
-from src.config.paths import Paths
+from nion.agents.memory.openviking_runtime import OpenVikingRuntime
+from nion.config.paths import Paths
 
 
 @pytest.mark.unit
 def test_BE_CORE_MEM_408_compact_tolerates_remote_not_found(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "src.agents.memory.openviking_runtime.get_paths",
+        "nion.agents.memory.openviking_runtime.get_paths",
         lambda: Paths(base_dir=tmp_path),
     )
     runtime = OpenVikingRuntime()
@@ -46,7 +46,7 @@ def test_BE_CORE_MEM_408_compact_tolerates_remote_not_found(monkeypatch, tmp_pat
 @pytest.mark.unit
 def test_BE_CORE_MEM_409_forget_tolerates_remote_not_found(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "src.agents.memory.openviking_runtime.get_paths",
+        "nion.agents.memory.openviking_runtime.get_paths",
         lambda: Paths(base_dir=tmp_path),
     )
     runtime = OpenVikingRuntime()

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-import src.agents.memory.actions as actions
+import nion.agents.memory.actions as actions
 
 
 class _DummyProvider:

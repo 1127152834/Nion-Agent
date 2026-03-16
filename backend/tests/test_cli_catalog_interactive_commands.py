@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.cli.catalog import load_cli_catalog
+from nion.cli.catalog import load_cli_catalog
 
 
 def test_xhs_cli_login_marked_as_pty_interactive():

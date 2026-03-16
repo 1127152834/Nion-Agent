@@ -4,9 +4,9 @@ import os
 
 import pytest
 
-from src.agents.memory.openviking_provider import OpenVikingMemoryProvider
-from src.agents.memory.openviking_runtime import OpenVikingRuntime
-from src.config.paths import Paths
+from nion.agents.memory.openviking_provider import OpenVikingMemoryProvider
+from nion.agents.memory.openviking_runtime import OpenVikingRuntime
+from nion.config.paths import Paths
 
 
 class _Resource:

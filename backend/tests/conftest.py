@@ -1,17 +1,14 @@
-"""Test configuration for the backend test suite.
-
-Why this exists:
-- Ensure the backend package root is importable so `import src.*` works
-  regardless of the current working directory when running pytest.
-"""
+"""Test configuration for the backend test suite."""
 
 import sys
 from pathlib import Path
 
 import pytest
 
-# Make `src` importable from any working directory.
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Make both `nion` (harness) and `app` importable from any working directory.
+backend_root = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_root))
+sys.path.insert(0, str(backend_root / "packages" / "harness"))
 
 
 @pytest.fixture

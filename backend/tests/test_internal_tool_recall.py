@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.tools.internal_tool_recall import recommend_internal_tools
+from nion.tools.internal_tool_recall import recommend_internal_tools
 
 
 def test_recommend_internal_tools_prefers_xhs_cli_for_xiaohongshu_login(

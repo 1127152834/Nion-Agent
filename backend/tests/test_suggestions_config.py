@@ -1,6 +1,6 @@
 """Tests for suggestions configuration singleton."""
 
-from src.config.suggestions_config import (
+from nion.config.suggestions_config import (
     SuggestionsConfig,
     get_suggestions_config,
     load_suggestions_config_from_dict,

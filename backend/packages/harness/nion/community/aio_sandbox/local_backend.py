@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import subprocess
 
-from src.utils.network import get_free_port, release_port
+from nion.utils.network import get_free_port, release_port
 
 from .backend import SandboxBackend, wait_for_sandbox_ready
 from .sandbox_info import SandboxInfo

@@ -18,14 +18,14 @@ from urllib.parse import urlparse
 
 import httpx
 
-from src.cli.catalog import CliMarketplaceTool, CliMarketplaceToolPlatform
-from src.cli.manifests import (
+from nion.cli.catalog import CliMarketplaceTool, CliMarketplaceToolPlatform
+from nion.cli.manifests import (
     CliInstallBinManifest,
     CliInstallManifest,
     load_cli_install_manifest,
     save_cli_install_manifest,
 )
-from src.config.paths import get_paths
+from nion.config.paths import get_paths
 
 _MAX_ARCHIVE_BYTES = 200 * 1024 * 1024
 _MAX_EXTRACT_BYTES = 500 * 1024 * 1024
@@ -418,7 +418,7 @@ async def install_cli_tool(
         env = dict(os.environ)
         try:
             if package_kind == "uv":
-                from src.cli.toolchains import ensure_uv_toolchain
+                from nion.cli.toolchains import ensure_uv_toolchain
 
                 _report_progress(progress, "准备 uv 工具链...")
                 toolchain, _ = await ensure_uv_toolchain()
@@ -433,7 +433,7 @@ async def install_cli_tool(
                 _report_progress(progress, "uv 安装中...")
                 code, out, err = await _run_subprocess([str(toolchain.uv_path), "tool", "install", spec], env=env)
             else:
-                from src.cli.toolchains import ensure_pipx_toolchain
+                from nion.cli.toolchains import ensure_pipx_toolchain
 
                 _report_progress(progress, "准备 pipx 工具链...")
                 toolchain, _ = await ensure_pipx_toolchain()
@@ -582,7 +582,7 @@ def uninstall_cli_tool(*, tool_id: str, keep_config: bool = True, paths=None) ->
         pass
 
     if not keep_config:
-        from src.config.extensions_config import ExtensionsConfig, reload_extensions_config
+        from nion.config.extensions_config import ExtensionsConfig, reload_extensions_config
 
         config_path = ExtensionsConfig.resolve_config_path()
         if config_path is not None:

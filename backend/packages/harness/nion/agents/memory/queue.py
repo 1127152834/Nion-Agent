@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from src.config.memory_config import get_memory_config
+from nion.config.memory_config import get_memory_config
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class MemoryUpdateQueue:
         self._timer.start()
 
     def _process_queue(self) -> None:
-        from src.agents.memory.registry import get_default_memory_provider
+        from nion.agents.memory.registry import get_default_memory_provider
 
         with self._lock:
             if self._processing:

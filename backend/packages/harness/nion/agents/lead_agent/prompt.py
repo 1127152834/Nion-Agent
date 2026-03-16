@@ -2,11 +2,11 @@ import json
 import re
 from datetime import datetime
 
-from src.agents.memory.core import MemoryReadRequest
-from src.agents.memory.registry import get_default_memory_provider
-from src.config.extensions_config import ExtensionsConfig
-from src.config.paths import get_paths
-from src.skills import load_skills
+from nion.agents.memory.core import MemoryReadRequest
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.config.extensions_config import ExtensionsConfig
+from nion.config.paths import get_paths
+from nion.skills import load_skills
 
 _SAFE_PLUGIN_STUDIO_SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 
@@ -498,7 +498,7 @@ def get_skills_prompt_section(available_skills: set[str] | None = None) -> str:
     skills = load_skills(enabled_only=True)
 
     try:
-        from src.config import get_app_config
+        from nion.config import get_app_config
 
         config = get_app_config()
         container_base_path = config.skills.container_path
@@ -560,8 +560,8 @@ The user explicitly specified the following skill(s) for this turn: {joined}
 
 def get_agent_soul(agent_name: str | None) -> str:
     """Load agent soul with summarization (Memoh Soul Core)."""
-    from src.agents.soul.resolver import SoulResolver
-    from src.agents.soul.summarizer import SoulSummarizer
+    from nion.agents.soul.resolver import SoulResolver
+    from nion.agents.soul.summarizer import SoulSummarizer
 
     resolver = SoulResolver()
     summarizer = SoulSummarizer()
@@ -588,9 +588,9 @@ def get_user_profile(
     memory_read: bool | None = None,
 ) -> str:
     """Load USER.md with policy enforcement (Memoh Soul Core)."""
-    from src.agents.memory.policy import resolve_memory_policy
-    from src.agents.soul.resolver import SoulResolver
-    from src.agents.soul.summarizer import SoulSummarizer
+    from nion.agents.memory.policy import resolve_memory_policy
+    from nion.agents.soul.resolver import SoulResolver
+    from nion.agents.soul.summarizer import SoulSummarizer
 
     # Check memory policy
     policy = resolve_memory_policy(
@@ -675,7 +675,7 @@ def _build_memory_policy_section(
     memory_read: bool | None,
     memory_write: bool | None,
 ) -> str:
-    from src.agents.memory.policy import resolve_memory_policy
+    from nion.agents.memory.policy import resolve_memory_policy
 
     policy = resolve_memory_policy(
         runtime_context={

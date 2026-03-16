@@ -7,7 +7,7 @@ import json
 import sys
 from datetime import timedelta
 
-from src.keychain import CredentialType, get_keychain
+from nion.keychain import CredentialType, get_keychain
 
 
 def cmd_store(args):

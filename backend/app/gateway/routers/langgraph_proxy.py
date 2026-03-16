@@ -14,7 +14,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
-from src.gateway.langgraph_client import build_langgraph_upstream_url, cancel_active_thread_runs
+from app.gateway.langgraph_client import build_langgraph_upstream_url, cancel_active_thread_runs
 
 router = APIRouter(prefix="/api/langgraph", tags=["langgraph"])
 

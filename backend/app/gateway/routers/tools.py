@@ -8,7 +8,7 @@ import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from src.community.web_search.tools import DEFAULT_PUBLIC_SEARXNG_INSTANCES
+from nion.community.web_search.tools import DEFAULT_PUBLIC_SEARXNG_INSTANCES
 
 router = APIRouter(prefix="/api/tools", tags=["tools"])
 

@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 import yaml
 
-from src.config.paths import get_paths
+from nion.config.paths import get_paths
 
 DEFAULT_CHECKPOINTER_CONFIG: dict[str, Any] = {
     "type": "sqlite",
@@ -26,7 +26,7 @@ MINIMAL_DEFAULT_CONFIG: dict[str, Any] = {
     "models": [],
     "tool_groups": [],
     "tools": [],
-    "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
+    "sandbox": {"use": "nion.sandbox.local:LocalSandboxProvider"},
     "checkpointer": deepcopy(DEFAULT_CHECKPOINTER_CONFIG),
 }
 

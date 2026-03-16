@@ -1,6 +1,6 @@
 """Test Heartbeat models and templates."""
 
-from src.heartbeat.models import (
+from app.heartbeat.models import (
     HeartbeatCategory,
     HeartbeatLogRecord,
     HeartbeatResultType,
@@ -8,7 +8,7 @@ from src.heartbeat.models import (
     HeartbeatTemplate,
     TemplateConfig,
 )
-from src.heartbeat.templates import get_default_templates, get_template
+from app.heartbeat.templates import get_default_templates, get_template
 
 
 def test_heartbeat_template_model():

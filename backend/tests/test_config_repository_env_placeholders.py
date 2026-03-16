@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.config.app_config import AppConfig
-from src.config.config_repository import ConfigRepository
-from src.config.config_store import create_config_store
+from nion.config.app_config import AppConfig
+from nion.config.config_repository import ConfigRepository
+from nion.config.config_store import create_config_store
 
 
 @pytest.fixture
@@ -22,12 +22,12 @@ def base_config() -> dict:
             {
                 "name": "write_file",
                 "group": "file",
-                "use": "src.tools.builtins:write_file_tool",
+                "use": "nion.tools.builtins:write_file_tool",
             }
         ],
         "tool_groups": [{"name": "file"}],
         "sandbox": {
-            "use": "src.sandbox.local:LocalSandboxProvider",
+            "use": "nion.sandbox.local:LocalSandboxProvider",
         },
     }
 
@@ -92,7 +92,7 @@ def test_store_exists_parse_failure_does_not_fallback(monkeypatch, tmp_path) -> 
         "models": "broken",
         "tools": [],
         "tool_groups": [],
-        "sandbox": {"use": "src.sandbox.local:LocalSandboxProvider"},
+        "sandbox": {"use": "nion.sandbox.local:LocalSandboxProvider"},
     }
     store.write(invalid_config, expected_version=version)
 

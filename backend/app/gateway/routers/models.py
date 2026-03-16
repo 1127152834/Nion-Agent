@@ -15,9 +15,9 @@ except Exception:  # pragma: no cover - compatibility fallback
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
-from src.config import get_app_config
-from src.reflection import resolve_class
-from src.tools.builtins._service_ops import (
+from nion.config import get_app_config
+from nion.reflection import resolve_class
+from nion.tools.builtins._service_ops import (
     ModelConnectionTestRequest,
     ModelConnectionTestResponse,
     ModelResponse,

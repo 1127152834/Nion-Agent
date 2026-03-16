@@ -6,8 +6,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.cli.catalog import CliArch, CliOs
-from src.config.paths import get_paths
+from nion.cli.catalog import CliArch, CliOs
+from nion.config.paths import get_paths
 
 
 def _utcnow_iso() -> str:

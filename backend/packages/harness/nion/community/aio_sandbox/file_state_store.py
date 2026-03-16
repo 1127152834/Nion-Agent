@@ -15,7 +15,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
-from src.config.paths import Paths
+from nion.config.paths import Paths
 
 from .sandbox_info import SandboxInfo
 from .state_store import SandboxStateStore

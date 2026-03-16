@@ -25,14 +25,14 @@ class _NoopProvider:
 @pytest.fixture(autouse=True)
 def _disable_openviking_sync_by_default():
     with patch(
-        "src.tools.builtins.setup_agent_tool.get_default_memory_provider",
+        "nion.tools.builtins.setup_agent_tool.get_default_memory_provider",
         return_value=_NoopProvider(),
     ):
         yield
 
 
 def _paths(base_dir: Path):
-    from src.config.paths import Paths
+    from nion.config.paths import Paths
 
     return Paths(base_dir=base_dir)
 
@@ -48,9 +48,9 @@ def _runtime(*, agent_name: str | None, agent_display_name: str | None = None):
 
 
 def test_setup_agent_custom_creates_assets_and_user_profile_block(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         _ = setup_agent.func(
             soul="# SOUL\ncustom soul",
             description="A custom agent for writing and editing.",
@@ -79,14 +79,14 @@ def test_setup_agent_custom_creates_assets_and_user_profile_block(tmp_path: Path
 
 
 def test_setup_agent_custom_rejects_existing_agent_dir_without_mutation(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     agent_dir = tmp_path / "agents" / "writer"
     agent_dir.mkdir(parents=True, exist_ok=True)
     sentinel = agent_dir / "sentinel.txt"
     sentinel.write_text("do-not-delete", encoding="utf-8")
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         result = setup_agent.func(
             soul="new soul",
             description="new desc",
@@ -104,9 +104,9 @@ def test_setup_agent_custom_rejects_existing_agent_dir_without_mutation(tmp_path
 
 
 def test_setup_agent_custom_rejects_missing_identity_without_creating_agent_dir(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         result = setup_agent.func(
             soul="custom soul",
             description="desc",
@@ -122,7 +122,7 @@ def test_setup_agent_custom_rejects_missing_identity_without_creating_agent_dir(
 
 
 def test_setup_agent_custom_rejects_soul_mixed_identity_content_without_creating_agent_dir(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     mixed_soul = """# Soul
 
@@ -130,7 +130,7 @@ def test_setup_agent_custom_rejects_soul_mixed_identity_content_without_creating
 - 你要做很多事（这段内容应当属于 IDENTITY，而不是 SOUL）
 """
 
-    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+    with patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
         result = setup_agent.func(
             soul=mixed_soul,
             description="desc",
@@ -148,11 +148,11 @@ def test_setup_agent_custom_rejects_soul_mixed_identity_content_without_creating
 
 
 def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
-        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.config.default_agent.get_paths", return_value=_paths(tmp_path)),
     ):
         _ = setup_agent.func(
             soul="# SOUL\ndefault soul v2",
@@ -171,7 +171,7 @@ def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
 
 
 def test_setup_agent_default_rejects_soul_mixed_identity_content_without_writing_default_assets(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     mixed_soul = """# Soul
 
@@ -180,8 +180,8 @@ def test_setup_agent_default_rejects_soul_mixed_identity_content_without_writing
 """
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
-        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.config.default_agent.get_paths", return_value=_paths(tmp_path)),
     ):
         result = setup_agent.func(
             soul=mixed_soul,
@@ -200,14 +200,14 @@ def test_setup_agent_default_rejects_soul_mixed_identity_content_without_writing
 
 
 def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     existing = "manual header\n<!-- nion:bootstrap:user_profile:start -->\nold block\n<!-- nion:bootstrap:user_profile:end -->\nmanual footer\n"
     (tmp_path / "USER.md").write_text(existing, encoding="utf-8")
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
-        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.config.default_agent.get_paths", return_value=_paths(tmp_path)),
     ):
         _ = setup_agent.func(
             soul="soul",
@@ -226,11 +226,11 @@ def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
 
 
 def test_setup_agent_default_rejects_missing_identity_without_writing_default_assets(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
-        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.config.default_agent.get_paths", return_value=_paths(tmp_path)),
     ):
         result = setup_agent.func(
             soul="default soul",
@@ -247,7 +247,7 @@ def test_setup_agent_default_rejects_missing_identity_without_writing_default_as
 
 
 def test_setup_agent_custom_writes_memory_items_and_returns_results(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     memory_items = [
         {"content": "项目背景：Nion-Agent 智能体系统重构", "tier": "profile"},
@@ -255,9 +255,9 @@ def test_setup_agent_custom_writes_memory_items_and_returns_results(tmp_path: Pa
     ]
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
         patch(
-            "src.tools.builtins.setup_agent_tool.store_memory_action",
+            "nion.tools.builtins.setup_agent_tool.store_memory_action",
             create=True,
             side_effect=[{"memory_id": "m1"}, {"memory_id": "m2"}],
         ) as store,
@@ -290,15 +290,15 @@ def test_setup_agent_custom_writes_memory_items_and_returns_results(tmp_path: Pa
 
 
 def test_setup_agent_default_writes_memory_items_to_global_scope(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     memory_items = [{"content": "偏好：重要变更必须先确认", "tier": "preference"}]
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
-        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.config.default_agent.get_paths", return_value=_paths(tmp_path)),
         patch(
-            "src.tools.builtins.setup_agent_tool.store_memory_action",
+            "nion.tools.builtins.setup_agent_tool.store_memory_action",
             create=True,
             side_effect=[{"memory_id": "g1"}],
         ) as store,
@@ -322,7 +322,7 @@ def test_setup_agent_default_writes_memory_items_to_global_scope(tmp_path: Path)
 
 
 def test_setup_agent_custom_syncs_assets_to_openviking_managed_resources(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     sync_calls: list[dict[str, object]] = []
 
@@ -341,8 +341,8 @@ def test_setup_agent_custom_syncs_assets_to_openviking_managed_resources(tmp_pat
             return {"ok": True}
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
-        patch("src.tools.builtins.setup_agent_tool.get_default_memory_provider", return_value=_DummyProvider()),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_default_memory_provider", return_value=_DummyProvider()),
     ):
         _ = setup_agent.func(
             soul="# SOUL\ncustom soul",
@@ -366,7 +366,7 @@ def test_setup_agent_custom_syncs_assets_to_openviking_managed_resources(tmp_pat
 
 
 def test_setup_agent_default_syncs_assets_to_openviking_managed_resources(tmp_path: Path):
-    from src.tools.builtins.setup_agent_tool import setup_agent
+    from nion.tools.builtins.setup_agent_tool import setup_agent
 
     sync_calls: list[dict[str, object]] = []
 
@@ -385,9 +385,9 @@ def test_setup_agent_default_syncs_assets_to_openviking_managed_resources(tmp_pa
             return {"ok": True}
 
     with (
-        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
-        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
-        patch("src.tools.builtins.setup_agent_tool.get_default_memory_provider", return_value=_DummyProvider()),
+        patch("nion.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch("nion.tools.builtins.setup_agent_tool.get_default_memory_provider", return_value=_DummyProvider()),
     ):
         _ = setup_agent.func(
             soul="# SOUL\ndefault soul v2",

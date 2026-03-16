@@ -5,9 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.config.agents_config import load_agent_config
-from src.tools import get_available_tools
-from src.tools.policy import (
+from nion.config.agents_config import load_agent_config
+from nion.tools import get_available_tools
+from nion.tools.policy import (
     AgentToolPolicy,
     AgentToolPolicyUpdateRequest,
     effective_policy_for_tools,

@@ -7,9 +7,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.runtime_profile import RuntimeProfileRepository
+from nion.runtime_profile import RuntimeProfileRepository
 
-_ROUTER_MODULE_PATH = Path(__file__).resolve().parents[1] / "src" / "gateway" / "routers" / "runtime_profile.py"
+_ROUTER_MODULE_PATH = Path(__file__).resolve().parents[1] / "app" / "gateway" / "routers" / "runtime_profile.py"
 _ROUTER_SPEC = importlib.util.spec_from_file_location("runtime_profile_router_test_module", _ROUTER_MODULE_PATH)
 if _ROUTER_SPEC is None or _ROUTER_SPEC.loader is None:  # pragma: no cover
     raise RuntimeError("Failed to load runtime_profile router module")
@@ -25,10 +25,10 @@ def _make_client(monkeypatch, tmp_path: Path, *, desktop: bool) -> TestClient:
     monkeypatch.setenv("NION_HOME", str(tmp_path))
     monkeypatch.setenv("NION_DESKTOP_RUNTIME", "1" if desktop else "0")
 
-    from src.config import paths as paths_module
+    from nion.config import paths as paths_module
 
     paths_module._paths = None
-    from src.config import app_config as app_config_module
+    from nion.config import app_config as app_config_module
 
     app_config_module.reset_app_config()
 

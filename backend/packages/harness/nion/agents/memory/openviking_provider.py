@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from src.agents.memory.core import MemoryPolicyRequest, MemoryReadRequest, MemoryWriteRequest
-from src.agents.memory.policy import MemorySessionPolicy, resolve_memory_policy
+from nion.agents.memory.core import MemoryPolicyRequest, MemoryReadRequest, MemoryWriteRequest
+from nion.agents.memory.policy import MemorySessionPolicy, resolve_memory_policy
 
 
 class OpenVikingMemoryProvider:
@@ -33,8 +33,8 @@ class OpenVikingMemoryProvider:
         if not policy.allow_read:
             return ""
 
-        from src.agents.memory import format_memory_for_injection
-        from src.config.memory_config import get_memory_config
+        from nion.agents.memory import format_memory_for_injection
+        from nion.config.memory_config import get_memory_config
 
         config = get_memory_config()
         if not config.enabled or not config.injection_enabled:

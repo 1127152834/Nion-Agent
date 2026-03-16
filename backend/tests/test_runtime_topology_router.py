@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.gateway import config as gateway_config_module
-from src.gateway.routers import runtime_topology
+from app.gateway import config as gateway_config_module
+from app.gateway.routers import runtime_topology
 
 
 def _make_client(monkeypatch, *, desktop: bool) -> TestClient:

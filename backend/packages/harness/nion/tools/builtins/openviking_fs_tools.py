@@ -21,8 +21,8 @@ except Exception:  # noqa: BLE001
         state: dict[str, Any]
 
 
-from src.agents.memory.registry import get_default_memory_provider
-from src.agents.memory.scope import resolve_agent_for_memory_scope
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.agents.memory.scope import resolve_agent_for_memory_scope
 
 MemoryScope = Literal["global", "agent", "auto"]
 

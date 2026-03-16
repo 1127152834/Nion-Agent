@@ -4,7 +4,7 @@ import logging
 import shutil
 from typing import Any
 
-from src.config.extensions_config import ExtensionsConfig, McpServerConfig
+from nion.config.extensions_config import ExtensionsConfig, McpServerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def build_server_params(server_name: str, config: McpServerConfig) -> dict[str, 
         # If user doesn't have a global `npx/node` etc, fall back to Nion-managed toolchains.
         if shutil.which(command) is None:
             try:
-                from src.mcp.toolchains import resolve_managed_command
+                from nion.mcp.toolchains import resolve_managed_command
 
                 managed = resolve_managed_command(command)
                 if managed is not None and managed.exists():

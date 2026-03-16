@@ -2,9 +2,9 @@ from typing import NotRequired, override
 
 from langgraph.runtime import Runtime
 
-from src.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
-from src.agents.thread_state import ThreadDataState
-from src.config.paths import Paths, get_paths
+from nion.agents.middlewares.langchain_compat import AgentMiddleware, AgentState
+from nion.agents.thread_state import ThreadDataState
+from nion.config.paths import Paths, get_paths
 
 
 class ThreadDataMiddlewareState(AgentState):

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 
-from src.agents.middlewares.clarification_middleware import ClarificationMiddleware
+from nion.agents.middlewares.clarification_middleware import ClarificationMiddleware
 
 
 def test_wrap_tool_call_intercepts_clarification_and_sets_structured_payload():

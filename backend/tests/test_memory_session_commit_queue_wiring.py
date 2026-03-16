@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agents.middlewares.memory_middleware import MemoryMiddleware
-from src.config.memory_config import MemoryConfig, set_memory_config
+from nion.agents.middlewares.memory_middleware import MemoryMiddleware
+from nion.config.memory_config import MemoryConfig, set_memory_config
 
 
 def teardown_function() -> None:
@@ -45,8 +45,8 @@ def test_BE_CORE_MEM_QUEUE_401_after_agent_enqueues_session_commit_when_enabled(
 
     provider = _DummyProvider(allow_write=True)
     queue = _DummyQueue()
-    monkeypatch.setattr("src.agents.middlewares.memory_middleware.get_default_memory_provider", lambda: provider)
-    monkeypatch.setattr("src.agents.middlewares.memory_middleware.get_memory_queue", lambda: queue)
+    monkeypatch.setattr("nion.agents.middlewares.memory_middleware.get_default_memory_provider", lambda: provider)
+    monkeypatch.setattr("nion.agents.middlewares.memory_middleware.get_memory_queue", lambda: queue)
 
     middleware = MemoryMiddleware(agent_name="agent-x")
     runtime = SimpleNamespace(context={"thread_id": "thread-1"}, state={})
@@ -63,8 +63,8 @@ def test_BE_CORE_MEM_QUEUE_402_after_agent_does_not_enqueue_session_commit_when_
 
     provider = _DummyProvider(allow_write=True)
     queue = _DummyQueue()
-    monkeypatch.setattr("src.agents.middlewares.memory_middleware.get_default_memory_provider", lambda: provider)
-    monkeypatch.setattr("src.agents.middlewares.memory_middleware.get_memory_queue", lambda: queue)
+    monkeypatch.setattr("nion.agents.middlewares.memory_middleware.get_default_memory_provider", lambda: provider)
+    monkeypatch.setattr("nion.agents.middlewares.memory_middleware.get_memory_queue", lambda: queue)
 
     middleware = MemoryMiddleware(agent_name=None)
     runtime = SimpleNamespace(context={"thread_id": "thread-2"}, state={})
@@ -80,8 +80,8 @@ def test_BE_CORE_MEM_QUEUE_403_temporary_chat_policy_blocks_enqueue_and_structur
 
     provider = _DummyProvider(allow_write=False)
     queue = _DummyQueue()
-    monkeypatch.setattr("src.agents.middlewares.memory_middleware.get_default_memory_provider", lambda: provider)
-    monkeypatch.setattr("src.agents.middlewares.memory_middleware.get_memory_queue", lambda: queue)
+    monkeypatch.setattr("nion.agents.middlewares.memory_middleware.get_default_memory_provider", lambda: provider)
+    monkeypatch.setattr("nion.agents.middlewares.memory_middleware.get_memory_queue", lambda: queue)
 
     middleware = MemoryMiddleware(agent_name=None)
     runtime = SimpleNamespace(context={"thread_id": "thread-3"}, state={})

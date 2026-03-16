@@ -3,9 +3,9 @@ import logging
 import requests
 from langchain.tools import tool
 
-from src.community.jina_ai.jina_client import JinaClient
-from src.config import get_app_config
-from src.utils.readability import ReadabilityExtractor
+from nion.community.jina_ai.jina_client import JinaClient
+from nion.config import get_app_config
+from nion.utils.readability import ReadabilityExtractor
 
 readability_extractor = ReadabilityExtractor()
 logger = logging.getLogger(__name__)

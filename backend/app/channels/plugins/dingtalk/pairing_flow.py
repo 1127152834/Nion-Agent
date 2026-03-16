@@ -4,7 +4,7 @@ import secrets
 from dataclasses import dataclass
 from typing import Any
 
-from src.channels.webhook_service import IncomingWebhookEvent, parse_pairing_code
+from app.channels.webhook_service import IncomingWebhookEvent, parse_pairing_code
 
 
 @dataclass(slots=True)

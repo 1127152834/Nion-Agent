@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.scheduler.models import (
+from nion.scheduler.models import (
     AgentStep,
     CompletionCriteria,
     CompletionCriteriaType,
@@ -36,19 +36,19 @@ __all__ = [
 
 
 def get_scheduler():
-    from src.scheduler.service import get_scheduler as _get_scheduler
+    from nion.scheduler.service import get_scheduler as _get_scheduler
 
     return _get_scheduler()
 
 
 def startup_scheduler() -> None:
-    from src.scheduler.service import startup_scheduler as _startup_scheduler
+    from nion.scheduler.service import startup_scheduler as _startup_scheduler
 
     _startup_scheduler()
 
 
 def shutdown_scheduler() -> None:
-    from src.scheduler.service import shutdown_scheduler as _shutdown_scheduler
+    from nion.scheduler.service import shutdown_scheduler as _shutdown_scheduler
 
     _shutdown_scheduler()
 
@@ -57,7 +57,7 @@ def __getattr__(name: str):
     if name != "TaskScheduler":
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-    from src.scheduler.runner import TaskScheduler as _TaskScheduler
+    from nion.scheduler.runner import TaskScheduler as _TaskScheduler
 
     globals()["TaskScheduler"] = _TaskScheduler
     return _TaskScheduler

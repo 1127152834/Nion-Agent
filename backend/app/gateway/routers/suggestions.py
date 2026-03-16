@@ -4,8 +4,8 @@ import logging
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from src.config.suggestions_config import get_suggestions_config
-from src.models import create_chat_model
+from nion.config.suggestions_config import get_suggestions_config
+from nion.models import create_chat_model
 
 logger = logging.getLogger(__name__)
 

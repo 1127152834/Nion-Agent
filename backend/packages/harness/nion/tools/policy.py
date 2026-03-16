@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.config.paths import get_paths
+from nion.config.paths import get_paths
 
 ToolTier = Literal["core", "extended"]
 

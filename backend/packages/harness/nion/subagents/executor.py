@@ -16,11 +16,11 @@ from langchain.tools import BaseTool
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 
-from src.agents.thread_state import SandboxState, ThreadDataState, ThreadState
-from src.models import create_chat_model
-from src.subagents.config import SubagentConfig
-from src.subagents.run_models import SubagentRunRecord
-from src.subagents.run_store import get_run, list_runs, patch_run, upsert_run
+from nion.agents.thread_state import SandboxState, ThreadDataState, ThreadState
+from nion.models import create_chat_model
+from nion.subagents.config import SubagentConfig
+from nion.subagents.run_models import SubagentRunRecord
+from nion.subagents.run_store import get_run, list_runs, patch_run, upsert_run
 
 logger = logging.getLogger(__name__)
 
@@ -199,8 +199,8 @@ class SubagentExecutor:
 
         # Subagents need minimal middlewares to ensure tools can access sandbox and thread_data
         # These middlewares will reuse the sandbox/thread_data from parent agent
-        from src.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
-        from src.sandbox.middleware import SandboxMiddleware
+        from nion.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
+        from nion.sandbox.middleware import SandboxMiddleware
 
         middlewares = [
             ThreadDataMiddleware(lazy_init=True),  # Compute thread paths

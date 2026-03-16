@@ -7,15 +7,15 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
-from src.channels.event_broker import ChannelEventBroker
-from src.channels.repository import ChannelRepository
-from src.channels.runtime_manager import ChannelRuntimeManager
-from src.config.app_config import get_app_config
-from src.config.default_agent import ensure_default_agent
-from src.config.paths import get_paths
-from src.gateway.config import get_gateway_config
-from src.gateway.routers import (
+from nion.agents.memory.legacy_cleanup import ensure_legacy_memory_removed
+from app.channels.event_broker import ChannelEventBroker
+from app.channels.repository import ChannelRepository
+from app.channels.runtime_manager import ChannelRuntimeManager
+from nion.config.app_config import get_app_config
+from nion.config.default_agent import ensure_default_agent
+from nion.config.paths import get_paths
+from app.gateway.config import get_gateway_config
+from app.gateway.routers import (
     agents,
     artifact_groups,
     artifacts,
@@ -43,7 +43,7 @@ from src.gateway.routers import (
     workbench,
     workspace,
 )
-from src.scheduler.service import shutdown_scheduler, startup_scheduler
+from nion.scheduler.service import shutdown_scheduler, startup_scheduler
 
 # Configure logging
 logging.basicConfig(
@@ -90,10 +90,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Register app-layer mode executors for scheduler before scheduler startup.
     # This avoids harness-layer scheduler importing app-layer evolution/heartbeat modules.
-    from src.scheduler.mode_registry import register_mode_executor
+    from nion.scheduler.mode_registry import register_mode_executor
 
     async def _evolution_executor(task, trace_id):
-        from src.evolution.service import get_evolution_service
+        from app.evolution.service import get_evolution_service
 
         report = await asyncio.wait_for(
             get_evolution_service().run(task.agent_name),
@@ -116,7 +116,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             raise ValueError(f"Invalid heartbeat task name: {task.name}")
 
         template_id = parts[2]
-        from src.heartbeat.executor import HeartbeatExecutor
+        from app.heartbeat.executor import HeartbeatExecutor
 
         record = await asyncio.wait_for(
             HeartbeatExecutor().execute(template_id, task.agent_name),

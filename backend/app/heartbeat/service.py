@@ -2,11 +2,11 @@
 
 from datetime import UTC, datetime
 
-from src.heartbeat.models import HeartbeatLogRecord, HeartbeatSettings, HeartbeatTemplate
-from src.heartbeat.store import get_log_by_id, load_logs, load_settings, save_settings
-from src.heartbeat.templates import get_default_templates, get_template
-from src.scheduler.models import ScheduledTask, TaskMode, TriggerConfig, TriggerType
-from src.scheduler.service import get_scheduler
+from app.heartbeat.models import HeartbeatLogRecord, HeartbeatSettings, HeartbeatTemplate
+from app.heartbeat.store import get_log_by_id, load_logs, load_settings, save_settings
+from app.heartbeat.templates import get_default_templates, get_template
+from nion.scheduler.models import ScheduledTask, TaskMode, TriggerConfig, TriggerType
+from nion.scheduler.service import get_scheduler
 
 
 class HeartbeatService:

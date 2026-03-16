@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from src.processlog.service import get_processlog_service
+from nion.processlog.service import get_processlog_service
 
 router = APIRouter(prefix="/api/processlog", tags=["processlog"])
 

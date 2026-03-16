@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.config.retrieval_models_config import RetrievalModelsConfig
-from src.retrieval_models.service import RetrievalModelsError, RetrievalModelsService
+from nion.config.retrieval_models_config import RetrievalModelsConfig
+from app.retrieval_models.service import RetrievalModelsError, RetrievalModelsService
 
 
 def _build_retrieval_config(
@@ -74,11 +74,11 @@ def _patch_runtime(monkeypatch: pytest.MonkeyPatch, cfg: RetrievalModelsConfig) 
     config_dict_ref = config_dict
 
     monkeypatch.setattr(
-        "src.retrieval_models.service.get_app_config",
+        "app.retrieval_models.service.get_app_config",
         lambda: SimpleNamespace(retrieval_models=cfg),
     )
     monkeypatch.setattr(
-        "src.retrieval_models.service.ConfigRepository",
+        "app.retrieval_models.service.ConfigRepository",
         _FakeConfigRepository,
     )
     return config_dict

@@ -17,14 +17,14 @@ except Exception:  # noqa: BLE001
         state: dict[str, Any]
 
 
-from src.agents.memory.actions import (
+from nion.agents.memory.actions import (
     compact_memory_action,
     forget_memory_action,
     query_memory_action,
     store_memory_action,
 )
-from src.agents.memory.policy import resolve_memory_policy
-from src.agents.memory.registry import get_default_memory_provider
+from nion.agents.memory.policy import resolve_memory_policy
+from nion.agents.memory.registry import get_default_memory_provider
 
 
 def _json(data: dict[str, Any]) -> str:

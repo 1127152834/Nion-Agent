@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.agents.middlewares.internal_tool_recall_middleware import InternalToolRecallMiddleware
-from src.tools.internal_tool_recall import InternalToolHit
+from nion.agents.middlewares.internal_tool_recall_middleware import InternalToolRecallMiddleware
+from nion.tools.internal_tool_recall import InternalToolHit
 
 
 def test_internal_tool_recall_middleware_injects_system_message(monkeypatch):
@@ -13,7 +13,7 @@ def test_internal_tool_recall_middleware_injects_system_message(monkeypatch):
     monkeypatch.setattr(mw, "_is_anthropic_compatible_model", lambda _runtime: False)
 
     monkeypatch.setattr(
-        "src.agents.middlewares.internal_tool_recall_middleware.recommend_internal_tools",
+        "nion.agents.middlewares.internal_tool_recall_middleware.recommend_internal_tools",
         lambda _query, limit: [
             InternalToolHit(
                 tool_type="cli",
@@ -40,7 +40,7 @@ def test_internal_tool_recall_middleware_dedupes_by_query_hash(monkeypatch):
     monkeypatch.setattr(mw, "_is_anthropic_compatible_model", lambda _runtime: False)
 
     monkeypatch.setattr(
-        "src.agents.middlewares.internal_tool_recall_middleware.recommend_internal_tools",
+        "nion.agents.middlewares.internal_tool_recall_middleware.recommend_internal_tools",
         lambda *_args, **_kwargs: [
             InternalToolHit(
                 tool_type="cli",

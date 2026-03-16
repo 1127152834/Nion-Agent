@@ -6,10 +6,10 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src.channels.bridge_service import ChannelAgentBridgeService
-from src.channels.plugins.dingtalk import DingTalkInboundPlugin
-from src.channels.repository import ChannelRepository
-from src.channels.webhook_service import IncomingWebhookEvent, parse_pairing_code
+from app.channels.bridge_service import ChannelAgentBridgeService
+from app.channels.plugins.dingtalk import DingTalkInboundPlugin
+from app.channels.repository import ChannelRepository
+from app.channels.webhook_service import IncomingWebhookEvent, parse_pairing_code
 
 
 def _safe_int(value: str | None, default_value: int, *, min_value: int, max_value: int) -> int:

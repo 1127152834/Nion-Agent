@@ -6,8 +6,8 @@ import json
 import threading
 from pathlib import Path
 
-from src.config.paths import get_paths
-from src.processlog.types import ProcessLogEvent
+from nion.config.paths import get_paths
+from nion.processlog.types import ProcessLogEvent
 
 _LOCK = threading.Lock()
 

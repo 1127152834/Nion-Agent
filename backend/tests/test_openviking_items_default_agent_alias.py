@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-import src.gateway.routers.openviking as openviking_router
+import app.gateway.routers.openviking as openviking_router
 
 
 class _DummyProvider:

@@ -14,14 +14,16 @@ import logging
 import os
 import sys
 
-# Ensure we can import from src
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Ensure we can import harness/app modules without installing the package.
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, backend_dir)
+sys.path.insert(0, os.path.join(backend_dir, "packages", "harness"))
 
 # Load environment variables
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 
-from src.agents import make_lead_agent
+from nion.agents import make_lead_agent
 
 load_dotenv()
 
@@ -36,7 +38,7 @@ logging.basicConfig(
 async def main():
     # Initialize MCP tools at startup
     try:
-        from src.mcp import initialize_mcp_tools
+        from nion.mcp import initialize_mcp_tools
 
         await initialize_mcp_tools()
     except Exception as e:

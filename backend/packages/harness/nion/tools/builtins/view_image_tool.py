@@ -9,9 +9,9 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 from langgraph.typing import ContextT
 
-from src.agents.thread_state import ThreadState
-from src.sandbox.tools import get_thread_data, replace_virtual_path
-from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
+from nion.agents.thread_state import ThreadState
+from nion.sandbox.tools import get_thread_data, replace_virtual_path
+from nion.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 
 
 @tool("view_image", parse_docstring=True)

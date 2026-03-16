@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from src.community.web_search import tools as web_search_tools
+from nion.community.web_search import tools as web_search_tools
 
 
 class _FakeAppConfig:

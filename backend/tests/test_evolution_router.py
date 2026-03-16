@@ -5,8 +5,8 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.config.paths import Paths
-from src.gateway.routers.evolution import router
+from nion.config.paths import Paths
+from app.gateway.routers.evolution import router
 
 
 def _make_app() -> FastAPI:
@@ -19,7 +19,7 @@ def test_evolution_run_creates_report_and_returns_202(tmp_path):
     app = _make_app()
     paths = Paths(base_dir=tmp_path)
 
-    with patch("src.evolution.store.get_paths", return_value=paths):
+    with patch("app.evolution.store.get_paths", return_value=paths):
         with TestClient(app) as client:
             resp = client.post("/api/evolution/run?agent_name=_default")
             assert resp.status_code == 202

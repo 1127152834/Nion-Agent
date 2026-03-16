@@ -19,13 +19,13 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from src.processlog.service import get_processlog_service
-from src.scheduler import store
-from src.scheduler.events import SchedulerEvent, get_scheduler_event_hub
-from src.scheduler.models import ScheduledTask, TaskExecutionRecord, TaskMode, TaskStatus, TriggerType
+from nion.processlog.service import get_processlog_service
+from nion.scheduler import store
+from nion.scheduler.events import SchedulerEvent, get_scheduler_event_hub
+from nion.scheduler.models import ScheduledTask, TaskExecutionRecord, TaskMode, TaskStatus, TriggerType
 
 if TYPE_CHECKING:
-    from src.scheduler.workflow import WorkflowExecutor
+    from nion.scheduler.workflow import WorkflowExecutor
 
 logger = logging.getLogger(__name__)
 
@@ -117,7 +117,7 @@ class TaskScheduler:
     def _get_workflow_executor(self) -> WorkflowExecutor:
         if self._workflow_executor is not None:
             return self._workflow_executor
-        from src.scheduler.workflow import WorkflowExecutor
+        from nion.scheduler.workflow import WorkflowExecutor
 
         self._workflow_executor = WorkflowExecutor()
         return self._workflow_executor
@@ -811,7 +811,7 @@ class TaskScheduler:
         )
 
         try:
-            from src.client import NionClient
+            from nion.client import NionClient
 
             client = NionClient(
                 thinking_enabled=False,
@@ -836,7 +836,7 @@ class TaskScheduler:
 
     def _execute_workflow(self, task: ScheduledTask, *, trace_id: str, thread_id: str | None) -> dict[str, Any]:
         if task.mode in {TaskMode.EVOLUTION, TaskMode.HEARTBEAT}:
-            from src.scheduler.mode_registry import get_mode_executor
+            from nion.scheduler.mode_registry import get_mode_executor
 
             executor = get_mode_executor(task.mode.value)
             if executor is None:

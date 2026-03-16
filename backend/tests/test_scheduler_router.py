@@ -7,9 +7,9 @@ from unittest.mock import patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.config.paths import Paths
-from src.gateway.routers.scheduler import router
-from src.scheduler.service import get_scheduler, shutdown_scheduler
+from nion.config.paths import Paths
+from app.gateway.routers.scheduler import router
+from nion.scheduler.service import get_scheduler, shutdown_scheduler
 
 
 def _make_app() -> FastAPI:
@@ -56,9 +56,9 @@ def test_scheduler_task_crud_and_run_now_scoped_to_agent(tmp_path):
     app = _make_app()
     paths = Paths(base_dir=tmp_path)
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         with patch(
-            "src.scheduler.runner.TaskScheduler._execute_workflow",
+            "nion.scheduler.runner.TaskScheduler._execute_workflow",
             return_value={"success": True, "context": {"step-1": [{"output": "ok"}]}},
         ):
             with TestClient(app) as client:
@@ -120,7 +120,7 @@ def test_scheduler_create_requires_agent_name(tmp_path):
     payload = _base_payload(agent_name="agent-a")
     del payload["agent_name"]
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         with TestClient(app) as client:
             scheduler = get_scheduler()
             scheduler.start()
@@ -138,7 +138,7 @@ def test_scheduler_rejects_non_time_triggers(tmp_path):
     payload = _base_payload(agent_name="agent-a")
     payload["trigger"] = {"type": "webhook", "webhook_secret": "secret"}
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         with TestClient(app) as client:
             scheduler = get_scheduler()
             scheduler.start()
@@ -153,7 +153,7 @@ def test_scheduler_list_filters_by_agent_name(tmp_path):
     app = _make_app()
     paths = Paths(base_dir=tmp_path)
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         with TestClient(app) as client:
             scheduler = get_scheduler()
             scheduler.start()
@@ -186,8 +186,8 @@ def test_scheduler_dashboard_aggregates_24h_metrics(tmp_path):
             return {"success": True, "context": {}}
         return {"success": False, "error": "boom", "context": {}}
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
-        with patch("src.scheduler.runner.TaskScheduler._execute_workflow", side_effect=_exec_result):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
+        with patch("nion.scheduler.runner.TaskScheduler._execute_workflow", side_effect=_exec_result):
             with TestClient(app) as client:
                 scheduler = get_scheduler()
                 scheduler.start()
@@ -238,7 +238,7 @@ def test_scheduler_once_trigger_respects_timezone(tmp_path):
         "timezone": "Asia/Shanghai",
     }
 
-    with patch("src.scheduler.store.get_paths", return_value=paths):
+    with patch("nion.scheduler.store.get_paths", return_value=paths):
         with TestClient(app) as client:
             scheduler = get_scheduler()
             scheduler.start()

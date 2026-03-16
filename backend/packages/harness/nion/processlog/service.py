@@ -6,8 +6,8 @@ import threading
 import uuid
 from typing import Any
 
-from src.processlog.store import append_event, load_events
-from src.processlog.types import ProcessLogEvent, ProcessLogLevel
+from nion.processlog.store import append_event, load_events
+from nion.processlog.types import ProcessLogEvent, ProcessLogLevel
 
 
 class ProcessLogService:

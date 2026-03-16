@@ -8,8 +8,8 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from src.config.app_config import ensure_latest_app_config
-from src.runtime_profile import (
+from nion.config.app_config import ensure_latest_app_config
+from nion.runtime_profile import (
     RuntimeProfileLockedError,
     RuntimeProfileRepository,
     RuntimeProfileValidationError,

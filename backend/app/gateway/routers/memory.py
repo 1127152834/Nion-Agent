@@ -7,8 +7,8 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from src.agents.memory.registry import get_default_memory_provider
-from src.agents.memory.scope import resolve_agent_for_memory_scope
+from nion.agents.memory.registry import get_default_memory_provider
+from nion.agents.memory.scope import resolve_agent_for_memory_scope
 
 router = APIRouter(prefix="/api/memory", tags=["memory"])
 

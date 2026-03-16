@@ -13,13 +13,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from src.gateway.langgraph_client import (
+from app.gateway.langgraph_client import (
     LangGraphThreadNotFoundError,
     LangGraphThreadNotReadyError,
     load_thread_state,
     update_thread_state,
 )
-from src.gateway.path_utils import resolve_thread_virtual_path
+from app.gateway.path_utils import resolve_thread_virtual_path
 
 logger = logging.getLogger(__name__)
 

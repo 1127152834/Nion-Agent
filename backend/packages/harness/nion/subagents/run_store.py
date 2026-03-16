@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from src.config.paths import get_paths
-from src.subagents.run_models import SubagentRunRecord
+from nion.config.paths import get_paths
+from nion.subagents.run_models import SubagentRunRecord
 
 _LOCK = threading.Lock()
 

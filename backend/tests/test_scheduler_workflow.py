@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.scheduler.models import AgentStep
-from src.scheduler.workflow import WorkflowExecutor
+from nion.scheduler.models import AgentStep
+from nion.scheduler.workflow import WorkflowExecutor
 
 
 def test_run_agent_sync_passes_memory_session_fields_to_nion_client():
@@ -28,7 +28,7 @@ def test_run_agent_sync_passes_memory_session_fields_to_nion_client():
     ]
 
     with (
-        patch("src.scheduler.workflow.NionClient", return_value=mock_client) as client_cls,
+        patch("nion.scheduler.workflow.NionClient", return_value=mock_client) as client_cls,
         patch.object(executor, "_inject_context", return_value="prompt"),
     ):
         result = executor._run_agent_sync(
@@ -76,7 +76,7 @@ def test_run_agent_sync_keeps_missing_memory_session_fields_compatible():
     ]
 
     with (
-        patch("src.scheduler.workflow.NionClient", return_value=mock_client) as client_cls,
+        patch("nion.scheduler.workflow.NionClient", return_value=mock_client) as client_cls,
         patch.object(executor, "_inject_context", return_value="prompt"),
     ):
         result = executor._run_agent_sync(
@@ -117,7 +117,7 @@ def test_run_agent_sync_passes_agent_name_to_nion_client_chat():
     ]
 
     with (
-        patch("src.scheduler.workflow.NionClient", return_value=mock_client),
+        patch("nion.scheduler.workflow.NionClient", return_value=mock_client),
         patch.object(executor, "_inject_context", return_value="prompt"),
     ):
         executor._run_agent_sync(

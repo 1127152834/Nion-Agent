@@ -39,7 +39,7 @@ def load_skills(skills_path: Path | None = None, use_config: bool = True, enable
     if skills_path is None:
         if use_config:
             try:
-                from src.config import get_app_config
+                from nion.config import get_app_config
 
                 config = get_app_config()
                 skills_path = config.skills.get_skills_path()
@@ -79,7 +79,7 @@ def load_skills(skills_path: Path | None = None, use_config: bool = True, enable
     # made through the Gateway API (which runs in a separate process) are immediately
     # reflected in the LangGraph Server when loading skills.
     try:
-        from src.config.extensions_config import ExtensionsConfig
+        from nion.config.extensions_config import ExtensionsConfig
 
         extensions_config = ExtensionsConfig.from_file()
         for skill in skills:

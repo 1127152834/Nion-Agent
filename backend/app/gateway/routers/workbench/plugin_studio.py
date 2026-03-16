@@ -16,9 +16,9 @@ from urllib.parse import quote
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from src.config.paths import get_paths
-from src.gateway.path_utils import resolve_thread_virtual_path
-from src.gateway.routers.workbench._helpers import (
+from nion.config.paths import get_paths
+from app.gateway.path_utils import resolve_thread_virtual_path
+from app.gateway.routers.workbench._helpers import (
     _PLUGIN_STUDIO_LOCK,
     _PLUGIN_STUDIO_WORKSPACE_SOURCE_ROOT,
     _PLUGIN_STUDIO_WORKSPACE_TEST_ROOT,
@@ -48,7 +48,7 @@ from src.gateway.routers.workbench._helpers import (
     _utcnow_iso,
     _write_json,
 )
-from src.gateway.routers.workbench.models import (
+from app.gateway.routers.workbench.models import (
     PluginStudioAutoVerifyResponse,
     PluginStudioDraftRequest,
     PluginStudioGenerateRequest,

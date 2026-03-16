@@ -5,8 +5,8 @@ from unittest.mock import Mock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agents.memory.policy import resolve_memory_policy
-from src.agents.middlewares.memory_middleware import MemoryMiddleware
+from nion.agents.memory.policy import resolve_memory_policy
+from nion.agents.middlewares.memory_middleware import MemoryMiddleware
 
 
 def test_policy_defaults_to_normal_session_when_fields_missing() -> None:
@@ -44,11 +44,11 @@ def test_memory_middleware_skips_queue_when_writes_disabled(monkeypatch) -> None
     provider = Mock()
 
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_memory_config",
+        "nion.agents.middlewares.memory_middleware.get_memory_config",
         lambda: SimpleNamespace(enabled=True),
     )
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_default_memory_provider",
+        "nion.agents.middlewares.memory_middleware.get_default_memory_provider",
         lambda: provider,
     )
 
@@ -72,11 +72,11 @@ def test_memory_middleware_skips_queue_for_temporary_chat(monkeypatch) -> None:
     provider = Mock()
 
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_memory_config",
+        "nion.agents.middlewares.memory_middleware.get_memory_config",
         lambda: SimpleNamespace(enabled=True),
     )
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_default_memory_provider",
+        "nion.agents.middlewares.memory_middleware.get_default_memory_provider",
         lambda: provider,
     )
 
@@ -100,11 +100,11 @@ def test_memory_middleware_queues_normal_session(monkeypatch) -> None:
     provider = Mock()
 
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_memory_config",
+        "nion.agents.middlewares.memory_middleware.get_memory_config",
         lambda: SimpleNamespace(enabled=True),
     )
     monkeypatch.setattr(
-        "src.agents.middlewares.memory_middleware.get_default_memory_provider",
+        "nion.agents.middlewares.memory_middleware.get_default_memory_provider",
         lambda: provider,
     )
 

@@ -9,21 +9,21 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from src.channels.bridge_service import ChannelAgentBridgeService
-from src.channels.connection_service import ChannelConnectionService
-from src.channels.event_broker import ChannelEventBroker
-from src.channels.incoming_service import ChannelInboundService
-from src.channels.plugins.dingtalk.card_renderer import DingTalkPairingCardRenderer
-from src.channels.repository import ChannelRepository, ChannelRepositoryNotFoundError
-from src.channels.runtime_manager import ChannelRuntimeManager
-from src.channels.webhook_service import (
+from app.channels.bridge_service import ChannelAgentBridgeService
+from app.channels.connection_service import ChannelConnectionService
+from app.channels.event_broker import ChannelEventBroker
+from app.channels.incoming_service import ChannelInboundService
+from app.channels.plugins.dingtalk.card_renderer import DingTalkPairingCardRenderer
+from app.channels.repository import ChannelRepository, ChannelRepositoryNotFoundError
+from app.channels.runtime_manager import ChannelRuntimeManager
+from app.channels.webhook_service import (
     IncomingWebhookEvent,
     extract_incoming_event,
     get_lark_challenge,
     is_lark_challenge,
 )
-from src.config.paths import get_paths
-from src.gateway.schemas.channels import (
+from nion.config.paths import get_paths
+from app.gateway.schemas.channels import (
     ChannelAuthorizedUserResponse,
     ChannelAuthorizedUserRevokeRequest,
     ChannelAuthorizedUserRevokeResponse,

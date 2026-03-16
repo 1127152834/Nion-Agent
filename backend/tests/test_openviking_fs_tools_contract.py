@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.tools.builtins.openviking_fs_tools import ovfs_find_tool, ovfs_search_tool, ovfs_stat_tool
+from nion.tools.builtins.openviking_fs_tools import ovfs_find_tool, ovfs_search_tool, ovfs_stat_tool
 
 
 class _DummyProvider:
@@ -30,7 +30,7 @@ class _DummyProvider:
 @pytest.mark.unit
 def test_BE_CORE_OVFS_TOOLS_301_ovfs_find_resolves_default_agent_to_global(monkeypatch):
     provider = _DummyProvider()
-    monkeypatch.setattr("src.tools.builtins.openviking_fs_tools.get_default_memory_provider", lambda: provider)
+    monkeypatch.setattr("nion.tools.builtins.openviking_fs_tools.get_default_memory_provider", lambda: provider)
 
     runtime = SimpleNamespace(context={"agent_name": "agent-ctx"}, state={})
     raw = ovfs_find_tool.func(
@@ -65,7 +65,7 @@ def test_BE_CORE_OVFS_TOOLS_301_ovfs_find_resolves_default_agent_to_global(monke
 @pytest.mark.unit
 def test_BE_CORE_OVFS_TOOLS_302_ovfs_search_parses_filter_json(monkeypatch):
     provider = _DummyProvider()
-    monkeypatch.setattr("src.tools.builtins.openviking_fs_tools.get_default_memory_provider", lambda: provider)
+    monkeypatch.setattr("nion.tools.builtins.openviking_fs_tools.get_default_memory_provider", lambda: provider)
 
     runtime = SimpleNamespace(context={}, state={})
     raw = ovfs_search_tool.func(
@@ -103,7 +103,7 @@ def test_BE_CORE_OVFS_TOOLS_303_errors_when_provider_is_not_openviking(monkeypat
     class _OtherProvider:
         name = "sqlite"
 
-    monkeypatch.setattr("src.tools.builtins.openviking_fs_tools.get_default_memory_provider", lambda: _OtherProvider())
+    monkeypatch.setattr("nion.tools.builtins.openviking_fs_tools.get_default_memory_provider", lambda: _OtherProvider())
 
     runtime = SimpleNamespace(context={}, state={})
     raw = ovfs_stat_tool.func(

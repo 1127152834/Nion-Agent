@@ -10,10 +10,10 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, Field
 
-from src.config.paths import get_paths
-from src.heartbeat.service import get_heartbeat_service
-from src.scheduler.models import TriggerType
-from src.scheduler.service import get_scheduler
+from nion.config.paths import get_paths
+from app.heartbeat.service import get_heartbeat_service
+from nion.scheduler.models import TriggerType
+from nion.scheduler.service import get_scheduler
 
 _LOCK = threading.Lock()
 

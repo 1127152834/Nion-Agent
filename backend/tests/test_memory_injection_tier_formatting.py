@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.memory.prompt import format_memory_for_injection
+from nion.agents.memory.prompt import format_memory_for_injection
 
 
 @pytest.mark.unit

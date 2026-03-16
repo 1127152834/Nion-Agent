@@ -4,9 +4,9 @@ import json
 import threading
 from pathlib import Path
 
-from src.config.paths import get_paths
-from src.heartbeat.models import HeartbeatLogRecord, HeartbeatSettings, TemplateConfig
-from src.heartbeat.templates import get_default_templates
+from nion.config.paths import get_paths
+from app.heartbeat.models import HeartbeatLogRecord, HeartbeatSettings, TemplateConfig
+from app.heartbeat.templates import get_default_templates
 
 _lock = threading.Lock()
 

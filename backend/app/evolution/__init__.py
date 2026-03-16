@@ -1,6 +1,6 @@
 """Evolution Core module."""
 
-from src.evolution.models import (
+from app.evolution.models import (
     EvolutionReport,
     EvolutionSettings,
     EvolutionSuggestion,

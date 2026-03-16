@@ -9,8 +9,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
-from src.cli.interactive_session import get_session_manager
-from src.keychain import SessionState, get_keychain
+from nion.cli.interactive_session import get_session_manager
+from nion.keychain import SessionState, get_keychain
 
 router = APIRouter(prefix="/api/cli", tags=["cli"])
 

@@ -1,6 +1,6 @@
 """Bash command execution subagent configuration."""
 
-from src.subagents.config import SubagentConfig
+from nion.subagents.config import SubagentConfig
 
 BASH_AGENT_CONFIG = SubagentConfig(
     name="bash",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from src.scheduler.runner import TaskScheduler
+from nion.scheduler.runner import TaskScheduler
 
 _LOCK = threading.Lock()
 _scheduler: TaskScheduler | None = None

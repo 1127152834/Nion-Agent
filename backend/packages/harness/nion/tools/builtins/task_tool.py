@@ -11,12 +11,12 @@ from typing import Annotated, Literal
 from langgraph.config import get_stream_writer
 from langgraph.typing import ContextT
 
-from src.agents.lead_agent.prompt import get_skills_prompt_section
-from src.agents.thread_state import ThreadState
-from src.processlog.service import get_processlog_service
-from src.subagents import SubagentExecutor, get_subagent_config
-from src.subagents.executor import SubagentStatus, cleanup_background_task, get_background_task_result
-from src.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
+from nion.agents.lead_agent.prompt import get_skills_prompt_section
+from nion.agents.thread_state import ThreadState
+from nion.processlog.service import get_processlog_service
+from nion.subagents import SubagentExecutor, get_subagent_config
+from nion.subagents.executor import SubagentStatus, cleanup_background_task, get_background_task_result
+from nion.tools.builtins.langchain_compat import InjectedToolCallId, ToolRuntime, tool
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def task_tool(
 
     # Get available tools (excluding task tool to prevent nesting)
     # Lazy import to avoid circular dependency
-    from src.tools import get_available_tools
+    from nion.tools import get_available_tools
 
     runtime_agent_name = None
     if runtime is not None:

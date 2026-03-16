@@ -10,11 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa: F401
 
-from src.agents.memory.core import MemoryReadRequest
-from src.client import NionClient
-from src.gateway.routers.openviking import OpenVikingConfigResponse
-from src.gateway.routers.uploads import UploadResponse
-from src.tools.builtins._service_ops import McpConfigResponse, ModelResponse, ModelsListResponse, SkillInstallResponse, SkillResponse, SkillsListResponse
+from nion.agents.memory.core import MemoryReadRequest
+from nion.client import NionClient
+from app.gateway.routers.openviking import OpenVikingConfigResponse
+from app.gateway.routers.uploads import UploadResponse
+from nion.tools.builtins._service_ops import McpConfigResponse, ModelResponse, ModelsListResponse, SkillInstallResponse, SkillResponse, SkillsListResponse
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -38,7 +38,7 @@ def mock_app_config():
 @pytest.fixture
 def client(mock_app_config):
     """Create a NionClient with mocked config loading."""
-    with patch("src.client.get_app_config", return_value=mock_app_config):
+    with patch("nion.client.get_app_config", return_value=mock_app_config):
         return NionClient()
 
 
@@ -60,7 +60,7 @@ class TestClientInit:
         assert client._agent is None
 
     def test_custom_params(self, mock_app_config):
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             c = NionClient(
                 model_name="gpt-4",
                 thinking_enabled=False,
@@ -80,8 +80,8 @@ class TestClientInit:
 
     def test_custom_config_path(self, mock_app_config):
         with (
-            patch("src.client.reload_app_config") as mock_reload,
-            patch("src.client.get_app_config", return_value=mock_app_config),
+            patch("nion.client.reload_app_config") as mock_reload,
+            patch("nion.client.get_app_config", return_value=mock_app_config),
         ):
             NionClient(config_path="/tmp/custom.yaml")
             mock_reload.assert_called_once_with("/tmp/custom.yaml")
@@ -89,7 +89,7 @@ class TestClientInit:
 
 class TestRunnableConfig:
     def test_includes_memory_session_defaults(self, mock_app_config):
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             client = NionClient(session_mode="temporary_chat", memory_read=True, memory_write=False)
 
         config = client._get_runnable_config("t1")
@@ -100,7 +100,7 @@ class TestRunnableConfig:
         assert configurable["memory_write"] is False
 
     def test_per_call_override_precedes_defaults(self, mock_app_config):
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             client = NionClient(session_mode="temporary_chat", memory_read=True, memory_write=False)
 
         config = client._get_runnable_config(
@@ -134,7 +134,7 @@ class TestRunnableConfig:
                 }
             }
         )
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             client = NionClient(checkpointer=checkpointer)
 
         config = client._get_runnable_config("t1")
@@ -155,7 +155,7 @@ class TestRunnableConfig:
                 }
             }
         )
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             client = NionClient(
                 checkpointer=checkpointer,
                 session_mode="normal",
@@ -172,7 +172,7 @@ class TestRunnableConfig:
 
     def test_checkpointer_stored(self, mock_app_config):
         cp = MagicMock()
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             c = NionClient(checkpointer=cp)
         assert c._checkpointer is cp
 
@@ -200,7 +200,7 @@ class TestConfigQueries:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("src.skills.loader.load_skills", return_value=[skill]) as mock_load:
+        with patch("nion.skills.loader.load_skills", return_value=[skill]) as mock_load:
             result = client.list_skills()
             mock_load.assert_called_once_with(enabled_only=False)
 
@@ -215,7 +215,7 @@ class TestConfigQueries:
         }
 
     def test_list_skills_enabled_only(self, client):
-        with patch("src.skills.loader.load_skills", return_value=[]) as mock_load:
+        with patch("nion.skills.loader.load_skills", return_value=[]) as mock_load:
             client.list_skills(enabled_only=True)
             mock_load.assert_called_once_with(enabled_only=True)
 
@@ -223,7 +223,7 @@ class TestConfigQueries:
         memory = {"version": "1.0", "facts": []}
         provider = MagicMock()
         provider.get_memory_data.return_value = memory
-        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
+        with patch("nion.agents.memory.registry.get_default_memory_provider", return_value=provider):
             result = client.get_memory()
         provider.get_memory_data.assert_called_once_with(MemoryReadRequest())
         assert result == memory
@@ -514,10 +514,10 @@ class TestEnsureAgent:
         config = client._get_runnable_config("t1")
 
         with (
-            patch("src.client.create_chat_model"),
-            patch("src.client.create_agent", return_value=mock_agent),
-            patch("src.client._build_middlewares", return_value=[]),
-            patch("src.client.apply_prompt_template", return_value="prompt"),
+            patch("nion.client.create_chat_model"),
+            patch("nion.client.create_agent", return_value=mock_agent),
+            patch("nion.client._build_middlewares", return_value=[]),
+            patch("nion.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -546,10 +546,10 @@ class TestEnsureAgent:
         )
 
         with (
-            patch("src.client.create_chat_model"),
-            patch("src.client.create_agent", return_value=mock_agent),
-            patch("src.client._build_middlewares", return_value=[]),
-            patch("src.client.apply_prompt_template", return_value="prompt") as prompt_template,
+            patch("nion.client.create_chat_model"),
+            patch("nion.client.create_agent", return_value=mock_agent),
+            patch("nion.client._build_middlewares", return_value=[]),
+            patch("nion.client.apply_prompt_template", return_value="prompt") as prompt_template,
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -601,7 +601,7 @@ class TestMcpConfig:
         ext_config = MagicMock()
         ext_config.mcp_servers = {"github": server}
 
-        with patch("src.client.get_extensions_config", return_value=ext_config):
+        with patch("nion.client.get_extensions_config", return_value=ext_config):
             result = client.get_mcp_config()
 
         assert "mcp_servers" in result
@@ -628,8 +628,8 @@ class TestMcpConfig:
             monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(tmp_path))
 
             with (
-                patch("src.client.get_extensions_config", return_value=current_config),
-                patch("src.client.reload_extensions_config", return_value=reloaded_config),
+                patch("nion.client.get_extensions_config", return_value=current_config),
+                patch("nion.client.reload_extensions_config", return_value=reloaded_config),
             ):
                 result = client.update_mcp_config({"new-server": {"enabled": True, "type": "sse"}})
 
@@ -662,13 +662,13 @@ class TestSkillsManagement:
 
     def test_get_skill_found(self, client):
         skill = self._make_skill()
-        with patch("src.skills.loader.load_skills", return_value=[skill]):
+        with patch("nion.skills.loader.load_skills", return_value=[skill]):
             result = client.get_skill("test-skill")
         assert result is not None
         assert result["name"] == "test-skill"
 
     def test_get_skill_not_found(self, client):
-        with patch("src.skills.loader.load_skills", return_value=[]):
+        with patch("nion.skills.loader.load_skills", return_value=[]):
             result = client.get_skill("nonexistent")
         assert result is None
 
@@ -690,9 +690,9 @@ class TestSkillsManagement:
             monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(tmp_path))
 
             with (
-                patch("src.skills.loader.load_skills", side_effect=[[skill], [updated_skill]]),
-                patch("src.client.get_extensions_config", return_value=ext_config),
-                patch("src.client.reload_extensions_config"),
+                patch("nion.skills.loader.load_skills", side_effect=[[skill], [updated_skill]]),
+                patch("nion.client.get_extensions_config", return_value=ext_config),
+                patch("nion.client.reload_extensions_config"),
             ):
                 result = client.update_skill("test-skill", enabled=False)
             assert result["enabled"] is False
@@ -701,7 +701,7 @@ class TestSkillsManagement:
             tmp_path.unlink()
 
     def test_update_skill_not_found(self, client):
-        with patch("src.skills.loader.load_skills", return_value=[]):
+        with patch("nion.skills.loader.load_skills", return_value=[]):
             with pytest.raises(ValueError, match="not found"):
                 client.update_skill("nonexistent", enabled=True)
 
@@ -722,8 +722,8 @@ class TestSkillsManagement:
             (skills_root / "custom").mkdir(parents=True)
 
             with (
-                patch("src.skills.loader.get_skills_root_path", return_value=skills_root),
-                patch("src.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-skill")),
+                patch("nion.skills.loader.get_skills_root_path", return_value=skills_root),
+                patch("nion.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-skill")),
             ):
                 result = client.install_skill(archive_path)
 
@@ -755,7 +755,7 @@ class TestMemoryManagement:
         data = {"version": "1.0", "facts": []}
         provider = MagicMock()
         provider.reload_memory_data.return_value = data
-        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
+        with patch("nion.agents.memory.registry.get_default_memory_provider", return_value=provider):
             result = client.reload_memory()
         provider.reload_memory_data.assert_called_once_with(MemoryReadRequest())
         assert result == data
@@ -775,7 +775,7 @@ class TestMemoryManagement:
         config.openviking_context_limit = 3
         config.openviking_session_commit_enabled = True
 
-        with patch("src.config.memory_config.get_memory_config", return_value=config):
+        with patch("nion.config.memory_config.get_memory_config", return_value=config):
             result = client.get_memory_config()
 
         assert result["enabled"] is True
@@ -801,8 +801,8 @@ class TestMemoryManagement:
         provider.get_memory_data.return_value = data
 
         with (
-            patch("src.config.memory_config.get_memory_config", return_value=config),
-            patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider),
+            patch("nion.config.memory_config.get_memory_config", return_value=config),
+            patch("nion.agents.memory.registry.get_default_memory_provider", return_value=provider),
         ):
             result = client.get_memory_status()
 
@@ -900,7 +900,7 @@ class TestArtifacts:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("src.client.get_paths", return_value=mock_paths):
+            with patch("nion.client.get_paths", return_value=mock_paths):
                 content, mime = client.get_artifact("t1", "mnt/user-data/outputs/result.txt")
 
             assert content == b"artifact content"
@@ -914,7 +914,7 @@ class TestArtifacts:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("src.client.get_paths", return_value=mock_paths):
+            with patch("nion.client.get_paths", return_value=mock_paths):
                 with pytest.raises(FileNotFoundError):
                     client.get_artifact("t1", "mnt/user-data/outputs/nope.txt")
 
@@ -930,7 +930,7 @@ class TestArtifacts:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("src.client.get_paths", return_value=mock_paths):
+            with patch("nion.client.get_paths", return_value=mock_paths):
                 with pytest.raises(PermissionError):
                     client.get_artifact("t1", "mnt/user-data/../../../etc/passwd")
 
@@ -1135,7 +1135,7 @@ class TestScenarioFileLifecycle:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.return_value = user_data_dir
 
-            with patch("src.client.get_paths", return_value=mock_paths):
+            with patch("nion.client.get_paths", return_value=mock_paths):
                 content, mime = client.get_artifact("t-artifact", "mnt/user-data/outputs/analysis.json")
 
             assert json.loads(content) == {"result": "processed"}
@@ -1171,12 +1171,12 @@ class TestScenarioConfigManagement:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("src.skills.loader.load_skills", return_value=[skill]):
+        with patch("nion.skills.loader.load_skills", return_value=[skill]):
             skills_result = client.list_skills()
         assert len(skills_result["skills"]) == 1
 
         # Get specific skill
-        with patch("src.skills.loader.load_skills", return_value=[skill]):
+        with patch("nion.skills.loader.load_skills", return_value=[skill]):
             detail = client.get_skill("web-search")
         assert detail is not None
         assert detail["enabled"] is True
@@ -1199,8 +1199,8 @@ class TestScenarioConfigManagement:
 
             client._agent = MagicMock()  # Simulate existing agent
             with (
-                patch("src.client.get_extensions_config", return_value=current_config),
-                patch("src.client.reload_extensions_config", return_value=reloaded_config),
+                patch("nion.client.get_extensions_config", return_value=current_config),
+                patch("nion.client.reload_extensions_config", return_value=reloaded_config),
             ):
                 mcp_result = client.update_mcp_config({"my-mcp": {"enabled": True}})
             assert "my-mcp" in mcp_result["mcp_servers"]
@@ -1227,9 +1227,9 @@ class TestScenarioConfigManagement:
 
             client._agent = MagicMock()  # Simulate re-created agent
             with (
-                patch("src.skills.loader.load_skills", side_effect=[[skill], [toggled]]),
-                patch("src.client.get_extensions_config", return_value=ext_config),
-                patch("src.client.reload_extensions_config"),
+                patch("nion.skills.loader.load_skills", side_effect=[[skill], [toggled]]),
+                patch("nion.client.get_extensions_config", return_value=ext_config),
+                patch("nion.client.reload_extensions_config"),
             ):
                 skill_result = client.update_skill("code-gen", enabled=False)
             assert skill_result["enabled"] is False
@@ -1252,10 +1252,10 @@ class TestScenarioAgentRecreation:
         config_b = client._get_runnable_config("t1", model_name="claude-3")
 
         with (
-            patch("src.client.create_chat_model"),
-            patch("src.client.create_agent", side_effect=fake_create_agent),
-            patch("src.client._build_middlewares", return_value=[]),
-            patch("src.client.apply_prompt_template", return_value="prompt"),
+            patch("nion.client.create_chat_model"),
+            patch("nion.client.create_agent", side_effect=fake_create_agent),
+            patch("nion.client._build_middlewares", return_value=[]),
+            patch("nion.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config_a)
@@ -1279,10 +1279,10 @@ class TestScenarioAgentRecreation:
         config = client._get_runnable_config("t1", model_name="gpt-4")
 
         with (
-            patch("src.client.create_chat_model"),
-            patch("src.client.create_agent", side_effect=fake_create_agent),
-            patch("src.client._build_middlewares", return_value=[]),
-            patch("src.client.apply_prompt_template", return_value="prompt"),
+            patch("nion.client.create_chat_model"),
+            patch("nion.client.create_agent", side_effect=fake_create_agent),
+            patch("nion.client._build_middlewares", return_value=[]),
+            patch("nion.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -1303,10 +1303,10 @@ class TestScenarioAgentRecreation:
         config = client._get_runnable_config("t1")
 
         with (
-            patch("src.client.create_chat_model"),
-            patch("src.client.create_agent", side_effect=fake_create_agent),
-            patch("src.client._build_middlewares", return_value=[]),
-            patch("src.client.apply_prompt_template", return_value="prompt"),
+            patch("nion.client.create_chat_model"),
+            patch("nion.client.create_agent", side_effect=fake_create_agent),
+            patch("nion.client._build_middlewares", return_value=[]),
+            patch("nion.client.apply_prompt_template", return_value="prompt"),
             patch.object(client, "_get_tools", return_value=[]),
         ):
             client._ensure_agent(config)
@@ -1417,7 +1417,7 @@ class TestScenarioThreadIsolation:
             mock_paths = MagicMock()
             mock_paths.sandbox_user_data_dir.side_effect = lambda tid: data_a if tid == "thread-a" else data_b
 
-            with patch("src.client.get_paths", return_value=mock_paths):
+            with patch("nion.client.get_paths", return_value=mock_paths):
                 content, _ = client.get_artifact("thread-a", "mnt/user-data/outputs/result.txt")
                 assert content == b"thread-a artifact"
 
@@ -1455,21 +1455,21 @@ class TestScenarioMemoryWorkflow:
 
         provider = MagicMock()
         provider.get_memory_data.return_value = initial_data
-        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
+        with patch("nion.agents.memory.registry.get_default_memory_provider", return_value=provider):
             mem = client.get_memory()
         assert len(mem["facts"]) == 1
 
         provider = MagicMock()
         provider.reload_memory_data.return_value = updated_data
-        with patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider):
+        with patch("nion.agents.memory.registry.get_default_memory_provider", return_value=provider):
             refreshed = client.reload_memory()
         assert len(refreshed["facts"]) == 2
 
         provider = MagicMock()
         provider.get_memory_data.return_value = updated_data
         with (
-            patch("src.config.memory_config.get_memory_config", return_value=config),
-            patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider),
+            patch("nion.config.memory_config.get_memory_config", return_value=config),
+            patch("nion.agents.memory.registry.get_default_memory_provider", return_value=provider),
         ):
             status = client.get_memory_status()
         assert status["config"]["enabled"] is True
@@ -1497,8 +1497,8 @@ class TestScenarioSkillInstallAndUse:
 
             # Step 1: Install
             with (
-                patch("src.skills.loader.get_skills_root_path", return_value=skills_root),
-                patch("src.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-analyzer")),
+                patch("nion.skills.loader.get_skills_root_path", return_value=skills_root),
+                patch("nion.skills.validation._validate_skill_frontmatter", return_value=(True, "OK", "my-analyzer")),
             ):
                 result = client.install_skill(archive)
             assert result["success"] is True
@@ -1512,7 +1512,7 @@ class TestScenarioSkillInstallAndUse:
             installed_skill.category = "custom"
             installed_skill.enabled = True
 
-            with patch("src.skills.loader.load_skills", return_value=[installed_skill]):
+            with patch("nion.skills.loader.load_skills", return_value=[installed_skill]):
                 skills_result = client.list_skills()
             assert any(s["name"] == "my-analyzer" for s in skills_result["skills"])
 
@@ -1533,9 +1533,9 @@ class TestScenarioSkillInstallAndUse:
             monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(config_file))
 
             with (
-                patch("src.skills.loader.load_skills", side_effect=[[installed_skill], [disabled_skill]]),
-                patch("src.client.get_extensions_config", return_value=ext_config),
-                patch("src.client.reload_extensions_config"),
+                patch("nion.skills.loader.load_skills", side_effect=[[installed_skill], [disabled_skill]]),
+                patch("nion.client.get_extensions_config", return_value=ext_config),
+                patch("nion.client.reload_extensions_config"),
             ):
                 toggled = client.update_skill("my-analyzer", enabled=False)
             assert toggled["enabled"] is False
@@ -1632,8 +1632,8 @@ class TestScenarioEdgeCases:
 
             with (
                 patch.object(NionClient, "_get_uploads_dir", return_value=uploads_dir),
-                patch("src.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
-                patch("src.utils.file_conversion.convert_file_to_markdown", side_effect=Exception("conversion failed")),
+                patch("nion.utils.file_conversion.CONVERTIBLE_EXTENSIONS", {".pdf"}),
+                patch("nion.utils.file_conversion.convert_file_to_markdown", side_effect=Exception("conversion failed")),
             ):
                 result = client.upload_files("t-pdf-fail", [pdf_file])
 
@@ -1665,7 +1665,7 @@ class TestGatewayConformance:
         model.supports_thinking = False
         mock_app_config.models = [model]
 
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             client = NionClient()
 
         result = client.list_models()
@@ -1682,7 +1682,7 @@ class TestGatewayConformance:
         mock_app_config.models = [model]
         mock_app_config.get_model_config.return_value = model
 
-        with patch("src.client.get_app_config", return_value=mock_app_config):
+        with patch("nion.client.get_app_config", return_value=mock_app_config):
             client = NionClient()
 
         result = client.get_model("test-model")
@@ -1698,7 +1698,7 @@ class TestGatewayConformance:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("src.skills.loader.load_skills", return_value=[skill]):
+        with patch("nion.skills.loader.load_skills", return_value=[skill]):
             result = client.list_skills()
 
         parsed = SkillsListResponse(**result)
@@ -1713,7 +1713,7 @@ class TestGatewayConformance:
         skill.category = "public"
         skill.enabled = True
 
-        with patch("src.skills.loader.load_skills", return_value=[skill]):
+        with patch("nion.skills.loader.load_skills", return_value=[skill]):
             result = client.get_skill("web-search")
 
         assert result is not None
@@ -1731,7 +1731,7 @@ class TestGatewayConformance:
 
         custom_dir = tmp_path / "custom"
         custom_dir.mkdir()
-        with patch("src.skills.loader.get_skills_root_path", return_value=tmp_path):
+        with patch("nion.skills.loader.get_skills_root_path", return_value=tmp_path):
             result = client.install_skill(archive)
 
         parsed = SkillInstallResponse(**result)
@@ -1753,7 +1753,7 @@ class TestGatewayConformance:
         ext_config = MagicMock()
         ext_config.mcp_servers = {"test": server}
 
-        with patch("src.client.get_extensions_config", return_value=ext_config):
+        with patch("nion.client.get_extensions_config", return_value=ext_config):
             result = client.get_mcp_config()
 
         parsed = McpConfigResponse(**result)
@@ -1780,8 +1780,8 @@ class TestGatewayConformance:
         monkeypatch.setenv("NION_EXTENSIONS_CONFIG_PATH", str(config_file))
 
         with (
-            patch("src.client.get_extensions_config", return_value=ext_config),
-            patch("src.client.reload_extensions_config", return_value=ext_config),
+            patch("nion.client.get_extensions_config", return_value=ext_config),
+            patch("nion.client.reload_extensions_config", return_value=ext_config),
         ):
             result = client.update_mcp_config({"srv": server.model_dump.return_value})
 
@@ -1817,7 +1817,7 @@ class TestGatewayConformance:
         mem_cfg.openviking_context_limit = 3
         mem_cfg.openviking_session_commit_enabled = True
 
-        with patch("src.config.memory_config.get_memory_config", return_value=mem_cfg):
+        with patch("nion.config.memory_config.get_memory_config", return_value=mem_cfg):
             result = client.get_memory_config()
 
         parsed = OpenVikingConfigResponse(**result)
@@ -1858,8 +1858,8 @@ class TestGatewayConformance:
         provider = MagicMock()
         provider.get_memory_data.return_value = memory_data
         with (
-            patch("src.config.memory_config.get_memory_config", return_value=mem_cfg),
-            patch("src.agents.memory.registry.get_default_memory_provider", return_value=provider),
+            patch("nion.config.memory_config.get_memory_config", return_value=mem_cfg),
+            patch("nion.agents.memory.registry.get_default_memory_provider", return_value=provider),
         ):
             result = client.get_memory_status()
 

@@ -11,10 +11,10 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from src.agents.memory.governor import get_memory_governor
-from src.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
-from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
-from src.config.paths import get_paths
+from nion.agents.memory.governor import get_memory_governor
+from nion.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul
+from nion.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
+from nion.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])
@@ -994,7 +994,7 @@ async def preview_soul_injection(
         SoulPreviewResponse with rendered sections.
     """
     try:
-        from src.agents.lead_agent.prompt import get_agent_soul, get_user_profile
+        from nion.agents.lead_agent.prompt import get_agent_soul, get_user_profile
 
         # Get soul (includes both SOUL.md and IDENTITY.md)
         soul_output = get_agent_soul(agent_name)

@@ -21,7 +21,7 @@ from typing import Literal
 
 import httpx
 
-from src.config.paths import get_paths
+from nion.config.paths import get_paths
 
 NODE_INDEX_URL = "https://nodejs.org/dist/index.json"
 NODE_DIST_BASE_URL = "https://nodejs.org/dist"

@@ -5,15 +5,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
-from src.runtime_profile import RuntimeProfileRepository
+from nion.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
+from nion.runtime_profile import RuntimeProfileRepository
 
 
 def _prepare_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("NION_HOME", str(tmp_path))
     monkeypatch.setenv("NION_DESKTOP_RUNTIME", "1")
 
-    from src.config import paths as paths_module
+    from nion.config import paths as paths_module
 
     paths_module._paths = None
 

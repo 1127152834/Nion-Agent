@@ -7,9 +7,9 @@ import importlib
 import json
 from types import SimpleNamespace
 
-from src.config.extensions_config import ExtensionsConfig, McpServerConfig
+from nion.config.extensions_config import ExtensionsConfig, McpServerConfig
 
-system_tools = importlib.import_module("src.tools.builtins.system_manage_tools")
+system_tools = importlib.import_module("nion.tools.builtins.system_manage_tools")
 
 
 def _runtime(thread_id: str = "thread-test") -> SimpleNamespace:

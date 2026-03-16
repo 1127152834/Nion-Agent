@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 
-from src.security.audit import Severity, run_security_audit, severity_at_least
+from app.security.audit import Severity, run_security_audit, severity_at_least
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:

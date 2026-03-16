@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import pytest
 
-from src.agents.memory.openviking_runtime import OpenVikingRuntime
-from src.config.paths import Paths
+from nion.agents.memory.openviking_runtime import OpenVikingRuntime
+from nion.config.paths import Paths
 
 
 @pytest.mark.unit
 def test_BE_CORE_MEM_407_default_agent_write_and_hit_use_global(monkeypatch, tmp_path):
     # Ensure runtime uses an isolated sqlite db.
     monkeypatch.setattr(
-        "src.agents.memory.openviking_runtime.get_paths",
+        "nion.agents.memory.openviking_runtime.get_paths",
         lambda: Paths(base_dir=tmp_path),
     )
 

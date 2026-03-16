@@ -3,7 +3,7 @@
 import json
 import logging
 
-from src.config.paths import get_paths
+from nion.config.paths import get_paths
 
 logger = logging.getLogger(__name__)
 

@@ -3,29 +3,29 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 
-from src.agents.lead_agent.prompt import apply_prompt_template
-from src.agents.middlewares.a2ui_middleware import A2UIMiddleware
-from src.agents.middlewares.clarification_middleware import ClarificationMiddleware
-from src.agents.middlewares.cli_interactive_middleware import CLIInteractiveMiddleware
-from src.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
-from src.agents.middlewares.internal_tool_recall_middleware import InternalToolRecallMiddleware
-from src.agents.middlewares.memory_middleware import MemoryMiddleware
-from src.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
-from src.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
-from src.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
-from src.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
-from src.agents.middlewares.title_middleware import TitleMiddleware
-from src.agents.middlewares.todo_middleware import TodoMiddleware
-from src.agents.middlewares.tool_policy_guard_middleware import ToolPolicyGuardMiddleware
-from src.agents.middlewares.tool_safety_guard_middleware import ToolSafetyGuardMiddleware
-from src.agents.middlewares.uploads_middleware import UploadsMiddleware
-from src.agents.middlewares.view_image_middleware import ViewImageMiddleware
-from src.agents.thread_state import ThreadState
-from src.config.agents_config import load_agent_config
-from src.config.app_config import ensure_latest_app_config
-from src.config.summarization_config import get_summarization_config
-from src.models import create_chat_model
-from src.sandbox.middleware import SandboxMiddleware
+from nion.agents.lead_agent.prompt import apply_prompt_template
+from nion.agents.middlewares.a2ui_middleware import A2UIMiddleware
+from nion.agents.middlewares.clarification_middleware import ClarificationMiddleware
+from nion.agents.middlewares.cli_interactive_middleware import CLIInteractiveMiddleware
+from nion.agents.middlewares.dangling_tool_call_middleware import DanglingToolCallMiddleware
+from nion.agents.middlewares.internal_tool_recall_middleware import InternalToolRecallMiddleware
+from nion.agents.middlewares.memory_middleware import MemoryMiddleware
+from nion.agents.middlewares.openviking_context_middleware import OpenVikingContextMiddleware
+from nion.agents.middlewares.runtime_profile_middleware import RuntimeProfileMiddleware
+from nion.agents.middlewares.subagent_limit_middleware import SubagentLimitMiddleware
+from nion.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
+from nion.agents.middlewares.title_middleware import TitleMiddleware
+from nion.agents.middlewares.todo_middleware import TodoMiddleware
+from nion.agents.middlewares.tool_policy_guard_middleware import ToolPolicyGuardMiddleware
+from nion.agents.middlewares.tool_safety_guard_middleware import ToolSafetyGuardMiddleware
+from nion.agents.middlewares.uploads_middleware import UploadsMiddleware
+from nion.agents.middlewares.view_image_middleware import ViewImageMiddleware
+from nion.agents.thread_state import ThreadState
+from nion.config.agents_config import load_agent_config
+from nion.config.app_config import ensure_latest_app_config
+from nion.config.summarization_config import get_summarization_config
+from nion.models import create_chat_model
+from nion.sandbox.middleware import SandboxMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def create_agent(*args, **kwargs):
     - We want to keep a *lazy import* to avoid import-time failures when LangChain
       optional components are missing or version-mismatched.
     - Our unit tests (and potentially other code) monkeypatch
-      ``src.agents.lead_agent.agent.create_agent`` directly.
+      ``nion.agents.lead_agent.agent.create_agent`` directly.
 
     Implementation:
     - Load the real factory at call-time via ``_load_create_agent()``.
@@ -345,8 +345,8 @@ def _build_middlewares(config: RunnableConfig, model_name: str | None, agent_nam
 
 def make_lead_agent(config: RunnableConfig):
     # Lazy import to avoid circular dependency
-    from src.tools import get_available_tools
-    from src.tools.builtins import setup_agent
+    from nion.tools import get_available_tools
+    from nion.tools.builtins import setup_agent
 
     cfg = config.get("configurable", {})
 

@@ -36,7 +36,7 @@ class RemoteSandboxBackend(SandboxBackend):
     Typical Config Store payload::
 
         sandbox:
-          use: src.community.aio_sandbox:AioSandboxProvider
+          use: nion.community.aio_sandbox:AioSandboxProvider
           provisioner_url: http://provisioner:8002
     """
 

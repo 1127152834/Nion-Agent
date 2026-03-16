@@ -11,9 +11,9 @@ import os
 
 import pytest
 
-from src.client import NionClient, StreamEvent
-from src.config.app_config import AppConfig
-from src.config.config_store import create_config_store, resolve_config_db_path
+from nion.client import NionClient, StreamEvent
+from nion.config.app_config import AppConfig
+from nion.config.config_store import create_config_store, resolve_config_db_path
 
 # Real-environment E2E is opt-in locally but mandatory in CI gates that set NION_REAL_E2E=1.
 pytestmark = [pytest.mark.real, pytest.mark.e2e]

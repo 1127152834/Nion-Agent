@@ -8,7 +8,7 @@ import pytest
 from langchain_core.messages import HumanMessage
 
 _middleware_module = pytest.importorskip(
-    "src.agents.middlewares.tool_safety_guard_middleware",
+    "nion.agents.middlewares.tool_safety_guard_middleware",
     exc_type=ImportError,
 )
 ToolSafetyGuardMiddleware = _middleware_module.ToolSafetyGuardMiddleware

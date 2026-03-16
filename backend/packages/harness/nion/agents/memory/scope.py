@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from src.config.default_agent import DEFAULT_AGENT_NAME
+from nion.config.default_agent import DEFAULT_AGENT_NAME
 
 MemoryScope = Literal["global", "agent", "auto"]
 

@@ -1,4 +1,4 @@
-from src.sandbox.tools import _is_path_in_allowed_thread_dirs
+from nion.sandbox.tools import _is_path_in_allowed_thread_dirs
 
 
 def test_path_boundary_allows_paths_within_thread_dirs(tmp_path):

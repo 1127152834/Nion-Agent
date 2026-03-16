@@ -5,9 +5,9 @@ import os
 
 import pytest
 
-from src.agents.memory.openviking_runtime import OpenVikingRuntime
-from src.config.memory_config import MemoryConfig, set_memory_config
-from src.config.paths import Paths
+from nion.agents.memory.openviking_runtime import OpenVikingRuntime
+from nion.config.memory_config import MemoryConfig, set_memory_config
+from nion.config.paths import Paths
 
 
 def teardown_function() -> None:

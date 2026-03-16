@@ -10,10 +10,10 @@ from typing import Any
 
 import httpx
 
-from src.config.app_config import get_app_config
-from src.config.config_repository import ConfigRepository
-from src.config.paths import Paths, get_paths
-from src.config.retrieval_models_config import RetrievalModelsConfig, _default_profiles
+from nion.config.app_config import get_app_config
+from nion.config.config_repository import ConfigRepository
+from nion.config.paths import Paths, get_paths
+from nion.config.retrieval_models_config import RetrievalModelsConfig, _default_profiles
 
 
 class RetrievalModelsError(Exception):
@@ -948,8 +948,8 @@ class RetrievalModelsService:
 
         # Update memory config to enable hybrid search
         try:
-            from src.config.config_repository import ConfigRepository
-            from src.config.memory_config import get_memory_config, set_memory_config
+            from nion.config.config_repository import ConfigRepository
+            from nion.config.memory_config import get_memory_config, set_memory_config
 
             memory_cfg = get_memory_config()
 

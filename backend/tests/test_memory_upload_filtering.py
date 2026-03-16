@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from src.agents.middlewares.memory_middleware import MemoryMiddleware, _filter_messages_for_memory
+from nion.agents.middlewares.memory_middleware import MemoryMiddleware, _filter_messages_for_memory
 
 _UPLOAD_BLOCK = "<uploaded_files>\nThe following files have been uploaded and are available for use:\n\n- filename: secret.txt\n  path: /mnt/user-data/uploads/abc123/secret.txt\n  size: 42 bytes\n</uploaded_files>"
 
@@ -68,8 +68,8 @@ def test_memory_middleware_writes_filtered_messages_via_graph_provider():
     runtime = SimpleNamespace(context={"thread_id": "thread-1"})
 
     with (
-        patch("src.agents.middlewares.memory_middleware.get_memory_config", return_value=mem_cfg),
-        patch("src.agents.middlewares.memory_middleware.get_default_memory_provider", return_value=provider),
+        patch("nion.agents.middlewares.memory_middleware.get_memory_config", return_value=mem_cfg),
+        patch("nion.agents.middlewares.memory_middleware.get_default_memory_provider", return_value=provider),
     ):
         result = middleware.after_agent(state, runtime)
 

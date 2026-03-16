@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, patch
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.gateway.routers import artifact_groups
-from src.gateway.routers.artifact_groups import ArtifactGroup
+from app.gateway.routers import artifact_groups
+from app.gateway.routers.artifact_groups import ArtifactGroup
 
 
 def _make_client() -> TestClient:

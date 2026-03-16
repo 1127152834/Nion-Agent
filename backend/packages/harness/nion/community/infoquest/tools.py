@@ -1,7 +1,7 @@
 from langchain.tools import tool
 
-from src.config import get_app_config
-from src.utils.readability import ReadabilityExtractor
+from nion.config import get_app_config
+from nion.utils.readability import ReadabilityExtractor
 
 from .infoquest_client import InfoQuestClient
 

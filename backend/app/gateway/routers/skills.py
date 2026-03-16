@@ -2,8 +2,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from src.skills import load_skills
-from src.tools.builtins._service_ops import (
+from nion.skills import load_skills
+from nion.tools.builtins._service_ops import (
     SkillInstallRequest,
     SkillInstallResponse,
     SkillResponse,

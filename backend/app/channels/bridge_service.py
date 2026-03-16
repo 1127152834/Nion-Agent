@@ -18,11 +18,11 @@ from typing import Any
 
 import httpx
 
-from src.channels.plugins.dingtalk.media_sender import DingTalkMediaSender
-from src.channels.repository import ChannelRepository
-from src.channels.webhook_service import IncomingWebhookEvent
-from src.config.paths import Paths, get_paths
-from src.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
+from app.channels.plugins.dingtalk.media_sender import DingTalkMediaSender
+from app.channels.repository import ChannelRepository
+from app.channels.webhook_service import IncomingWebhookEvent
+from nion.config.paths import Paths, get_paths
+from nion.runtime_profile import RuntimeProfileRepository, RuntimeProfileValidationError
 
 
 @dataclass(slots=True)
