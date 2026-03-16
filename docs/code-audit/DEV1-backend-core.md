@@ -7,6 +7,65 @@
 
 ---
 
+## Phase 0：紧急 Bug 修复（Day 1 必须完成）
+
+### Task 0.1：修复 heartbeat store 死锁 bug
+
+**严重度:** CRITICAL — `threading.Lock` 不可重入，`append_log()` 调用 `load_logs()` 时必然死锁
+
+**Files:**
+- Modify: `backend/src/heartbeat/store.py`
+
+```python
+# 修复：将 threading.Lock() 改为 threading.RLock()
+_lock = threading.RLock()  # RLock 允许同一线程重复获取
+```
+
+- [ ] Step 1: 将 `_lock = threading.Lock()` 改为 `_lock = threading.RLock()`
+- [ ] Step 2: 编写测试验证 `append_log` 不再死锁
+- [ ] Step 3: Commit
+
+### Task 0.2：修复 scheduler store TOCTOU 竞态条件
+
+**严重度:** HIGH — `append_history()` 的 read 和 write 之间锁被释放
+
+**Files:**
+- Modify: `backend/src/scheduler/store.py`
+- Modify: `backend/src/subagents/run_store.py`
+
+对 scheduler store，将 `append_history` 改为在同一个锁内完成 read-modify-write：
+```python
+def append_history(task_id: str, record: TaskExecutionRecord, limit: int = 200) -> None:
+    with _lock:  # 一次获取锁，完成全部操作
+        raw = _read_json(_history_path())
+        records = raw.get(task_id, [])
+        records.insert(0, record.model_dump())
+        raw[task_id] = records[:limit]
+        _write_json(_history_path(), raw)
+```
+
+对 subagent run_store，同样修复 `patch_run` 的 TOCTOU。
+
+- [ ] Step 1: 修复 scheduler/store.py 的 append_history
+- [ ] Step 2: 修复 subagents/run_store.py 的 patch_run
+- [ ] Step 3: 编写并发测试验证
+- [ ] Step 4: Commit
+
+### Task 0.3：修复 Gateway 默认绑定地址
+
+**Files:**
+- Modify: `backend/src/gateway/config.py`
+
+```python
+# 将默认值从 0.0.0.0 改为 127.0.0.1
+host: str = Field(default="127.0.0.1")
+```
+
+- [ ] Step 1: 修改默认绑定地址
+- [ ] Step 2: Commit
+
+---
+
 ## Phase 1：API 响应标准化 + 全局异常处理
 
 ### Task 1.1：创建统一响应 Schema

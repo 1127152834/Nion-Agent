@@ -22,24 +22,36 @@
 | **列表性能** | 零虚拟化，所有列表全量渲染 | 🟠 D | 关键列表虚拟化 |
 | **前端 Error Boundary** | 仅 A2UI 卡片有 | 🟠 D | 路由级 + 功能级 boundary |
 | **配置系统** | Pydantic 验证 + SQLite 版本控制 | 🟢 B | 保持，加强热重载 |
-| **线程安全** | Store 层有 threading.Lock | 🟢 B | 保持 |
+| **线程安全** | heartbeat store 有死锁 bug，9/10 单例无同步 | 🔴 F | RLock + 原子操作 |
+| **文件上传** | 无大小限制，无类型白名单 | 🔴 F | 大小/类型验证 |
+| **Electron IPC** | host-fs:read/write 无路径限制 | 🔴 F | 路径白名单 |
+| **XSS 防护** | HTML artifact 内联渲染，无 CSP | 🟠 D | sandbox iframe + CSP |
 | **类型安全** | 0 个 `any`/`as any` | 🟢 A | 保持 |
-| **国际化** | 完整 zh-CN/en-US 双语 | 🟢 B | 补全硬编码中文 |
+| **国际化** | 414 处硬编码中文绕过 i18n | 🔴 F | 全部走 i18n |
+| **apiFetch 覆盖** | 仅 13 处使用，~100+ 处仍用 raw fetch | 🟠 D | 100% 迁移 |
+| **前端路由错误** | 零 error.tsx / not-found.tsx | 🔴 F | 全路由覆盖 |
+| **Gateway 绑定** | 默认 0.0.0.0 + 无认证 | 🔴 F | 默认 127.0.0.1 |
 
 ### 核心问题分类
 
-#### P0 — 阻塞上线
+#### P0 — 阻塞上线（必须立即修复）
 
 1. **零认证系统**：任何人可访问所有 API，包括配置修改、模型密钥读取、文件操作
-2. **零前端测试**：无法保证回归安全
-3. **无全局错误处理**：未捕获异常直接暴露 stack trace
+2. **heartbeat store 死锁 bug**：`append_log()` 使用 `threading.Lock`（不可重入），内部调用 `load_logs()` 再次获取同一锁 → **必然死锁**。scheduler/store.py 和 subagents/run_store.py 有 TOCTOU 竞态条件
+3. **文件上传无大小限制**：`uploads.py` 的 `await file.read()` 直接将整个文件读入内存，攻击者可上传 GB 级文件耗尽内存
+4. **Electron IPC 无路径限制**：`desktop:host-fs:read/write` 接受任意文件路径，可读取 `~/.ssh/id_rsa`、写入任意系统文件
+5. **零前端测试 + 零 error.tsx**：无法保证回归安全，未处理异常显示 Next.js 默认错误页
+6. **HTML artifact 内联渲染（XSS）**：`artifacts.py` 的 `HTMLResponse` 渲染用户生成的 HTML，可执行任意 JS
 
 #### P1 — 严重影响质量
 
 4. **数据层无抽象**：Store 实现直接在 router 中调用，业务逻辑和数据访问混合
 5. **API 响应格式不统一**：有的返回 `{data}`，有的返回裸对象，有的返回 `{detail}`
 6. **Settings 页面状态管理灾难**：单个页面 17-32 个 useState，无 form 库
-7. **大文件仍存在**：plugin-assistant 2118 行、5 个 Settings 页面各 1200-2000 行
+7. **apiFetch 覆盖率仅 13%**：~100+ 处仍用 raw `fetch()`，每个 API 模块自行实现错误处理
+8. **414 处硬编码中文**：16 个组件文件绕过 i18n 系统，英文用户看到中文
+9. **Gateway 默认绑定 0.0.0.0**：结合零认证，暴露在网络上极危险
+10. **9/10 配置单例无线程同步**：FastAPI async + 后台线程池环境下有数据竞争风险
 
 #### P2 — 影响可维护性
 

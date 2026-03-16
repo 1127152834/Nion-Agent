@@ -7,6 +7,44 @@
 
 ---
 
+## Phase 0：紧急修复（Day 1 必须完成）
+
+### Task 0.1：添加 error.tsx 和 not-found.tsx
+
+**严重度:** HIGH — 当前零容错页面，任何未处理异常显示 Next.js 默认白屏
+
+**Files:**
+- Create: `frontend/src/app/error.tsx`（全局 fallback）
+- Create: `frontend/src/app/not-found.tsx`（全局 404）
+- Create: `frontend/src/app/workspace/error.tsx`（工作区级）
+- Create: `frontend/src/app/workspace/chats/[thread_id]/error.tsx`（聊天级）
+
+```tsx
+// frontend/src/app/workspace/error.tsx
+"use client";
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+
+export default function WorkspaceError({
+  error, reset,
+}: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => { console.error(error); }, [error]);
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4">
+      <h2 className="text-lg font-semibold">Something went wrong</h2>
+      <p className="text-sm text-muted-foreground">{error.message}</p>
+      <Button onClick={reset} variant="outline">Try again</Button>
+    </div>
+  );
+}
+```
+
+- [ ] Step 1: 创建 4 个 error/not-found 文件
+- [ ] Step 2: TypeScript 类型检查
+- [ ] Step 3: Commit
+
+---
+
 ## Phase 1：Error Boundary 体系 + Form State 库引入
 
 ### Task 1.1：引入 react-hook-form + zod
@@ -309,17 +347,66 @@ export default defineConfig({
 
 ### Task 3.5：迁移剩余 API 模块到 apiFetch
 
-当前还有约 15 个 API 模块使用原始 `fetch()`。逐步迁移：
+当前覆盖率极低：仅 13 处使用 `apiFetch`，~100+ 处仍用 raw `fetch()`。这是前端最大的一致性问题。
 
-```bash
-# 找出所有还在用 raw fetch 的文件
-grep -rn 'fetch(' --include='*.ts' src/core/ | grep -v 'apiFetch\|node_modules\|fetch.ts'
+每个 API 模块需独立重复实现错误处理，例如：
+- `core/agents/api.ts` 有本地 `readApiError()` 辅助函数
+- `core/memory/api.ts` 有本地 `toErrorMessage()` 辅助函数
+- `core/channels/api.ts` 有内联错误解析
+
+**重点迁移清单（按模块大小排序）：**
+1. `core/agents/api.ts` + `editor-api.ts` + `evolution-api.ts` + `heartbeat-api.ts` + `settings-api.ts`（~33 处）
+2. `core/cli/api.ts`（~15 处）
+3. `core/memory/api.ts`（~12 处，注意消除 `as unknown as X` 双重转换）
+4. `core/retrieval-models/api.ts`（~12 处）
+5. `core/scheduler/api.ts`（~10 处）
+6. `core/mcp/api.ts`（~10 处）
+7. `core/workbench/marketplace.ts` + `sdk.ts` + `loader.ts`（~32 处）
+8. `core/config-center/api.ts`（~5 处）
+9. `core/channels/api.ts` + `core/uploads/api.ts` + `core/artifacts/api.ts` + 其他（~10 处）
+
+- [ ] Step 1: 批量迁移 agents 系列（每 3 个文件一个 commit）
+- [ ] Step 2: 批量迁移 cli + memory + retrieval-models
+- [ ] Step 3: 批量迁移 scheduler + mcp + workbench
+- [ ] Step 4: 批量迁移剩余模块
+- [ ] Step 5: 消除 memory/api.ts 中的 3 个 `as unknown as X` 双重转换
+- [ ] Step 6: TypeScript 类型检查
+- [ ] Step 7: 验证无遗漏：`grep -rn 'fetch(' --include='*.ts' src/core/ | grep -v 'apiFetch'` 应为空
+
+### Task 3.6：i18n 硬编码中文清理（414 处）
+
+**严重度:** HIGH — 英文用户在 16 个页面看到中文
+
+**重点文件（按严重度排序）：**
+1. `settings/cli-tools-page.tsx`（86 处）— 移除 `FALLBACK_COPY`，迁移到 `locales/zh-CN.ts`
+2. `settings/mcp-servers-page.tsx`（82 处）— 同上
+3. `app/workspace/plugins/assistant/page.tsx`（70 处）
+4. `settings/search-settings-page.tsx`（60 处）
+5. `settings/embedding-settings-page.tsx`（46 处）
+6. `messages/a2ui-card.tsx`（14 处）— 完全无 i18n 集成
+7. `messages/cli-interactive-card.tsx`（14 处）
+8. `agents/settings/scheduler-settings.tsx`（14 处）
+9. 其余 8 个文件（~28 处）
+
+**迁移模式：**
+```typescript
+// Before:
+<span>保存成功</span>
+
+// After:
+<span>{t.common.saveSuccess}</span>
+
+// 在 locales/types.ts 添加键
+// 在 locales/en-US.ts 添加 "Saved successfully"
+// 在 locales/zh-CN.ts 添加 "保存成功"
 ```
 
-- [ ] Step 1: 列出所有未迁移文件
-- [ ] Step 2: 批量迁移（每 3 个文件一个 commit）
-- [ ] Step 3: TypeScript 类型检查
-- [ ] Step 4: Commit
+- [ ] Step 1: 迁移 cli-tools-page + mcp-servers-page（移除 FALLBACK_COPY 反模式）
+- [ ] Step 2: 迁移 plugin-assistant + search-settings + embedding-settings
+- [ ] Step 3: 迁移 a2ui-card + cli-interactive-card + scheduler-settings
+- [ ] Step 4: 迁移剩余文件
+- [ ] Step 5: 验证：`grep -rn '[\\u4e00-\\u9fff]' --include='*.tsx' src/ | grep -v 'i18n\\|locales' | wc -l` 应为 0
+- [ ] Step 6: Commit
 
 ---
 

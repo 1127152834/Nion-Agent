@@ -7,6 +7,95 @@
 
 ---
 
+## Phase 0：紧急安全修复（Day 1 必须完成）
+
+### Task 0.1：添加上传文件大小限制
+
+**严重度:** CRITICAL — `await file.read()` 将整个文件读入内存，无大小限制
+
+**Files:**
+- Modify: `backend/src/gateway/routers/uploads.py`
+
+```python
+MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100 MB
+
+@router.post("/api/threads/{thread_id}/uploads")
+async def upload_files(thread_id: str, files: list[UploadFile] = File(...)):
+    for file in files:
+        # 检查 Content-Length（如果有）
+        if file.size and file.size > MAX_UPLOAD_SIZE:
+            raise HTTPException(413, f"File {file.filename} exceeds {MAX_UPLOAD_SIZE // 1024 // 1024}MB limit")
+
+        # 流式读取并检查实际大小
+        chunks = []
+        total = 0
+        while chunk := await file.read(8192):
+            total += len(chunk)
+            if total > MAX_UPLOAD_SIZE:
+                raise HTTPException(413, f"File {file.filename} exceeds size limit")
+            chunks.append(chunk)
+        content = b"".join(chunks)
+        # ... 继续处理
+```
+
+- [ ] Step 1: 添加大小限制和流式读取
+- [ ] Step 2: 添加文件类型白名单（允许：txt, md, pdf, pptx, xlsx, docx, csv, json, yaml, py, ts, js, png, jpg, gif, svg, zip）
+- [ ] Step 3: 编写测试（超大文件被拒绝、非法类型被拒绝）
+- [ ] Step 4: Commit
+
+### Task 0.2：修复 Electron IPC 路径遍历
+
+**严重度:** CRITICAL — `desktop:host-fs:read/write` 接受任意路径，可读写系统任何文件
+
+**Files:**
+- Modify: `desktop/electron/src/main.ts`
+
+```typescript
+// 添加路径白名单验证
+function isPathAllowed(targetPath: string): boolean {
+  const resolved = path.resolve(targetPath);
+  // 只允许在工作区目录内操作
+  const allowedRoots = [
+    nionHome,  // .nion/ 数据目录
+    // 可以添加用户选择的工作区根目录
+  ];
+  return allowedRoots.some(root => resolved.startsWith(root));
+}
+
+// 在 host-fs:read 和 host-fs:write handler 中：
+if (!isPathAllowed(targetPath)) {
+  throw new Error(`Access denied: ${targetPath} is outside allowed directories`);
+}
+```
+
+- [ ] Step 1: 实现路径白名单验证函数
+- [ ] Step 2: 在所有文件系统 IPC handler 中添加验证
+- [ ] Step 3: 修复 `shell.openExternal` 添加 URL scheme 白名单（仅 http/https）
+- [ ] Step 4: Commit
+
+### Task 0.3：修复 HTML artifact XSS
+
+**Files:**
+- Modify: `backend/src/gateway/routers/artifacts.py`
+
+```python
+# 不再直接渲染 HTML，改为强制下载或 sandbox iframe
+if mime_type == "text/html":
+    # 选项 1: 强制下载
+    return FileResponse(actual_path, media_type="application/octet-stream",
+                       headers={"Content-Disposition": f"attachment; filename={path}"})
+    # 选项 2: 添加 CSP 头禁止脚本执行
+    return HTMLResponse(content, headers={
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:;"
+    })
+```
+
+- [ ] Step 1: 为 HTML artifact 添加 CSP 头或强制下载
+- [ ] Step 2: 编写安全测试（包含 `<script>` 标签的 HTML 被阻止执行）
+- [ ] Step 3: Commit
+
+---
+
 ## Phase 1：API Key 认证 + 安全审计修复
 
 ### Task 1.1：实现 API Key 认证中间件
