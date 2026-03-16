@@ -8,6 +8,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from "@/com
 import { RuntimeOnboardingOverlay } from "@/components/workspace/runtime-onboarding-overlay";
 import { SchedulerTaskWatcher } from "@/components/workspace/scheduler/scheduler-task-watcher";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
+import { useAppRouter } from "@/core/navigation";
 import { getLocalSettings, useLocalSettings } from "@/core/settings";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ export default function WorkspaceLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const [settings, setSettings] = useLocalSettings();
+  const router = useAppRouter();
   const [open, setOpen] = useState(false); // SSR default: open (matches server render)
   const [titlebarInset, setTitlebarInset] = useState(0);
 
@@ -41,6 +43,20 @@ export default function WorkspaceLayout({
     const isMac = /Mac/i.test(platform) || /Macintosh|Mac OS X/i.test(ua);
     setTitlebarInset(isElectron && isMac ? 28 : 0);
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        router.prefetch("/workspace/agents");
+        router.prefetch("/workspace/scheduler");
+      } catch {
+        // Non-fatal: prefetch may not be supported in certain Next runtimes.
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [router]);
+
   useEffect(() => {
     setOpen(!settings.layout.sidebar_collapsed);
   }, [settings.layout.sidebar_collapsed]);
