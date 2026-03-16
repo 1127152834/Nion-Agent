@@ -67,6 +67,7 @@ def test_setup_agent_custom_rejects_existing_agent_dir_without_mutation(tmp_path
             description="new desc",
             runtime=_runtime(agent_name="writer", agent_display_name="写作助手"),
             target="custom",
+            identity="identity must be provided to avoid falling back to default template",
         )
 
     # 不应删除/覆盖既有目录
@@ -75,6 +76,24 @@ def test_setup_agent_custom_rejects_existing_agent_dir_without_mutation(tmp_path
     # 失败应返回 ToolMessage（Command.update.messages）
     assert result.update.get("messages")
     assert "already exists" in (result.update["messages"][0].content or "").lower()
+
+
+def test_setup_agent_custom_rejects_missing_identity_without_creating_agent_dir(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+        result = setup_agent.func(
+            soul="custom soul",
+            description="desc",
+            runtime=_runtime(agent_name="writer", agent_display_name="写作助手"),
+            target="custom",
+            identity="   ",
+        )
+
+    agent_dir = tmp_path / "agents" / "writer"
+    assert not agent_dir.exists()
+    assert result.update.get("messages")
+    assert "identity" in (result.update["messages"][0].content or "").lower()
 
 
 def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
@@ -115,6 +134,7 @@ def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
             description="desc",
             runtime=_runtime(agent_name=None),
             target="default",
+            identity="identity is required for bootstrap updates (no silent default template)",
             user_profile="new block",
         )
 
@@ -123,3 +143,24 @@ def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
     assert "manual footer" in updated
     assert "old block" not in updated
     assert "new block" in updated
+
+
+def test_setup_agent_default_rejects_missing_identity_without_writing_default_assets(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    with (
+        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+    ):
+        result = setup_agent.func(
+            soul="default soul",
+            description="desc",
+            runtime=_runtime(agent_name=None),
+            target="default",
+            identity=None,
+        )
+
+    default_dir = tmp_path / "agents" / "_default"
+    assert not default_dir.exists()
+    assert result.update.get("messages")
+    assert "identity" in (result.update["messages"][0].content or "").lower()
