@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDownIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   Collapsible,
@@ -66,6 +66,7 @@ export function SandboxSection({
   const sandbox = asObject(config.sandbox);
   const sandboxUse = asString(sandbox.use);
   const sandboxMode = getSandboxMode(sandboxUse);
+  const sandboxUseBeforeStrictModeRef = useRef<string | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const strictModeEnabled = asBoolean(sandbox.strict_mode, false);
   const strictModeTip =
@@ -161,13 +162,28 @@ export function SandboxSection({
               checked={strictModeEnabled}
               onCheckedChange={(checked) => {
                 if (checked) {
+                  // Strict mode forces AIO sandbox; remember current selection so we can restore it.
+                  sandboxUseBeforeStrictModeRef.current = sandboxUse;
+                  setAdvancedOpen(false);
                   updateSandboxBatch({
                     strict_mode: true,
                     use: "src.community.aio_sandbox:AioSandboxProvider",
                   });
                   return;
                 }
-                updateSandbox("strict_mode", false);
+                setAdvancedOpen(false);
+
+                const restoreUse = sandboxUseBeforeStrictModeRef.current;
+                sandboxUseBeforeStrictModeRef.current = null;
+
+                updateSandboxBatch({
+                  // Default is disabled; keep config clean by removing the override.
+                  strict_mode: undefined,
+                  // If strict mode was forcing AIO and we don't know previous selection, fall back to local.
+                  use: restoreUse ?? (sandboxMode === "aio"
+                    ? "src.sandbox.local:LocalSandboxProvider"
+                    : sandboxUse),
+                });
               }}
               disabled={disabled}
             />
