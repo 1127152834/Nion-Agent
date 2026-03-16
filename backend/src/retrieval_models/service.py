@@ -361,18 +361,16 @@ class RetrievalModelsService:
 
         return modified
 
-    def build_status(self) -> dict[str, Any]:
-        app_config = get_app_config()
-        cfg = app_config.retrieval_models
-        registry = self._load_registry(cfg)
-
+    def _maybe_normalize_and_persist(self, *, cfg: RetrievalModelsConfig, registry: dict[str, Any]) -> bool:
         modified = False
         normalization_applied = False
+
         if self._cleanup_invalid_active_models(cfg, registry):
             modified = True
         if self._normalize_local_active_pack(cfg):
             modified = True
             normalization_applied = True
+
         if modified:
             repo = ConfigRepository()
             config_dict, version, _ = repo.read()
@@ -384,15 +382,17 @@ class RetrievalModelsService:
                 retrieval_cfg=cfg,
             )
 
-        registry_models = registry.get("models", {})
-        if not isinstance(registry_models, dict):
-            registry_models = {}
+        return normalization_applied
 
-        active = self._active_selection_from_config(cfg)
-        active_pack_id = self._detect_active_local_pack_id(cfg)
-        active_embedding = active.get("embedding", {}) if isinstance(active.get("embedding"), dict) else {}
-        active_rerank = active.get("rerank", {}) if isinstance(active.get("rerank"), dict) else {}
-
+    def _build_models_by_family(
+        self,
+        *,
+        cfg: RetrievalModelsConfig,
+        registry: dict[str, Any],
+        registry_models: dict[str, Any],
+        active_embedding: dict[str, Any],
+        active_rerank: dict[str, Any],
+    ) -> dict[str, list[dict[str, Any]]]:
         locale_map = _family_locale_map()
         models_by_family: dict[str, list[dict[str, Any]]] = {"embedding": [], "rerank": []}
 
@@ -430,6 +430,18 @@ class RetrievalModelsService:
                 }
             )
 
+        return models_by_family
+
+    def _build_packs_status(
+        self,
+        *,
+        cfg: RetrievalModelsConfig,
+        registry: dict[str, Any],
+        registry_models: dict[str, Any],
+        active_pack_id: str | None,
+        active_embedding: dict[str, Any],
+        active_rerank: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         packs: list[dict[str, Any]] = []
         for pack in LOCAL_PACK_SPECS:
             items: list[dict[str, Any]] = []
@@ -480,6 +492,40 @@ class RetrievalModelsService:
                     "models": items,
                 }
             )
+
+        return packs
+
+    def build_status(self) -> dict[str, Any]:
+        app_config = get_app_config()
+        cfg = app_config.retrieval_models
+        registry = self._load_registry(cfg)
+
+        normalization_applied = self._maybe_normalize_and_persist(cfg=cfg, registry=registry)
+
+        registry_models = registry.get("models", {})
+        if not isinstance(registry_models, dict):
+            registry_models = {}
+
+        active = self._active_selection_from_config(cfg)
+        active_pack_id = self._detect_active_local_pack_id(cfg)
+        active_embedding = active.get("embedding", {}) if isinstance(active.get("embedding"), dict) else {}
+        active_rerank = active.get("rerank", {}) if isinstance(active.get("rerank"), dict) else {}
+
+        models_by_family = self._build_models_by_family(
+            cfg=cfg,
+            registry=registry,
+            registry_models=registry_models,
+            active_embedding=active_embedding,
+            active_rerank=active_rerank,
+        )
+        packs = self._build_packs_status(
+            cfg=cfg,
+            registry=registry,
+            registry_models=registry_models,
+            active_pack_id=active_pack_id,
+            active_embedding=active_embedding,
+            active_rerank=active_rerank,
+        )
 
         return {
             "enabled": cfg.enabled,
