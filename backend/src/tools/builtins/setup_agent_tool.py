@@ -2,12 +2,13 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 from langgraph.types import Command
 
+from src.agents.memory.actions import store_memory_action
 from src.config.paths import get_paths
 from src.tools.builtins.langchain_compat import ToolRuntime
 
@@ -16,25 +17,6 @@ AGENT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 
 USER_PROFILE_MARKER_START = "<!-- nion:bootstrap:user_profile:start -->"
 USER_PROFILE_MARKER_END = "<!-- nion:bootstrap:user_profile:end -->"
-
-
-DEFAULT_IDENTITY_CONTENT = """# Agent Identity
-
-## Role
-You are a helpful AI assistant focused on assisting users with their tasks.
-
-## Personality Traits
-- Professional and focused
-- Patient and thorough
-- Adaptable to user needs
-- Proactive in problem-solving
-
-## Values
-- Quality and accuracy
-- User autonomy and consent
-- Transparency in actions
-- Continuous improvement
-"""
 
 
 def _tool_error(message: str, runtime: ToolRuntime) -> Command:
@@ -76,6 +58,77 @@ def _upsert_user_profile_block(*, user_md_path: Path, content: str) -> None:
     user_md_path.write_text(merged, encoding="utf-8")
 
 
+def _runtime_context(runtime: ToolRuntime) -> dict[str, Any]:
+    if not isinstance(runtime.context, dict):
+        return {}
+    return runtime.context
+
+
+def _runtime_state(runtime: ToolRuntime) -> dict[str, Any]:
+    # ToolRuntime typing is intentionally loose for compatibility across
+    # LangChain versions. Be defensive.
+    state = getattr(runtime, "state", None)
+    if not isinstance(state, dict):
+        return {}
+    return state
+
+
+def _runtime_thread_id(runtime: ToolRuntime) -> str | None:
+    value = _runtime_context(runtime).get("thread_id")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+def _memory_policy_state(runtime: ToolRuntime) -> dict[str, Any]:
+    state = _runtime_state(runtime)
+    return {
+        "session_mode": state.get("session_mode"),
+        "memory_read": state.get("memory_read"),
+        "memory_write": state.get("memory_write"),
+    }
+
+
+def _memory_policy_runtime_context(runtime: ToolRuntime) -> dict[str, Any]:
+    context = _runtime_context(runtime)
+    return {
+        "session_mode": context.get("session_mode"),
+        "memory_read": context.get("memory_read"),
+        "memory_write": context.get("memory_write"),
+    }
+
+
+def _normalize_identity(identity: str | None) -> str | None:
+    payload = (identity or "").strip()
+    return payload or None
+
+
+def _normalize_memory_items(raw_items: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not raw_items:
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        tier = str(item.get("tier") or "").strip().lower() or "episode"
+        if tier not in {"profile", "preference", "episode", "trace"}:
+            tier = "episode"
+        confidence_raw = item.get("confidence")
+        confidence = 0.9
+        if confidence_raw is not None:
+            try:
+                confidence = float(confidence_raw)
+            except Exception:  # noqa: BLE001
+                confidence = 0.9
+        normalized.append({"content": content, "tier": tier, "confidence": confidence})
+
+    return normalized
+
+
 @tool
 def setup_agent(
     soul: str,
@@ -88,6 +141,7 @@ def setup_agent(
     identity: str | None = None,
     user_profile: str | None = None,
     user_profile_strategy: Literal["replace_generated_block"] = "replace_generated_block",
+    memory_items: list[dict[str, Any]] | None = None,
     model: str | None = None,
     tool_groups: list[str] | None = None,
 ) -> Command:
@@ -96,6 +150,8 @@ def setup_agent(
     Args:
         soul: SOUL.md content defining the agent's personality and behavior.
         description: One-line description of what the agent does (custom agent only).
+        identity: IDENTITY.md content defining the agent's role, responsibilities, and boundaries.
+        memory_items: Optional list of memory items to seed into OpenViking (profile/preference tiers).
         model: Optional model name to use for this agent (e.g., "claude-opus-4-6").
         tool_groups: Optional list of tool groups to enable for this agent (e.g., ["default"]).
     """
@@ -107,6 +163,16 @@ def setup_agent(
         )
 
     if target == "default":
+        identity_payload = _normalize_identity(identity)
+        if identity_payload is None:
+            return _tool_error(
+                "Error: missing required 'identity' content. "
+                "Bootstrap must generate and pass a non-empty IDENTITY.md (do not rely on silent default templates).",
+                runtime,
+            )
+
+        normalized_memory_items = _normalize_memory_items(memory_items)
+
         from src.config.default_agent import DEFAULT_AGENT_NAME, ensure_default_agent
 
         try:
@@ -121,19 +187,52 @@ def setup_agent(
 
             identity_path = paths.agent_identity_file(default_name)
             identity_path.parent.mkdir(parents=True, exist_ok=True)
-            identity_payload = identity.strip() if isinstance(identity, str) and identity.strip() else DEFAULT_IDENTITY_CONTENT.strip()
             identity_path.write_text(identity_payload, encoding="utf-8")
 
             if isinstance(user_profile, str) and user_profile.strip():
                 _upsert_user_profile_block(user_md_path=paths.user_md_file, content=user_profile)
 
+            memory_results: list[dict[str, Any]] = []
+            memory_errors: list[str] = []
+            if normalized_memory_items:
+                for idx, item in enumerate(normalized_memory_items, start=1):
+                    try:
+                        memory_results.append(
+                            store_memory_action(
+                                content=item["content"],
+                                confidence=float(item["confidence"]),
+                                scope="global",
+                                agent_name=None,
+                                runtime_agent_name=None,
+                                source="bootstrap",
+                                thread_id=_runtime_thread_id(runtime),
+                                metadata={"tier": item["tier"]},
+                                policy_state=_memory_policy_state(runtime),
+                                policy_runtime_context=_memory_policy_runtime_context(runtime),
+                            )
+                        )
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning(
+                            "[agent_creator] Failed to store default memory item %s: %s",
+                            idx,
+                            e,
+                            exc_info=True,
+                        )
+                        memory_errors.append(f"{idx}: {e}")
+
             logger.info("[agent_creator] Updated default agent assets at %s", paths.agent_dir(default_name))
+            message_lines = ["Default agent assets updated successfully!"]
+            if memory_errors:
+                message_lines.append(
+                    f"Warning: memory initialization failed for {len(memory_errors)} item(s): " + "; ".join(memory_errors)
+                )
             return Command(
                 update={
                     "updated_agent_name": default_name,
+                    "memory_results": memory_results,
                     "messages": [
                         ToolMessage(
-                            content="Default agent assets updated successfully!",
+                            content="\n".join(message_lines),
                             tool_call_id=runtime.tool_call_id,
                         )
                     ],
@@ -160,6 +259,16 @@ def setup_agent(
             f"Error: invalid agent_name '{normalized_agent_name}'. Must match ^[A-Za-z0-9-]+$ (letters, digits, and hyphens only).",
             runtime,
         )
+
+    identity_payload = _normalize_identity(identity)
+    if identity_payload is None:
+        return _tool_error(
+            "Error: missing required 'identity' content. "
+            "Bootstrap must generate and pass a non-empty IDENTITY.md (do not rely on silent default templates).",
+            runtime,
+        )
+
+    normalized_memory_items = _normalize_memory_items(memory_items)
 
     agent_dir = None
     try:
@@ -199,19 +308,52 @@ def setup_agent(
         soul_file = paths.agent_soul_file(normalized_agent_name)
         soul_file.write_text(soul, encoding="utf-8")
 
-        # Create IDENTITY.md (custom content or default template)
+        # Create IDENTITY.md (bootstrap must provide non-empty content)
         identity_file = paths.agent_identity_file(normalized_agent_name)
-        identity_payload = identity.strip() if isinstance(identity, str) and identity.strip() else DEFAULT_IDENTITY_CONTENT.strip()
         identity_file.write_text(identity_payload, encoding="utf-8")
 
         if isinstance(user_profile, str) and user_profile.strip():
             _upsert_user_profile_block(user_md_path=paths.user_md_file, content=user_profile)
 
+        memory_results: list[dict[str, Any]] = []
+        memory_errors: list[str] = []
+        if normalized_memory_items:
+            for idx, item in enumerate(normalized_memory_items, start=1):
+                try:
+                    memory_results.append(
+                        store_memory_action(
+                            content=item["content"],
+                            confidence=float(item["confidence"]),
+                            scope="agent",
+                            agent_name=normalized_agent_name,
+                            runtime_agent_name=normalized_agent_name,
+                            source="bootstrap",
+                            thread_id=_runtime_thread_id(runtime),
+                            metadata={"tier": item["tier"]},
+                            policy_state=_memory_policy_state(runtime),
+                            policy_runtime_context=_memory_policy_runtime_context(runtime),
+                        )
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(
+                        "[agent_creator] Failed to store agent memory item %s: %s",
+                        idx,
+                        e,
+                        exc_info=True,
+                    )
+                    memory_errors.append(f"{idx}: {e}")
+
         logger.info(f"[agent_creator] Created agent '{normalized_agent_name}' at {agent_dir}")
+        message_lines = [f"Agent '{normalized_agent_name}' created successfully!"]
+        if memory_errors:
+            message_lines.append(
+                f"Warning: memory initialization failed for {len(memory_errors)} item(s): " + "; ".join(memory_errors)
+            )
         return Command(
             update={
                 "created_agent_name": normalized_agent_name,
-                "messages": [ToolMessage(content=f"Agent '{normalized_agent_name}' created successfully!", tool_call_id=runtime.tool_call_id)],
+                "memory_results": memory_results,
+                "messages": [ToolMessage(content="\n".join(message_lines), tool_call_id=runtime.tool_call_id)],
             }
         )
 
