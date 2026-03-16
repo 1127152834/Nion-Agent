@@ -19,6 +19,16 @@ AGENT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 USER_PROFILE_MARKER_START = "<!-- nion:bootstrap:user_profile:start -->"
 USER_PROFILE_MARKER_END = "<!-- nion:bootstrap:user_profile:end -->"
 
+_SOUL_IDENTITY_MIXED_HEADING_RE = re.compile(
+    r"(?im)^\s*#{1,6}\s*(?:"
+    r"主要任务|任务与范围|职责范围|职责|交付物|典型输入|输入\s*[→\-]{1,2}\s*输出|输入\s*→\s*输出|质量标准|边界与禁区|不做什么|"
+    r"Role\b|Responsibilities\b|Tasks\b|Deliverables\b|Input\b.*Output\b|Quality\s*(?:Bar|Standards)\b|Boundaries\b|Restrictions\b"
+    r")"
+)
+_SOUL_IDENTITY_MIXED_ARROW_RE = re.compile(
+    r"(?im)^\s*(?:输入|Input)\s*[:：]?\s*.*?(?:→|->|=>)\s*.*?(?:输出|Output)\b"
+)
+
 
 def _tool_error(message: str, runtime: ToolRuntime) -> Command:
     logger.error("[agent_creator] %s", message)
@@ -173,6 +183,26 @@ def _normalize_memory_items(raw_items: list[dict[str, Any]] | None) -> list[dict
     return normalized
 
 
+def _detect_identity_signals_in_soul(soul: str) -> str | None:
+    """Best-effort guardrail: reject obviously mixed SOUL/IDENTITY content.
+
+    This is intentionally lightweight and explainable. We only match strong
+    structural signals that usually indicate responsibilities/deliverables are
+    being written into SOUL (which must be persona-only).
+    """
+
+    raw = (soul or "").strip()
+    if not raw:
+        return None
+
+    match = _SOUL_IDENTITY_MIXED_HEADING_RE.search(raw) or _SOUL_IDENTITY_MIXED_ARROW_RE.search(raw)
+    if not match:
+        return None
+
+    snippet = match.group(0).strip().replace("\n", " ")
+    return snippet[:160]
+
+
 @tool
 def setup_agent(
     soul: str,
@@ -212,6 +242,14 @@ def setup_agent(
             return _tool_error(
                 "Error: missing required 'identity' content. "
                 "Bootstrap must generate and pass a non-empty IDENTITY.md (do not rely on silent default templates).",
+                runtime,
+            )
+
+        if signal := _detect_identity_signals_in_soul(soul):
+            return _tool_error(
+                "Error: SOUL.md content appears to include role/responsibility/deliverable sections that belong in IDENTITY.md. "
+                "Please move the responsibilities/outputs/boundaries content into IDENTITY.md and keep SOUL.md persona-only. "
+                f"(signal: {signal})",
                 runtime,
             )
 
@@ -325,6 +363,14 @@ def setup_agent(
         return _tool_error(
             "Error: missing required 'identity' content. "
             "Bootstrap must generate and pass a non-empty IDENTITY.md (do not rely on silent default templates).",
+            runtime,
+        )
+
+    if signal := _detect_identity_signals_in_soul(soul):
+        return _tool_error(
+            "Error: SOUL.md content appears to include role/responsibility/deliverable sections that belong in IDENTITY.md. "
+            "Please move the responsibilities/outputs/boundaries content into IDENTITY.md and keep SOUL.md persona-only. "
+            f"(signal: {signal})",
             runtime,
         )
 
