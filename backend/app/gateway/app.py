@@ -97,6 +97,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:  # noqa: BLE001
         logger.warning("Failed to remove legacy memory artifacts (non-blocking): %s", e)
 
+    async def _warmup_memory_provider() -> None:
+        """Warm up the default memory provider so the first OpenViking request isn't a cold init."""
+        try:
+            from nion.config.memory_config import get_memory_config
+
+            if not get_memory_config().enabled:
+                logger.info("Memory provider warmup skipped: memory is disabled")
+                return
+        except Exception as error:  # noqa: BLE001
+            logger.warning("Memory provider warmup config check failed (non-blocking): %s", error)
+
+        try:
+            from nion.agents.memory.registry import get_default_memory_provider
+
+            await asyncio.to_thread(get_default_memory_provider)
+            logger.info("Memory provider warmup completed")
+        except Exception as error:  # noqa: BLE001
+            logger.warning("Memory provider warmup failed (non-blocking): %s", error)
+
+    try:
+        asyncio.create_task(_warmup_memory_provider())
+    except Exception as error:  # noqa: BLE001
+        logger.warning("Failed to schedule memory provider warmup (non-blocking): %s", error)
+
     config = get_gateway_config()
     logger.info(f"Starting API Gateway on {config.host}:{config.port}")
 
