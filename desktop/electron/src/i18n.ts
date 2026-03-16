@@ -27,6 +27,18 @@ export interface DesktopStartupCopy {
   startupErrorPortSummary: string;
   startupErrorCodePrefix: string;
   startupErrorCodeUnknown: string;
+  startupAttemptPrefix: string;
+  startupAttemptSuffix: string;
+  startupActionFallback: string;
+  startupActionRetryStartup: string;
+  startupActionOpenLogs: string;
+  startupActionExitApp: string;
+  startupInProgressStatus: string;
+  startupRetryStartedStatus: string;
+  openLogsFailedPrefix: string;
+  logsOpenedStatus: string;
+  appExitingStatus: string;
+  unknownRecoveryActionPrefix: string;
   startupEngineVersionPrefix: string;
   startupStages: Record<string, StartupStageCopy>;
 }
@@ -35,7 +47,7 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
   "zh-CN": {
     windowTitle: "一念 Nion",
     startupLoadingAriaLabel: "Nion 启动加载页",
-    startupBrandTitle: "Nion",
+    startupBrandTitle: "一念 Nion",
     startupCompanionLabel: "你的全能AI伙伴",
     startupSlogans: [
       "一念之间，万事即达。",
@@ -59,6 +71,18 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
     startupErrorPortSummary: "启动端口被占用，请释放后重试。",
     startupErrorCodePrefix: "错误码: ",
     startupErrorCodeUnknown: "unknown",
+    startupAttemptPrefix: "启动尝试: 第 ",
+    startupAttemptSuffix: " 次",
+    startupActionFallback: "操作",
+    startupActionRetryStartup: "重试启动",
+    startupActionOpenLogs: "查看日志",
+    startupActionExitApp: "退出应用",
+    startupInProgressStatus: "启动流程正在进行中，请稍候。",
+    startupRetryStartedStatus: "已开始重试启动。",
+    openLogsFailedPrefix: "打开日志目录失败: ",
+    logsOpenedStatus: "日志目录已打开。",
+    appExitingStatus: "应用即将退出。",
+    unknownRecoveryActionPrefix: "未知恢复动作: ",
     startupEngineVersionPrefix: "ENGINE VERSION",
     startupStages: {
       "runtime.assign-ports": {
@@ -85,6 +109,11 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
         message: "启动 API 网关",
         detail: "正在拉起 127.0.0.1 网关服务",
         percent: 0.74
+      },
+      "runtime.recover.pending-runs": {
+        message: "恢复运行状态",
+        detail: "正在恢复未完成的运行任务",
+        percent: 0.8
       },
       "runtime.start.frontend": {
         message: "启动前端界面",
@@ -125,6 +154,18 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
     startupErrorPortSummary: "Required startup ports are occupied. Free the ports and retry.",
     startupErrorCodePrefix: "Error code: ",
     startupErrorCodeUnknown: "unknown",
+    startupAttemptPrefix: "Startup attempt: ",
+    startupAttemptSuffix: "",
+    startupActionFallback: "Action",
+    startupActionRetryStartup: "Retry startup",
+    startupActionOpenLogs: "View logs",
+    startupActionExitApp: "Exit app",
+    startupInProgressStatus: "Startup is in progress. Please wait.",
+    startupRetryStartedStatus: "Startup retry has started.",
+    openLogsFailedPrefix: "Failed to open logs: ",
+    logsOpenedStatus: "Logs directory opened.",
+    appExitingStatus: "Application is exiting.",
+    unknownRecoveryActionPrefix: "Unknown recovery action: ",
     startupEngineVersionPrefix: "ENGINE VERSION",
     startupStages: {
       "runtime.assign-ports": {
@@ -151,6 +192,11 @@ const DESKTOP_STARTUP_I18N: Record<DesktopLocale, DesktopStartupCopy> = {
         message: "Starting API gateway",
         detail: "Launching local gateway on 127.0.0.1",
         percent: 0.74
+      },
+      "runtime.recover.pending-runs": {
+        message: "Restoring runs",
+        detail: "Recovering unfinished tasks",
+        percent: 0.8
       },
       "runtime.start.frontend": {
         message: "Starting frontend UI",
