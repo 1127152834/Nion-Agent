@@ -3,9 +3,9 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getBackendBaseURL, getLangGraphBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { isElectron } from "@/core/platform";
-import { getBackendBaseURL, getLangGraphBaseURL } from "@/core/config";
 import { useRuntimeInfo } from "@/core/runtime-info/hooks";
 import { useRuntimeTopology } from "@/core/runtime-topology/hooks";
 
