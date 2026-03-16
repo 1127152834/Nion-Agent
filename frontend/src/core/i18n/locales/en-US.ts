@@ -1000,6 +1000,13 @@ export const enUS: Translations = {
       desktopRuntime: "Desktop Ports",
       about: "About",
     },
+    navGroups: {
+      experience: "Experience",
+      conversation: "Chat & Models",
+      memory: "Memory & Retrieval",
+      tools: "Tools & Extensions",
+      system: "System & Debug",
+    },
     validation: {
       rootLabel: "root",
       validationFailed: "Validation failed",

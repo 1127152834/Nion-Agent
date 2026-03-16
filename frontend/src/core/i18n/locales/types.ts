@@ -895,6 +895,13 @@ export interface Translations {
       desktopRuntime: string;
       about: string;
     };
+    navGroups: {
+      experience: string;
+      conversation: string;
+      memory: string;
+      tools: string;
+      system: string;
+    };
     validation: {
       rootLabel: string;
       validationFailed: string;

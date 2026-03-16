@@ -7,6 +7,7 @@ import type { ComponentType } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SidebarGroupLabel } from "@/components/ui/sidebar";
 import { AgentMemorySection } from "@/components/workspace/agents/settings/agent-memory-section";
 import { BasicSettings } from "@/components/workspace/agents/settings/basic-settings";
 import { IdentityEditor, SoulEditor } from "@/components/workspace/agents/settings/editor-section";
@@ -150,10 +151,17 @@ export default function AgentSettingsPage({
                 const GroupIcon = group.icon;
                 return (
                   <div key={group.title} className="mb-3">
-                    <div className="text-muted-foreground mb-1 flex items-center gap-2 px-2 text-xs font-medium">
-                      <GroupIcon className="size-3.5" />
-                      {group.title}
-                    </div>
+                    <SidebarGroupLabel
+                      className={cn(
+                        "mb-1",
+                        "bg-muted/40 text-foreground/75 shadow-[inset_0_0_0_1px_hsl(var(--border)/0.6)]",
+                        "text-[11px] font-semibold tracking-[0.18em]",
+                        "after:content-[''] after:ml-2 after:h-px after:flex-1 after:bg-border/70",
+                      )}
+                    >
+                      <GroupIcon className="size-3.5 opacity-80" />
+                      <span className="truncate">{group.title}</span>
+                    </SidebarGroupLabel>
                     <div className="space-y-1">
                       {group.items.map((item) => {
                         const active = activeSection === item.id;

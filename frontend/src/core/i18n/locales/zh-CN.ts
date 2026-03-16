@@ -978,6 +978,13 @@ export const zhCN: Translations = {
       desktopRuntime: "桌面端口",
       about: "关于",
     },
+    navGroups: {
+      experience: "外观与体验",
+      conversation: "对话与模型",
+      memory: "记忆与检索",
+      tools: "工具与扩展",
+      system: "系统与调试",
+    },
     validation: {
       rootLabel: "根配置",
       validationFailed: "配置校验失败",
