@@ -197,6 +197,29 @@ class TaskScheduler:
         history = store.load_history()
         return history.get(task_id, [])
 
+    def clear_history(self, task_id: str) -> None:
+        """Clear all persisted execution records for a task.
+
+        Notes:
+        - This does not modify the task itself (last_run_at/status/etc).
+        - It only clears the historical run records stored in history.json.
+        - Emits an SSE event so connected frontends can refresh their caches.
+        """
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise KeyError(task_id)
+            agent_name = task.agent_name
+            should_emit = self._should_emit_task_event(task)
+
+        store.clear_history(task_id)
+
+        if should_emit:
+            self._publish_event(
+                "task_history_cleared",
+                {"task_id": task_id, "agent_name": agent_name},
+            )
+
     def run_task_now(self, task_id: str) -> TaskExecutionRecord:
         """Enqueue a task run and return immediately.
 

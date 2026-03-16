@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  clearScheduledTaskHistory,
   createScheduledTask,
   deleteScheduledTask,
   getScheduledTask,
@@ -153,4 +154,15 @@ export function useScheduledTaskHistory(taskId: string | null | undefined) {
     error,
     refetch,
   };
+}
+
+export function useClearScheduledTaskHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => clearScheduledTaskHistory(taskId),
+    onSuccess: (_data, taskId) => {
+      queryClient.setQueryData([...SCHEDULER_HISTORY_QUERY_KEY, taskId], []);
+      void queryClient.invalidateQueries({ queryKey: SCHEDULER_DASHBOARD_QUERY_KEY });
+    },
+  });
 }

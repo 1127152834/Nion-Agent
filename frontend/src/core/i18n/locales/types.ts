@@ -757,6 +757,10 @@ export interface Translations {
       deleteDialogTitle: string;
       deleteDialogDescription: string;
       deleteDialogConfirm: string;
+      clearHistory: string;
+      clearHistoryDialogTitle: string;
+      clearHistoryDialogDescription: string;
+      clearHistoryDialogConfirm: string;
       toastCreateSuccess: string;
       toastUpdateSuccess: string;
       toastSaveFailed: string;
@@ -764,6 +768,7 @@ export interface Translations {
       toastDisabled: string;
       toastRunSuccess: string;
       toastRunFailed: string;
+      toastClearHistoryFailed: string;
       toastDeleteSuccess: string;
       toastDeleteFailed: string;
     };

@@ -84,3 +84,18 @@ def append_history(task_id: str, record: TaskExecutionRecord, limit: int = 200) 
     records.insert(0, record)
     history[task_id] = records[:limit]
     save_history(history)
+
+
+def clear_history(task_id: str) -> None:
+    """Remove all execution records for the given task.
+
+    This is an idempotent operation:
+    - If the task has no stored history, it is a no-op.
+    - If the task has history, the entry is removed entirely to keep the JSON
+      store compact.
+    """
+    history = load_history()
+    if task_id not in history:
+        return
+    del history[task_id]
+    save_history(history)

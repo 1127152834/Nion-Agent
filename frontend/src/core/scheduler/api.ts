@@ -194,3 +194,17 @@ export async function listScheduledTaskHistory(
   }
   return payload ?? [];
 }
+
+export async function clearScheduledTaskHistory(taskId: string): Promise<void> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/scheduler/tasks/${encodeURIComponent(taskId)}/history`,
+    { method: "DELETE" },
+  );
+  const payload = await parseJSONOrNull(response);
+  if (!response.ok) {
+    throw new Error(
+      extractErrorDetail(payload) ??
+        `Failed to clear scheduled task history (${response.status})`,
+    );
+  }
+}

@@ -313,6 +313,16 @@ async def get_task_history(task_id: str) -> list[TaskExecutionRecord]:
     return scheduler.list_history(task_id)
 
 
+@router.delete("/tasks/{task_id}/history", status_code=204)
+async def clear_task_history(task_id: str) -> Response:
+    scheduler = _scheduler_started()
+    try:
+        scheduler.clear_history(task_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+    return Response(status_code=204)
+
+
 @router.get("/events", summary="Subscribe scheduler events (SSE)")
 async def stream_scheduler_events(request: Request) -> StreamingResponse:
     """Stream scheduler events via Server-Sent Events (SSE)."""

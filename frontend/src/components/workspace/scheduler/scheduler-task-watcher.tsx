@@ -120,6 +120,11 @@ type SchedulerTaskRunLogUpdatedEvent = {
   run_id?: string;
 };
 
+type SchedulerTaskHistoryClearedEvent = {
+  task_id?: string;
+  agent_name?: string | null;
+};
+
 function sortTasks(tasks: ScheduledTask[]): ScheduledTask[] {
   return [...tasks].sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
@@ -403,6 +408,24 @@ export function SchedulerTaskWatcher() {
             return;
           }
           void queryClient.invalidateQueries({ queryKey: [...HISTORY_QUERY_KEY_PREFIX, taskId] });
+        } catch {
+          // Ignore parse errors.
+        }
+      });
+
+      source.addEventListener("task_history_cleared", (raw) => {
+        if (disposed) {
+          return;
+        }
+        try {
+          const event = raw as MessageEvent<string>;
+          const payload = JSON.parse(event.data) as SchedulerTaskHistoryClearedEvent;
+          const taskId = payload.task_id;
+          if (!taskId) {
+            return;
+          }
+          queryClient.setQueryData([...HISTORY_QUERY_KEY_PREFIX, taskId], []);
+          void queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
         } catch {
           // Ignore parse errors.
         }

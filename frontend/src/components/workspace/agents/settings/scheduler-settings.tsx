@@ -48,6 +48,7 @@ import { useHeartbeatSettings } from "@/core/agents/settings-hooks";
 import { useI18n } from "@/core/i18n/hooks";
 import {
   useCreateScheduledTask,
+  useClearScheduledTaskHistory,
   useDeleteScheduledTask,
   useRunScheduledTaskNow,
   useScheduledTaskHistory,
@@ -86,6 +87,7 @@ type SchedulerSettingsPanelProps = {
   onCreateTask: () => void;
   onEditTask: (task: ScheduledTask) => void;
   onRunTask: (taskId: string) => void;
+  onClearHistory?: (task: ScheduledTask) => void;
   onDeleteTask: (task: ScheduledTask) => void;
   onToggleTask: (task: ScheduledTask, enabled: boolean) => void;
   editorInline?: React.ReactNode;
@@ -508,6 +510,7 @@ export function SchedulerSettingsPanel({
   onCreateTask,
   onEditTask,
   onRunTask,
+  onClearHistory,
   onDeleteTask,
   onToggleTask,
   editorInline,
@@ -787,14 +790,28 @@ export function SchedulerSettingsPanel({
         </Card>
 
         <Card className="rounded-2xl border-border/80 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HistoryIcon className="size-4 text-primary" />
-              {copy.historyTitle}
-            </CardTitle>
-            <CardDescription>
-              {selectedTask ? selectedTask.name : copy.historyEmptyHint}
-            </CardDescription>
+          <CardHeader className="gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2">
+                <HistoryIcon className="size-4 text-primary" />
+                {copy.historyTitle}
+              </CardTitle>
+              <CardDescription>
+                {selectedTask ? selectedTask.name : copy.historyEmptyHint}
+              </CardDescription>
+            </div>
+
+            {selectedTask && onClearHistory ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 rounded-xl"
+                disabled={isHistoryLoading || selectedHistory.length === 0}
+                onClick={() => onClearHistory(selectedTask)}
+              >
+                {copy.clearHistory}
+              </Button>
+            ) : null}
           </CardHeader>
           <CardContent className="space-y-4">
             {selectedTask ? (
@@ -907,6 +924,7 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
   const updateMutation = useUpdateScheduledTask(agentName);
   const deleteMutation = useDeleteScheduledTask(agentName);
   const runMutation = useRunScheduledTaskNow(agentName);
+  const clearHistoryMutation = useClearScheduledTaskHistory();
 
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -914,6 +932,7 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [draft, setDraft] = useState<SchedulerTaskDraft>(createEmptySchedulerTaskDraft());
   const [taskPendingDelete, setTaskPendingDelete] = useState<ScheduledTask | null>(null);
+  const [taskPendingClearHistory, setTaskPendingClearHistory] = useState<ScheduledTask | null>(null);
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
 
   const { history, isLoading: isHistoryLoading } = useScheduledTaskHistory(selectedTaskId);
@@ -1061,6 +1080,20 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
     }
   };
 
+  const handleClearHistory = async () => {
+    if (!taskPendingClearHistory) {
+      return;
+    }
+
+    try {
+      await clearHistoryMutation.mutateAsync(taskPendingClearHistory.id);
+      // 成功反馈交给 UI 自身变化（记录数归零、列表清空），避免额外 success toast 打扰。
+      setTaskPendingClearHistory(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : copy.toastClearHistoryFailed, { toasterId: "scheduler" });
+    }
+  };
+
   return (
     <>
       <SchedulerSettingsPanel
@@ -1078,6 +1111,7 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
         onCreateTask={openCreate}
         onEditTask={openEdit}
         onRunTask={handleRunTask}
+        onClearHistory={setTaskPendingClearHistory}
         onDeleteTask={setTaskPendingDelete}
         onToggleTask={handleToggleTask}
       />
@@ -1129,6 +1163,27 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
         confirmDisabled={deleteMutation.isPending}
         onConfirm={() => {
           void handleDeleteTask();
+        }}
+      />
+
+      <ConfirmActionDialog
+        open={!!taskPendingClearHistory}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTaskPendingClearHistory(null);
+          }
+        }}
+        title={copy.clearHistoryDialogTitle}
+        description={
+          taskPendingClearHistory
+            ? copy.clearHistoryDialogDescription.replace("{name}", taskPendingClearHistory.name)
+            : copy.clearHistoryDialogDescription.replace("{name}", "")
+        }
+        confirmText={copy.clearHistoryDialogConfirm}
+        confirmVariant="destructive"
+        confirmDisabled={clearHistoryMutation.isPending}
+        onConfirm={() => {
+          void handleClearHistory();
         }}
       />
     </>

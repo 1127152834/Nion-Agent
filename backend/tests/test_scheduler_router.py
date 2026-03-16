@@ -104,6 +104,13 @@ def test_scheduler_task_crud_and_run_now_scoped_to_agent(tmp_path):
                         time.sleep(0.05)
                     assert task_status == "completed"
 
+                    clear_history_resp = client.delete(f"/api/scheduler/tasks/{task_id}/history")
+                    assert clear_history_resp.status_code == 204
+
+                    history_resp = client.get(f"/api/scheduler/tasks/{task_id}/history")
+                    assert history_resp.status_code == 200
+                    assert history_resp.json() == []
+
                     delete_resp = client.delete(f"/api/scheduler/tasks/{task_id}")
                     assert delete_resp.status_code == 204
 
