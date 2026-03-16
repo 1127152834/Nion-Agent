@@ -10,12 +10,13 @@ import {
   updateEvolutionSettings,
   runEvolution,
 } from "./settings-api";
+import { agentKeys } from "./query-keys";
 import type { HeartbeatSettings, EvolutionSettings } from "./settings-types";
 
 // Heartbeat Hooks
 export function useHeartbeatSettings(agentName: string) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["heartbeat", "settings", agentName],
+    queryKey: agentKeys.heartbeat.settings(agentName),
     queryFn: () => getHeartbeatSettings(agentName),
   });
   return { settings: data ?? null, isLoading, error };
@@ -29,7 +30,7 @@ export function useUpdateHeartbeatSettings(agentName: string) {
       updateHeartbeatSettings(agentName, settings),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["heartbeat", "settings", agentName],
+        queryKey: agentKeys.heartbeat.settings(agentName),
       });
       toast.success(t.agents.settings.toasts.heartbeatSaved);
     },
@@ -42,7 +43,7 @@ export function useUpdateHeartbeatSettings(agentName: string) {
 // Evolution Hooks
 export function useEvolutionSettings(agentName: string) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["evolution", "settings", agentName],
+    queryKey: agentKeys.evolution.settings(agentName),
     queryFn: () => getEvolutionSettings(agentName),
   });
   return { settings: data ?? null, isLoading, error };
@@ -56,7 +57,7 @@ export function useUpdateEvolutionSettings(agentName: string) {
       updateEvolutionSettings(agentName, settings),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["evolution", "settings", agentName],
+        queryKey: agentKeys.evolution.settings(agentName),
       });
       toast.success(t.agents.settings.toasts.evolutionSaved);
     },
@@ -73,10 +74,7 @@ export function useRunEvolution(agentName: string) {
     mutationFn: () => runEvolution(agentName),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["evolution", "reports", agentName],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["evolution", "suggestions", agentName],
+        queryKey: agentKeys.evolution.all(agentName),
       });
       toast.success(t.agents.settings.toasts.evolutionRunTriggered);
     },

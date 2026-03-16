@@ -11,10 +11,11 @@ import {
   getHeartbeatTemplates,
   type HeartbeatLogsParams,
 } from "./heartbeat-api";
+import { agentKeys } from "./query-keys";
 
 export function useHeartbeatLogs(params: HeartbeatLogsParams) {
   return useQuery({
-    queryKey: ["heartbeat", "logs", params.agentName, params.templateId, params.status, params.offset],
+    queryKey: agentKeys.heartbeat.logsList(params.agentName, params.templateId, params.status, params.offset),
     queryFn: () => getHeartbeatLogs(params),
     staleTime: 30 * 1000,
   });
@@ -22,7 +23,7 @@ export function useHeartbeatLogs(params: HeartbeatLogsParams) {
 
 export function useHeartbeatLog(agentName: string, logId: string) {
   return useQuery({
-    queryKey: ["heartbeat", "log", agentName, logId],
+    queryKey: agentKeys.heartbeat.log(agentName, logId),
     queryFn: () => getHeartbeatLog(agentName, logId),
     staleTime: 30 * 1000,
     enabled: !!logId,
@@ -31,7 +32,7 @@ export function useHeartbeatLog(agentName: string, logId: string) {
 
 export function useHeartbeatStatus(agentName: string) {
   return useQuery({
-    queryKey: ["heartbeat", "status", agentName],
+    queryKey: agentKeys.heartbeat.status(agentName),
     queryFn: () => getHeartbeatStatus(agentName),
     staleTime: 30 * 1000,
   });
@@ -39,7 +40,7 @@ export function useHeartbeatStatus(agentName: string) {
 
 export function useHeartbeatTemplates() {
   return useQuery({
-    queryKey: ["heartbeat", "templates"],
+    queryKey: agentKeys.heartbeat.templates(),
     queryFn: () => getHeartbeatTemplates(),
     staleTime: 5 * 60 * 1000,
   });
@@ -51,8 +52,7 @@ export function useExecuteHeartbeat(agentName: string) {
   return useMutation({
     mutationFn: (templateId: string) => executeHeartbeat(agentName, templateId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["heartbeat", "status", agentName] });
-      void queryClient.invalidateQueries({ queryKey: ["heartbeat", "logs", agentName] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.heartbeat.all(agentName) });
       toast.success(t.agents.settings.toasts.heartbeatRunTriggered);
     },
     onError: (error: Error) => {

@@ -1,4 +1,4 @@
-import { getBackendBaseURL } from "@/core/config";
+import { apiFetch } from "@/core/api";
 
 export type ExecutionMode = "sandbox" | "host";
 
@@ -10,24 +10,7 @@ export interface RuntimeProfile {
 }
 
 export async function fetchRuntimeProfile(threadId: string): Promise<RuntimeProfile> {
-  const response = await fetch(
-    `${getBackendBaseURL()}/api/threads/${threadId}/runtime-profile`,
-  );
-  if (!response.ok) {
-    let detail = "";
-    try {
-      const payload = (await response.json()) as { detail?: unknown; message?: unknown };
-      if (typeof payload.detail === "string") {
-        detail = payload.detail;
-      } else if (typeof payload.message === "string") {
-        detail = payload.message;
-      }
-    } catch {
-      // ignore json parse failures
-    }
-    throw new Error(detail || `Failed to fetch runtime profile (${response.status})`);
-  }
-  return (await response.json()) as RuntimeProfile;
+  return apiFetch<RuntimeProfile>(`/api/threads/${threadId}/runtime-profile`);
 }
 
 export async function updateRuntimeProfile(
@@ -37,29 +20,11 @@ export async function updateRuntimeProfile(
     host_workdir?: string | null;
   },
 ): Promise<RuntimeProfile> {
-  const response = await fetch(
-    `${getBackendBaseURL()}/api/threads/${threadId}/runtime-profile`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+  return apiFetch<RuntimeProfile>(`/api/threads/${threadId}/runtime-profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
-  if (!response.ok) {
-    let detail = "";
-    try {
-      const payload = (await response.json()) as { detail?: unknown; message?: unknown };
-      if (typeof payload.detail === "string") {
-        detail = payload.detail;
-      } else if (typeof payload.message === "string") {
-        detail = payload.message;
-      }
-    } catch {
-      // ignore json parse failures
-    }
-    throw new Error(detail || `Failed to update runtime profile (${response.status})`);
-  }
-  return (await response.json()) as RuntimeProfile;
+    body: JSON.stringify(payload),
+  });
 }

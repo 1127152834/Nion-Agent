@@ -9,10 +9,11 @@ import {
   updateAgentIdentity,
   updateAgentSoul,
 } from "./editor-api";
+import { agentKeys } from "./query-keys";
 
 export function useAgentSoul(agentName: string) {
   return useQuery({
-    queryKey: ["agent", "soul", agentName],
+    queryKey: agentKeys.soul(agentName),
     queryFn: () => getAgentSoul(agentName),
     staleTime: 30 * 1000,
   });
@@ -24,7 +25,7 @@ export function useUpdateAgentSoul(agentName: string) {
   return useMutation({
     mutationFn: (content: string) => updateAgentSoul(agentName, content),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agent", "soul", agentName] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.soul(agentName) });
       toast.success(t.agents.settings.toasts.soulSaved);
     },
     onError: (error: Error) => {
@@ -35,7 +36,7 @@ export function useUpdateAgentSoul(agentName: string) {
 
 export function useAgentIdentity(agentName: string) {
   return useQuery({
-    queryKey: ["agent", "identity", agentName],
+    queryKey: agentKeys.identity(agentName),
     queryFn: () => getAgentIdentity(agentName),
     staleTime: 30 * 1000,
   });
@@ -47,7 +48,7 @@ export function useUpdateAgentIdentity(agentName: string) {
   return useMutation({
     mutationFn: (content: string) => updateAgentIdentity(agentName, content),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agent", "identity", agentName] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.identity(agentName) });
       toast.success(t.agents.settings.toasts.identitySaved);
     },
     onError: (error: Error) => {

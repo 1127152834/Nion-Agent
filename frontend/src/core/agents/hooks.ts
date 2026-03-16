@@ -13,6 +13,7 @@ import {
   updateAgent,
   updateDefaultAgentConfig,
 } from "./api";
+import { agentKeys } from "./query-keys";
 import type {
   CreateAgentRequest,
   UpdateAgentRequest,
@@ -21,7 +22,7 @@ import type {
 
 export function useAgents() {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["agents"],
+    queryKey: agentKeys.all,
     queryFn: () => listAgents(),
   });
   return { agents: data ?? [], isLoading, error };
@@ -29,7 +30,7 @@ export function useAgents() {
 
 export function useAgent(name: string | null | undefined) {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["agents", name],
+    queryKey: agentKeys.detail(name!),
     queryFn: () => getAgent(name!),
     enabled: !!name,
   });
@@ -41,7 +42,7 @@ export function useCreateAgent() {
   return useMutation({
     mutationFn: (request: CreateAgentRequest) => createAgent(request),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }
@@ -57,8 +58,7 @@ export function useUpdateAgent() {
       request: UpdateAgentRequest;
     }) => updateAgent(name, request),
     onSuccess: (_data, { name }) => {
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
-      void queryClient.invalidateQueries({ queryKey: ["agents", name] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }
@@ -68,14 +68,14 @@ export function useDeleteAgent() {
   return useMutation({
     mutationFn: (name: string) => deleteAgent(name),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }
 
 export function useDefaultAgentConfig() {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["agents", "default-config"],
+    queryKey: agentKeys.defaultConfig(),
     queryFn: () => getDefaultAgentConfig(),
   });
   return { config: data ?? null, isLoading, error };
@@ -87,8 +87,7 @@ export function useUpdateDefaultAgentConfig() {
     mutationFn: (request: UpdateDefaultAgentConfigRequest) =>
       updateDefaultAgentConfig(request),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agents", "default-config"] });
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }
@@ -98,9 +97,7 @@ export function useUploadAgentAvatar() {
   return useMutation({
     mutationFn: ({ name, file }: { name: string; file: File }) => uploadAgentAvatar(name, file),
     onSuccess: (_data, { name }) => {
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
-      void queryClient.invalidateQueries({ queryKey: ["agents", name] });
-      void queryClient.invalidateQueries({ queryKey: ["agents", "default-config"] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }
@@ -110,9 +107,7 @@ export function useDeleteAgentAvatar() {
   return useMutation({
     mutationFn: (name: string) => deleteAgentAvatar(name),
     onSuccess: (_data, name) => {
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
-      void queryClient.invalidateQueries({ queryKey: ["agents", name] });
-      void queryClient.invalidateQueries({ queryKey: ["agents", "default-config"] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }
@@ -122,8 +117,7 @@ export function useUploadDefaultAgentAvatar() {
   return useMutation({
     mutationFn: (file: File) => uploadDefaultAgentAvatar(file),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
-      void queryClient.invalidateQueries({ queryKey: ["agents", "default-config"] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }
@@ -133,8 +127,7 @@ export function useDeleteDefaultAgentAvatar() {
   return useMutation({
     mutationFn: () => deleteDefaultAgentAvatar(),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["agents"] });
-      void queryClient.invalidateQueries({ queryKey: ["agents", "default-config"] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.all });
     },
   });
 }

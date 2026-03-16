@@ -9,10 +9,11 @@ import {
   getEvolutionReports,
   getEvolutionSuggestions,
 } from "./evolution-api";
+import { agentKeys } from "./query-keys";
 
 export function useEvolutionReports(agentName: string) {
   return useQuery({
-    queryKey: ["evolution", "reports", agentName],
+    queryKey: agentKeys.evolution.reports(agentName),
     queryFn: () => getEvolutionReports(agentName),
     staleTime: 30 * 1000,
   });
@@ -20,7 +21,7 @@ export function useEvolutionReports(agentName: string) {
 
 export function useEvolutionSuggestions(agentName: string, status?: string) {
   return useQuery({
-    queryKey: ["evolution", "suggestions", agentName, status],
+    queryKey: agentKeys.evolution.suggestions(agentName, status),
     queryFn: () => getEvolutionSuggestions(agentName, status),
     staleTime: 30 * 1000,
   });
@@ -32,7 +33,7 @@ export function useDismissSuggestion(agentName: string) {
   return useMutation({
     mutationFn: (suggestionId: string) => dismissSuggestion(agentName, suggestionId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["evolution", "suggestions", agentName] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.evolution.all(agentName) });
       toast.success(t.agents.settings.toasts.suggestionDismissed);
     },
     onError: (error: Error) => {
@@ -47,7 +48,7 @@ export function useAcceptSuggestion(agentName: string) {
   return useMutation({
     mutationFn: (suggestionId: string) => acceptSuggestion(agentName, suggestionId),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["evolution", "suggestions", agentName] });
+      void queryClient.invalidateQueries({ queryKey: agentKeys.evolution.all(agentName) });
       toast.success(t.agents.settings.toasts.suggestionAccepted);
     },
     onError: (error: Error) => {
