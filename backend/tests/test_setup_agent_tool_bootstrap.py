@@ -164,3 +164,78 @@ def test_setup_agent_default_rejects_missing_identity_without_writing_default_as
     assert not default_dir.exists()
     assert result.update.get("messages")
     assert "identity" in (result.update["messages"][0].content or "").lower()
+
+
+def test_setup_agent_custom_writes_memory_items_and_returns_results(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    memory_items = [
+        {"content": "项目背景：Nion-Agent 智能体系统重构", "tier": "profile"},
+        {"content": "偏好：默认中文输出，结论优先", "tier": "preference", "confidence": 0.8},
+    ]
+
+    with (
+        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch(
+            "src.tools.builtins.setup_agent_tool.store_memory_action",
+            create=True,
+            side_effect=[{"memory_id": "m1"}, {"memory_id": "m2"}],
+        ) as store,
+    ):
+        result = setup_agent.func(
+            soul="custom soul",
+            description="desc",
+            runtime=_runtime(agent_name="writer", agent_display_name="写作助手"),
+            target="custom",
+            identity="custom identity",
+            memory_items=memory_items,
+        )
+
+    assert store.call_count == 2
+
+    first = store.call_args_list[0].kwargs
+    assert first["scope"] == "agent"
+    assert first["agent_name"] == "writer"
+    assert first["content"] == "项目背景：Nion-Agent 智能体系统重构"
+    assert first["metadata"]["tier"] == "profile"
+
+    second = store.call_args_list[1].kwargs
+    assert second["scope"] == "agent"
+    assert second["agent_name"] == "writer"
+    assert second["content"] == "偏好：默认中文输出，结论优先"
+    assert second["confidence"] == 0.8
+    assert second["metadata"]["tier"] == "preference"
+
+    assert result.update.get("memory_results") == [{"memory_id": "m1"}, {"memory_id": "m2"}]
+
+
+def test_setup_agent_default_writes_memory_items_to_global_scope(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    memory_items = [{"content": "偏好：重要变更必须先确认", "tier": "preference"}]
+
+    with (
+        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+        patch(
+            "src.tools.builtins.setup_agent_tool.store_memory_action",
+            create=True,
+            side_effect=[{"memory_id": "g1"}],
+        ) as store,
+    ):
+        result = setup_agent.func(
+            soul="default soul",
+            description="desc",
+            runtime=_runtime(agent_name=None),
+            target="default",
+            identity="default identity",
+            memory_items=memory_items,
+        )
+
+    assert store.call_count == 1
+    args = store.call_args.kwargs
+    assert args["scope"] == "global"
+    assert args["agent_name"] is None
+    assert args["content"] == "偏好：重要变更必须先确认"
+    assert args["metadata"]["tier"] == "preference"
+    assert result.update.get("memory_results") == [{"memory_id": "g1"}]
