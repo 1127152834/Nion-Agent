@@ -15,3 +15,14 @@ lint:
 
 format:
 	uvx ruff check . --fix && uvx ruff format .
+
+# Coverage (pytest-cov) - report only, does not change the default `make test` behavior.
+coverage:
+	PYTHONPATH=. uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=xml
+
+coverage-html:
+	PYTHONPATH=. uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-report=html
+
+# Dead code candidate scan (heuristic). Use as an input signal for cleanup, NOT as a hard gate by default.
+deadcode:
+	uv run vulture src --min-confidence 80

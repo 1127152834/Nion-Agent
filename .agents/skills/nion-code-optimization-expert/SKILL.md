@@ -218,3 +218,23 @@ type(scope): 一句话总结
 - `superpowers:verification-before-completion`：任何“完成”宣称前先跑验证命令。
 - `superpowers:dispatching-parallel-agents`：当存在多个互不相关的治理子任务时并行推进。
 - `code-simplifier`：对“刚改过的代码”做行为不变的简化收敛，防止重构越改越复杂。
+
+## Backend 专用工具链（Python 治理）
+
+说明：Skill 本身不会“凭空拥有新工具能力”，但可以把工具接入仓库的 dev 依赖与 Makefile，形成可重复执行的标准动作。
+
+已推荐接入的工具：
+
+- `ruff`：静态检查与格式化（仓库已集成，见 `backend/Makefile` 的 `lint/format`）。
+- `pytest-cov` / `coverage`：生成覆盖率报告，用于“护城河测试”与重构安全评估（建议先做 report，不要一上来就用阈值卡死治理）。
+- `vulture`：死代码候选扫描（**启发式**，容易对动态加载/反射/注册表误报，只能当“候选线索”，不能据此直接删代码）。
+
+对应命令（后端目录执行）：
+
+```bash
+make lint
+make test
+make coverage        # 生成覆盖率终端报告 + coverage.xml
+make coverage-html   # 生成 htmlcov/
+make deadcode        # 输出死代码候选（min-confidence=80）
+```
