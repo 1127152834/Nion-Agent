@@ -184,7 +184,12 @@ function WheelCard({
   const opacity = useTransform(currentAngle, [-50, -35, 0, 35, 50], [0, 1, 1, 1, 0]);
   const scale = useTransform(currentAngle, [-50, -25, 0, 25, 50], [0.7, 0.9, 1, 0.9, 0.7]);
   const blur = useTransform(currentAngle, [-50, -30, 0, 30, 50], ["blur(8px)", "blur(0px)", "blur(0px)", "blur(0px)", "blur(8px)"]);
-  const baseZIndex = useTransform(currentAngle, (angle) => Math.round(100 - Math.abs(angle)));
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const zIndex = useTransform(currentAngle, (angle) => {
+    const base = Math.round(100 - Math.abs(angle));
+    return selectedRef.current ? base + 1 : base;
+  });
   const pointerEvents = useTransform(currentAngle, (angle) =>
     Math.abs(angle) > 35 ? "none" : "auto",
   );
@@ -198,7 +203,7 @@ function WheelCard({
         transformOrigin: "50% 350px",
         rotate: currentAngle,
         x,
-        zIndex: launching ? 220 : baseZIndex,
+        zIndex: launching ? 220 : zIndex,
         pointerEvents,
         opacity: launching ? 0 : undefined,
       }}
@@ -290,7 +295,7 @@ export function AgentPickerCards({
   const timersRef = useRef<number[]>([]);
 
   const cardCount = cards.length;
-  const fanLayout = cardCount >= 5;
+  const fanLayout = cardCount >= 2;
   const transitioning = phase !== "selection" && transitionState != null;
 
   useEffect(() => {
