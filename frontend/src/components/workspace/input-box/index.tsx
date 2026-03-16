@@ -8,7 +8,6 @@ import {
   GraduationCapIcon,
   LightbulbIcon,
   PaperclipIcon,
-  PlusIcon,
   SparklesIcon,
   RocketIcon,
   SquareTerminalIcon,
@@ -44,7 +43,6 @@ import {
   usePromptInputController,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
-import { ConfettiButton } from "@/components/ui/confetti-button";
 import {
   DropdownMenuGroup,
   DropdownMenuLabel,
@@ -55,7 +53,6 @@ import { getBackendBaseURL } from "@/core/config";
 import { useI18n } from "@/core/i18n/hooks";
 import { useMCPConfig } from "@/core/mcp/hooks";
 import { useModels } from "@/core/models/hooks";
-import { useAppRouter as useRouter } from "@/core/navigation";
 import { useLocalSettings } from "@/core/settings";
 import { useSkills } from "@/core/skills/hooks";
 import { getLocalizedSkillDescription, getLocalizedSkillName } from "@/core/skills/i18n";
@@ -73,497 +70,43 @@ import {
   ModelSelectorCheck,
   ModelSelectorGroupTitle,
   ModelSelectorSeparator,
-} from "../ai-elements/model-selector";
-import { Suggestion, Suggestions } from "../ai-elements/suggestion";
+} from "../../ai-elements/model-selector";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
+} from "../../ui/dropdown-menu";
 
-import { useThread } from "./messages/context";
-import { ModeHoverGuide } from "./mode-hover-guide";
-import { Tooltip } from "./tooltip";
+import { useThread } from "../messages/context";
+import { ModeHoverGuide } from "../mode-hover-guide";
+import { Tooltip } from "../tooltip";
 
-type InputMode = "flash" | "thinking" | "pro" | "ultra";
-
-// Mention system types
-type MentionTrigger = "@" | "/";
-
-interface MentionOption {
-  id: string;
-  label: string;
-  value: string;
-  kind: "file" | "directory" | "skill" | "mcp" | "cli";
-  description?: string;
-}
-
-interface MentionState {
-  trigger: MentionTrigger;
-  query: string;
-  start: number;
-  end: number;
-}
-
-interface SelectedContextTag {
-  value: string;
-  kind: "file" | "directory";
-}
-
-interface FollowUpSuggestionMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
-interface RecentMentionsState {
-  "@": string[];
-  "/": string[];
-}
-
-interface MentionGroup {
-  id: string;
-  label: string;
-  options: MentionOption[];
-}
-
-// Constants
-const RECENT_MENTION_LIMIT = 5;
-const RECENT_MODELS_STORAGE_KEY = "nion:recent-models";
-const RECENT_MODELS_LIMIT = 5;
-
-// Mention system utility functions
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, "/").replace(/\/{2,}/g, "/");
-}
-
-function basename(path: string): string {
-  const normalized = normalizePath(path).replace(/\/$/, "");
-  const parts = normalized.split("/").filter(Boolean);
-  return parts[parts.length - 1] ?? normalized;
-}
-
-function buildPathMentionOptions(paths: string[]): MentionOption[] {
-  const fileSet = new Set<string>();
-  const directorySet = new Set<string>();
-
-  for (const rawPath of paths) {
-    const normalized = normalizePath(rawPath).trim();
-    if (!normalized) {
-      continue;
-    }
-
-    const isDirectoryInput = normalized.endsWith("/");
-    const pathWithoutTrailingSlash = normalized.replace(/\/+$/, "");
-    if (!pathWithoutTrailingSlash) {
-      continue;
-    }
-
-    if (isDirectoryInput) {
-      directorySet.add(pathWithoutTrailingSlash);
-    } else {
-      fileSet.add(pathWithoutTrailingSlash);
-    }
-
-    const parts = pathWithoutTrailingSlash.split("/").filter(Boolean);
-    const rootsPrefix = pathWithoutTrailingSlash.startsWith("/") ? "/" : "";
-    let current = "";
-    for (let index = 0; index < parts.length - 1; index += 1) {
-      current = `${current}/${parts[index]}`;
-      directorySet.add(`${rootsPrefix}${current}`.replace(/\/{2,}/g, "/"));
-    }
-  }
-
-  const directoryOptions: MentionOption[] = [...directorySet]
-    .filter((path) => path !== "/mnt" && path !== "mnt")
-    .sort((a, b) => a.localeCompare(b))
-    .map((path) => ({
-      id: `dir:${path}`,
-      label: basename(path),
-      value: path,
-      kind: "directory" as const,
-      description: path,
-    }));
-  const fileOptions: MentionOption[] = [...fileSet]
-    .sort((a, b) => a.localeCompare(b))
-    .map((path) => ({
-      id: `file:${path}`,
-      label: basename(path),
-      value: path,
-      kind: "file" as const,
-      description: path,
-    }));
-  return [...directoryOptions, ...fileOptions];
-}
-
-/**
- * Parse text to identify selected mentions for highlighting
- */
-function parseMentions(
-  text: string,
-  selectedSkills: string[],
-  selectedContexts: SelectedContextTag[],
-  selectedMcpTools: string[]
-): Array<{ type: 'skill' | 'context' | 'tool'; value: string; start: number; end: number }> {
-  const mentions: Array<{
-    type: 'skill' | 'context' | 'tool';
-    value: string;
-    start: number;
-    end: number;
-  }> = [];
-
-  // Match /skill-name format (ensure preceded by space or start of string)
-  const skillRegex = /(^|\s)(\/[a-zA-Z0-9_-]+)/g;
-  let match;
-  while ((match = skillRegex.exec(text)) !== null) {
-    const skillText = match[2]; // /skill-name
-    const skillName = skillText.slice(1); // remove /
-    if (selectedSkills.includes(skillName)) {
-      mentions.push({
-        type: 'skill',
-        value: skillName,
-        start: match.index + match[1].length,
-        end: match.index + match[0].length,
-      });
-    }
-  }
-
-  // Match @file-path or @tool-name format (ensure preceded by space or start of string)
-  const atRegex = /(^|\s)(@[^\s]+)/g;
-  while ((match = atRegex.exec(text)) !== null) {
-    const atText = match[2]; // @value
-    const value = atText.slice(1); // remove @
-    if (selectedMcpTools.includes(value)) {
-      mentions.push({
-        type: 'tool',
-        value,
-        start: match.index + match[1].length,
-        end: match.index + match[0].length,
-      });
-    } else if (selectedContexts.some((c) => c.value === value)) {
-      mentions.push({
-        type: 'context',
-        value,
-        start: match.index + match[1].length,
-        end: match.index + match[0].length,
-      });
-    }
-  }
-
-  return mentions;
-}
-
-/**
- * Overlay component to highlight selected mentions in the input text
- */
-function MentionHighlightOverlay({
-  text,
-  mentions,
-}: {
-  text: string;
-  mentions: Array<{ type: 'skill' | 'context' | 'tool'; value: string; start: number; end: number }>;
-}) {
-  // Split text into segments (plain text or mention)
-  const segments: Array<{ text: string; isMention: boolean; type?: string }> = [];
-  let lastIndex = 0;
-
-  // Sort mentions by position
-  const sortedMentions = [...mentions].sort((a, b) => a.start - b.start);
-
-  for (const mention of sortedMentions) {
-    // Add plain text before mention
-    if (mention.start > lastIndex) {
-      segments.push({
-        text: text.slice(lastIndex, mention.start),
-        isMention: false,
-      });
-    }
-    // Add mention
-    segments.push({
-      text: text.slice(mention.start, mention.end),
-      isMention: true,
-      type: mention.type,
-    });
-    lastIndex = mention.end;
-  }
-
-  // Add remaining plain text
-  if (lastIndex < text.length) {
-    segments.push({
-      text: text.slice(lastIndex),
-      isMention: false,
-    });
-  }
-
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words p-3 text-sm leading-relaxed">
-      {segments.map((segment, index) => {
-        if (segment.isMention) {
-          const colorClass =
-            segment.type === 'skill'
-              ? 'bg-purple-500/30 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300'
-              : segment.type === 'context'
-                ? 'bg-blue-500/30 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
-                : 'bg-green-500/30 text-green-700 dark:bg-green-500/20 dark:text-green-300';
-          return (
-            <span key={index} className={cn('rounded px-0.5 font-semibold', colorClass)}>
-              {segment.text}
-            </span>
-          );
-        }
-        return (
-          <span key={index} className="text-transparent">
-            {segment.text}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-function resolveMentionState(value: string, caret: number): MentionState | null {
-  const safeCaret = Math.max(0, Math.min(caret, value.length));
-  if (safeCaret <= 0) {
-    return null;
-  }
-
-  // Scan backward to find the nearest trigger character.
-  let triggerIndex = -1;
-  let trigger: MentionTrigger | null = null;
-
-  for (let i = safeCaret - 1; i >= 0; i--) {
-    const char = value.charAt(i);
-
-    // Stop scanning when we hit whitespace/newline.
-    if (char === ' ' || char === '\n') {
-      break;
-    }
-
-    // Mention trigger found.
-    if (char === '@' || char === '/') {
-      // Allow mention triggers in any position.
-      triggerIndex = i;
-      trigger = char as MentionTrigger;
-      break;
-    }
-  }
-
-  if (triggerIndex === -1 || !trigger) {
-    return null;
-  }
-
-  const query = value.slice(triggerIndex + 1, safeCaret);
-
-  return {
-    trigger,
-    query,
-    start: triggerIndex,
-    end: safeCaret,
-  };
-}
-
-function rankMentionOption(option: MentionOption, normalizedQuery: string): number {
-  if (!normalizedQuery) {
-    return 0;
-  }
-  const label = option.label.toLowerCase();
-  const value = option.value.toLowerCase();
-  const description = option.description?.toLowerCase() ?? "";
-
-  if (label === normalizedQuery || value === normalizedQuery) {
-    return 5;
-  }
-  if (label.startsWith(normalizedQuery) || value.startsWith(normalizedQuery)) {
-    return 4;
-  }
-  if (label.includes(normalizedQuery) || value.includes(normalizedQuery)) {
-    return 3;
-  }
-
-  if (description.includes(normalizedQuery)) {
-    return 2;
-  }
-
-  const terms = normalizedQuery.split(/\s+/).filter(Boolean);
-  if (terms.length > 1) {
-    const matchedAllTerms = terms.every(
-      (term) =>
-        label.includes(term) || value.includes(term) || description.includes(term),
-    );
-    if (matchedAllTerms) {
-      return 1;
-    }
-  }
-
-  return 0;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function hasInlineMention(text: string, mention: string): boolean {
-  const pattern = new RegExp(`(^|\\s)${escapeRegExp(mention)}(?=\\s|$)`);
-  return pattern.test(text);
-}
-
-function buildSubmissionPayload(
-  text: string,
-  selectedSkills: string[],
-  selectedContexts: SelectedContextTag[],
-  selectedMcpTools: string[],
-  selectedCliTools: string[],
-): {
-  text: string;
-  implicitMentions: NonNullable<PromptInputMessage["implicitMentions"]>;
-} {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return { text: trimmed, implicitMentions: [] };
-  }
-
-  const implicitMentions: NonNullable<PromptInputMessage["implicitMentions"]> = [];
-  const seenMentions = new Set<string>();
-
-  const appendImplicitMention = (
-    kind: "context" | "skill" | "mcp" | "cli",
-    value: string,
-    mention: string,
-  ) => {
-    if (hasInlineMention(trimmed, mention) || seenMentions.has(mention)) {
-      return;
-    }
-    seenMentions.add(mention);
-    implicitMentions.push({ kind, value, mention });
-  };
-
-  for (const context of selectedContexts) {
-    const mention = `@${context.value}`;
-    appendImplicitMention("context", context.value, mention);
-  }
-
-  for (const skill of selectedSkills) {
-    const mention = `/${skill}`;
-    appendImplicitMention("skill", skill, mention);
-  }
-
-  for (const tool of selectedMcpTools) {
-    const mention = `@${tool}`;
-    appendImplicitMention("mcp", tool, mention);
-  }
-
-  for (const tool of selectedCliTools) {
-    const mention = `#${tool}`;
-    appendImplicitMention("cli", tool, mention);
-  }
-
-  if (implicitMentions.length === 0) {
-    return { text: trimmed, implicitMentions: [] };
-  }
-
-  const mentionLine = implicitMentions.map((item) => item.mention).join(" ");
-  return {
-    text: `${trimmed}\n\n${mentionLine}`,
-    implicitMentions,
-  };
-}
-
-function readRecentModels(): string[] {
-  try {
-    const stored = localStorage.getItem(RECENT_MODELS_STORAGE_KEY);
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeRecentModels(models: string[]): void {
-  try {
-    localStorage.setItem(RECENT_MODELS_STORAGE_KEY, JSON.stringify(models));
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-function getResolvedMode(
-  mode: InputMode | undefined,
-  supportsThinking: boolean,
-): InputMode {
-  if (!supportsThinking && mode !== "flash") {
-    return "flash";
-  }
-  if (mode) {
-    return mode;
-  }
-  return supportsThinking ? "pro" : "flash";
-}
-
-function normalizeFollowUpRole(value: unknown): "user" | "assistant" | null {
-  const role = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (role === "user" || role === "human") {
-    return "user";
-  }
-  if (role === "assistant" || role === "ai") {
-    return "assistant";
-  }
-  return null;
-}
-
-function extractFollowUpText(content: unknown): string {
-  if (typeof content === "string") {
-    return content.trim();
-  }
-  if (Array.isArray(content)) {
-    return content
-      .flatMap((part) => {
-        if (typeof part === "string") {
-          return [part.trim()];
-        }
-        if (typeof part === "object" && part !== null) {
-          const candidate = (part as { text?: unknown }).text;
-          if (typeof candidate === "string") {
-            return [candidate.trim()];
-          }
-        }
-        return [];
-      })
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-  }
-  if (typeof content === "object" && content !== null) {
-    const candidate = (content as { text?: unknown; content?: unknown }).text
-      ?? (content as { text?: unknown; content?: unknown }).content;
-    if (typeof candidate === "string") {
-      return candidate.trim();
-    }
-  }
-  return "";
-}
-
-function buildFollowUpMessages(messages: unknown[]): FollowUpSuggestionMessage[] {
-  const parsed = messages
-    .map((message) => {
-      if (typeof message !== "object" || message === null) {
-        return null;
-      }
-      const role = normalizeFollowUpRole((message as { type?: unknown; role?: unknown }).type
-        ?? (message as { type?: unknown; role?: unknown }).role);
-      if (!role) {
-        return null;
-      }
-      const content = extractFollowUpText((message as { content?: unknown }).content);
-      if (!content) {
-        return null;
-      }
-      return { role, content };
-    })
-    .filter((item): item is FollowUpSuggestionMessage => Boolean(item));
-
-  return parsed.slice(-8);
-}
+import { FollowUpSuggestionList, SuggestionList } from "./follow-up";
+import {
+  MentionHighlightOverlay,
+  parseMentions,
+  rankMentionOption,
+  resolveMentionState,
+} from "./mentions";
+import {
+  basename,
+  buildFollowUpMessages,
+  buildPathMentionOptions,
+  buildSubmissionPayload,
+  getResolvedMode,
+  readRecentModels,
+  writeRecentModels,
+  RECENT_MENTION_LIMIT,
+  RECENT_MODELS_LIMIT,
+  type InputMode,
+  type MentionGroup,
+  type MentionOption,
+  type MentionState,
+  type MentionTrigger,
+  type RecentMentionsState,
+  type SelectedContextTag,
+} from "./utils";
 
 export function InputBox({
   className,
@@ -2362,121 +1905,6 @@ export function InputBox({
         )
       )}
     </PromptInput>
-  );
-}
-
-function FollowUpSuggestionList({
-  suggestions,
-  loading,
-  onClick,
-}: {
-  suggestions: string[];
-  loading: boolean;
-  onClick: (suggestion: string) => void;
-}) {
-  const { t } = useI18n();
-  const loadingText = t.inputBox.generatingFollowUpSuggestions;
-
-  return (
-    <Suggestions className="min-h-16 w-fit items-start">
-      {loading && (
-        <ConfettiButton
-          className="text-muted-foreground cursor-default rounded-full px-4 text-xs font-normal"
-          variant="outline"
-          size="sm"
-          disabled
-        >
-          <SparklesIcon className="size-4" /> {loadingText}
-        </ConfettiButton>
-      )}
-      {suggestions.map((suggestion) => (
-        <Suggestion
-          key={suggestion}
-          icon={LightbulbIcon}
-          suggestion={suggestion}
-          onClick={() => onClick(suggestion)}
-        />
-      ))}
-    </Suggestions>
-  );
-}
-
-function SuggestionList() {
-  const { t } = useI18n();
-  const router = useRouter();
-  const { textInput } = usePromptInputController();
-  const handleSuggestionClick = useCallback(
-    (prompt: string | undefined) => {
-      if (!prompt) return;
-      textInput.setInput(prompt);
-      setTimeout(() => {
-        const textarea = document.querySelector<HTMLTextAreaElement>(
-          "textarea[name='message']",
-        );
-        if (textarea) {
-          const selStart = prompt.indexOf("[");
-          const selEnd = prompt.indexOf("]");
-          if (selStart !== -1 && selEnd !== -1) {
-            textarea.setSelectionRange(selStart, selEnd + 1);
-            textarea.focus();
-          }
-        }
-      }, 500);
-    },
-    [textInput],
-  );
-  return (
-    <Suggestions className="min-h-16 w-fit items-start">
-      <ConfettiButton
-        className="text-muted-foreground cursor-pointer rounded-full px-4 text-xs font-normal"
-        variant="outline"
-        size="sm"
-        onClick={() => handleSuggestionClick(t.inputBox.surpriseMePrompt)}
-      >
-        <SparklesIcon className="size-4" /> {t.inputBox.surpriseMe}
-      </ConfettiButton>
-      {t.inputBox.suggestions.map((suggestion) => (
-        <Suggestion
-          key={suggestion.suggestion}
-          icon={suggestion.icon}
-          suggestion={suggestion.suggestion}
-          onClick={() => handleSuggestionClick(suggestion.prompt)}
-        />
-      ))}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Suggestion icon={PlusIcon} suggestion={t.common.create} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start">
-          <DropdownMenuGroup>
-            {t.inputBox.suggestionsCreate.map((suggestion, index) =>
-              "type" in suggestion && suggestion.type === "separator" ? (
-                <DropdownMenuSeparator key={index} />
-              ) : (
-                !("type" in suggestion) && (
-                  <DropdownMenuItem
-                    key={suggestion.suggestion}
-                    onClick={() => handleSuggestionClick(suggestion.prompt)}
-                  >
-                    {suggestion.icon && <suggestion.icon className="size-4" />}
-                    {suggestion.suggestion}
-                  </DropdownMenuItem>
-                )
-              ),
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => {
-                router.push("/workspace/chats/new?mode=temporary-chat");
-              }}
-            >
-              <RocketIcon className="size-4" />
-              {t.inputBox.temporaryChat}
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </Suggestions>
   );
 }
 
