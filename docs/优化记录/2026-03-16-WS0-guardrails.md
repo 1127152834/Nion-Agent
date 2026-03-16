@@ -26,6 +26,8 @@
   - 更新 `docs/plans/2026-03-16-repo-optimization-design.md`，补齐 writing-plans 风格的 Header 与“总体 Checklist（详细且可复用）”。
 - Workstream 计划沉淀：
   - 纳入 `docs/plans/2026-03-16-ws1-repo-hygiene-implementation-plan.md`（WS1 Repo Hygiene 的可执行计划，强调证据链删除与小步可回滚）。
+- 模块地图（风险边界）沉淀：
+  - 新增 `docs/plans/2026-03-16-module-map.md`，输出全仓模块清单与 A/B/C/D 风险排序，作为后续 workstream 的共同边界参考。
 - 优化记录初始化：
   - 新增本文件 `docs/优化记录/2026-03-16-WS0-guardrails.md`，作为 WS0 的执行记录与后续补齐证据的落点。
 
@@ -47,6 +49,7 @@
 
 - 产出：
   - 形成可复用的“治理总纲 + 全量 Checklist + Commit 模板”，作为后续所有 workstream 的执行标准。
+  - 输出“模块地图与风险排序”快照，避免后续治理凭感觉选点与范围漂移。
   - 明确 `docs/plans/`（计划）与 `docs/优化记录/`（执行记录）的分工，避免并发阶段的信息散落。
 - 指标（本阶段为流程产出，不做硬指标承诺）：
   - 后续阶段将以“文件数/LOC 变化、重复逻辑减少、门禁通过率、回归测试补齐情况”作为阶段性指标。
