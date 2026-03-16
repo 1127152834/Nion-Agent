@@ -1,6 +1,6 @@
 # Nion - Unified Development Environment
 
-.PHONY: help config check install dev dev-reload stop clean desktop-dev desktop-stop docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
+.PHONY: help config check install verify verify-backend verify-frontend verify-desktop dev dev-reload stop clean desktop-dev desktop-stop docker-init docker-start docker-stop docker-logs docker-logs-frontend docker-logs-gateway
 
 GATEWAY_RELOAD ?= 0
 
@@ -9,6 +9,7 @@ help:
 	@echo "  make config          - Generate local config files (aborts if config already exists)"
 	@echo "  make check           - Check if all required tools are installed"
 	@echo "  make install         - Install all dependencies (frontend + backend)"
+	@echo "  make verify          - Run lint + typecheck + unit tests (backend + frontend + desktop)"
 	@echo "  make setup-sandbox   - Pre-pull sandbox container image (recommended)"
 	@echo "  make dev             - Start all services (frontend + backend + nginx on localhost:2026)"
 	@echo "  make dev-reload      - Start dev services with gateway hot reload enabled"
@@ -24,6 +25,26 @@ help:
 	@echo "  make docker-logs     - View Docker development logs"
 	@echo "  make docker-logs-frontend - View Docker frontend logs"
 	@echo "  make docker-logs-gateway - View Docker gateway logs"
+
+verify: verify-backend verify-frontend verify-desktop
+
+verify-backend:
+	@echo "=========================================="
+	@echo "  Verifying Backend (ruff + pytest)"
+	@echo "=========================================="
+	@cd backend && make lint && make test
+
+verify-frontend:
+	@echo "=========================================="
+	@echo "  Verifying Frontend (eslint + tsc + vitest)"
+	@echo "=========================================="
+	@cd frontend && pnpm run check && pnpm run test:unit
+
+verify-desktop:
+	@echo "=========================================="
+	@echo "  Verifying Desktop (tsc + node --test)"
+	@echo "=========================================="
+	@cd desktop/electron && pnpm run test
 
 config:
 	@if [ -f config.yaml ] || [ -f config.yml ] || [ -f configure.yml ]; then \
