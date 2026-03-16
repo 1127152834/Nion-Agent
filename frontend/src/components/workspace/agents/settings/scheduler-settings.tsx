@@ -1033,11 +1033,9 @@ export function AgentSchedulerSettingsSection({ agentName }: { agentName: string
     }
     setRunningTaskId(taskId);
     try {
-      const resp = await runMutation.mutateAsync(taskId);
-      toast.success(copy.toastRunSuccess, {
-        toasterId: "scheduler",
-        description: resp.run_id ? `run_id: ${resp.run_id}` : undefined,
-      });
+      await runMutation.mutateAsync(taskId);
+      // 立即执行属于“触发动作”而不是“结果”，此处不再弹出「已触发执行/run_id」提示。
+      // 任务完成/失败由 SchedulerTaskWatcher 统一给出结果通知，避免重复打扰。
       setSelectedTaskId(taskId);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : copy.toastRunFailed, { toasterId: "scheduler" });
