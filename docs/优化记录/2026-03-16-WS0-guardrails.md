@@ -8,7 +8,7 @@
 **关联计划**：
 - `docs/plans/2026-03-16-repo-optimization-design.md`
 - `docs/plans/2026-03-16-ws1-repo-hygiene-implementation-plan.md`
-**关联提交**：d203837b..HEAD（以本阶段落地提交为准）  
+**关联提交**：`edfb41b0..d8f7876c`（make verify + 三端 CI 门禁落地与稳定性修复）  
 
 ## 背景
 
@@ -18,7 +18,7 @@
 
 - 渐进式治理：不追求一次性大改，优先把流程规范化、把风险分层，把小步可回滚作为硬约束。
 - 并发但不失控：允许多 workstream 并行，但要求 WIP limit（建议最多 2-3 个同时进行），并规定合并顺序（WS0→WS1→WS2/WS3→WS4）。
-- 本阶段只做“文档与流程”建设：不引入新抽象、不触碰业务逻辑，不做目录大搬家。
+- 本阶段以“文档 + 门禁(guardrails)”为主：不引入新抽象、不触碰业务逻辑，不做目录大搬家；仅允许对 CI/Makefile 等验证入口做增量改造以形成可执行证据链。
 
 ## 变更清单（按类别）
 
@@ -30,6 +30,10 @@
   - 新增 `docs/plans/2026-03-16-module-map.md`，输出全仓模块清单与 A/B/C/D 风险排序，作为后续 workstream 的共同边界参考。
 - 优化记录初始化：
   - 新增本文件 `docs/优化记录/2026-03-16-WS0-guardrails.md`，作为 WS0 的执行记录与后续补齐证据的落点。
+- 统一验证入口与 CI 门禁（guardrails）：
+  - Makefile：新增根目录 `make verify`（backend + frontend + desktop 的 lint/typecheck/unit tests 统一入口）。
+  - GitHub Actions：补齐 frontend/desktop 的 PR 单测门禁，与 backend 并行执行。
+  - 稳定性修复：让 `make verify` 在 main 上稳定通过（memory config 缺字段兼容 + Ruff import 排序）。
 
 ## 删除/迁移/冻结证据链（若适用）
 
@@ -41,9 +45,9 @@
 
 - Run: `make verify`
 - Result: PASS
-- Backend: `ruff check` PASS；`pytest` 590 passed, 1 skipped（24.42s）
-- Frontend: `eslint` 0 errors（存在 9 warnings）；`tsc` PASS；`vitest` 22 files, 53 tests PASS
-- Desktop: `tsc` PASS；`node --test` 1 passed
+- Backend: `uvx ruff check .` PASS；`pytest` 605 passed, 1 skipped
+- Frontend: `pnpm run check` PASS；`pnpm run test:unit` 53 passed
+- Desktop: `pnpm run test` PASS（node --test 1 passed）
 
 ## 产出与指标
 
@@ -60,4 +64,4 @@
   - WS0：把“门禁先行”落到 CI 与本地统一入口（若已有则做对齐与补齐）。
   - WS1：先产出候选清单与证据链，再执行第一批 D/C 级低风险清理。
 - 待补齐项：
-  - 在 WS0/WS1 真正落地后，将把 `关联提交` 精确到 SHA 区间，并把关键命令输出摘要写入“验证证据”小节。
+  - 后续可把 coverage/deadcode（report-only）接入到统一入口，但默认不作为硬门禁，避免阻塞渐进式治理吞吐。
