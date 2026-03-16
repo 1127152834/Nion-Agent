@@ -1,10 +1,12 @@
 import asyncio
 import logging
+import os
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.channels.event_broker import ChannelEventBroker
@@ -289,6 +291,39 @@ It proxies LangGraph streaming requests and also provides custom endpoints for m
             },
         ],
     )
+
+    slow_request_threshold_ms_raw = os.environ.get("NION_GATEWAY_SLOW_REQUEST_MS", "800").strip()
+    try:
+        slow_request_threshold_ms = float(slow_request_threshold_ms_raw)
+    except ValueError:
+        slow_request_threshold_ms = 800.0
+
+    @app.middleware("http")
+    async def log_slow_requests(request: Request, call_next):  # type: ignore[no-untyped-def]
+        started = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:  # noqa: BLE001
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            if elapsed_ms >= slow_request_threshold_ms:
+                logger.exception(
+                    "Slow request failed: %s %s (%.0fms)",
+                    request.method,
+                    request.url.path,
+                    elapsed_ms,
+                )
+            raise
+
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        if elapsed_ms >= slow_request_threshold_ms:
+            logger.warning(
+                "Slow request: %s %s -> %s (%.0fms)",
+                request.method,
+                request.url.path,
+                response.status_code,
+                elapsed_ms,
+            )
+        return response
 
     # Keep CORS at app-level so local frontend can call gateway directly
     # (e.g., http://localhost:3000 -> http://localhost:8001) without nginx.
