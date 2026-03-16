@@ -321,7 +321,6 @@ export const enUS: Translations = {
     backToGallery: "Back to Gallery",
     searchPlaceholder: "Search by name, description, model, or catalog summary",
     totalCount: "{count} agents",
-    statusDotHint: "Status uses icon dots to stay unobtrusive",
     filterAll: "All agents",
     filterDefault: "Default only",
     filterHeartbeat: "Heartbeat enabled",

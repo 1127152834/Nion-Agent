@@ -91,9 +91,6 @@ export function AgentGallery() {
               <span className="text-muted-foreground inline-flex h-11 items-center rounded-full border border-border/80 bg-background/80 px-4 text-xs">
                 {t.agents.totalCount.replace("{count}", String(cards.length))}
               </span>
-              <span className="text-muted-foreground inline-flex h-11 items-center rounded-full border border-border/80 bg-background/80 px-4 text-xs">
-                {t.agents.statusDotHint}
-              </span>
             </div>
           </div>
         </section>
@@ -119,7 +116,7 @@ export function AgentGallery() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 xl:grid-cols-3">
             {cards.map(({ agent, isDefault }) => (
               <AgentCard
                 key={agent.name}

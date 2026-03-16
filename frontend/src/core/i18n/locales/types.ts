@@ -233,7 +233,6 @@ export interface Translations {
     backToGallery: string;
     searchPlaceholder: string;
     totalCount: string;
-    statusDotHint: string;
     filterAll: string;
     filterDefault: string;
     filterHeartbeat: string;

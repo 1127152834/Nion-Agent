@@ -311,7 +311,6 @@ export const zhCN: Translations = {
     backToGallery: "返回 Gallery",
     searchPlaceholder: "搜索名称、描述、模型或能力摘要",
     totalCount: "共 {count} 个智能体",
-    statusDotHint: "状态以图标提示，不打断主流程",
     filterAll: "全部智能体",
     filterDefault: "仅默认智能体",
     filterHeartbeat: "已启用心跳",

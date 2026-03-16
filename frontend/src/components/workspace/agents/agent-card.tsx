@@ -115,7 +115,7 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
 
   return (
     <>
-      <Card className="group relative flex h-full flex-col overflow-hidden rounded-3xl border-border/80 bg-card/95 shadow-[0_14px_30px_-26px_rgba(35,30,24,0.5)] transition-all hover:-translate-y-0.5 hover:border-border hover:shadow-[0_20px_40px_-28px_rgba(35,30,24,0.62)]">
+      <Card className="group relative flex flex-col overflow-hidden rounded-3xl border-border/80 bg-card/95 shadow-[0_14px_30px_-26px_rgba(35,30,24,0.5)] transition-all hover:-translate-y-0.5 hover:border-border hover:shadow-[0_20px_40px_-28px_rgba(35,30,24,0.62)]">
         <svg
           viewBox="0 0 160 160"
           fill="none"
@@ -127,9 +127,9 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
           <circle cx="118" cy="44" r="20" stroke="currentColor" strokeWidth="1" />
         </svg>
 
-        <CardHeader className="relative p-6 pb-4">
+        <CardHeader className="relative p-5 pb-3">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-start gap-3.5">
+            <div className="flex min-w-0 items-start gap-3">
               <AgentAvatarEditor
                 agentName={agent.name}
                 isDefault={isDefault}
@@ -173,27 +173,27 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
             </div>
           </div>
 
-          <CardDescription className="mt-4 line-clamp-3 min-h-[4.1rem] text-[13.5px] leading-6">
+          <CardDescription className="mt-3 line-clamp-2 text-[13.5px] leading-6">
             {agent.description || t.agents.picker.noDescription}
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="px-6 pt-0 pb-4">
-          <div className="rounded-xl border border-dashed border-border/90 bg-muted/25 px-3.5 py-2.5">
+        <CardContent className="px-5 pt-0 pb-3">
+          <div className="rounded-xl border border-dashed border-border/90 bg-muted/25 px-3 py-2">
             <p className="text-foreground text-xs font-medium">{t.agents.memoryOverview}</p>
             <p className="text-muted-foreground mt-1 line-clamp-2 text-xs leading-5">{memoryOverview}</p>
           </div>
         </CardContent>
 
-        <CardFooter className="mt-auto flex items-center gap-2.5 px-6 pb-6 pt-2">
-          <Button size="sm" className="h-9 flex-1 rounded-xl" onClick={handleChat}>
+        <CardFooter className="mt-auto flex items-center gap-2 px-5 pb-5 pt-1">
+          <Button size="sm" className="h-8 flex-1 rounded-xl" onClick={handleChat}>
             <MessageSquareIcon className="mr-1.5 size-3.5" />
             {t.agents.chat}
           </Button>
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="icon" variant="outline" className="size-9 rounded-xl" onClick={handleMemory}>
+              <Button size="icon" variant="outline" className="size-8 rounded-xl" onClick={handleMemory}>
                 <BrainIcon className="size-4" />
               </Button>
             </TooltipTrigger>
@@ -206,7 +206,7 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
                 <Button
                   size="icon"
                   variant="outline"
-                  className="size-9 rounded-xl"
+                  className="size-8 rounded-xl"
                   onClick={handleBootstrap}
                 >
                   <SparklesIcon className="size-4" />
@@ -218,7 +218,7 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button size="icon" variant="outline" className="size-9 rounded-xl" onClick={handleSettings}>
+              <Button size="icon" variant="outline" className="size-8 rounded-xl" onClick={handleSettings}>
                 <SettingsIcon className="size-4" />
               </Button>
             </TooltipTrigger>
@@ -231,7 +231,7 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
                 <Button
                   size="icon"
                   variant="outline"
-                  className="text-destructive size-9 rounded-xl"
+                  className="text-destructive size-8 rounded-xl"
                   onClick={() => setDeleteOpen(true)}
                 >
                   <Trash2Icon className="size-4" />
