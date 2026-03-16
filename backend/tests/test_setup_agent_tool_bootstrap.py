@@ -96,6 +96,32 @@ def test_setup_agent_custom_rejects_missing_identity_without_creating_agent_dir(
     assert "identity" in (result.update["messages"][0].content or "").lower()
 
 
+def test_setup_agent_custom_rejects_soul_mixed_identity_content_without_creating_agent_dir(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    mixed_soul = """# Soul
+
+## 主要任务与范围（做什么）
+- 你要做很多事（这段内容应当属于 IDENTITY，而不是 SOUL）
+"""
+
+    with patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)):
+        result = setup_agent.func(
+            soul=mixed_soul,
+            description="desc",
+            runtime=_runtime(agent_name="writer", agent_display_name="写作助手"),
+            target="custom",
+            identity="custom identity",
+        )
+
+    agent_dir = tmp_path / "agents" / "writer"
+    assert not agent_dir.exists()
+    assert result.update.get("messages")
+    msg = (result.update["messages"][0].content or "").lower()
+    assert "soul" in msg
+    assert "identity" in msg
+
+
 def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
     from src.tools.builtins.setup_agent_tool import setup_agent
 
@@ -117,6 +143,35 @@ def test_setup_agent_default_updates_assets_without_agent_name(tmp_path: Path):
     assert (default_dir / "IDENTITY.md").read_text(encoding="utf-8") == "# IDENTITY\ndefault identity v2"
     user_md = (tmp_path / "USER.md").read_text(encoding="utf-8")
     assert "# USER\nuser profile v2" in user_md
+
+
+def test_setup_agent_default_rejects_soul_mixed_identity_content_without_writing_default_assets(tmp_path: Path):
+    from src.tools.builtins.setup_agent_tool import setup_agent
+
+    mixed_soul = """# Soul
+
+## 边界与禁区（不做什么）
+- 这段内容应当属于 IDENTITY，而不是 SOUL
+"""
+
+    with (
+        patch("src.tools.builtins.setup_agent_tool.get_paths", return_value=_paths(tmp_path)),
+        patch("src.config.default_agent.get_paths", return_value=_paths(tmp_path)),
+    ):
+        result = setup_agent.func(
+            soul=mixed_soul,
+            description="ignored",
+            runtime=_runtime(agent_name=None),
+            target="default",
+            identity="default identity",
+        )
+
+    default_dir = tmp_path / "agents" / "_default"
+    assert not default_dir.exists()
+    assert result.update.get("messages")
+    msg = (result.update["messages"][0].content or "").lower()
+    assert "soul" in msg
+    assert "identity" in msg
 
 
 def test_user_profile_marker_replaces_existing_block(tmp_path: Path):
