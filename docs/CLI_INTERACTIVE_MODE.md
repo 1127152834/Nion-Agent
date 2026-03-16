@@ -148,3 +148,38 @@ PTY 模式下 payload 的关键字段（简化）：
 - ws base URL 工具：
   - `frontend/src/core/config/ws.ts`
 
+---
+
+## Agent 控制面工具（nion_manage）
+
+本仓库除了“托管外部 CLI”（CLI marketplace + PTY）以外，还提供了一个专供 Agent 使用的内置控制面工具：`nion_manage`。
+
+定位：
+- 给 Agent 做系统级诊断与管理的统一入口（CLI 形态，argv 风格）
+- 不依赖桌面端/Web 端的 URL 选择，不需要 exec 外部进程
+- 返回统一结构的 JSON（`build_management_response()`），便于前端或 Agent 二次解析
+
+输入（核心）：
+- `argv: list[str]`：例如 `["doctor"]`、`["skills","list"]`
+- `confirmation_token: str | None`：破坏性操作二次确认（禁用/改名等）
+- `thread_id: str | None`：部分命令需要（例如 `skills install`）
+
+输出：
+- `success / message / data / requires_confirmation / confirmation_token`（JSON 字符串）
+- `data` 中会回显 `argv` 便于追踪调用链路
+
+子命令：
+- `nion_manage doctor [--tail N] [--include-logs] [--include-processlog]`
+  - 采集运行时诊断信息（best-effort）。
+  - 安全约束：仅允许读取 `NION_HOME` 下的 processlog 与 desktop logs，避免成为“任意文件读取”后门。
+- `nion_manage skills list|enable|disable|install|rename ...`
+  - `disable` 和 `rename` 需要 confirmation token 二次确认。
+  - `rename` 仅允许 custom skills（`skills/custom`），并会迁移 extensions_config 中的 enabled 状态。
+
+确认 token 流程（通用）：
+1. 第一次调用不带 `confirmation_token`，工具返回 `requires_confirmation=true` 并提供 token。
+2. 第二次调用带上 token，工具才会执行实际操作。
+
+相关实现位置：
+- `backend/packages/harness/nion/tools/builtins/system_manage_tools.py`（nion_manage argv routing + doctor/skills）
+- `backend/packages/harness/nion/tools/builtins/_service_ops.py`（rename_skill 等可复用的业务层逻辑）
