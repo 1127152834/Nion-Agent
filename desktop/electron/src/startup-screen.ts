@@ -455,7 +455,7 @@ export function renderStartupLoadingHtml(context: StartupLoadingHtmlContext): st
             <div class="progress-glow" aria-hidden="true"></div>
           </div>
           <div class="progress-meta">
-            <span>Loading</span>
+            <span>${text.startupProgressLabel}</span>
             <span id="progressText">0%</span>
           </div>
         </div>
