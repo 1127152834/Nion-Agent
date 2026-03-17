@@ -1,10 +1,14 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 
 import { useSidebar } from "@/components/ui/sidebar";
+import { getDefaultAgentConfig, listAgents } from "@/core/agents/api";
+import { agentKeys } from "@/core/agents/query-keys";
 import { useAppRouter } from "@/core/navigation";
+import { getSchedulerDashboard, listScheduledTasks } from "@/core/scheduler/api";
 import { pathOfChatsIndex, pathOfNewThread } from "@/core/threads/utils";
 
 export type WorkspaceSidebarSection =
@@ -80,12 +84,60 @@ export function useWorkspaceSidebarNavigation() {
 
 export function usePrefetchWorkspaceSidebarRoutes() {
   const router = useAppRouter();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     for (const route of WORKSPACE_SIDEBAR_PREFETCH_ROUTES) {
       router.prefetch(route);
     }
-  }, [router]);
+
+    // Prefetch the data behind slow pages so the first navigation feels instant.
+    // This is especially useful in Electron where the backend may still be warming up.
+    const schedule = (cb: () => void) => {
+      const requestIdleCallback = (window as unknown as {
+        requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+      }).requestIdleCallback;
+      if (typeof requestIdleCallback === "function") {
+        return requestIdleCallback(cb, { timeout: 1200 });
+      }
+      return window.setTimeout(cb, 0);
+    };
+
+    const cancelSchedule = (id: number) => {
+      const cancelIdleCallback = (window as unknown as { cancelIdleCallback?: (id: number) => void })
+        .cancelIdleCallback;
+      if (typeof cancelIdleCallback === "function") {
+        cancelIdleCallback(id);
+        return;
+      }
+      window.clearTimeout(id);
+    };
+
+    const handle = schedule(() => {
+      void queryClient.prefetchQuery({
+        queryKey: agentKeys.all,
+        queryFn: () => listAgents(),
+        staleTime: 10_000,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: agentKeys.defaultConfig(),
+        queryFn: () => getDefaultAgentConfig(),
+        staleTime: 10_000,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: ["scheduler", "dashboard"],
+        queryFn: () => getSchedulerDashboard(),
+        staleTime: 10_000,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: ["scheduler", "tasks", "all"],
+        queryFn: () => listScheduledTasks(),
+        staleTime: 10_000,
+      });
+    });
+
+    return () => cancelSchedule(handle);
+  }, [queryClient, router]);
 }
 
 function isModifiedNavigationEvent(event: MouseEvent<HTMLAnchorElement>) {
