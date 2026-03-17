@@ -450,7 +450,6 @@ def make_lead_agent(config: RunnableConfig):
         model=create_chat_model(name=model_name, thinking_enabled=thinking_enabled, reasoning_effort=reasoning_effort),
         tools=get_available_tools(
             model_name=model_name,
-            groups=agent_config.tool_groups if agent_config else None,
             subagent_enabled=subagent_enabled,
             agent_name=agent_name,
         ),

@@ -8,7 +8,6 @@ import {
   SparklesIcon,
   SettingsIcon,
   Trash2Icon,
-  WrenchIcon,
 } from "lucide-react";
 import { useState } from "react";
 import type { ComponentType } from "react";
@@ -86,7 +85,6 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
 
   const heartbeatEnabled = agent.heartbeat_enabled ?? false;
   const evolutionEnabled = agent.evolution_enabled ?? false;
-  const toolGroupCount = agent.tool_groups?.length ?? 0;
   const trimmedDisplayName = agent.display_name?.trim();
   const agentDisplayName = agent.name === "_default"
     ? t.agents.picker.defaultAgentName
@@ -171,14 +169,6 @@ export function AgentCard({ agent, isDefault = false, catalogCard = null }: Agen
                 icon={OrbitIcon}
                 active={evolutionEnabled}
                 title={evolutionEnabled ? t.agents.evolutionOn : t.agents.evolutionOff}
-              />
-              <SignalIndicator
-                icon={WrenchIcon}
-                active={toolGroupCount > 0}
-                tone="warn"
-                title={toolGroupCount > 0
-                  ? t.agents.status.toolGroupsConfigured.replace("{count}", String(toolGroupCount))
-                  : t.agents.status.toolGroupsEmpty}
               />
             </div>
           </div>

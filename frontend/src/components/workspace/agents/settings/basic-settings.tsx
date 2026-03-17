@@ -1,12 +1,10 @@
 "use client";
 
-import { ChevronDownIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,7 +16,6 @@ import {
 } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
 import { useModels } from "@/core/models/hooks";
-import { cn } from "@/lib/utils";
 
 interface BasicSettingsProps {
   agentName: string;
@@ -26,21 +23,6 @@ interface BasicSettingsProps {
 
 const DEFAULT_MODEL_VALUE = "__agent_default_model__";
 const LEGACY_MODEL_VALUE_PREFIX = "__agent_legacy_model__:";
-
-function toolGroupsToText(groups: string[] | null | undefined): string {
-  if (!groups || groups.length === 0) {
-    return "";
-  }
-  return groups.join(", ");
-}
-
-function textToToolGroups(value: string): string[] | undefined {
-  const parsed = value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return parsed.length > 0 ? parsed : undefined;
-}
 
 export function BasicSettings({ agentName }: BasicSettingsProps) {
   const { t } = useI18n();
@@ -66,8 +48,6 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
   const [description, setDescription] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [model, setModel] = useState("");
-  const [toolGroups, setToolGroups] = useState("");
-  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const modelOptions = useMemo(
     () =>
@@ -92,7 +72,6 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
     setDescription(source.description ?? "");
     setDisplayName(source.display_name ?? "");
     setModel(source.model ?? "");
-    setToolGroups(toolGroupsToText(source.tool_groups));
   }, [source]);
 
   const normalizedCurrentModel = model.trim();
@@ -111,14 +90,12 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
       description !== (source.description ?? "")
       || displayName !== (source.display_name ?? "")
       || normalizedCurrentModel !== (source.model ?? "")
-      || toolGroups !== toolGroupsToText(source.tool_groups)
     );
   }, [
     description,
     displayName,
     normalizedCurrentModel,
-    source,
-    toolGroups,
+    source
   ]);
 
   async function handleSave() {
@@ -137,7 +114,6 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
         await updateDefaultAgent.mutateAsync({
           description,
           model: nextModel,
-          tool_groups: textToToolGroups(toolGroups) ?? null,
         });
       } else {
         await updateCustomAgent.mutateAsync({
@@ -146,7 +122,6 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
             display_name: displayName.trim() ? displayName.trim() : null,
             description,
             model: nextModel,
-            tool_groups: textToToolGroups(toolGroups) ?? null,
           },
         });
       }
@@ -163,7 +138,6 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
     setDescription(source.description ?? "");
     setDisplayName(source.display_name ?? "");
     setModel(source.model ?? "");
-    setToolGroups(toolGroupsToText(source.tool_groups));
   }
 
   if (isLoading) {
@@ -277,31 +251,6 @@ export function BasicSettings({ agentName }: BasicSettingsProps) {
             <p className="text-destructive text-xs">{basicCopy.modelLegacyUnavailableHint}</p>
           ) : null}
         </div>
-        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
-            >
-              <ChevronDownIcon
-                className={cn("size-3.5 transition-transform", advancedOpen && "rotate-180")}
-              />
-              {basicCopy.advancedTitle}
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <div className="space-y-2">
-              <Label htmlFor="agent-tool-groups">{basicCopy.toolGroupsLabel}</Label>
-              <Input
-                id="agent-tool-groups"
-                value={toolGroups}
-                onChange={(event) => setToolGroups(event.target.value)}
-                placeholder={basicCopy.toolGroupsPlaceholder}
-              />
-              <p className="text-muted-foreground text-xs">{basicCopy.toolGroupsHint}</p>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
       </CardContent>
     </Card>
   );

@@ -47,7 +47,6 @@ export function AgentGallery() {
         agent.display_name ?? "",
         agent.description,
         agent.model ?? "",
-        (agent.tool_groups ?? []).join(" "),
         catalogCard?.capability_summary ?? "",
         catalogCard?.persona_summary ?? "",
       ]
