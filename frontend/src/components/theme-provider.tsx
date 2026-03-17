@@ -8,10 +8,13 @@ export function ThemeProvider({
   ...props
 }: React.ComponentProps<typeof NextThemesProvider>) {
   const pathname = usePathname();
+  const isElectron = process.env.NEXT_PUBLIC_IS_ELECTRON === "1";
   return (
     <NextThemesProvider
       {...props}
-      forcedTheme={pathname === "/" ? "dark" : undefined}
+      // "/" in desktop just redirects into workspace; forcing dark there causes a visible dark flash
+      // when the route changes. Keep the landing-page behavior for web, but disable it in Electron.
+      forcedTheme={!isElectron && pathname === "/" ? "dark" : undefined}
     >
       {children}
     </NextThemesProvider>
