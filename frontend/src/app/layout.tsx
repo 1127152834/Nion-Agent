@@ -21,7 +21,8 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
-const DEFAULT_THEME = process.env.NEXT_PUBLIC_IS_ELECTRON === "1" ? "light" : "system";
+const IS_ELECTRON = process.env.NEXT_PUBLIC_IS_ELECTRON === "1";
+const DEFAULT_THEME = IS_ELECTRON ? "light" : "system";
 
 export default async function RootLayout({
   children,
@@ -30,6 +31,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
+      data-electron={IS_ELECTRON ? "1" : undefined}
       className={geist.variable}
       suppressContentEditableWarning
       suppressHydrationWarning

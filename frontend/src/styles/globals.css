@@ -307,12 +307,31 @@
   font-weight: 300;
 }
 
+@keyframes nion-desktop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+
+  html[data-electron="1"] body {
+    animation: nion-desktop-enter 180ms ease-out both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html[data-electron="1"] body {
+      animation: none;
+    }
   }
 
   .container-md {
