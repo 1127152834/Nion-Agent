@@ -52,13 +52,26 @@ echo "Installing pip==$PIP_VERSION into the venv..."
 uv pip install --python "$VENV_PYTHON" --upgrade "pip==$PIP_VERSION"
 
 # Install backend dependencies with extras.
-# Use non-editable install so packaged runtime does not depend on source absolute paths.
-echo "Installing backend dependencies..."
-if [ -n "$BACKEND_EXTRAS" ]; then
-  uv pip install --python "$VENV_PYTHON" ".[$BACKEND_EXTRAS]"
-else
-  uv pip install --python "$VENV_PYTHON" "."
-fi
+# IMPORTANT:
+# - The desktop runtime bundle copies backend sources into `runtime/core/backend/` (see pack-backend.sh).
+# - At runtime, services are started with `cwd=backend` so Python can import `app.*` from the working directory.
+# - Therefore, for the packaged runtime we only need to install *dependencies* into the venv.
+# - Installing the backend project itself would require building a wheel. Our backend repository is a "flat layout"
+#   with multiple top-level directories (e.g. app/, data/, packages/) and is not meant to be built as a single
+#   setuptools-discovered wheel. Attempting to do so breaks full packaging.
+#
+# Use `uv sync` against backend/uv.lock to install dependencies into the venv, without installing the backend
+# project itself. This keeps the runtime deterministic and avoids setuptools package discovery errors.
+echo "Installing backend dependencies (uv sync, without installing the backend project)..."
+
+# Make this venv the "active" environment for uv.
+export VIRTUAL_ENV="$PYTHON_DIR"
+export PATH="$(dirname "$VENV_PYTHON")${PATH:+:${PATH}}"
+
+# NOTE: We intentionally do NOT pass `--extra` flags here.
+# The default BACKEND_EXTRAS is used by some repos, but this repo does not define those extras in
+# `[project.optional-dependencies]`, and `uv sync --extra ...` would hard-error.
+uv sync --active --frozen --no-dev --no-editable --no-install-project
 
 # Verify installation
 echo "Verifying installation..."
