@@ -560,14 +560,16 @@ export function renderStartupLoadingHtml(context: StartupLoadingHtmlContext): st
 
       const renderProgress = (percent) => {
         const normalized = clamp(percent, 0, 1);
+        const percentInt = Math.round(normalized * 100);
         if (progressBarEl) {
-          progressBarEl.style.width = (normalized * 100).toFixed(1) + "%";
+          // Keep bar width and label consistent (avoid "100% but not full" due to rounding).
+          progressBarEl.style.width = percentInt + "%";
         }
         if (progressTextEl) {
-          progressTextEl.textContent = Math.round(normalized * 100) + "%";
+          progressTextEl.textContent = percentInt + "%";
         }
         if (progressTrackEl) {
-          progressTrackEl.setAttribute("aria-valuenow", String(Math.round(normalized * 100)));
+          progressTrackEl.setAttribute("aria-valuenow", String(percentInt));
         }
       };
 
