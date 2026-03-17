@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electro
 import type { OpenDialogOptions } from "electron";
 import { existsSync, promises as fs, readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import path from "node:path";
 import { resolveRuntimePaths, type DesktopRuntimePaths } from "./paths";
 import { WorkspaceDirectoryWatcher } from "./workspace-directory-watcher";
@@ -31,6 +32,34 @@ let creatingMainWindow = false;
 let runtimeRestartInProgress = false;
 let cachedAppVersion: string | null = null;
 const workspaceWatchers = new Map<string, { watcher: WorkspaceDirectoryWatcher; senderId: number }>();
+
+function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) {
+    return "-";
+  }
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
+  }
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function logStartupStageTiming(
+  stageDurations: Map<string, number>,
+  extra?: { totalMs?: number },
+): void {
+  const rows = [...stageDurations.entries()].filter(([, duration]) => Number.isFinite(duration));
+  if (rows.length === 0) {
+    return;
+  }
+
+  rows.sort((a, b) => b[1] - a[1]);
+  const preview = rows
+    .slice(0, 8)
+    .map(([stage, durationMs]) => `${stage}=${formatDurationMs(durationMs)}`)
+    .join(", ");
+  const suffix = typeof extra?.totalMs === "number" ? ` total=${formatDurationMs(extra.totalMs)}` : "";
+  console.log(`[Startup] Stage timing (top ${Math.min(8, rows.length)}): ${preview}.${suffix}`);
+}
 
 // 单实例锁
 const gotTheLock = app.requestSingleInstanceLock();
@@ -100,17 +129,41 @@ async function startupRuntimeInternal(observer?: DesktopStartupObserver): Promis
     throw new Error("Runtime paths not initialized");
   }
 
+  const startupStart = performance.now();
+  const stageStart = new Map<string, number>();
+  const stageDurations = new Map<string, number>();
+
+  const markStageStart = (stage: string): void => {
+    stageStart.set(stage, performance.now());
+  };
+
+  const markStageEnd = (stage: string): number | null => {
+    const start = stageStart.get(stage);
+    const end = performance.now();
+    if (typeof start !== "number") {
+      return null;
+    }
+    const duration = Math.max(0, end - start);
+    stageDurations.set(stage, duration);
+    return duration;
+  };
+
   processManager = new DesktopProcessManager(runtimePaths, {
     onStageStart: (stage) => {
+      markStageStart(stage);
       console.log(`[Startup] ${stage} started`);
       observer?.onStageStart?.(stage);
     },
     onStageSuccess: (stage) => {
-      console.log(`[Startup] ${stage} succeeded`);
+      const duration = markStageEnd(stage);
+      const durationSuffix = typeof duration === "number" ? ` (${formatDurationMs(duration)})` : "";
+      console.log(`[Startup] ${stage} succeeded${durationSuffix}`);
       observer?.onStageSuccess?.(stage);
     },
     onStageFailure: (stage, error) => {
-      console.error(`[Startup] ${stage} failed:`, error);
+      const duration = markStageEnd(stage);
+      const durationSuffix = typeof duration === "number" ? ` (${formatDurationMs(duration)})` : "";
+      console.error(`[Startup] ${stage} failed${durationSuffix}:`, error);
       observer?.onStageFailure?.(stage, error);
     },
     onFrontendHttpReady: (ports) => {
@@ -121,10 +174,18 @@ async function startupRuntimeInternal(observer?: DesktopStartupObserver): Promis
     },
   });
 
-  const ports = await processManager.startup();
-  console.log("[Startup] All services started:", ports);
-
-  return ports;
+  try {
+    const ports = await processManager.startup();
+    const totalMs = performance.now() - startupStart;
+    console.log(`[Startup] All services started in ${formatDurationMs(totalMs)}:`, ports);
+    logStartupStageTiming(stageDurations, { totalMs });
+    return ports;
+  } catch (error) {
+    const totalMs = performance.now() - startupStart;
+    console.error(`[Startup] Runtime startup failed after ${formatDurationMs(totalMs)}:`, error);
+    logStartupStageTiming(stageDurations, { totalMs });
+    throw error;
+  }
 }
 
 async function startupRuntime(observer?: DesktopStartupObserver): Promise<DesktopRuntimePorts> {
@@ -302,6 +363,8 @@ function createMainWindow(): void {
       minWidth: 1000,
       minHeight: 600,
       title: startupCopy.windowTitle,
+      // Prevent a brief black flash between the data-url bootstrap page and the frontend URL navigation.
+      backgroundColor: "#faf9f6",
       ...(iconPath && !isMac ? { icon: iconPath } : {}),
       ...(isMac
         ? {

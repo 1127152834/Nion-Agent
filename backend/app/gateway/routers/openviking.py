@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, HTTPException
@@ -182,7 +183,11 @@ async def list_openviking_items(
     resolved_agent = _resolve_agent_by_scope(scope, agent_name)
     normalized_scope = "global" if resolved_agent is None else f"agent:{resolved_agent}"
     try:
-        items = provider.get_memory_items(scope="global" if resolved_agent is None else "agent", agent_name=resolved_agent)  # type: ignore[attr-defined]
+        items = await asyncio.to_thread(
+            provider.get_memory_items,  # type: ignore[attr-defined]
+            scope="global" if resolved_agent is None else "agent",
+            agent_name=resolved_agent,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return OpenVikingItemsResponse(scope=normalized_scope, items=items)
