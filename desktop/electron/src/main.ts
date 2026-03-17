@@ -409,7 +409,7 @@ function createMainWindow(): void {
 
     if (runtimePorts) {
       // 运行时已就绪时直接加载前端应用。
-      void mainWindow.loadURL(`http://localhost:${runtimePorts.frontendPort}`);
+      void mainWindow.loadURL(`http://localhost:${runtimePorts.frontendPort}/workspace/chats/new`);
     } else {
       // 运行时尚未就绪时显示启动进度界面。
       void mainWindow.loadURL(
@@ -995,7 +995,7 @@ async function loadMainWindowFrontend(): Promise<void> {
 
   // App activate is triggered when switching back to Nion on macOS.
   // If we're already on the same frontend origin, keep current route and avoid reloading.
-  let targetUrl = frontendOrigin;
+  let targetUrl = `${frontendOrigin}/workspace/chats/new`;
   if (currentUrl) {
     try {
       const current = new URL(currentUrl);
