@@ -21,6 +21,8 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
+const DEFAULT_THEME = process.env.NEXT_PUBLIC_IS_ELECTRON === "1" ? "light" : "system";
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -34,7 +36,12 @@ export default async function RootLayout({
     >
       <body suppressHydrationWarning>
         <PluginInitializer />
-        <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
+        <ThemeProvider
+          attribute="class"
+          enableSystem
+          disableTransitionOnChange
+          defaultTheme={DEFAULT_THEME}
+        >
           <I18nProvider initialLocale={locale}>
             <RouteProgressBar />
             {children}
