@@ -36,25 +36,33 @@ echo "Creating Python environment with uv..."
 cd "$BACKEND_DIR"
 uv venv "$PYTHON_DIR" --python "$PYTHON_VERSION"
 
-# Activate environment
-source "$PYTHON_DIR/bin/activate"
+VENV_PYTHON="$PYTHON_DIR/bin/python"
+if [ ! -x "$VENV_PYTHON" ]; then
+  echo "Expected venv python not found or not executable: $VENV_PYTHON" >&2
+  exit 1
+fi
 
-# Upgrade pip
-echo "Upgrading pip to version $PIP_VERSION..."
-pip install --upgrade "pip==$PIP_VERSION"
+# NOTE: Do not call the global `pip` executable here.
+# On some machines, `pip` may point to a system Python that is broken or has invalid code signature,
+# which will crash the runtime build (dyld error) and block full Electron packaging.
+#
+# We instead force-install/upgrade pip inside the venv using uv, explicitly targeting the venv
+# interpreter.
+echo "Installing pip==$PIP_VERSION into the venv..."
+uv pip install --python "$VENV_PYTHON" --upgrade "pip==$PIP_VERSION"
 
 # Install backend dependencies with extras.
 # Use non-editable install so packaged runtime does not depend on source absolute paths.
 echo "Installing backend dependencies..."
 if [ -n "$BACKEND_EXTRAS" ]; then
-  uv pip install ".[$BACKEND_EXTRAS]"
+  uv pip install --python "$VENV_PYTHON" ".[$BACKEND_EXTRAS]"
 else
-  uv pip install "."
+  uv pip install --python "$VENV_PYTHON" "."
 fi
 
 # Verify installation
 echo "Verifying installation..."
-python -c 'from importlib.metadata import version; print("LangGraph version:", version("langgraph"))'
-python -c 'from importlib.metadata import version; print("FastAPI version:", version("fastapi"))'
+"$VENV_PYTHON" -c 'from importlib.metadata import version; print("LangGraph version:", version("langgraph"))'
+"$VENV_PYTHON" -c 'from importlib.metadata import version; print("FastAPI version:", version("fastapi"))'
 
 echo "Python runtime built successfully at: $PYTHON_DIR"
