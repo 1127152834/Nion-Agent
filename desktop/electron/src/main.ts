@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, session, shell } from "electron";
 import type { OpenDialogOptions } from "electron";
 import { existsSync, promises as fs, readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -31,6 +31,7 @@ let isShuttingDown = false;
 let creatingMainWindow = false;
 let runtimeRestartInProgress = false;
 let cachedAppVersion: string | null = null;
+let preferredDesktopLocale: DesktopLocale | null = null;
 const workspaceWatchers = new Map<string, { watcher: WorkspaceDirectoryWatcher; senderId: number }>();
 
 function formatDurationMs(ms: number): string {
@@ -77,6 +78,7 @@ if (!gotTheLock) {
 app.on("ready", async () => {
   try {
     applyAppIcon();
+    await hydrateDesktopLocalePreference();
     runtimePaths = resolveRuntimePaths();
     runtimeOptionalComponentsManager = new RuntimeOptionalComponentsManager(runtimePaths);
     ensureMainWindow();
@@ -276,8 +278,34 @@ function resolveAppIconPngPath(): string | null {
   return null;
 }
 
+async function hydrateDesktopLocalePreference(): Promise<void> {
+  // Prefer the frontend "locale" cookie when present so the startup/boot page matches
+  // the language chosen inside the app (and stays stable even when the OS locale differs).
+  try {
+    const cookies = await session.defaultSession.cookies.get({
+      url: "http://localhost",
+      name: "locale",
+    });
+    const cookie = cookies.find((item) => typeof item.value === "string" && item.value.trim());
+    if (!cookie) {
+      return;
+    }
+
+    let raw = cookie.value;
+    try {
+      raw = decodeURIComponent(raw);
+    } catch {
+      // Keep raw value when decoding fails.
+    }
+
+    preferredDesktopLocale = normalizeDesktopLocale(raw);
+  } catch (error) {
+    console.warn("[Locale] Failed to load preferred locale cookie. Falling back to system locale.", error);
+  }
+}
+
 function resolveDesktopLocale(): DesktopLocale {
-  return normalizeDesktopLocale(app.getLocale());
+  return preferredDesktopLocale ?? normalizeDesktopLocale(app.getLocale());
 }
 
 function resolveStartupLogoDataUri(): string | null {
